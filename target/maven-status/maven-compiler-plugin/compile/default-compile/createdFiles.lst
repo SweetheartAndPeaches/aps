@@ -1,6 +1,7 @@
 com/jinyu/aps/common/Result.class
 com/jinyu/aps/service/ScheduleDetailService.class
 com/jinyu/aps/service/ScheduleMainService.class
+com/jinyu/aps/service/impl/MonthPlanFinalServiceImpl.class
 com/jinyu/aps/entity/AlertConfig.class
 com/jinyu/aps/config/DatabaseInitializer.class
 com/jinyu/aps/entity/Machine.class
@@ -14,7 +15,9 @@ com/jinyu/aps/ApsFormingScheduleApplication.class
 com/jinyu/aps/controller/StockController.class
 com/jinyu/aps/entity/Material.class
 com/jinyu/aps/entity/ScheduleDetail.class
+com/jinyu/aps/mapper/MonthPlanFinalMapper.class
 com/jinyu/aps/entity/DailyEmbryoTask.class
+com/jinyu/aps/service/MonthPlanFinalService$MonthPlanOverview.class
 com/jinyu/aps/controller/MaterialController.class
 com/jinyu/aps/mapper/StockMapper.class
 com/jinyu/aps/model/entity/MaterialGroup.class
@@ -23,7 +26,9 @@ com/jinyu/aps/controller/MachineController.class
 com/jinyu/aps/mapper/AlertConfigMapper.class
 com/jinyu/aps/mapper/ScheduleDetailMapper.class
 com/jinyu/aps/service/MaterialService.class
+com/jinyu/aps/service/MonthPlanFinalService.class
 com/jinyu/aps/service/AlgorithmService$TaskAllocationContext.class
+com/jinyu/aps/entity/MonthPlanFinal.class
 com/jinyu/aps/service/MachineService.class
 com/jinyu/aps/service/impl/AlertConfigServiceImpl.class
 com/jinyu/aps/service/impl/StockServiceImpl.class
@@ -37,6 +42,7 @@ com/jinyu/aps/mapper/ScheduleMainMapper.class
 com/jinyu/aps/service/AlgorithmService$AllocationResult.class
 com/jinyu/aps/mapper/VulcanizingPlanMapper.class
 com/jinyu/aps/controller/ScheduleMainController.class
+com/jinyu/aps/service/MonthPlanFinalService$ScheduleGenerateResult.class
 com/jinyu/aps/service/ScheduleService$1.class
 com/jinyu/aps/service/impl/ScheduleDetailServiceImpl.class
 com/jinyu/aps/service/AlgorithmService$MachineLoadContext.class
