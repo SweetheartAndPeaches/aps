@@ -1,0 +1,11 @@
+[project]
+entrypoint = "target/aps-forming-schedule.jar"
+requires = ["java-8", "maven"]
+
+[dev]
+build = ["mvn", "clean", "package", "-DskipTests"]
+run = ["java", "-jar", "target/aps-forming-schedule.jar", "--server.port=5000"]
+
+[deploy]
+build = ["mvn", "clean", "package", "-DskipTests"]
+run = ["java", "-jar", "target/aps-forming-schedule.jar", "--server.port=5000"]
