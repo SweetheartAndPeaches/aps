@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 import java.io.Serializable;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
@@ -29,7 +30,7 @@ public class ScheduleMain implements Serializable {
 
     @Schema(description = "计划日期")
     @TableField("schedule_date")
-    private LocalDateTime scheduleDate;
+    private LocalDate scheduleDate;
 
     @Schema(description = "排程类型")
     @TableField("schedule_type")
