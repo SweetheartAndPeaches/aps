@@ -5,7 +5,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 /**
- * 数据库初始化器 - PostgreSQL版本
+ * 数据库初始化器 - MySQL版本
  * 在应用启动时创建表和初始化数据
  *
  * @author APS Team
@@ -22,13 +22,13 @@ public class DatabaseInitializer implements CommandLineRunner {
     @Override
     public void run(String... args) throws Exception {
         System.out.println("========================================");
-        System.out.println("  开始初始化PostgreSQL数据库...");
+        System.out.println("  开始初始化MySQL数据库...");
         System.out.println("========================================");
 
         // 班次配置表
-        jdbcTemplate.execute("DROP TABLE IF EXISTS t_cx_shift_config CASCADE");
+        jdbcTemplate.execute("DROP TABLE IF EXISTS t_cx_shift_config");
         jdbcTemplate.execute("CREATE TABLE t_cx_shift_config (" +
-                "id BIGSERIAL PRIMARY KEY, " +
+                "id BIGINT PRIMARY KEY AUTO_INCREMENT, " +
                 "shift_code VARCHAR(20) NOT NULL UNIQUE, " +
                 "shift_name VARCHAR(50) NOT NULL, " +
                 "start_time TIME NOT NULL, " +
@@ -38,9 +38,9 @@ public class DatabaseInitializer implements CommandLineRunner {
                 "create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
 
         // 预警配置表
-        jdbcTemplate.execute("DROP TABLE IF EXISTS t_cx_alert_config CASCADE");
+        jdbcTemplate.execute("DROP TABLE IF EXISTS t_cx_alert_config");
         jdbcTemplate.execute("CREATE TABLE t_cx_alert_config (" +
-                "id BIGSERIAL PRIMARY KEY, " +
+                "id BIGINT PRIMARY KEY AUTO_INCREMENT, " +
                 "config_code VARCHAR(50) NOT NULL UNIQUE, " +
                 "config_name VARCHAR(100) NOT NULL, " +
                 "config_value VARCHAR(500) NOT NULL, " +
@@ -50,14 +50,14 @@ public class DatabaseInitializer implements CommandLineRunner {
                 "is_active SMALLINT DEFAULT 1, " +
                 "effective_date DATE, " +
                 "create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
-                "update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                "update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, " +
                 "create_by VARCHAR(50), " +
                 "update_by VARCHAR(50))");
 
         // 成型机台表
-        jdbcTemplate.execute("DROP TABLE IF EXISTS t_cx_machine CASCADE");
+        jdbcTemplate.execute("DROP TABLE IF EXISTS t_cx_machine");
         jdbcTemplate.execute("CREATE TABLE t_cx_machine (" +
-                "id BIGSERIAL PRIMARY KEY, " +
+                "id BIGINT PRIMARY KEY AUTO_INCREMENT, " +
                 "machine_code VARCHAR(50) NOT NULL UNIQUE, " +
                 "machine_name VARCHAR(100), " +
                 "machine_type VARCHAR(50), " +
@@ -76,12 +76,12 @@ public class DatabaseInitializer implements CommandLineRunner {
                 "status VARCHAR(20) DEFAULT 'RUNNING', " +
                 "is_active SMALLINT DEFAULT 1, " +
                 "create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
-                "update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
+                "update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)");
 
         // 物料表
-        jdbcTemplate.execute("DROP TABLE IF EXISTS t_cx_material CASCADE");
+        jdbcTemplate.execute("DROP TABLE IF EXISTS t_cx_material");
         jdbcTemplate.execute("CREATE TABLE t_cx_material (" +
-                "id BIGSERIAL PRIMARY KEY, " +
+                "id BIGINT PRIMARY KEY AUTO_INCREMENT, " +
                 "material_code VARCHAR(50) NOT NULL UNIQUE, " +
                 "material_name VARCHAR(200), " +
                 "specification VARCHAR(100), " +
@@ -96,9 +96,9 @@ public class DatabaseInitializer implements CommandLineRunner {
                 "create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
 
         // 库存表
-        jdbcTemplate.execute("DROP TABLE IF EXISTS t_cx_stock CASCADE");
+        jdbcTemplate.execute("DROP TABLE IF EXISTS t_cx_stock");
         jdbcTemplate.execute("CREATE TABLE t_cx_stock (" +
-                "id BIGSERIAL PRIMARY KEY, " +
+                "id BIGINT PRIMARY KEY AUTO_INCREMENT, " +
                 "material_code VARCHAR(50) NOT NULL, " +
                 "current_stock INT NOT NULL DEFAULT 0, " +
                 "planned_in_qty INT DEFAULT 0, " +
@@ -115,12 +115,12 @@ public class DatabaseInitializer implements CommandLineRunner {
                 "ending_date DATE, " +
                 "calc_time TIMESTAMP, " +
                 "create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
-                "update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
+                "update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)");
 
         // 排程主表
-        jdbcTemplate.execute("DROP TABLE IF EXISTS t_cx_schedule_main CASCADE");
+        jdbcTemplate.execute("DROP TABLE IF EXISTS t_cx_schedule_main");
         jdbcTemplate.execute("CREATE TABLE t_cx_schedule_main (" +
-                "id BIGSERIAL PRIMARY KEY, " +
+                "id BIGINT PRIMARY KEY AUTO_INCREMENT, " +
                 "schedule_code VARCHAR(50) NOT NULL UNIQUE, " +
                 "schedule_date DATE NOT NULL, " +
                 "schedule_type VARCHAR(20) DEFAULT 'NORMAL', " +
@@ -130,7 +130,7 @@ public class DatabaseInitializer implements CommandLineRunner {
                 "total_vehicles INT DEFAULT 0, " +
                 "version INT DEFAULT 1, " +
                 "create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
-                "update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                "update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, " +
                 "create_by VARCHAR(50), " +
                 "update_by VARCHAR(50), " +
                 "confirm_time TIMESTAMP, " +
@@ -138,9 +138,9 @@ public class DatabaseInitializer implements CommandLineRunner {
                 "remark VARCHAR(500))");
 
         // 排程明细表
-        jdbcTemplate.execute("DROP TABLE IF EXISTS t_cx_schedule_detail CASCADE");
+        jdbcTemplate.execute("DROP TABLE IF EXISTS t_cx_schedule_detail");
         jdbcTemplate.execute("CREATE TABLE t_cx_schedule_detail (" +
-                "id BIGSERIAL PRIMARY KEY, " +
+                "id BIGINT PRIMARY KEY AUTO_INCREMENT, " +
                 "main_id BIGINT NOT NULL, " +
                 "schedule_date DATE NOT NULL, " +
                 "shift_code VARCHAR(20) NOT NULL, " +
@@ -211,7 +211,10 @@ public class DatabaseInitializer implements CommandLineRunner {
                 "('MAT004', 800, 3, 12, 'HIGH')");
 
         System.out.println("========================================");
-        System.out.println("  PostgreSQL数据库初始化完成!");
+        System.out.println("  MySQL数据库初始化完成!");
+        System.out.println("========================================");
+        System.out.println("  APS成型排程系统启动成功!");
+        System.out.println("  Swagger文档地址: http://localhost:5000/api/swagger-ui/index.html");
         System.out.println("========================================");
     }
 }

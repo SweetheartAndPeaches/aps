@@ -48,10 +48,11 @@
             <version>${mybatis-plus.version}</version>
         </dependency>
 
-        <!-- PostgreSQL Driver -->
+        <!-- MySQL Driver -->
         <dependency>
-            <groupId>org.postgresql</groupId>
-            <artifactId>postgresql</artifactId>
+            <groupId>mysql</groupId>
+            <artifactId>mysql-connector-java</artifactId>
+            <version>8.0.33</version>
             <scope>runtime</scope>
         </dependency>
 

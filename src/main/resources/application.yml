@@ -10,10 +10,10 @@ spring:
     pathmatch:
       matching-strategy: ant_path_matcher
   datasource:
-    driver-class-name: org.postgresql.Driver
-    url: ${DATABASE_URL:jdbc:postgresql://cp-kind-flare-c341cc84.pg5.aidap-global.cn-beijing.volces.com:5432/postgres?sslmode=require}
-    username: ${PGUSER:postgres}
-    password: ${PGPASSWORD:OAw4t4Kfb86N0zf6TI}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://16.162.95.221:3306/aps?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: aps
+    password: 747452
     hikari:
       maximum-pool-size: 10
       minimum-idle: 2
