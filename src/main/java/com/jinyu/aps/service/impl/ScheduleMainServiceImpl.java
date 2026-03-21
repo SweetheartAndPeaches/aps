@@ -10,6 +10,7 @@ import com.jinyu.aps.mapper.ScheduleMainMapper;
 import com.jinyu.aps.service.ScheduleMainService;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -25,7 +26,7 @@ public class ScheduleMainServiceImpl extends ServiceImpl<ScheduleMainMapper, Sch
     public ScheduleMain generateSchedule(LocalDateTime scheduleDate, Integer days) {
         ScheduleMain scheduleMain = new ScheduleMain();
         scheduleMain.setScheduleCode("SCH" + DateUtil.format(DateUtil.date(), "yyyyMMdd") + IdUtil.fastSimpleUUID().substring(0, 4).toUpperCase());
-        scheduleMain.setScheduleDate(scheduleDate);
+        scheduleMain.setScheduleDate(scheduleDate.toLocalDate());  // 转换为LocalDate
         scheduleMain.setScheduleType("NORMAL");
         scheduleMain.setStatus("DRAFT");
         scheduleMain.setTotalMachines(0);

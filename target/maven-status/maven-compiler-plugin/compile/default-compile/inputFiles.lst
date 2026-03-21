@@ -4,11 +4,15 @@
 /workspace/projects/src/main/java/com/jinyu/aps/entity/AlertConfig.java
 /workspace/projects/src/main/java/com/jinyu/aps/config/DatabaseInitializer.java
 /workspace/projects/src/main/java/com/jinyu/aps/config/MybatisPlusConfig.java
+/workspace/projects/src/main/java/com/jinyu/aps/entity/DailyEmbryoTask.java
+/workspace/projects/src/main/java/com/jinyu/aps/service/AlgorithmService.java
 /workspace/projects/src/main/java/com/jinyu/aps/service/impl/ScheduleDetailServiceImpl.java
 /workspace/projects/src/main/java/com/jinyu/aps/entity/Material.java
 /workspace/projects/src/main/java/com/jinyu/aps/service/AlertConfigService.java
 /workspace/projects/src/main/java/com/jinyu/aps/entity/ScheduleDetail.java
 /workspace/projects/src/main/java/com/jinyu/aps/service/MaterialService.java
+/workspace/projects/src/main/java/com/jinyu/aps/entity/VulcanizingPlan.java
+/workspace/projects/src/main/java/com/jinyu/aps/mapper/VulcanizingPlanMapper.java
 /workspace/projects/src/main/java/com/jinyu/aps/config/OpenApiConfig.java
 /workspace/projects/src/main/java/com/jinyu/aps/service/impl/StockServiceImpl.java
 /workspace/projects/src/main/java/com/jinyu/aps/entity/Machine.java
@@ -20,6 +24,9 @@
 /workspace/projects/src/main/java/com/jinyu/aps/mapper/MaterialMapper.java
 /workspace/projects/src/main/java/com/jinyu/aps/service/impl/AlertConfigServiceImpl.java
 /workspace/projects/src/main/java/com/jinyu/aps/service/impl/MaterialServiceImpl.java
+/workspace/projects/src/main/java/com/jinyu/aps/service/ScheduleService.java
+/workspace/projects/src/main/java/com/jinyu/aps/mapper/DailyEmbryoTaskMapper.java
+/workspace/projects/src/main/java/com/jinyu/aps/model/entity/MaterialGroup.java
 /workspace/projects/src/main/java/com/jinyu/aps/mapper/MachineMapper.java
 /workspace/projects/src/main/java/com/jinyu/aps/service/ScheduleDetailService.java
 /workspace/projects/src/main/java/com/jinyu/aps/entity/ScheduleMain.java

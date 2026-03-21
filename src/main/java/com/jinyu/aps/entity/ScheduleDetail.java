@@ -6,6 +6,7 @@ import lombok.Data;
 
 import java.io.Serializable;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
@@ -30,7 +31,7 @@ public class ScheduleDetail implements Serializable {
 
     @Schema(description = "计划日期")
     @TableField("schedule_date")
-    private LocalDateTime scheduleDate;
+    private LocalDate scheduleDate;
 
     @Schema(description = "班次编码")
     @TableField("shift_code")
@@ -151,4 +152,16 @@ public class ScheduleDetail implements Serializable {
     @Schema(description = "备注")
     @TableField("remark")
     private String remark;
+
+    @Schema(description = "创建时间")
+    @TableField("create_time")
+    private LocalDateTime createTime;
+
+    // ==================== 扩展字段（不映射到数据库） ====================
+
+    @TableField(exist = false)
+    private String productStructure;
+
+    @TableField(exist = false)
+    private Boolean isMainProduct;
 }
