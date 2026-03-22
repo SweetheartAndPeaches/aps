@@ -457,8 +457,8 @@ public class AlgorithmServiceOptimized {
             .collect(Collectors.groupingByConcurrent(ScheduleDetail::getMachineCode));
         
         // 3. 并行排序每个机台的明细
-        List<ScheduleDetail> sortedDetails = new ArrayList<>();
-        int[] globalSequence = {1};
+        final List<ScheduleDetail> sortedList = Collections.synchronizedList(new ArrayList<>());
+        final int[] globalSequence = {1};
         
         byMachine.entrySet().parallelStream()
             .forEach(entry -> {
@@ -476,18 +476,16 @@ public class AlgorithmServiceOptimized {
                     }
                 }
                 
-                synchronized (sortedDetails) {
-                    sortedDetails.addAll(machineDetails);
-                }
+                sortedList.addAll(machineDetails);
             });
         
         // 4. 车次齐套处理
-        sortedDetails = arrangeTripsOptimized(sortedDetails);
+        List<ScheduleDetail> result = arrangeTripsOptimized(sortedList);
         
         long endTime = System.currentTimeMillis();
         perfLogger.debug("顺位排序耗时: {}ms", (endTime - startTime));
         
-        return sortedDetails;
+        return result;
     }
 
     /**
