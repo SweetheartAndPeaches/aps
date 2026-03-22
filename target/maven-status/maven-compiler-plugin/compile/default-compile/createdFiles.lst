@@ -5,8 +5,10 @@ com/jinyu/aps/service/impl/MonthPlanFinalServiceImpl.class
 com/jinyu/aps/entity/AlertConfig.class
 com/jinyu/aps/config/DatabaseInitializer.class
 com/jinyu/aps/entity/Machine.class
+com/jinyu/aps/entity/HolidayConfig.class
 com/jinyu/aps/entity/VulcanizingPlan.class
 com/jinyu/aps/service/ScheduleService.class
+com/jinyu/aps/entity/TrialTask.class
 com/jinyu/aps/service/AlgorithmService$AllocationDetail.class
 com/jinyu/aps/service/AlgorithmServiceOptimized$AllocationDetail.class
 com/jinyu/aps/service/impl/ScheduleMainServiceImpl.class
@@ -19,6 +21,7 @@ com/jinyu/aps/entity/Material.class
 com/jinyu/aps/mapper/MonthPlanFinalMapper.class
 com/jinyu/aps/service/AlgorithmServiceOptimized$AllocationSnapshot.class
 com/jinyu/aps/service/AlgorithmServiceOptimized$AllocationState.class
+com/jinyu/aps/entity/MaterialException.class
 com/jinyu/aps/entity/DailyEmbryoTask.class
 com/jinyu/aps/controller/MaterialController.class
 com/jinyu/aps/service/MonthPlanFinalService$MonthPlanOverview.class
@@ -29,11 +32,14 @@ com/jinyu/aps/entity/ScheduleMain.class
 com/jinyu/aps/mapper/AlertConfigMapper.class
 com/jinyu/aps/service/AlgorithmServiceOptimized.class
 com/jinyu/aps/mapper/ScheduleDetailMapper.class
+com/jinyu/aps/entity/TreadParkingConfig.class
+com/jinyu/aps/entity/ShiftConfig.class
 com/jinyu/aps/service/AlgorithmServiceOptimized$1.class
 com/jinyu/aps/service/MaterialService.class
 com/jinyu/aps/service/MonthPlanFinalService.class
 com/jinyu/aps/service/AlgorithmService$TaskAllocationContext.class
 com/jinyu/aps/service/AlgorithmServiceOptimized$AllocationResult.class
+com/jinyu/aps/service/P1CoreService.class
 com/jinyu/aps/service/MachineService.class
 com/jinyu/aps/entity/PrecisionPlan.class
 com/jinyu/aps/entity/MonthPlanFinal.class
@@ -53,6 +59,7 @@ com/jinyu/aps/mapper/VulcanizingPlanMapper.class
 com/jinyu/aps/controller/ScheduleMainController.class
 com/jinyu/aps/service/MonthPlanFinalService$ScheduleGenerateResult.class
 com/jinyu/aps/service/ScheduleService$1.class
+com/jinyu/aps/entity/OperatorLeave.class
 com/jinyu/aps/service/impl/ScheduleDetailServiceImpl.class
 com/jinyu/aps/entity/StructureEnding.class
 com/jinyu/aps/service/AlgorithmService$MachineLoadContext.class
@@ -62,6 +69,7 @@ com/jinyu/aps/service/ScheduleService$ScheduleGenerateResult.class
 com/jinyu/aps/service/AlgorithmService.class
 com/jinyu/aps/service/ScheduleService$ScheduleContext.class
 com/jinyu/aps/config/MybatisPlusConfig.class
+com/jinyu/aps/service/P2CoreService.class
 com/jinyu/aps/service/StockService.class
 com/jinyu/aps/config/OpenApiConfig.class
 com/jinyu/aps/service/impl/MachineServiceImpl.class

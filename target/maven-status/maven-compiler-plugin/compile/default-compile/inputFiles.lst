@@ -1,11 +1,14 @@
+/workspace/projects/src/main/java/com/jinyu/aps/entity/MaterialException.java
 /workspace/projects/src/main/java/com/jinyu/aps/common/Result.java
 /workspace/projects/src/main/java/com/jinyu/aps/entity/AlertConfig.java
 /workspace/projects/src/main/java/com/jinyu/aps/config/MybatisPlusConfig.java
+/workspace/projects/src/main/java/com/jinyu/aps/entity/TrialTask.java
 /workspace/projects/src/main/java/com/jinyu/aps/entity/DailyEmbryoTask.java
 /workspace/projects/src/main/java/com/jinyu/aps/service/impl/ScheduleDetailServiceImpl.java
 /workspace/projects/src/main/java/com/jinyu/aps/entity/Material.java
 /workspace/projects/src/main/java/com/jinyu/aps/entity/ScheduleDetail.java
 /workspace/projects/src/main/java/com/jinyu/aps/service/MaterialService.java
+/workspace/projects/src/main/java/com/jinyu/aps/entity/ShiftConfig.java
 /workspace/projects/src/main/java/com/jinyu/aps/entity/StructureEnding.java
 /workspace/projects/src/main/java/com/jinyu/aps/entity/VulcanizingPlan.java
 /workspace/projects/src/main/java/com/jinyu/aps/config/OpenApiConfig.java
@@ -15,11 +18,13 @@
 /workspace/projects/src/main/java/com/jinyu/aps/service/impl/MonthPlanFinalServiceImpl.java
 /workspace/projects/src/main/java/com/jinyu/aps/ApsFormingScheduleApplication.java
 /workspace/projects/src/main/java/com/jinyu/aps/controller/ScheduleDetailController.java
+/workspace/projects/src/main/java/com/jinyu/aps/entity/HolidayConfig.java
 /workspace/projects/src/main/java/com/jinyu/aps/mapper/MaterialMapper.java
 /workspace/projects/src/main/java/com/jinyu/aps/service/ScheduleService.java
 /workspace/projects/src/main/java/com/jinyu/aps/mapper/DailyEmbryoTaskMapper.java
 /workspace/projects/src/main/java/com/jinyu/aps/mapper/MachineMapper.java
 /workspace/projects/src/main/java/com/jinyu/aps/service/impl/ScheduleMainServiceImpl.java
+/workspace/projects/src/main/java/com/jinyu/aps/service/P1CoreService.java
 /workspace/projects/src/main/java/com/jinyu/aps/service/ScheduleMainService.java
 /workspace/projects/src/main/java/com/jinyu/aps/dto/ScheduleGenerateDTO.java
 /workspace/projects/src/main/java/com/jinyu/aps/service/impl/MachineServiceImpl.java
@@ -30,9 +35,11 @@
 /workspace/projects/src/main/java/com/jinyu/aps/config/DatabaseInitializer.java
 /workspace/projects/src/main/java/com/jinyu/aps/service/AlgorithmService.java
 /workspace/projects/src/main/java/com/jinyu/aps/service/AlertConfigService.java
+/workspace/projects/src/main/java/com/jinyu/aps/entity/OperatorLeave.java
 /workspace/projects/src/main/java/com/jinyu/aps/service/AlgorithmServiceOptimized.java
 /workspace/projects/src/main/java/com/jinyu/aps/service/MonthPlanFinalService.java
 /workspace/projects/src/main/java/com/jinyu/aps/mapper/VulcanizingPlanMapper.java
+/workspace/projects/src/main/java/com/jinyu/aps/service/P2CoreService.java
 /workspace/projects/src/main/java/com/jinyu/aps/service/MachineService.java
 /workspace/projects/src/main/java/com/jinyu/aps/controller/ScheduleMainController.java
 /workspace/projects/src/main/java/com/jinyu/aps/entity/Stock.java
@@ -47,5 +54,6 @@
 /workspace/projects/src/main/java/com/jinyu/aps/controller/AlertConfigController.java
 /workspace/projects/src/main/java/com/jinyu/aps/service/P0CoreService.java
 /workspace/projects/src/main/java/com/jinyu/aps/mapper/AlertConfigMapper.java
+/workspace/projects/src/main/java/com/jinyu/aps/entity/TreadParkingConfig.java
 /workspace/projects/src/main/java/com/jinyu/aps/entity/MonthPlanFinal.java
 /workspace/projects/src/main/java/com/jinyu/aps/controller/MaterialController.java

@@ -1,0 +1,4 @@
+-------------------------------------------------------------------------------
+Test set: com.jinyu.aps.service.P2CoreServiceTest
+-------------------------------------------------------------------------------
+Tests run: 0, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 3.649 s - in com.jinyu.aps.service.P2CoreServiceTest
