@@ -3,6 +3,7 @@ package com.jinyu.aps.integration;
 import com.jinyu.aps.entity.*;
 import com.jinyu.aps.service.AlgorithmService;
 import com.jinyu.aps.service.AlgorithmService.AllocationResult;
+import com.jinyu.aps.service.AlgorithmService.AllocationDetail;
 import com.jinyu.aps.service.ScheduleService;
 import com.jinyu.aps.service.ScheduleService.ScheduleGenerateResult;
 import org.junit.jupiter.api.*;
@@ -166,7 +167,7 @@ public class ScheduleIntegrationTest {
             // Then: 验证约束传递
             // 检查SKU种类限制（每机台最多4种）
             Map<String, Set<String>> machineMaterials = new HashMap<>();
-            for (var detail : result.getDetails()) {
+            for (AllocationDetail detail : result.getDetails()) {
                 machineMaterials.computeIfAbsent(detail.getMachineCode(), k -> new HashSet<>())
                     .add(detail.getMaterialCode());
             }
@@ -206,7 +207,7 @@ public class ScheduleIntegrationTest {
             // Then: 验证约束
             if (result.isSuccess()) {
                 Map<String, Set<String>> machineMaterials = new HashMap<>();
-                for (var detail : result.getDetails()) {
+                for (AllocationDetail detail : result.getDetails()) {
                     machineMaterials.computeIfAbsent(detail.getMachineCode(), k -> new HashSet<>())
                         .add(detail.getMaterialCode());
                 }
@@ -548,7 +549,7 @@ public class ScheduleIntegrationTest {
         String[] shifts = {"DAY", "AFTERNOON", "NIGHT"};
         int idx = 0;
         
-        for (var alloc : allocationResult.getDetails()) {
+        for (AllocationDetail alloc : allocationResult.getDetails()) {
             ScheduleDetail detail = new ScheduleDetail();
             detail.setId((long) (idx + 1));
             detail.setMainId(alloc.getMainId());

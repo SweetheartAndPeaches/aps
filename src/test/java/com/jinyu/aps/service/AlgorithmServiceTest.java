@@ -2,6 +2,7 @@ package com.jinyu.aps.service;
 
 import com.jinyu.aps.entity.*;
 import com.jinyu.aps.service.AlgorithmService.AllocationResult;
+import com.jinyu.aps.service.AlgorithmService.AllocationDetail;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -39,7 +40,7 @@ public class AlgorithmServiceTest {
 
     @Nested
     @DisplayName("试错分配算法测试")
-    class AllocationAlgorithmTests {
+    public class AllocationAlgorithmTests {
 
         @Test
         @DisplayName("基本分配-单任务单机台")
@@ -124,7 +125,7 @@ public class AlgorithmServiceTest {
             
             // 按机台分组统计分配量
             Map<String, Integer> machineLoad = new HashMap<>();
-            for (var detail : result.getDetails()) {
+            for (AllocationDetail detail : result.getDetails()) {
                 machineLoad.merge(detail.getMachineCode(), detail.getPlanQuantity(), Integer::sum);
             }
             
@@ -178,7 +179,7 @@ public class AlgorithmServiceTest {
 
     @Nested
     @DisplayName("班次均衡调整算法测试")
-    class ShiftBalanceTests {
+    public class ShiftBalanceTests {
 
         @Test
         @DisplayName("基本均衡-三班均衡分配")
@@ -287,7 +288,7 @@ public class AlgorithmServiceTest {
 
     @Nested
     @DisplayName("顺位排序算法测试")
-    class SequenceSortingTests {
+    public class SequenceSortingTests {
 
         @Test
         @DisplayName("基本排序-按库存时长升序")

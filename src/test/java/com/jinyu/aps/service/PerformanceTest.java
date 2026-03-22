@@ -3,6 +3,7 @@ package com.jinyu.aps.service;
 import com.jinyu.aps.entity.*;
 import com.jinyu.aps.service.AlgorithmService.AllocationResult;
 import com.jinyu.aps.service.AlgorithmServiceOptimized;
+import com.jinyu.aps.service.AlgorithmServiceOptimized.AllocationDetail;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.Timeout;
 
@@ -40,7 +41,7 @@ public class PerformanceTest {
 
     @Nested
     @DisplayName("规模测试")
-    class ScaleTests {
+    public class ScaleTests {
 
         @Test
         @Timeout(value = 30, unit = TimeUnit.SECONDS)
@@ -57,7 +58,7 @@ public class PerformanceTest {
 
             // 优化版测试
             long optimizedStart = System.currentTimeMillis();
-            var optimizedResult = optimizedService.allocateTasks(tasks, machines, scheduleMain);
+            AlgorithmServiceOptimized.AllocationResult optimizedResult = optimizedService.allocateTasks(tasks, machines, scheduleMain);
             long optimizedTime = System.currentTimeMillis() - optimizedStart;
 
             printComparison("小规模测试", originalTime, optimizedTime, 
@@ -79,7 +80,7 @@ public class PerformanceTest {
 
             // 优化版测试
             long optimizedStart = System.currentTimeMillis();
-            var optimizedResult = optimizedService.allocateTasks(tasks, machines, scheduleMain);
+            AlgorithmServiceOptimized.AllocationResult optimizedResult = optimizedService.allocateTasks(tasks, machines, scheduleMain);
             long optimizedTime = System.currentTimeMillis() - optimizedStart;
 
             printComparison("中规模测试", originalTime, optimizedTime,
@@ -96,7 +97,7 @@ public class PerformanceTest {
 
             // 优化版测试（原版可能超时，仅测试优化版）
             long optimizedStart = System.currentTimeMillis();
-            var optimizedResult = optimizedService.allocateTasks(tasks, machines, scheduleMain);
+            AlgorithmServiceOptimized.AllocationResult optimizedResult = optimizedService.allocateTasks(tasks, machines, scheduleMain);
             long optimizedTime = System.currentTimeMillis() - optimizedStart;
 
             System.out.println("=== 大规模测试结果 ===");
@@ -112,7 +113,7 @@ public class PerformanceTest {
 
     @Nested
     @DisplayName("压力测试")
-    class StressTests {
+    public class StressTests {
 
         @Test
         @Timeout(value = 60, unit = TimeUnit.SECONDS)
@@ -124,7 +125,7 @@ public class PerformanceTest {
             ScheduleMain scheduleMain = createScheduleMain();
 
             long start = System.currentTimeMillis();
-            var result = optimizedService.allocateTasks(tasks, machines, scheduleMain);
+            AlgorithmServiceOptimized.AllocationResult result = optimizedService.allocateTasks(tasks, machines, scheduleMain);
             long time = System.currentTimeMillis() - start;
 
             System.out.println("=== 高约束压力测试 ===");
@@ -135,12 +136,12 @@ public class PerformanceTest {
             // 验证约束
             if (result.isSuccess()) {
                 Map<String, Set<String>> machineMaterials = new HashMap<>();
-                for (var detail : result.getDetails()) {
+                for (AllocationDetail detail : result.getDetails()) {
                     machineMaterials.computeIfAbsent(detail.getMachineCode(), k -> new HashSet<>())
                         .add(detail.getMaterialCode());
                 }
                 
-                for (var entry : machineMaterials.entrySet()) {
+                for (Map.Entry<String, Set<String>> entry : machineMaterials.entrySet()) {
                     assertTrue(entry.getValue().size() <= 4, 
                         "机台" + entry.getKey() + "SKU种类应<=4，实际: " + entry.getValue().size());
                 }
@@ -157,7 +158,7 @@ public class PerformanceTest {
             ScheduleMain scheduleMain = createScheduleMain();
 
             long start = System.currentTimeMillis();
-            var result = optimizedService.allocateTasks(tasks, machines, scheduleMain);
+            AlgorithmServiceOptimized.AllocationResult result = optimizedService.allocateTasks(tasks, machines, scheduleMain);
             long time = System.currentTimeMillis() - start;
 
             System.out.println("=== 产能瓶颈压力测试 ===");
@@ -184,7 +185,7 @@ public class PerformanceTest {
                 ScheduleMain scheduleMain = createScheduleMain();
 
                 long start = System.currentTimeMillis();
-                var result = optimizedService.allocateTasks(tasks, machines, scheduleMain);
+                AlgorithmServiceOptimized.AllocationResult result = optimizedService.allocateTasks(tasks, machines, scheduleMain);
                 long time = System.currentTimeMillis() - start;
                 times.add(time);
 
@@ -212,7 +213,7 @@ public class PerformanceTest {
 
     @Nested
     @DisplayName("班次均衡性能测试")
-    class ShiftBalancePerformanceTests {
+    public class ShiftBalancePerformanceTests {
 
         @Test
         @Timeout(value = 30, unit = TimeUnit.SECONDS)
@@ -222,7 +223,7 @@ public class PerformanceTest {
             String shiftRatio = "1:2:1";
 
             long start = System.currentTimeMillis();
-            var result = optimizedService.balanceShiftDistribution(details, shiftRatio);
+            List<ScheduleDetail> result = optimizedService.balanceShiftDistribution(details, shiftRatio);
             long time = System.currentTimeMillis() - start;
 
             System.out.println("=== 班次均衡大量明细测试 ===");
@@ -241,7 +242,7 @@ public class PerformanceTest {
             String shiftRatio = "1:1:1";
 
             long start = System.currentTimeMillis();
-            var result = optimizedService.balanceShiftDistribution(details, shiftRatio);
+            List<ScheduleDetail> result = optimizedService.balanceShiftDistribution(details, shiftRatio);
             long time = System.currentTimeMillis() - start;
 
             System.out.println("=== 班次均衡严重不均衡测试 ===");
@@ -265,7 +266,7 @@ public class PerformanceTest {
 
     @Nested
     @DisplayName("顺位排序性能测试")
-    class SequenceSortPerformanceTests {
+    public class SequenceSortPerformanceTests {
 
         @Test
         @Timeout(value = 30, unit = TimeUnit.SECONDS)
@@ -275,7 +276,7 @@ public class PerformanceTest {
             Map<String, Double> stockHours = createStockHours(details);
 
             long start = System.currentTimeMillis();
-            var result = optimizedService.sortScheduleSequence(details, stockHours);
+            List<ScheduleDetail> result = optimizedService.sortScheduleSequence(details, stockHours);
             long time = System.currentTimeMillis() - start;
 
             System.out.println("=== 顺位排序大量明细测试 ===");
@@ -294,7 +295,7 @@ public class PerformanceTest {
             Map<String, Double> stockHours = createStockHours(details);
 
             long start = System.currentTimeMillis();
-            var result = optimizedService.sortScheduleSequence(details, stockHours);
+            List<ScheduleDetail> result = optimizedService.sortScheduleSequence(details, stockHours);
             long time = System.currentTimeMillis() - start;
 
             System.out.println("=== 顺位排序超大规模测试 ===");
@@ -309,7 +310,7 @@ public class PerformanceTest {
 
     @Nested
     @DisplayName("缓存效果测试")
-    class CacheEffectTests {
+    public class CacheEffectTests {
 
         @Test
         @DisplayName("缓存效果-重复分配场景")
@@ -320,12 +321,12 @@ public class PerformanceTest {
 
             // 第一次分配（冷启动）
             long coldStart = System.currentTimeMillis();
-            var result1 = optimizedService.allocateTasks(tasks, machines, scheduleMain);
+            AlgorithmServiceOptimized.AllocationResult result1 = optimizedService.allocateTasks(tasks, machines, scheduleMain);
             long coldTime = System.currentTimeMillis() - coldStart;
 
             // 第二次分配（热启动，相同数据）
             long hotStart = System.currentTimeMillis();
-            var result2 = optimizedService.allocateTasks(tasks, machines, scheduleMain);
+            AlgorithmServiceOptimized.AllocationResult result2 = optimizedService.allocateTasks(tasks, machines, scheduleMain);
             long hotTime = System.currentTimeMillis() - hotStart;
 
             System.out.println("=== 缓存效果测试 ===");
