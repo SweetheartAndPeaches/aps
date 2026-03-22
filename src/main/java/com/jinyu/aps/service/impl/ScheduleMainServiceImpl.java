@@ -8,6 +8,10 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.jinyu.aps.entity.ScheduleMain;
 import com.jinyu.aps.mapper.ScheduleMainMapper;
 import com.jinyu.aps.service.ScheduleMainService;
+import com.jinyu.aps.service.ScheduleService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -22,21 +26,27 @@ import java.util.List;
 @Service
 public class ScheduleMainServiceImpl extends ServiceImpl<ScheduleMainMapper, ScheduleMain> implements ScheduleMainService {
 
+    private static final Logger logger = LoggerFactory.getLogger(ScheduleMainServiceImpl.class);
+
+    @Autowired
+    private ScheduleService scheduleService;
+
     @Override
     public ScheduleMain generateSchedule(LocalDateTime scheduleDate, Integer days) {
-        ScheduleMain scheduleMain = new ScheduleMain();
-        scheduleMain.setScheduleCode("SCH" + DateUtil.format(DateUtil.date(), "yyyyMMdd") + IdUtil.fastSimpleUUID().substring(0, 4).toUpperCase());
-        scheduleMain.setScheduleDate(scheduleDate.toLocalDate());  // 转换为LocalDate
-        scheduleMain.setScheduleType("NORMAL");
-        scheduleMain.setStatus("DRAFT");
-        scheduleMain.setTotalMachines(0);
-        scheduleMain.setTotalQuantity(0);
-        scheduleMain.setTotalVehicles(0);
-        scheduleMain.setVersion(1);
-        scheduleMain.setCreateTime(LocalDateTime.now());
-        scheduleMain.setUpdateTime(LocalDateTime.now());
-        save(scheduleMain);
-        return scheduleMain;
+        logger.info("开始生成排程，日期: {}, 天数: {}", scheduleDate, days);
+        
+        // 调用 ScheduleService 的完整排程生成逻辑
+        LocalDate date = scheduleDate.toLocalDate();
+        ScheduleService.ScheduleGenerateResult result = scheduleService.generateSchedule(date);
+        
+        if (result.isSuccess()) {
+            logger.info("排程生成成功，总机台数: {}, 总计划量: {}", 
+                result.getTotalMachines(), result.getTotalQuantity());
+            return result.getScheduleMain();
+        } else {
+            logger.error("排程生成失败: {}", result.getMessage());
+            throw new RuntimeException("排程生成失败: " + result.getMessage());
+        }
     }
 
     @Override

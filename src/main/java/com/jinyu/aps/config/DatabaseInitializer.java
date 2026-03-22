@@ -706,12 +706,13 @@ public class DatabaseInitializer implements CommandLineRunner {
      * 初始化机台数据
      */
     private void initMachineData() {
-        jdbcTemplate.execute("INSERT INTO t_cx_machine (machine_code, machine_name, machine_type, line_number, max_daily_capacity, max_capacity_per_hour, status, wrapping_type, has_zero_degree_feeder) VALUES " +
-                "('GM01', '成型机01', '软控三鼓', 1, 120, 15.0, 'RUNNING', 'A型', 1), " +
-                "('GM02', '成型机02', '软控三鼓', 1, 120, 15.0, 'RUNNING', 'A型', 1), " +
-                "('GM03', '成型机03', '软控三鼓', 2, 120, 15.0, 'RUNNING', 'A型', 0), " +
-                "('GM04', '成型机04', '赛象三鼓', 2, 120, 15.0, 'RUNNING', 'B型', 1), " +
-                "('GM05', '成型机05', '赛象三鼓', 3, 120, 15.0, 'RUNNING', 'B型', 0)");
+        // 机台数据：部分机台设置在产结构（structure字段），用于测试续作排产
+        jdbcTemplate.execute("INSERT INTO t_cx_machine (machine_code, machine_name, machine_type, line_number, max_daily_capacity, max_capacity_per_hour, status, wrapping_type, has_zero_degree_feeder, structure) VALUES " +
+                "('GM01', '成型机01', '软控三鼓', 1, 120, 15.0, 'RUNNING', 'A型', 1, '12R22.5'), " +  // 在产结构：12R22.5
+                "('GM02', '成型机02', '软控三鼓', 1, 120, 15.0, 'RUNNING', 'A型', 1, '11R22.5'), " +  // 在产结构：11R22.5
+                "('GM03', '成型机03', '软控三鼓', 2, 120, 15.0, 'RUNNING', 'A型', 0, '295/80R22.5'), " + // 在产结构：295/80R22.5
+                "('GM04', '成型机04', '赛象三鼓', 2, 120, 15.0, 'RUNNING', 'B型', 1, NULL), " +  // 无在产结构
+                "('GM05', '成型机05', '赛象三鼓', 3, 120, 15.0, 'RUNNING', 'B型', 0, NULL)");   // 无在产结构
     }
 
     /**
@@ -742,14 +743,22 @@ public class DatabaseInitializer implements CommandLineRunner {
 
     /**
      * 初始化硫化计划数据
+     * 使用相对日期，确保与测试排程日期匹配
      */
     private void initVulcanizingPlanData() {
+        // 硫化计划日期：当天和第二天，方便测试
         jdbcTemplate.execute("INSERT INTO t_cx_vulcanizing_plan (plan_code, plan_date, material_code, plan_quantity, priority, source, status) VALUES " +
                 "('VP2024010001', CURDATE(), 'MAT001', 240, 1, 'ERP', 'PENDING'), " +
                 "('VP2024010002', CURDATE(), 'MAT002', 180, 2, 'ERP', 'PENDING'), " +
                 "('VP2024010003', CURDATE(), 'MAT003', 120, 3, 'ERP', 'PENDING'), " +
                 "('VP2024010004', CURDATE(), 'MAT004', 200, 2, 'ERP', 'PENDING'), " +
                 "('VP2024010005', CURDATE(), 'MAT005', 100, 1, 'ERP', 'PENDING'), " +
-                "('VP2024010006', CURDATE(), 'MAT006', 150, 3, 'ERP', 'PENDING')");
+                "('VP2024010006', CURDATE(), 'MAT006', 150, 3, 'ERP', 'PENDING'), " +
+                "('VP2024010007', DATE_ADD(CURDATE(), INTERVAL 1 DAY), 'MAT001', 240, 1, 'ERP', 'PENDING'), " +
+                "('VP2024010008', DATE_ADD(CURDATE(), INTERVAL 1 DAY), 'MAT002', 180, 2, 'ERP', 'PENDING'), " +
+                "('VP2024010009', DATE_ADD(CURDATE(), INTERVAL 1 DAY), 'MAT003', 120, 3, 'ERP', 'PENDING'), " +
+                "('VP2024010010', DATE_ADD(CURDATE(), INTERVAL 1 DAY), 'MAT004', 200, 2, 'ERP', 'PENDING'), " +
+                "('VP2024010011', DATE_ADD(CURDATE(), INTERVAL 1 DAY), 'MAT005', 100, 1, 'ERP', 'PENDING'), " +
+                "('VP2024010012', DATE_ADD(CURDATE(), INTERVAL 1 DAY), 'MAT006', 150, 3, 'ERP', 'PENDING')");
     }
 }

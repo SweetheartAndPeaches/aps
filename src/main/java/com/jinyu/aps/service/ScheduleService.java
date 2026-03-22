@@ -83,6 +83,7 @@ public class ScheduleService {
             if (context.getErrors().size() > 0) {
                 result.setSuccess(false);
                 result.setErrors(context.getErrors());
+                result.setMessage(String.join("; ", context.getErrors()));
                 return result;
             }
             
@@ -101,8 +102,13 @@ public class ScheduleService {
             List<MaterialGroup> materialGroups = groupMaterials(context);
             context.setMaterialGroups(materialGroups);
             
-            // 5. 试错分配算法
-            logger.info("步骤5: 执行试错分配算法...");
+            // 5. S5.3.1 续作排产 - 优先处理续作任务
+            logger.info("步骤5: S5.3.1 续作排产...");
+            List<ScheduleDetail> continueDetails = processContinueProduction(context);
+            logger.info("续作排产完成，生成续作明细数: {}", continueDetails.size());
+            
+            // 6. S5.3.2 新增规格排产 - 试错分配算法
+            logger.info("步骤6: S5.3.2 新增规格排产（试错分配算法）...");
             AllocationResult allocationResult = algorithmService.allocateTasks(
                 tasks, context.getMachines(), scheduleMain);
             
@@ -112,39 +118,44 @@ public class ScheduleService {
                 return result;
             }
             
-            // 6. 转换分配结果为排程明细
-            logger.info("步骤6: 转换分配结果...");
-            List<ScheduleDetail> details = convertAllocationToDetails(allocationResult, context);
+            // 7. 转换分配结果为排程明细
+            logger.info("步骤7: 转换分配结果...");
+            List<ScheduleDetail> newDetails = convertAllocationToDetails(allocationResult, context);
             
-            // 7. 班次均衡调整
-            logger.info("步骤7: 班次均衡调整...");
+            // 8. 合并续作明细和新增明细
+            List<ScheduleDetail> allDetails = new ArrayList<>();
+            allDetails.addAll(continueDetails);  // 续作明细在前
+            allDetails.addAll(newDetails);       // 新增明细在后
+            
+            // 9. 班次均衡调整
+            logger.info("步骤9: 班次均衡调整...");
             String shiftRatio = getAlertConfigValue("SHIFT_BALANCE_RATIO", "1:2:1");
-            details = algorithmService.balanceShiftDistribution(details, shiftRatio);
+            allDetails = algorithmService.balanceShiftDistribution(allDetails, shiftRatio);
             
-            // 8. 顺位排序
-            logger.info("步骤8: 顺位排序...");
+            // 10. 顺位排序（续作已在前面，排序时会保持续作优先）
+            logger.info("步骤10: 顺位排序...");
             Map<String, Double> stockHours = calculateStockHours(context);
-            details = algorithmService.sortScheduleSequence(details, stockHours);
+            allDetails = algorithmService.sortScheduleSequence(allDetails, stockHours);
             
-            // 9. 约束检查与预警
-            logger.info("步骤9: 约束检查与预警...");
-            List<String> warnings = checkConstraintsAndGenerateWarnings(details, context);
+            // 11. 约束检查与预警
+            logger.info("步骤11: 约束检查与预警...");
+            List<String> warnings = checkConstraintsAndGenerateWarnings(allDetails, context);
             result.setWarnings(warnings);
             
-            // 10. 保存结果
-            logger.info("步骤10: 保存排程结果...");
-            saveScheduleResult(scheduleMain, details, tasks);
+            // 12. 保存结果
+            logger.info("步骤12: 保存排程结果...");
+            saveScheduleResult(scheduleMain, allDetails, tasks);
             
-            // 11. 更新排程主表统计信息
-            updateScheduleMainStatistics(scheduleMain, details);
+            // 13. 更新排程主表统计信息
+            updateScheduleMainStatistics(scheduleMain, allDetails);
             
             result.setSuccess(true);
             result.setMessage("排程生成成功");
             result.setScheduleMain(scheduleMain);
-            result.setDetails(details);
+            result.setDetails(allDetails);
             result.setTotalMachines(context.getMachines().size());
-            result.setTotalQuantity(details.stream().mapToInt(ScheduleDetail::getPlanQuantity).sum());
-            result.setTotalVehicles((int) details.stream().filter(d -> d.getTripNo() != null).count());
+            result.setTotalQuantity(allDetails.stream().mapToInt(ScheduleDetail::getPlanQuantity).sum());
+            result.setTotalVehicles((int) allDetails.stream().filter(d -> d.getTripNo() != null).count());
             
             logger.info("========== 排程生成完成 ==========");
             
@@ -155,6 +166,112 @@ public class ScheduleService {
         }
         
         return result;
+    }
+    
+    /**
+     * S5.3.1 续作排产
+     * 核心逻辑：
+     * 1. 遍历所有机台
+     * 2. 检查机台是否有在产结构（structure字段）
+     * 3. 如果有在产结构，查找对应的任务
+     * 4. 创建续作排程明细，标记 is_continue = true
+     * 
+     * @param context 排程上下文
+     * @return 续作排程明细列表
+     */
+    private List<ScheduleDetail> processContinueProduction(ScheduleContext context) {
+        List<ScheduleDetail> continueDetails = new ArrayList<>();
+        
+        // 构建物料编码到产品结构的映射
+        Map<String, String> materialToStructure = new HashMap<>();
+        for (Material material : context.getMaterialMap().values()) {
+            if (material.getProductStructure() != null) {
+                materialToStructure.put(material.getMaterialCode(), material.getProductStructure());
+            }
+        }
+        
+        // 构建产品结构到任务列表的映射
+        Map<String, List<DailyEmbryoTask>> structureToTasks = new HashMap<>();
+        for (DailyEmbryoTask task : context.getTasks()) {
+            String structure = task.getProductStructure();
+            if (structure != null) {
+                structureToTasks.computeIfAbsent(structure, k -> new ArrayList<>()).add(task);
+            }
+        }
+        
+        // 遍历机台，处理续作
+        for (Machine machine : context.getMachines()) {
+            String inProductionStructure = machine.getStructure();
+            
+            // 跳过没有在产结构的机台
+            if (inProductionStructure == null || inProductionStructure.trim().isEmpty()) {
+                logger.debug("机台 {} 无在产结构，跳过续作处理", machine.getMachineCode());
+                continue;
+            }
+            
+            logger.info("机台 {} 在产结构: {}，处理续作...", machine.getMachineCode(), inProductionStructure);
+            
+            // 查找该结构对应的任务
+            List<DailyEmbryoTask> matchedTasks = structureToTasks.get(inProductionStructure);
+            if (matchedTasks == null || matchedTasks.isEmpty()) {
+                logger.info("机台 {} 在产结构 {} 无对应任务，跳过", machine.getMachineCode(), inProductionStructure);
+                continue;
+            }
+            
+            // 找到有剩余量的任务
+            for (DailyEmbryoTask task : matchedTasks) {
+                if (task.getRemainderQuantity() != null && task.getRemainderQuantity() > 0) {
+                    // 计算续作计划量（取机台日产能或任务剩余量的较小值）
+                    int continueQty = Math.min(
+                        machine.getMaxDailyCapacity() != null ? machine.getMaxDailyCapacity() : 120,
+                        task.getRemainderQuantity()
+                    );
+                    
+                    // 创建续作排程明细
+                    ScheduleDetail detail = new ScheduleDetail();
+                    detail.setMainId(context.getScheduleMain().getId());
+                    detail.setScheduleDate(context.getScheduleDate());
+                    detail.setMachineCode(machine.getMachineCode());
+                    detail.setMaterialCode(task.getMaterialCode());
+                    detail.setPlanQuantity(continueQty);
+                    detail.setCompletedQuantity(0);
+                    
+                    // 设置续作标识
+                    detail.setIsContinue(1);
+                    detail.setProductionMode("CONTINUE");
+                    
+                    // 设置物料属性
+                    Material material = context.getMaterialMap().get(task.getMaterialCode());
+                    if (material != null) {
+                        detail.setProductStructure(material.getProductStructure());
+                        detail.setIsMainProduct(material.getIsMainProduct() == 1);
+                    }
+                    
+                    // 分配班次（续作优先分配到夜班，符合波浪交替）
+                    detail.setShiftCode("NIGHT");
+                    
+                    detail.setStatus("PLANNED");
+                    detail.setCreateTime(LocalDateTime.now());
+                    
+                    continueDetails.add(detail);
+                    
+                    // 更新任务剩余量
+                    task.setAssignedQuantity(task.getAssignedQuantity() + continueQty);
+                    task.setRemainderQuantity(task.getRemainderQuantity() - continueQty);
+                    if (task.getRemainderQuantity() <= 0) {
+                        task.setIsFullyAssigned(1);
+                    }
+                    
+                    logger.info("机台 {} 续作排产: 物料={}, 计划量={}, 剩余量={}",
+                        machine.getMachineCode(), task.getMaterialCode(), continueQty, task.getRemainderQuantity());
+                    
+                    // 每个机台只处理一个续作任务（同一结构）
+                    break;
+                }
+            }
+        }
+        
+        return continueDetails;
     }
 
     /**
