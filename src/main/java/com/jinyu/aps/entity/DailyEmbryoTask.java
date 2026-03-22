@@ -6,6 +6,7 @@ import lombok.Data;
 
 import java.io.Serializable;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
@@ -101,4 +102,48 @@ public class DailyEmbryoTask implements Serializable {
     @TableField(exist = false)
     @Schema(description = "是否开产首日")
     private Integer isStartingDay;
+    
+    // ==================== P1功能扩展字段 ====================
+    
+    @TableField(exist = false)
+    @Schema(description = "是否试制任务")
+    private Integer isTrialTask;
+    
+    @TableField(exist = false)
+    @Schema(description = "试制单号")
+    private String trialNo;
+    
+    @TableField(exist = false)
+    @Schema(description = "计划日期")
+    private LocalDate planDate;
+    
+    @TableField(exist = false)
+    @Schema(description = "计划数量")
+    private Integer planQuantity;
+    
+    @TableField(exist = false)
+    @Schema(description = "结构编码")
+    private String structureCode;
+    
+    @TableField(exist = false)
+    @Schema(description = "机台编码")
+    private String machineCode;
+    
+    @TableField(exist = false)
+    @Schema(description = "状态")
+    private String status;
+    
+    // ==================== P2功能扩展字段 ====================
+    
+    @TableField(exist = false)
+    @Schema(description = "生产时间（用于停放时间计算）")
+    private LocalDateTime produceTime;
+    
+    @TableField(exist = false)
+    @Schema(description = "停放时间（小时）")
+    private Double parkingHours;
+    
+    @TableField(exist = false)
+    @Schema(description = "原材料编码（替换前）")
+    private String originalMaterialCode;
 }
