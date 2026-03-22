@@ -1,0 +1,63 @@
+server:
+  port: 5000
+  servlet:
+    context-path: /api
+
+spring:
+  application:
+    name: aps-forming-schedule
+  mvc:
+    pathmatch:
+      matching-strategy: ant_path_matcher
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://16.162.95.221:3306/aps?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: aps
+    password: 747452
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: GMT+8
+    default-property-inclusion: non_null
+
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: com.jinyu.aps.entity
+  configuration:
+    map-underscore-to-camel-case: true
+    cache-enabled: false
+    call-setters-on-nulls: true
+    jdbc-type-for-null: 'null'
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: isDeleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+# Knife4j Swagger配置
+knife4j:
+  enable: true
+  setting:
+    language: zh-CN
+    swagger-model-name: 实体类列表
+
+# Swagger配置
+springfox:
+  documentation:
+    enabled: true
+    swagger-ui:
+      enabled: true
+
+# 日志配置
+logging:
+  level:
+    com.jinyu.aps: debug
+    com.baomidou.mybatisplus: debug
+  file:
+    path: /app/work/logs/bypass
+    name: /app/work/logs/bypass/app.log
