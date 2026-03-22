@@ -328,9 +328,9 @@ public class DatabaseInitializer implements CommandLineRunner {
                 "id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', " +
                 "production_no VARCHAR(50) COMMENT '工单号', " +
                 "factory_code VARCHAR(50) COMMENT '工厂编码', " +
-                "year INT COMMENT '年份', " +
-                "month INT COMMENT '月份', " +
-                "year_month INT COMMENT '年月YYYYMM', " +
+                "`year` INT COMMENT '年份', " +
+                "`month` INT COMMENT '月份', " +
+                "`year_month` INT COMMENT '年月YYYYMM', " +
                 "month_plan_version VARCHAR(50) COMMENT '销售生产需求计划版本', " +
                 "last_month_plan_version VARCHAR(50) COMMENT '最新需求计划版本', " +
                 "production_version VARCHAR(50) COMMENT '排产计划版本', " +
@@ -425,7 +425,7 @@ public class DatabaseInitializer implements CommandLineRunner {
                 "create_by VARCHAR(50) COMMENT '创建人', " +
                 "update_by VARCHAR(50) COMMENT '更新人', " +
                 "remark VARCHAR(500) COMMENT '备注', " +
-                "INDEX idx_year_month (year_month), " +
+                "INDEX idx_year_month (`year_month`), " +
                 "INDEX idx_material_code (material_code), " +
                 "INDEX idx_production_no (production_no)" +
                 ") COMMENT='月度生产计划定稿表'");
