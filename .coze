@@ -1,11 +1,11 @@
 [project]
 entrypoint = "target/aps-forming-schedule.jar"
-requires = ["java-8"]
+requires = ["openjdk-8", "maven-3.8"]
 
 [dev]
-build = ["./mvnw", "clean", "package", "-DskipTests"]
+build = ["mvn", "clean", "package", "-DskipTests"]
 run = ["java", "-jar", "target/aps-forming-schedule.jar", "--server.port=5000"]
 
 [deploy]
-build = ["./mvnw", "clean", "package", "-DskipTests"]
+build = ["mvn", "clean", "package", "-DskipTests"]
 run = ["java", "-jar", "target/aps-forming-schedule.jar", "--server.port=5000"]
