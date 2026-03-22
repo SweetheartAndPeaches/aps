@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 import java.io.Serializable;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
@@ -84,4 +85,20 @@ public class DailyEmbryoTask implements Serializable {
 
     @TableField(exist = false)
     private Double stockHours;
+    
+    @TableField(exist = false)
+    @Schema(description = "是否紧急收尾（3天内）")
+    private Integer isUrgentEnding;
+    
+    @TableField(exist = false)
+    @Schema(description = "是否关键产品")
+    private Integer isKeyProduct;
+    
+    @TableField(exist = false)
+    @Schema(description = "收尾天数")
+    private BigDecimal endingDays;
+    
+    @TableField(exist = false)
+    @Schema(description = "是否开产首日")
+    private Integer isStartingDay;
 }

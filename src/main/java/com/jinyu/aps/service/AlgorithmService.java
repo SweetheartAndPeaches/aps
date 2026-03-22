@@ -3,6 +3,7 @@ package com.jinyu.aps.service;
 import com.jinyu.aps.entity.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -24,6 +25,9 @@ import java.util.stream.Collectors;
 public class AlgorithmService {
 
     private static final Logger logger = LoggerFactory.getLogger(AlgorithmService.class);
+
+    @Autowired
+    private P0CoreService p0CoreService;
 
     // 算法参数配置
     private static final int MAX_RECURSION_DEPTH = 20;  // 最大递归深度
@@ -499,10 +503,18 @@ public class AlgorithmService {
             List<ScheduleDetail> machineDetails = entry.getValue();
             
             // 排序规则：
-            // 1. 库存时长升序（低库存优先）
-            // 2. 续作相同结构优先
-            // 3. 主销产品优先
+            // 1. 紧急收尾优先（最高优先级）
+            // 2. 库存时长升序（低库存优先）
+            // 3. 续作相同结构优先
+            // 4. 主销产品优先
             machineDetails.sort((a, b) -> {
+                // 紧急收尾优先（最高优先级）
+                int aUrgent = a.getIsUrgentEnding() != null ? a.getIsUrgentEnding() : 0;
+                int bUrgent = b.getIsUrgentEnding() != null ? b.getIsUrgentEnding() : 0;
+                if (aUrgent != bUrgent) {
+                    return bUrgent - aUrgent;  // 紧急收尾优先
+                }
+                
                 // 库存时长比较（升序）
                 double aStock = a.getStockHoursAtCalc() != null ? a.getStockHoursAtCalc().doubleValue() : 999.0;
                 double bStock = b.getStockHoursAtCalc() != null ? b.getStockHoursAtCalc().doubleValue() : 999.0;
@@ -608,6 +620,8 @@ public class AlgorithmService {
         target.setSequence(source.getSequence());
         target.setStatus(source.getStatus());
         target.setIsContinue(source.getIsContinue());  // 复制续作标记
+        target.setIsUrgentEnding(source.getIsUrgentEnding());  // 复制紧急收尾标记
+        target.setIsKeyProduct(source.getIsKeyProduct());  // 复制关键产品标记
         target.setStockHoursAtCalc(source.getStockHoursAtCalc());  // 复制库存时长
         return target;
     }

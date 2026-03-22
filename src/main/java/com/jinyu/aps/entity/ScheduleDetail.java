@@ -125,6 +125,18 @@ public class ScheduleDetail implements Serializable {
     @TableField("is_continue")
     private Integer isContinue;
 
+    @Schema(description = "紧急收尾标识(0-否,1-是)")
+    @TableField("is_urgent_ending")
+    private Integer isUrgentEnding;
+
+    @Schema(description = "关键产品标识(0-否,1-是)")
+    @TableField("is_key_product")
+    private Integer isKeyProduct;
+
+    @Schema(description = "收尾天数")
+    @TableField("ending_days")
+    private BigDecimal endingDays;
+
     @Schema(description = "状态")
     @TableField("status")
     private String status;
