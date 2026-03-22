@@ -519,6 +519,7 @@ public class AlgorithmServiceOptimized {
         
         List<ScheduleDetail> result = Collections.synchronizedList(new ArrayList<>());
         int[] tripCounter = {1};
+        int[] sequenceCounter = {1}; // 全局顺位计数器
         
         groups.values().parallelStream().forEach(group -> {
             int tripNo = 1;
@@ -532,6 +533,7 @@ public class AlgorithmServiceOptimized {
                     detail.setTripActualQty(DEFAULT_TRIP_CAPACITY);
                     synchronized (tripCounter) {
                         detail.setTripGroupId("TRIP_" + tripCounter[0]++);
+                        detail.setSequence(sequenceCounter[0]++); // 分配唯一顺位
                     }
                 }
             }

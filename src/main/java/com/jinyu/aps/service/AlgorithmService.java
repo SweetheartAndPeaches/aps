@@ -480,7 +480,10 @@ public class AlgorithmService {
         
         // 1. 为每个明细计算排序分数
         for (ScheduleDetail detail : details) {
-            double stockHour = stockHours.getOrDefault(detail.getMaterialCode(), 0.0);
+            // 如果stockHours中没有该物料，使用默认值999.0（排在后面）
+            double stockHour = stockHours.containsKey(detail.getMaterialCode()) 
+                ? stockHours.get(detail.getMaterialCode()) 
+                : 999.0;
             detail.setStockHoursAtCalc(BigDecimal.valueOf(stockHour));
         }
         
@@ -539,16 +542,22 @@ public class AlgorithmService {
      * 将每12条作为一个车次，确保齐套
      */
     private List<ScheduleDetail> arrangeTrips(List<ScheduleDetail> details) {
-        // 按机台和班次分组
+        // 按机台和班次分组，使用LinkedHashMap保持插入顺序
         Map<String, List<ScheduleDetail>> groups = details.stream()
             .collect(Collectors.groupingBy(d -> 
-                d.getMachineCode() + "_" + d.getShiftCode()));
+                d.getMachineCode() + "_" + d.getShiftCode(),
+                LinkedHashMap::new,
+                Collectors.toList()));
         
         List<ScheduleDetail> result = new ArrayList<>();
         int tripCounter = 1;
+        int sequenceCounter = 1; // 全局顺位计数器
         
         for (List<ScheduleDetail> group : groups.values()) {
-            int remainingQty = group.stream().mapToInt(ScheduleDetail::getPlanQuantity).sum();
+            // 按之前的sequence排序，保持续作优先等排序结果
+            group.sort(Comparator.comparingInt(d -> 
+                d.getSequence() != null ? d.getSequence() : Integer.MAX_VALUE));
+            
             int tripNo = 1;
             
             for (ScheduleDetail detail : group) {
@@ -564,6 +573,8 @@ public class AlgorithmService {
                         detail.setTripCapacity(DEFAULT_TRIP_CAPACITY);
                         detail.setTripActualQty(tripQty);
                         detail.setTripGroupId("TRIP_" + tripCounter++);
+                        detail.setSequence(sequenceCounter++); // 重新分配顺位
+                        result.add(detail);  // 直接添加到result，保持顺序
                     } else {
                         // 创建新的明细用于后续车次
                         ScheduleDetail newDetail = cloneDetail(detail);
@@ -572,14 +583,13 @@ public class AlgorithmService {
                         newDetail.setTripActualQty(tripQty);
                         newDetail.setTripGroupId("TRIP_" + tripCounter++);
                         newDetail.setPlanQuantity(tripQty);
+                        newDetail.setSequence(sequenceCounter++); // 分配唯一顺位
                         result.add(newDetail);
                     }
                 }
                 
                 tripNo++;
             }
-            
-            result.addAll(group);
         }
         
         return result;
@@ -597,6 +607,8 @@ public class AlgorithmService {
         target.setMaterialCode(source.getMaterialCode());
         target.setSequence(source.getSequence());
         target.setStatus(source.getStatus());
+        target.setIsContinue(source.getIsContinue());  // 复制续作标记
+        target.setStockHoursAtCalc(source.getStockHoursAtCalc());  // 复制库存时长
         return target;
     }
 

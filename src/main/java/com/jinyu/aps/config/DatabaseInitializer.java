@@ -1,6 +1,7 @@
 package com.jinyu.aps.config;
 
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
@@ -9,10 +10,13 @@ import org.springframework.stereotype.Component;
  * 在应用启动时创建表和初始化数据
  * 
  * 按照技术文档V5.0.0定义的完整表结构
+ * 
+ * 注意：此初始化器仅在非测试环境执行
  *
  * @author APS Team
  */
 @Component
+@Profile("!test")
 public class DatabaseInitializer implements CommandLineRunner {
 
     private final JdbcTemplate jdbcTemplate;
