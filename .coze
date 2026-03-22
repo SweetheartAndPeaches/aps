@@ -1,12 +1,11 @@
 [project]
-requires = ["nodejs-24"]
+entrypoint = "target/aps-forming-schedule.jar"
+requires = ["java-8", "maven"]
 
 [dev]
-build = ["bash", "./scripts/prepare.sh"]
-run = ["bash", "./scripts/dev.sh"]
-deps = ["git"] # -> apt install git
+build = ["mvn", "clean", "package", "-DskipTests"]
+run = ["java", "-jar", "target/aps-forming-schedule.jar", "--server.port=5000"]
 
 [deploy]
-build = ["bash","./scripts/build.sh"]
-run = ["bash","./scripts/start.sh"]
-deps = ["git"] # -> apt install git
+build = ["mvn", "clean", "package", "-DskipTests"]
+run = ["java", "-jar", "target/aps-forming-schedule.jar", "--server.port=5000"]
