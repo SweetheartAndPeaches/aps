@@ -4,7 +4,9 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zlt.aps.cx.entity.*;
+import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
 import com.zlt.aps.cx.mapper.*;
+import com.zlt.aps.cx.mapper.LhScheduleResultMapper;
 import com.zlt.aps.cx.service.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,7 +35,7 @@ public class MonthPlanFinalServiceImpl extends ServiceImpl<MonthPlanFinalMapper,
     private MonthPlanFinalMapper monthPlanFinalMapper;
 
     @Autowired
-    private VulcanizingPlanMapper vulcanizingPlanMapper;
+    private LhScheduleResultMapper lhScheduleResultMapper;
 
     @Autowired
     private ScheduleMainMapper scheduleMainMapper;
@@ -121,7 +123,7 @@ public class MonthPlanFinalServiceImpl extends ServiceImpl<MonthPlanFinalMapper,
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public List<VulcanizingPlan> splitToDailyPlan(LocalDate scheduleDate) {
+    public List<LhScheduleResult> splitToDailyPlan(LocalDate scheduleDate) {
         int yearMonth = Integer.parseInt(scheduleDate.format(DateTimeFormatter.ofPattern("yyyyMM")));
         int day = scheduleDate.getDayOfMonth();
         return splitToDailyPlan(yearMonth, day);
@@ -129,8 +131,8 @@ public class MonthPlanFinalServiceImpl extends ServiceImpl<MonthPlanFinalMapper,
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public List<VulcanizingPlan> splitToDailyPlan(Integer yearMonth, Integer day) {
-        logger.info("开始拆分月计划到日计划，年月: {}, 日期: {}", yearMonth, day);
+    public List<LhScheduleResult> splitToDailyPlan(Integer yearMonth, Integer day) {
+        logger.info("开始拆分月计划到日硫化排程，年月: {}, 日期: {}", yearMonth, day);
         
         // 1. 查询当天有排产的月计划
         List<MonthPlanFinal> monthPlans = monthPlanFinalMapper.selectWithPlanOnDay(yearMonth, day);
@@ -139,9 +141,10 @@ public class MonthPlanFinalServiceImpl extends ServiceImpl<MonthPlanFinalMapper,
             return Collections.emptyList();
         }
         
-        // 2. 转换为日硫化计划
-        List<VulcanizingPlan> dailyPlans = new ArrayList<>();
+        // 2. 转换为日硫化排程
+        List<LhScheduleResult> dailyPlans = new ArrayList<>();
         int sortIndex = 1;
+        LocalDate scheduleDate = convertToDate(yearMonth, day);
         
         for (MonthPlanFinal monthPlan : monthPlans) {
             Integer planQty = monthPlan.getDayQty(day);
@@ -149,16 +152,14 @@ public class MonthPlanFinalServiceImpl extends ServiceImpl<MonthPlanFinalMapper,
                 continue;
             }
             
-            VulcanizingPlan dailyPlan = new VulcanizingPlan();
-            dailyPlan.setPlanCode(generateDailyPlanCode(yearMonth, day, sortIndex));
-            dailyPlan.setPlanDate(convertToDate(yearMonth, day));
+            LhScheduleResult dailyPlan = new LhScheduleResult();
+            dailyPlan.setBatchNo(generateBatchNo(yearMonth, day, sortIndex));
+            dailyPlan.setScheduleDate(scheduleDate);
             dailyPlan.setMaterialCode(monthPlan.getMaterialCode());
-            dailyPlan.setPlanQuantity(planQty);
-            dailyPlan.setPriority(calculatePriority(monthPlan));
-            dailyPlan.setSource("MONTH_PLAN");
-            dailyPlan.setStatus("PENDING");
-            dailyPlan.setAssignedQuantity(0);
-            dailyPlan.setRemainderQuantity(planQty);
+            dailyPlan.setDailyPlanQty(planQty);
+            dailyPlan.setStructureName(monthPlan.getProductStructure());
+            dailyPlan.setProductionStatus("PENDING");
+            dailyPlan.setMachineOrder(sortIndex);
             dailyPlan.setCreateTime(LocalDateTime.now());
             dailyPlan.setCreateBy("SYSTEM");
             
@@ -166,12 +167,12 @@ public class MonthPlanFinalServiceImpl extends ServiceImpl<MonthPlanFinalMapper,
             sortIndex++;
         }
         
-        // 3. 批量保存日计划
-        for (VulcanizingPlan plan : dailyPlans) {
-            vulcanizingPlanMapper.insert(plan);
+        // 3. 批量保存日硫化排程
+        for (LhScheduleResult plan : dailyPlans) {
+            lhScheduleResultMapper.insert(plan);
         }
         
-        logger.info("月计划拆分完成，生成日计划数量: {}", dailyPlans.size());
+        logger.info("月计划拆分完成，生成日硫化排程数量: {}", dailyPlans.size());
         return dailyPlans;
     }
 
@@ -184,8 +185,8 @@ public class MonthPlanFinalServiceImpl extends ServiceImpl<MonthPlanFinalMapper,
         result.setScheduleDate(scheduleDate);
         
         try {
-            // 1. 拆分月计划到日计划
-            List<VulcanizingPlan> dailyPlans = splitToDailyPlan(scheduleDate);
+            // 1. 拆分月计划到日硫化排程
+            List<LhScheduleResult> dailyPlans = splitToDailyPlan(scheduleDate);
             if (dailyPlans.isEmpty()) {
                 result.setSuccess(false);
                 result.setMessage("未找到当日计划数据");
@@ -344,10 +345,10 @@ public class MonthPlanFinalServiceImpl extends ServiceImpl<MonthPlanFinalMapper,
     // ==================== 私有方法 ====================
 
     /**
-     * 生成日计划编码
+     * 生成批次号
      */
-    private String generateDailyPlanCode(Integer yearMonth, int day, int index) {
-        return String.format("VP%d%02d%04d", yearMonth, day, index);
+    private String generateBatchNo(Integer yearMonth, int day, int index) {
+        return String.format("LH%d%02d%04d", yearMonth, day, index);
     }
 
     /**
@@ -360,39 +361,17 @@ public class MonthPlanFinalServiceImpl extends ServiceImpl<MonthPlanFinalMapper,
     }
 
     /**
-     * 计算优先级
-     */
-    private Integer calculatePriority(MonthPlanFinal monthPlan) {
-        // 根据排产分类和产品状态确定优先级
-        String productionType = monthPlan.getProductionType();
-        String productStatus = monthPlan.getProductStatus();
-        
-        // 高优先级
-        if ("HEIGHT".equalsIgnoreCase(productionType)) {
-            return 1;
-        }
-        
-        // 试制/量试优先
-        if ("01".equals(productStatus) || "02".equals(productStatus)) {
-            return 2;
-        }
-        
-        // 默认优先级
-        return 3;
-    }
-
-    /**
      * 转换为日胎胚任务
      */
-    private List<DailyEmbryoTask> convertToTasks(List<VulcanizingPlan> dailyPlans, LocalDate scheduleDate) {
+    private List<DailyEmbryoTask> convertToTasks(List<LhScheduleResult> dailyPlans, LocalDate scheduleDate) {
         return dailyPlans.stream()
             .map(plan -> {
                 DailyEmbryoTask task = new DailyEmbryoTask();
                 task.setMaterialCode(plan.getMaterialCode());
-                task.setTaskQuantity(plan.getPlanQuantity());
-                task.setPriority(plan.getPriority());
+                task.setTaskQuantity(plan.getDailyPlanQty());
+                task.setProductStructure(plan.getStructureName());
                 task.setAssignedQuantity(0);
-                task.setRemainderQuantity(plan.getPlanQuantity());
+                task.setRemainderQuantity(plan.getDailyPlanQty());
                 task.setIsFullyAssigned(0);
                 task.setCreateTime(LocalDateTime.now());
                 return task;

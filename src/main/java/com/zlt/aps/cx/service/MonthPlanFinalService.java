@@ -2,7 +2,7 @@ package com.zlt.aps.cx.service;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.zlt.aps.cx.entity.MonthPlanFinal;
-import com.zlt.aps.cx.entity.VulcanizingPlan;
+import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -99,25 +99,25 @@ public interface MonthPlanFinalService {
      * ==================== 核心功能：月计划拆分为日计划 ==================== */
 
     /**
-     * 将月计划拆分为日硫化计划
+     * 将月计划拆分为日硫化排程
      * 
      * 流程：
      * 1. 查询月计划中指定日期有排产的物料
-     * 2. 根据day_X字段值创建日硫化计划
+     * 2. 根据day_X字段值创建日硫化排程记录
      * 3. 设置优先级(根据productionType)
      * 
      * @param scheduleDate 计划日期
-     * @return 日硫化计划列表
+     * @return 日硫化排程列表
      */
-    List<VulcanizingPlan> splitToDailyPlan(LocalDate scheduleDate);
+    List<LhScheduleResult> splitToDailyPlan(LocalDate scheduleDate);
 
     /**
      * 将月计划拆分为指定日期的日计划
      * @param yearMonth 年月
      * @param day 日期(1-31)
-     * @return 日硫化计划列表
+     * @return 日硫化排程列表
      */
-    List<VulcanizingPlan> splitToDailyPlan(Integer yearMonth, Integer day);
+    List<LhScheduleResult> splitToDailyPlan(Integer yearMonth, Integer day);
 
     /**
      * 根据月计划生成APS排程
