@@ -3,6 +3,11 @@ package com.zlt.aps.cx.mapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
+
+import java.time.LocalDate;
+import java.util.List;
 
 /**
  * 硫化排程结果Mapper接口
@@ -12,4 +17,16 @@ import org.apache.ibatis.annotations.Mapper;
  */
 @Mapper
 public interface LhScheduleResultMapper extends BaseMapper<LhScheduleResult> {
+
+    /**
+     * 按排程日期查询
+     */
+    @Select("SELECT * FROM T_LH_SCHEDULE_RESULT WHERE SCHEDULE_DATE = #{scheduleDate} AND PRODUCTION_STATUS != 'COMPLETED'")
+    List<LhScheduleResult> selectByDate(@Param("scheduleDate") LocalDate scheduleDate);
+
+    /**
+     * 查询所有未完成的排程
+     */
+    @Select("SELECT * FROM T_LH_SCHEDULE_RESULT WHERE PRODUCTION_STATUS != 'COMPLETED' ORDER BY SCHEDULE_DATE, MACHINE_ORDER")
+    List<LhScheduleResult> selectAll();
 }

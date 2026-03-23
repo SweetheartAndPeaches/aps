@@ -1,7 +1,9 @@
 package com.zlt.aps.cx.service;
 
 import com.zlt.aps.cx.entity.*;
+import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
 import com.zlt.aps.cx.mapper.*;
+import com.zlt.aps.cx.mapper.LhScheduleResultMapper;
 import com.zlt.aps.cx.model.entity.MaterialGroup;
 import com.zlt.aps.cx.service.AlgorithmService.AllocationResult;
 import org.slf4j.Logger;
@@ -46,7 +48,7 @@ public class ScheduleService {
     private StockMapper stockMapper;
 
     @Autowired
-    private VulcanizingPlanMapper vulcanizingPlanMapper;
+    private LhScheduleResultMapper lhScheduleResultMapper;
 
     @Autowired
     private ScheduleMainMapper scheduleMainMapper;
@@ -289,13 +291,13 @@ public class ScheduleService {
         }
         context.setMachines(machines);
         
-        // 获取硫化计划
-        List<VulcanizingPlan> plans = vulcanizingPlanMapper.selectByDate(scheduleDate);
+        // 获取硫化排程计划
+        List<LhScheduleResult> plans = lhScheduleResultMapper.selectByDate(scheduleDate);
         if (plans == null || plans.isEmpty()) {
-            context.addError("没有当日的硫化计划");
+            context.addError("没有当日的硫化排程计划");
             return context;
         }
-        context.setVulcanizingPlans(plans);
+        context.setLhScheduleResults(plans);
         
         // 获取物料信息
         List<Material> materials = materialMapper.selectAll();
@@ -336,12 +338,12 @@ public class ScheduleService {
         List<DailyEmbryoTask> tasks = new ArrayList<>();
         int sortOrder = 1;
         
-        for (VulcanizingPlan plan : context.getVulcanizingPlans()) {
+        for (LhScheduleResult plan : context.getLhScheduleResults()) {
             DailyEmbryoTask task = new DailyEmbryoTask();
             task.setScheduleMainId(context.getScheduleMain().getId());
             task.setTaskGroupId("TG_" + plan.getMaterialCode());
             task.setMaterialCode(plan.getMaterialCode());
-            task.setTaskQuantity(plan.getPlanQuantity());
+            task.setTaskQuantity(plan.getDailyPlanQty());
             
             // 设置物料属性
             Material material = context.getMaterialMap().get(plan.getMaterialCode());
@@ -358,10 +360,10 @@ public class ScheduleService {
                 task.setVulcanizeMachineCount(stock.getVulcanizeMachineCount());
             }
             
-            task.setPriority(plan.getPriority());
+            task.setPriority(sortOrder); // 使用排序号作为优先级
             task.setSortOrder(sortOrder++);
             task.setAssignedQuantity(0);
-            task.setRemainderQuantity(plan.getPlanQuantity());
+            task.setRemainderQuantity(plan.getDailyPlanQty());
             task.setIsFullyAssigned(0);
             task.setCreateTime(LocalDateTime.now());
             
@@ -621,7 +623,7 @@ public class ScheduleService {
         private LocalDate scheduleDate;
         private ScheduleMain scheduleMain;
         private List<Machine> machines;
-        private List<VulcanizingPlan> vulcanizingPlans;
+        private List<LhScheduleResult> lhScheduleResults;
         private List<DailyEmbryoTask> tasks;
         private List<MaterialGroup> materialGroups;
         private Map<String, Material> materialMap;
@@ -635,8 +637,8 @@ public class ScheduleService {
         public void setScheduleMain(ScheduleMain scheduleMain) { this.scheduleMain = scheduleMain; }
         public List<Machine> getMachines() { return machines; }
         public void setMachines(List<Machine> machines) { this.machines = machines; }
-        public List<VulcanizingPlan> getVulcanizingPlans() { return vulcanizingPlans; }
-        public void setVulcanizingPlans(List<VulcanizingPlan> vulcanizingPlans) { this.vulcanizingPlans = vulcanizingPlans; }
+        public List<LhScheduleResult> getLhScheduleResults() { return lhScheduleResults; }
+        public void setLhScheduleResults(List<LhScheduleResult> lhScheduleResults) { this.lhScheduleResults = lhScheduleResults; }
         public List<DailyEmbryoTask> getTasks() { return tasks; }
         public void setTasks(List<DailyEmbryoTask> tasks) { this.tasks = tasks; }
         public List<MaterialGroup> getMaterialGroups() { return materialGroups; }

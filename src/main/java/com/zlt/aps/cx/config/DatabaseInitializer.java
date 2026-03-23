@@ -43,7 +43,7 @@ public class DatabaseInitializer implements CommandLineRunner {
         createScheduleDetailTable();
 
         // ==================== 三、计划与任务表 ====================
-        createVulcanizingPlanTable();
+        createLhScheduleResultTable();
         createDailyEmbryoTaskTable();
 
         // ==================== 三之一、月度计划表 ====================
@@ -72,7 +72,7 @@ public class DatabaseInitializer implements CommandLineRunner {
         initMachineData();
         initMaterialData();
         initStockData();
-        initVulcanizingPlanData();
+        initLhScheduleResultData();
 
         System.out.println("========================================");
         System.out.println("  MySQL数据库初始化完成!");
@@ -275,23 +275,61 @@ public class DatabaseInitializer implements CommandLineRunner {
     /**
      * 创建硫化计划表
      */
-    private void createVulcanizingPlanTable() {
-        jdbcTemplate.execute("DROP TABLE IF EXISTS t_cx_vulcanizing_plan");
-        jdbcTemplate.execute("CREATE TABLE t_cx_vulcanizing_plan (" +
-                "id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', " +
-                "plan_code VARCHAR(50) NOT NULL UNIQUE COMMENT '计划单号', " +
-                "plan_date DATE NOT NULL COMMENT '计划日期', " +
-                "material_code VARCHAR(50) NOT NULL COMMENT '胎胚物料编码', " +
-                "plan_quantity INT NOT NULL COMMENT '计划产量', " +
-                "priority INT DEFAULT 0 COMMENT '优先级', " +
-                "source VARCHAR(50) COMMENT '来源', " +
-                "status VARCHAR(20) DEFAULT 'PENDING' COMMENT '状态', " +
-                "assigned_quantity INT DEFAULT 0 COMMENT '已分配数量', " +
-                "remainder_quantity INT DEFAULT 0 COMMENT '剩余未分配数量', " +
-                "create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间', " +
-                "update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间', " +
-                "create_by VARCHAR(50) COMMENT '创建人'" +
-                ") COMMENT='硫化计划表'");
+    private void createLhScheduleResultTable() {
+        jdbcTemplate.execute("DROP TABLE IF EXISTS T_LH_SCHEDULE_RESULT");
+        jdbcTemplate.execute("CREATE TABLE T_LH_SCHEDULE_RESULT (" +
+                "ID BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', " +
+                "BATCH_NO VARCHAR(50) COMMENT '批次号', " +
+                "ORDER_NO VARCHAR(50) COMMENT '工单号', " +
+                "LH_MACHINE_CODE VARCHAR(50) COMMENT '硫化机台编号', " +
+                "LEFT_RIGHT_MOULD VARCHAR(10) COMMENT '左右模', " +
+                "LH_MACHINE_NAME VARCHAR(100) COMMENT '硫化机台名称', " +
+                "MATERIAL_CODE VARCHAR(50) COMMENT '物料编号', " +
+                "SPEC_CODE VARCHAR(50) COMMENT '规格代码', " +
+                "EMBRYO_CODE VARCHAR(50) COMMENT '胎胚代码', " +
+                "STRUCTURE_NAME VARCHAR(100) COMMENT '产品结构', " +
+                "MATERIAL_DESC VARCHAR(200) COMMENT '物料描述', " +
+                "MAIN_MATERIAL_DESC VARCHAR(200) COMMENT '主物料', " +
+                "EMBRYO_STOCK INT COMMENT '胎胚库存', " +
+                "SPEC_DESC VARCHAR(200) COMMENT '规格描述', " +
+                "LH_TIME INT COMMENT '硫化时长(秒)', " +
+                "DAILY_PLAN_QTY INT COMMENT '日计划数量', " +
+                "SCHEDULE_DATE DATE COMMENT '排程日期', " +
+                "SPEC_END_TIME DATETIME COMMENT '规格结束时间', " +
+                "PRODUCTION_STATUS VARCHAR(20) DEFAULT 'PENDING' COMMENT '生产状态', " +
+                "CLASS1_PLAN_QTY INT COMMENT '1班计划量', " +
+                "CLASS1_START_TIME DATETIME COMMENT '1班开始时间', " +
+                "CLASS1_END_TIME DATETIME COMMENT '1班结束时间', " +
+                "CLASS1_ANALYSIS VARCHAR(500) COMMENT '1班原因分析', " +
+                "CLASS1_FINISH_QTY INT COMMENT '1班完成量', " +
+                "CLASS2_PLAN_QTY INT COMMENT '2班计划量', " +
+                "CLASS2_START_TIME DATETIME COMMENT '2班开始时间', " +
+                "CLASS2_END_TIME DATETIME COMMENT '2班结束时间', " +
+                "CLASS2_ANALYSIS VARCHAR(500) COMMENT '2班原因分析', " +
+                "CLASS2_FINISH_QTY INT COMMENT '2班完成量', " +
+                "CLASS3_PLAN_QTY INT COMMENT '3班计划量', " +
+                "CLASS3_START_TIME DATETIME COMMENT '3班开始时间', " +
+                "CLASS3_END_TIME DATETIME COMMENT '3班结束时间', " +
+                "CLASS3_ANALYSIS VARCHAR(500) COMMENT '3班原因分析', " +
+                "CLASS3_FINISH_QTY INT COMMENT '3班完成量', " +
+                "CLASS4_PLAN_QTY INT COMMENT '4班计划量', " +
+                "CLASS4_START_TIME DATETIME COMMENT '4班开始时间', " +
+                "CLASS4_END_TIME DATETIME COMMENT '4班结束时间', " +
+                "CLASS4_ANALYSIS VARCHAR(500) COMMENT '4班原因分析', " +
+                "CLASS4_FINISH_QTY INT COMMENT '4班完成量', " +
+                "IS_DELIVERY VARCHAR(10) COMMENT '是否交期', " +
+                "IS_RELEASE VARCHAR(10) COMMENT '是否发布', " +
+                "DATA_SOURCE VARCHAR(20) COMMENT '数据来源', " +
+                "MOULD_QTY INT COMMENT '使用模数', " +
+                "MOULD_METHOD VARCHAR(20) COMMENT '硫化方式', " +
+                "MACHINE_ORDER INT COMMENT '机台排序号', " +
+                "IS_TRIAL VARCHAR(10) COMMENT '是否试制量试', " +
+                "MOULD_SURPLUS_QTY INT COMMENT '硫化余量', " +
+                "IS_END VARCHAR(10) COMMENT '是否收尾', " +
+                "CREATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间', " +
+                "UPDATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间', " +
+                "CREATE_BY VARCHAR(50) COMMENT '创建人'" +
+                ") COMMENT='硫化排程结果表'");
     }
 
     /**
@@ -742,23 +780,23 @@ public class DatabaseInitializer implements CommandLineRunner {
     }
 
     /**
-     * 初始化硫化计划数据
+     * 初始化硫化排程结果数据
      * 使用相对日期，确保与测试排程日期匹配
      */
-    private void initVulcanizingPlanData() {
-        // 硫化计划日期：当天和第二天，方便测试
-        jdbcTemplate.execute("INSERT INTO t_cx_vulcanizing_plan (plan_code, plan_date, material_code, plan_quantity, priority, source, status) VALUES " +
-                "('VP2024010001', CURDATE(), 'MAT001', 240, 1, 'ERP', 'PENDING'), " +
-                "('VP2024010002', CURDATE(), 'MAT002', 180, 2, 'ERP', 'PENDING'), " +
-                "('VP2024010003', CURDATE(), 'MAT003', 120, 3, 'ERP', 'PENDING'), " +
-                "('VP2024010004', CURDATE(), 'MAT004', 200, 2, 'ERP', 'PENDING'), " +
-                "('VP2024010005', CURDATE(), 'MAT005', 100, 1, 'ERP', 'PENDING'), " +
-                "('VP2024010006', CURDATE(), 'MAT006', 150, 3, 'ERP', 'PENDING'), " +
-                "('VP2024010007', DATE_ADD(CURDATE(), INTERVAL 1 DAY), 'MAT001', 240, 1, 'ERP', 'PENDING'), " +
-                "('VP2024010008', DATE_ADD(CURDATE(), INTERVAL 1 DAY), 'MAT002', 180, 2, 'ERP', 'PENDING'), " +
-                "('VP2024010009', DATE_ADD(CURDATE(), INTERVAL 1 DAY), 'MAT003', 120, 3, 'ERP', 'PENDING'), " +
-                "('VP2024010010', DATE_ADD(CURDATE(), INTERVAL 1 DAY), 'MAT004', 200, 2, 'ERP', 'PENDING'), " +
-                "('VP2024010011', DATE_ADD(CURDATE(), INTERVAL 1 DAY), 'MAT005', 100, 1, 'ERP', 'PENDING'), " +
-                "('VP2024010012', DATE_ADD(CURDATE(), INTERVAL 1 DAY), 'MAT006', 150, 3, 'ERP', 'PENDING')");
+    private void initLhScheduleResultData() {
+        // 硫化排程日期：当天和第二天，方便测试
+        jdbcTemplate.execute("INSERT INTO T_LH_SCHEDULE_RESULT (BATCH_NO, SCHEDULE_DATE, MATERIAL_CODE, STRUCTURE_NAME, DAILY_PLAN_QTY, PRODUCTION_STATUS, MACHINE_ORDER, DATA_SOURCE) VALUES " +
+                "('LH2024010001', CURDATE(), 'MAT001', '12R22.5', 240, 'PENDING', 1, 'MONTH_PLAN'), " +
+                "('LH2024010002', CURDATE(), 'MAT002', '11R22.5', 180, 'PENDING', 2, 'MONTH_PLAN'), " +
+                "('LH2024010003', CURDATE(), 'MAT003', '295/80R22.5', 120, 'PENDING', 3, 'MONTH_PLAN'), " +
+                "('LH2024010004', CURDATE(), 'MAT004', '275/80R22.5', 200, 'PENDING', 4, 'MONTH_PLAN'), " +
+                "('LH2024010005', CURDATE(), 'MAT005', '315/80R22.5', 100, 'PENDING', 5, 'MONTH_PLAN'), " +
+                "('LH2024010006', CURDATE(), 'MAT006', '385/65R22.5', 150, 'PENDING', 6, 'MONTH_PLAN'), " +
+                "('LH2024010007', DATE_ADD(CURDATE(), INTERVAL 1 DAY), 'MAT001', '12R22.5', 240, 'PENDING', 1, 'MONTH_PLAN'), " +
+                "('LH2024010008', DATE_ADD(CURDATE(), INTERVAL 1 DAY), 'MAT002', '11R22.5', 180, 'PENDING', 2, 'MONTH_PLAN'), " +
+                "('LH2024010009', DATE_ADD(CURDATE(), INTERVAL 1 DAY), 'MAT003', '295/80R22.5', 120, 'PENDING', 3, 'MONTH_PLAN'), " +
+                "('LH2024010010', DATE_ADD(CURDATE(), INTERVAL 1 DAY), 'MAT004', '275/80R22.5', 200, 'PENDING', 4, 'MONTH_PLAN'), " +
+                "('LH2024010011', DATE_ADD(CURDATE(), INTERVAL 1 DAY), 'MAT005', '315/80R22.5', 100, 'PENDING', 5, 'MONTH_PLAN'), " +
+                "('LH2024010012', DATE_ADD(CURDATE(), INTERVAL 1 DAY), 'MAT006', '385/65R22.5', 150, 'PENDING', 6, 'MONTH_PLAN')");
     }
 }
