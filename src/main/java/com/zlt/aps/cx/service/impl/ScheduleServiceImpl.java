@@ -1,13 +1,14 @@
 package com.zlt.aps.cx.service.impl;
 
-import com.zlt.aps.cx.dto.ScheduleGenerateDTO;
-import com.zlt.aps.cx.dto.ScheduleResultDTO;
-import com.zlt.aps.cx.entity.CxMaterial;
-import com.zlt.aps.cx.entity.CxStock;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.zlt.aps.cx.dto.ScheduleContextDTO;
+import com.zlt.aps.cx.entity.*;
+import com.zlt.aps.cx.entity.config.CxParamConfig;
+import com.zlt.aps.cx.entity.mdm.MdmMoldingMachine;
 import com.zlt.aps.cx.entity.schedule.CxScheduleDetail;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
-import com.zlt.aps.cx.entity.mdm.MdmMoldingMachine;
-import com.zlt.aps.cx.mapper.MdmMoldingMachineMapper;
+import com.zlt.aps.cx.entity.schedule.CxTrialPlan;
+import com.zlt.aps.cx.mapper.*;
 import com.zlt.aps.cx.service.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,10 +21,13 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * 排程管理服务实现类
+ * 排程服务实现类
+ * 
+ * 整合所有核心服务，实现完整的排程流程
  *
  * @author APS Team
  */
@@ -32,281 +36,360 @@ import java.util.stream.Collectors;
 public class ScheduleServiceImpl implements ScheduleService {
 
     @Autowired
-    private CxMaterialService cxMaterialService;
+    private CoreScheduleAlgorithmService coreAlgorithmService;
 
     @Autowired
-    private CxStockService cxStockService;
+    private ConstraintCheckService constraintCheckService;
 
     @Autowired
-    private CxScheduleResultService cxScheduleResultService;
+    private DynamicAdjustService dynamicAdjustService;
 
     @Autowired
-    private CxScheduleDetailService cxScheduleDetailService;
+    private HolidayScheduleService holidayScheduleService;
 
     @Autowired
-    private LhScheduleResultService lhScheduleResultService;
+    private TrialScheduleService trialScheduleService;
 
     @Autowired
-    private AlgorithmService algorithmService;
+    private MdmMoldingMachineMapper moldingMachineMapper;
 
     @Autowired
-    private MdmMoldingMachineMapper mdmMoldingMachineMapper;
+    private CxMaterialMapper materialMapper;
+
+    @Autowired
+    private CxStockMapper stockMapper;
+
+    @Autowired
+    private CxLhPlanMapper lhPlanMapper;
+
+    @Autowired
+    private CxScheduleResultMapper scheduleResultMapper;
+
+    @Autowired
+    private CxScheduleDetailMapper scheduleDetailMapper;
+
+    @Autowired
+    private CxParamConfigMapper paramConfigMapper;
+
+    @Autowired
+    private CxTrialPlanMapper trialPlanMapper;
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
-    public List<CxScheduleResult> generateSchedule(ScheduleGenerateDTO dto) {
-        log.info("开始生成排程，日期: {}, 天数: {}", dto.getScheduleDate(), dto.getDays());
+    public ScheduleResult executeSchedule(ScheduleRequest request) {
+        ScheduleResult result = new ScheduleResult();
+        result.setSuccess(false);
+        result.setScheduleDate(request.getScheduleDate());
 
-        List<CxScheduleResult> allResults = new ArrayList<>();
-        LocalDate currentDate = dto.getScheduleDate();
+        try {
+            log.info("开始执行排程，日期：{}，排程模式：{}", 
+                    request.getScheduleDate(), request.getScheduleMode());
 
-        for (int i = 0; i < dto.getDays(); i++) {
-            LocalDate scheduleDate = currentDate.plusDays(i);
-            
-            // 检查是否需要覆盖
-            if (!Boolean.TRUE.equals(dto.getOverwrite())) {
-                List<CxScheduleResult> existing = cxScheduleResultService.listByScheduleDate(scheduleDate);
-                if (!existing.isEmpty()) {
-                    log.info("日期 {} 已存在排程，跳过生成", scheduleDate);
-                    allResults.addAll(existing);
-                    continue;
-                }
-            } else {
-                // 删除已有排程
-                cxScheduleResultService.deleteByScheduleDate(scheduleDate);
+            // 1. 检查节假日
+            if (holidayScheduleService.isStopProductionDay(request.getScheduleDate())) {
+                result.setMessage("停产日，不执行排程");
+                log.info("停产日 {}，跳过排程", request.getScheduleDate());
+                return result;
             }
 
-            // 生成当日排程
-            List<CxScheduleResult> dailyResults = generateDailySchedule(scheduleDate);
-            allResults.addAll(dailyResults);
-        }
+            // 2. 构建排程上下文
+            ScheduleContextDTO context = buildScheduleContext(request);
+            if (context == null) {
+                result.setMessage("构建排程上下文失败");
+                return result;
+            }
 
-        log.info("排程生成完成，共生成 {} 条记录", allResults.size());
-        return allResults;
-    }
+            // 3. 处理节假日特殊逻辑
+            if (holidayScheduleService.isBeforeHoliday(request.getScheduleDate())) {
+                HolidayScheduleService.HolidayScheduleResult holidayResult = 
+                        holidayScheduleService.handleBeforeHoliday(request.getScheduleDate());
+                log.info("停产前一天处理结果：{}", holidayResult.getMessage());
+            }
 
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public List<CxScheduleResult> generateDailySchedule(LocalDate scheduleDate) {
-        log.info("生成日排程，日期: {}", scheduleDate);
+            // 4. 执行试制排程
+            executeTrialScheduleInternal(request.getScheduleDate());
 
-        // 1. 获取基础数据
-        List<MdmMoldingMachine> machines = mdmMoldingMachineMapper.selectList(null);
-        List<CxMaterial> materials = cxMaterialService.listActive();
-        List<CxStock> stocks = cxStockService.list();
+            // 5. 执行核心排程算法
+            List<CxScheduleResult> scheduleResults = coreAlgorithmService.executeSchedule(context);
 
-        if (CollectionUtils.isEmpty(machines) || CollectionUtils.isEmpty(materials)) {
-            log.warn("缺少基础数据，无法生成排程。机台数: {}, 物料数: {}", 
-                    machines != null ? machines.size() : 0, 
-                    materials != null ? materials.size() : 0);
-            return new ArrayList<>();
-        }
+            // 6. 应用节假日调整
+            scheduleResults = holidayScheduleService.adjustHolidaySchedule(
+                    request.getScheduleDate(), scheduleResults);
 
-        // 2. 执行排程算法
-        List<CxScheduleResult> results = algorithmService.executeScheduleAlgorithm(
-                scheduleDate, machines, materials, stocks);
+            // 7. 保存排程结果
+            saveScheduleResults(scheduleResults);
 
-        // 3. 保存排程结果
-        for (CxScheduleResult result : results) {
-            // 生成批次号
-            result.setCxBatchNo(cxScheduleResultService.generateBatchNo(scheduleDate));
-            result.setScheduleDate(scheduleDate.atStartOfDay());
-            result.setProductionStatus("0"); // 未生产
-            result.setIsRelease("0"); // 未发布
-            result.setDataSource("0"); // 自动排程
-            result.setCreateTime(LocalDateTime.now());
-            
-            // 保存主表
-            cxScheduleResultService.save(result);
-            
-            // 生成明细
-            List<CxScheduleDetail> details = algorithmService.generateScheduleDetails(
-                    result, getDefaultShiftConfig());
-            
-            // 设置明细的主表ID
-            details.forEach(detail -> {
-                detail.setMainId(result.getId());
-                detail.setScheduleDate(scheduleDate);
-                detail.setCreateTime(LocalDateTime.now());
-            });
-            
-            // 保存明细
-            cxScheduleDetailService.batchSave(details);
-        }
+            // 8. 验证排程结果
+            boolean validated = validateScheduleResults(scheduleResults);
 
-        log.info("日排程生成完成，日期: {}, 记录数: {}", scheduleDate, results.size());
-        return results;
-    }
+            result.setSuccess(validated);
+            result.setMessage(validated ? "排程成功" : "排程完成，但存在约束冲突");
+            result.setResults(scheduleResults);
 
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public boolean confirmSchedule(Long id) {
-        log.info("确认排程，ID: {}", id);
-        return cxScheduleResultService.updateProductionStatus(id, "0");
-    }
+            log.info("排程执行完成，日期：{}，结果数量：{}", 
+                    request.getScheduleDate(), scheduleResults.size());
 
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public boolean releaseSchedule(Long id) {
-        log.info("发布排程，ID: {}", id);
-        return cxScheduleResultService.releaseSchedule(id);
-    }
-
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public boolean batchReleaseSchedule(List<Long> ids) {
-        log.info("批量发布排程，ID数量: {}", ids.size());
-        return cxScheduleResultService.batchReleaseSchedule(ids);
-    }
-
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public boolean cancelSchedule(Long id) {
-        log.info("取消排程，ID: {}", id);
-        // 删除明细
-        cxScheduleDetailService.deleteByMainId(id);
-        // 删除主表
-        return cxScheduleResultService.removeById(id);
-    }
-
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public boolean deleteSchedule(Long id) {
-        log.info("删除排程，ID: {}", id);
-        return cancelSchedule(id);
-    }
-
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public boolean deleteScheduleByDate(LocalDate scheduleDate) {
-        log.info("删除日期排程，日期: {}", scheduleDate);
-        return cxScheduleResultService.deleteByScheduleDate(scheduleDate);
-    }
-
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public CxScheduleResult adjustSchedule(Long id, String adjustType, String adjustParam) {
-        log.info("调整排程，ID: {}, 类型: {}, 参数: {}", id, adjustType, adjustParam);
-        
-        CxScheduleResult result = cxScheduleResultService.getById(id);
-        if (result == null) {
-            return null;
-        }
-
-        // 根据调整类型执行不同逻辑
-        switch (adjustType) {
-            case "INSERT": // 插单
-                // TODO: 实现插单逻辑
-                break;
-            case "SWAP": // 换班
-                // TODO: 实现换班逻辑
-                break;
-            case "MODIFY": // 修改数量
-                if (adjustParam != null) {
-                    BigDecimal newQty = new BigDecimal(adjustParam);
-                    result.setProductNum(newQty);
-                    cxScheduleResultService.updateById(result);
-                }
-                break;
-            default:
-                log.warn("未知的调整类型: {}", adjustType);
+        } catch (Exception e) {
+            log.error("排程执行失败", e);
+            result.setMessage("排程失败：" + e.getMessage());
         }
 
         return result;
     }
 
     @Override
-    public ScheduleResultDTO getScheduleDetail(Long id) {
-        return cxScheduleResultService.getDetailById(id);
+    public ScheduleContextDTO buildScheduleContext(ScheduleRequest request) {
+        try {
+            ScheduleContextDTO context = new ScheduleContextDTO();
+
+            // 1. 获取机台信息
+            List<MdmMoldingMachine> machines = moldingMachineMapper.selectList(
+                    new LambdaQueryWrapper<MdmMoldingMachine>()
+                            .eq(MdmMoldingMachine::getIsActive, 1)
+                            .ne(MdmMoldingMachine::getMaintainStatus, "FAULT"));
+            context.setMachines(machines);
+
+            // 2. 获取物料信息
+            List<CxMaterial> materials = materialMapper.selectList(
+                    new LambdaQueryWrapper<CxMaterial>()
+                            .eq(CxMaterial::getIsActive, 1));
+            context.setMaterials(materials);
+
+            // 3. 获取库存信息
+            List<CxStock> stocks = stockMapper.selectList(
+                    new LambdaQueryWrapper<CxStock>()
+                            .gt(CxStock::getCurrentStock, 0));
+            context.setStocks(stocks);
+
+            // 4. 获取硫化计划（需求）
+            List<CxLhPlan> lhPlans = lhPlanMapper.selectList(
+                    new LambdaQueryWrapper<CxLhPlan>()
+                            .eq(CxLhPlan::getPlanDate, request.getScheduleDate())
+                            .eq(CxLhPlan::getStatus, "PENDING"));
+            context.setLhPlans(lhPlans);
+
+            // 5. 获取参数配置
+            List<CxParamConfig> paramConfigs = paramConfigMapper.selectList(null);
+            context.setParamConfigs(paramConfigs);
+
+            // 6. 设置排程参数
+            context.setScheduleDate(request.getScheduleDate());
+            context.setScheduleMode(request.getScheduleMode());
+            context.setReScheduleType(request.getReScheduleType());
+
+            return context;
+
+        } catch (Exception e) {
+            log.error("构建排程上下文失败", e);
+            return null;
+        }
     }
 
     @Override
-    public ScheduleStatusSummary getTodayScheduleStatus() {
-        LocalDate today = LocalDate.now();
-        List<CxScheduleResult> results = cxScheduleResultService.listByScheduleDate(today);
+    public boolean executeDynamicAdjust(String shiftCode) {
+        try {
+            log.info("执行动态调整，班次：{}", shiftCode);
 
-        ScheduleStatusSummary summary = new ScheduleStatusSummary();
-        summary.setScheduleDate(today);
-        summary.setTotalCount(results.size());
-        summary.setReleasedCount((int) results.stream()
-                .filter(r -> "1".equals(r.getIsRelease()))
-                .count());
-        summary.setProducingCount((int) results.stream()
-                .filter(r -> "1".equals(r.getProductionStatus()))
-                .count());
-        summary.setCompletedCount((int) results.stream()
-                .filter(r -> "2".equals(r.getProductionStatus()))
-                .count());
-        
-        // 计算预警数量
-        List<CxStock> alertStocks = cxStockService.listLowStock();
-        summary.setAlertCount(alertStocks.size());
+            // 获取当前日期
+            LocalDate today = LocalDate.now();
 
-        return summary;
-    }
+            // 执行交班前检查和调整
+            DynamicAdjustService.ShiftAdjustResult adjustResult = 
+                    dynamicAdjustService.checkAndAdjustBeforeShiftEnd(
+                            today.atStartOfDay(), shiftCode);
 
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public boolean refreshStockAlertStatus() {
-        log.info("刷新库存预警状态");
-        cxStockService.refreshAllAlertStatus();
-        return true;
-    }
-
-    @Override
-    public ConstraintCheckResult checkConstraints(CxScheduleResult scheduleResult) {
-        ConstraintCheckResult result = new ConstraintCheckResult();
-        List<String> violations = new ArrayList<>();
-
-        // 检查库存约束
-        CxStock stock = cxStockService.getByMaterialCode(scheduleResult.getEmbryoCode());
-        if (stock != null) {
-            AlgorithmService.StockConstraintResult stockResult = algorithmService.checkStockConstraint(
-                    stock, scheduleResult.getProductNum(), new BigDecimal("4"));
-            if (!stockResult.isPassed()) {
-                violations.add("库存约束不满足: " + stockResult.getReason());
+            if (adjustResult.isAdjusted()) {
+                log.info("动态调整完成：{}", adjustResult.getMessage());
+            } else {
+                log.info("无需动态调整：{}", adjustResult.getMessage());
             }
+
+            return true;
+
+        } catch (Exception e) {
+            log.error("动态调整失败", e);
+            return false;
+        }
+    }
+
+    @Override
+    public ScheduleResult executeTrialSchedule(LocalDate scheduleDate) {
+        ScheduleResult result = new ScheduleResult();
+        result.setScheduleDate(scheduleDate);
+
+        try {
+            // 获取待排程的试制计划
+            List<CxTrialPlan> trialPlans = trialScheduleService.getPendingTrialPlans();
+
+            // 执行试制排程
+            TrialScheduleService.TrialScheduleResult trialResult = 
+                    trialScheduleService.executeTrialSchedule(scheduleDate, trialPlans);
+
+            result.setSuccess(trialResult.isSuccess());
+            result.setMessage(trialResult.getMessage());
+
+            // 转换为通用排程结果格式
+            if (!CollectionUtils.isEmpty(trialResult.getScheduledDetails())) {
+                List<CxScheduleResult> results = new ArrayList<>();
+                for (CxScheduleDetail detail : trialResult.getScheduledDetails()) {
+                    CxScheduleResult sr = new CxScheduleResult();
+                    sr.setCxMachineCode(detail.getMachineCode());
+                    sr.setEmbryoCode(detail.getMaterialCode());
+                    sr.setProductNum(BigDecimal.valueOf(detail.getPlanQty()));
+                    sr.setScheduleDate(detail.getScheduleDate());
+                    sr.setShiftCode(detail.getShiftCode());
+                    sr.setIsTrial(1);
+                    results.add(sr);
+                }
+                result.setResults(results);
+            }
+
+            log.info("试制排程完成，日期：{}，结果：{}", scheduleDate, trialResult.getMessage());
+
+        } catch (Exception e) {
+            log.error("试制排程失败", e);
+            result.setSuccess(false);
+            result.setMessage("试制排程失败：" + e.getMessage());
         }
 
-        // 检查机台约束
-        MdmMoldingMachine machine = mdmMoldingMachineMapper.selectOne(
-                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<MdmMoldingMachine>()
-                        .eq(MdmMoldingMachine::getCxMachineCode, scheduleResult.getCxMachineCode()));
-        if (machine != null) {
-            boolean structureOk = algorithmService.checkStructureConstraint(
-                    machine, scheduleResult.getStructureName());
-            if (!structureOk) {
-                violations.add("机台结构约束不满足");
+        return result;
+    }
+
+    @Override
+    public boolean executeReSchedule(ReScheduleRequest request) {
+        try {
+            log.info("执行重排程，类型：{}，原因：{}", 
+                    request.getReScheduleType(), request.getReason());
+
+            // 构建排程请求
+            ScheduleRequest scheduleRequest = new ScheduleRequest();
+            scheduleRequest.setScheduleDate(request.getScheduleDate());
+            scheduleRequest.setScheduleMode("RE_SCHEDULE");
+            scheduleRequest.setReScheduleType(request.getReScheduleType());
+            scheduleRequest.setAffectedMachineCodes(request.getAffectedMachineCodes());
+
+            // 执行排程
+            ScheduleResult result = executeSchedule(scheduleRequest);
+
+            return result.isSuccess();
+
+        } catch (Exception e) {
+            log.error("重排程失败", e);
+            return false;
+        }
+    }
+
+    @Override
+    public ScheduleValidationResult validateSchedule(LocalDate scheduleDate) {
+        ScheduleValidationResult result = new ScheduleValidationResult();
+        result.setValid(true);
+        result.setErrors(new ArrayList<>());
+        result.setWarnings(new ArrayList<>());
+
+        try {
+            // 获取该日期的所有排程结果
+            List<CxScheduleResult> results = scheduleResultMapper.selectList(
+                    new LambdaQueryWrapper<CxScheduleResult>()
+                            .eq(CxScheduleResult::getScheduleDate, scheduleDate));
+
+            if (CollectionUtils.isEmpty(results)) {
+                result.setValid(false);
+                result.getErrors().add("无排程结果");
+                return result;
             }
+
+            // 逐个校验
+            for (CxScheduleResult scheduleResult : results) {
+                ConstraintCheckService.ConstraintCheckResult checkResult = 
+                        constraintCheckService.checkAllConstraints(scheduleResult);
+
+                if (!checkResult.isPassed()) {
+                    result.setValid(false);
+                    result.getErrors().addAll(checkResult.getViolations());
+                }
+
+                if (!CollectionUtils.isEmpty(checkResult.getWarnings())) {
+                    result.getWarnings().addAll(checkResult.getWarnings());
+                }
+            }
+
+        } catch (Exception e) {
+            log.error("验证排程失败", e);
+            result.setValid(false);
+            result.getErrors().add("验证异常：" + e.getMessage());
         }
 
-        result.setPassed(violations.isEmpty());
-        result.setViolations(violations);
         return result;
     }
 
     /**
-     * 获取默认班次配置（8班次）
+     * 执行内部试制排程
      */
-    private java.util.Map<String, AlgorithmService.ShiftConfig> getDefaultShiftConfig() {
-        java.util.Map<String, AlgorithmService.ShiftConfig> shifts = new java.util.LinkedHashMap<>();
-        
-        // 8班次配置
-        String[] shiftCodes = {"SHIFT1", "SHIFT2", "SHIFT3", "SHIFT4", "SHIFT5", "SHIFT6", "SHIFT7", "SHIFT8"};
-        String[] shiftNames = {"一班", "二班", "三班", "四班", "五班", "六班", "七班", "八班"};
-        int[] startHours = {0, 3, 6, 9, 12, 15, 18, 21};
-        int[] endHours = {3, 6, 9, 12, 15, 18, 21, 24};
+    private void executeTrialScheduleInternal(LocalDate scheduleDate) {
+        try {
+            // 获取待排程的试制计划
+            List<CxTrialPlan> trialPlans = trialScheduleService.getPendingTrialPlans();
 
-        for (int i = 0; i < shiftCodes.length; i++) {
-            AlgorithmService.ShiftConfig config = new AlgorithmService.ShiftConfig();
-            config.setShiftCode(shiftCodes[i]);
-            config.setShiftName(shiftNames[i]);
-            config.setStartHour(startHours[i]);
-            config.setEndHour(endHours[i]);
-            config.setStandardHours(3);
-            shifts.put(shiftCodes[i], config);
+            if (!CollectionUtils.isEmpty(trialPlans)) {
+                // 执行试制排程
+                TrialScheduleService.TrialScheduleResult trialResult = 
+                        trialScheduleService.executeTrialSchedule(scheduleDate, trialPlans);
+
+                log.info("试制排程完成：{}", trialResult.getMessage());
+            }
+
+        } catch (Exception e) {
+            log.error("试制排程失败", e);
+        }
+    }
+
+    /**
+     * 保存排程结果
+     */
+    @Transactional(rollbackFor = Exception.class)
+    private void saveScheduleResults(List<CxScheduleResult> results) {
+        if (CollectionUtils.isEmpty(results)) {
+            return;
         }
 
-        return shifts;
+        for (CxScheduleResult result : results) {
+            result.setCreateTime(LocalDateTime.now());
+            result.setStatus("PLANNED");
+            scheduleResultMapper.insert(result);
+
+            // 保存明细
+            if (!CollectionUtils.isEmpty(result.getDetails())) {
+                for (CxScheduleDetail detail : result.getDetails()) {
+                    detail.setResultId(result.getId());
+                    detail.setCreateTime(LocalDateTime.now());
+                    scheduleDetailMapper.insert(detail);
+                }
+            }
+        }
+
+        log.info("保存排程结果 {} 条", results.size());
+    }
+
+    /**
+     * 验证排程结果
+     */
+    private boolean validateScheduleResults(List<CxScheduleResult> results) {
+        if (CollectionUtils.isEmpty(results)) {
+            return false;
+        }
+
+        int validCount = 0;
+        for (CxScheduleResult result : results) {
+            ConstraintCheckService.ConstraintCheckResult checkResult = 
+                    constraintCheckService.checkAllConstraints(result);
+            if (checkResult.isPassed()) {
+                validCount++;
+            } else {
+                log.warn("排程结果存在约束冲突，机台：{}，物料：{}，冲突：{}",
+                        result.getCxMachineCode(), result.getEmbryoCode(), 
+                        checkResult.getViolations());
+            }
+        }
+
+        return validCount == results.size();
     }
 }

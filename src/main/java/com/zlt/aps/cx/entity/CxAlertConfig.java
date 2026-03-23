@@ -1,74 +1,43 @@
 package com.zlt.aps.cx.entity;
 
-import com.baomidou.mybatisplus.annotation.*;
-import io.swagger.v3.oas.annotations.media.Schema;
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
-import java.io.Serializable;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
- * 预警配置实体类
- * 对应数据库表：T_CX_ALERT_CONFIG
+ * 预警配置实体
  *
  * @author APS Team
  */
 @Data
-@TableName(value = "T_CX_ALERT_CONFIG", keepGlobalPrefix = false)
-@Schema(description = "预警配置")
-public class CxAlertConfig implements Serializable {
+@TableName("cx_alert_config")
+public class CxAlertConfig {
 
-    private static final long serialVersionUID = 1L;
-
-    @Schema(description = "主键ID")
-    @TableId(value = "ID", type = IdType.AUTO)
+    @TableId(type = IdType.AUTO)
     private Long id;
 
-    @Schema(description = "配置编码")
-    @TableField("CONFIG_CODE")
-    private String configCode;
+    /** 预警类型 */
+    private String alertType;
 
-    @Schema(description = "配置名称")
-    @TableField("CONFIG_NAME")
-    private String configName;
+    /** 预警名称 */
+    private String alertName;
 
-    @Schema(description = "配置值")
-    @TableField("CONFIG_VALUE")
-    private String configValue;
+    /** 预警阈值 */
+    private BigDecimal thresholdValue;
 
-    @Schema(description = "配置类型")
-    @TableField("CONFIG_TYPE")
-    private String configType;
+    /** 预警级别 */
+    private String alertLevel;
 
-    @Schema(description = "单位")
-    @TableField("CONFIG_UNIT")
-    private String configUnit;
+    /** 是否启用 */
+    private Integer isEnabled;
 
-    @Schema(description = "配置说明")
-    @TableField("DESCRIPTION")
-    private String description;
+    /** 备注 */
+    private String remark;
 
-    @Schema(description = "是否启用")
-    @TableField("IS_ACTIVE")
-    private Integer isActive;
-
-    @Schema(description = "生效日期")
-    @TableField("EFFECTIVE_DATE")
-    private LocalDateTime effectiveDate;
-
-    @Schema(description = "创建时间")
-    @TableField(value = "CREATE_TIME", fill = FieldFill.INSERT)
+    /** 创建时间 */
     private LocalDateTime createTime;
-
-    @Schema(description = "更新时间")
-    @TableField(value = "UPDATE_TIME", fill = FieldFill.INSERT_UPDATE)
-    private LocalDateTime updateTime;
-
-    @Schema(description = "创建人")
-    @TableField("CREATE_BY")
-    private String createBy;
-
-    @Schema(description = "更新人")
-    @TableField("UPDATE_BY")
-    private String updateBy;
 }

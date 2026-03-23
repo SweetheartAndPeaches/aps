@@ -1,14 +1,14 @@
 package com.zlt.aps.cx.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import com.zlt.aps.cx.entity.CxAlertConfig;
+import com.zlt.aps.cx.entity.CxMaterialException;
 import org.apache.ibatis.annotations.Mapper;
 
 /**
- * 预警配置Mapper
+ * 材料异常记录Mapper
  *
  * @author APS Team
  */
 @Mapper
-public interface CxAlertConfigMapper extends BaseMapper<CxAlertConfig> {
+public interface CxMaterialExceptionMapper extends BaseMapper<CxMaterialException> {
 }

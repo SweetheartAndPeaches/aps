@@ -1,0 +1,511 @@
+package com.zlt.aps.cx.service.impl;
+
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.zlt.aps.cx.entity.*;
+import com.zlt.aps.cx.entity.config.CxParamConfig;
+import com.zlt.aps.cx.entity.mdm.*;
+import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
+import com.zlt.aps.cx.mapper.*;
+import com.zlt.aps.cx.service.ConstraintCheckService;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.util.CollectionUtils;
+
+import java.math.BigDecimal;
+import java.time.DayOfWeek;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * 约束校验服务实现类
+ *
+ * @author APS Team
+ */
+@Slf4j
+@Service
+public class ConstraintCheckServiceImpl implements ConstraintCheckService {
+
+    @Autowired
+    private MdmCxMachineFixedMapper machineFixedMapper;
+
+    @Autowired
+    private MdmStructureLhRatioMapper structureLhRatioMapper;
+
+    @Autowired
+    private CxTreadParkingConfigMapper treadParkingConfigMapper;
+
+    @Autowired
+    private CxPrecisionPlanMapper precisionPlanMapper;
+
+    @Autowired
+    private CxOperatorLeaveMapper operatorLeaveMapper;
+
+    @Autowired
+    private CxAlertConfigMapper alertConfigMapper;
+
+    @Autowired
+    private CxParamConfigMapper paramConfigMapper;
+
+    @Autowired
+    private MdmMoldingMachineMapper moldingMachineMapper;
+
+    @Autowired
+    private CxMaterialMapper materialMapper;
+
+    @Override
+    public ConstraintCheckResult checkAllConstraints(CxScheduleResult scheduleResult) {
+        List<String> violations = new ArrayList<>();
+        List<String> warnings = new ArrayList<>();
+
+        // 获取机台信息
+        MdmMoldingMachine machine = moldingMachineMapper.selectOne(
+                new LambdaQueryWrapper<MdmMoldingMachine>()
+                        .eq(MdmMoldingMachine::getCxMachineCode, scheduleResult.getCxMachineCode()));
+
+        // 获取物料信息
+        CxMaterial material = materialMapper.selectOne(
+                new LambdaQueryWrapper<CxMaterial>()
+                        .eq(CxMaterial::getMaterialCode, scheduleResult.getEmbryoCode()));
+
+        // 1. 检查结构约束
+        if (machine != null && material != null) {
+            ConstraintCheckResult structureResult = checkStructureConstraint(machine, material);
+            if (!structureResult.isPassed()) {
+                violations.addAll(structureResult.getViolations());
+            }
+        }
+
+        // 2. 检查产能约束
+        if (machine != null) {
+            ConstraintCheckResult capacityResult = checkCapacityConstraint(
+                    machine, scheduleResult.getProductNum(), 24);
+            if (!capacityResult.isPassed()) {
+                violations.addAll(capacityResult.getViolations());
+            }
+        }
+
+        // 3. 检查精度计划约束
+        ConstraintCheckResult precisionResult = checkPrecisionPlanConstraint(
+                scheduleResult.getCxMachineCode(),
+                scheduleResult.getScheduleDate(),
+                null);
+        if (!precisionResult.isPassed()) {
+            violations.addAll(precisionResult.getViolations());
+        }
+
+        // 4. 检查操作工请假约束
+        ConstraintCheckResult leaveResult = checkOperatorLeaveConstraint(
+                scheduleResult.getCxMachineCode(),
+                null,
+                scheduleResult.getScheduleDate());
+        if (!leaveResult.isPassed()) {
+            warnings.addAll(leaveResult.getViolations());
+        }
+
+        // 构建结果
+        ConstraintCheckResult result = new ConstraintCheckResult();
+        result.setPassed(violations.isEmpty());
+        result.setViolations(violations);
+        result.setWarnings(warnings);
+        return result;
+    }
+
+    @Override
+    public ConstraintCheckResult checkStructureConstraint(MdmMoldingMachine machine, CxMaterial material) {
+        if (machine == null || material == null) {
+            return ConstraintCheckResult.fail("机台或物料信息为空");
+        }
+
+        List<String> violations = new ArrayList<>();
+        String structure = material.getProductStructure();
+
+        // 检查固定机台配置
+        List<MdmCxMachineFixed> fixedConfigs = machineFixedMapper.selectList(
+                new LambdaQueryWrapper<MdmCxMachineFixed>()
+                        .eq(MdmCxMachineFixed::getCxMachineCode, machine.getCxMachineCode()));
+
+        for (MdmCxMachineFixed fixed : fixedConfigs) {
+            // 检查不可作业结构
+            if (fixed.getDisableStructure() != null && 
+                containsValue(fixed.getDisableStructure(), structure)) {
+                violations.add(String.format("机台 %s 不可作业结构 %s", 
+                        machine.getCxMachineCode(), structure));
+            }
+
+            // 检查不可作业SKU
+            if (fixed.getDisableMaterialCode() != null && 
+                containsValue(fixed.getDisableMaterialCode(), material.getMaterialCode())) {
+                violations.add(String.format("机台 %s 不可作业SKU %s", 
+                        machine.getCxMachineCode(), material.getMaterialCode()));
+            }
+        }
+
+        // 检查硫化配比
+        List<MdmStructureLhRatio> ratios = structureLhRatioMapper.selectList(
+                new LambdaQueryWrapper<MdmStructureLhRatio>()
+                        .eq(MdmStructureLhRatio::getStructureName, structure));
+
+        for (MdmStructureLhRatio ratio : ratios) {
+            // 检查机型是否匹配
+            if (ratio.getCxMachineTypeCode() != null && 
+                !ratio.getCxMachineTypeCode().equals(machine.getCxMachineTypeCode())) {
+                violations.add(String.format("结构 %s 不匹配机型 %s", 
+                        structure, machine.getCxMachineTypeCode()));
+            }
+        }
+
+        if (violations.isEmpty()) {
+            return ConstraintCheckResult.pass();
+        } else {
+            return ConstraintCheckResult.fail(violations);
+        }
+    }
+
+    @Override
+    public ConstraintCheckResult checkStockConstraint(CxStock stock, BigDecimal planQty, BigDecimal alertThreshold) {
+        List<String> violations = new ArrayList<>();
+
+        if (stock == null) {
+            return ConstraintCheckResult.fail("库存信息不存在");
+        }
+
+        if (stock.getCurrentStock() == null || stock.getCurrentStock() <= 0) {
+            return ConstraintCheckResult.fail("库存为零");
+        }
+
+        // 检查库存是否满足计划量
+        if (planQty != null && planQty.compareTo(BigDecimal.valueOf(stock.getCurrentStock())) > 0) {
+            violations.add(String.format("库存不足，当前库存: %d, 计划量: %s", 
+                    stock.getCurrentStock(), planQty));
+        }
+
+        // 检查库存时长预警
+        BigDecimal stockHours = stock.getStockHours();
+        if (stockHours != null && alertThreshold != null && 
+            stockHours.compareTo(alertThreshold) < 0) {
+            violations.add(String.format("库存可供硫化时长低于预警阈值，当前: %.2f小时, 阈值: %.2f小时", 
+                    stockHours, alertThreshold));
+        }
+
+        if (violations.isEmpty()) {
+            ConstraintCheckResult result = ConstraintCheckResult.pass();
+            result.setDetails(String.format("库存充足，当前: %d条，可供时长: %.2f小时", 
+                    stock.getCurrentStock(), stockHours != null ? stockHours : BigDecimal.ZERO));
+            return result;
+        } else {
+            return ConstraintCheckResult.fail(violations);
+        }
+    }
+
+    @Override
+    public ConstraintCheckResult checkTreadParkingTime(String materialCode, LocalDateTime produceTime, LocalDateTime scheduleTime) {
+        List<String> violations = new ArrayList<>();
+        List<String> warnings = new ArrayList<>();
+
+        if (produceTime == null || scheduleTime == null) {
+            return ConstraintCheckResult.pass();
+        }
+
+        // 计算停放时间（小时）
+        long parkingHours = ChronoUnit.HOURS.between(produceTime, scheduleTime);
+
+        // 获取胎面停放配置
+        CxTreadParkingConfig config = getTreadParkingConfig(materialCode);
+
+        if (config != null) {
+            // 检查最小停放时间
+            if (config.getMinParkingHours() != null && parkingHours < config.getMinParkingHours()) {
+                violations.add(String.format("胎面停放时间不足，当前: %d小时，要求最少: %d小时", 
+                        parkingHours, config.getMinParkingHours()));
+            }
+
+            // 检查最大停放时间
+            if (config.getMaxParkingHours() != null && parkingHours > config.getMaxParkingHours()) {
+                warnings.add(String.format("胎面停放时间过长，当前: %d小时，建议最多: %d小时", 
+                        parkingHours, config.getMaxParkingHours()));
+            }
+        } else {
+            // 默认规则：停放4小时以上
+            if (parkingHours < 4) {
+                violations.add(String.format("胎面停放时间不足4小时，当前: %d小时", parkingHours));
+            }
+        }
+
+        // 检查是否差10分钟以内（预警）
+        long parkingMinutes = ChronoUnit.MINUTES.between(produceTime, scheduleTime);
+        if (config != null && config.getMinParkingHours() != null) {
+            long minMinutes = config.getMinParkingHours() * 60;
+            if (parkingMinutes >= minMinutes && parkingMinutes < minMinutes + 10) {
+                warnings.add("胎面停放时间刚好满足，建议关注");
+            }
+        }
+
+        ConstraintCheckResult result = new ConstraintCheckResult();
+        result.setPassed(violations.isEmpty());
+        result.setViolations(violations);
+        result.setWarnings(warnings);
+        return result;
+    }
+
+    @Override
+    public ConstraintCheckResult checkCapacityConstraint(MdmMoldingMachine machine, BigDecimal planQty, Integer shiftHours) {
+        if (machine == null) {
+            return ConstraintCheckResult.fail("机台信息为空");
+        }
+
+        List<String> violations = new ArrayList<>();
+
+        // 计算机台产能
+        BigDecimal capacity = machine.getProductionCapacity() != null 
+                ? machine.getProductionCapacity().multiply(BigDecimal.valueOf(shiftHours != null ? shiftHours : 24))
+                : BigDecimal.valueOf(1200); // 默认1200条/天
+
+        // 检查产能是否满足
+        if (planQty != null && planQty.compareTo(capacity) > 0) {
+            violations.add(String.format("机台产能不足，计划量: %s，最大产能: %s", 
+                    planQty, capacity));
+        }
+
+        // 检查机台状态
+        if ("MAINTAINING".equals(machine.getMaintainStatus())) {
+            violations.add(String.format("机台 %s 正在维护中", machine.getCxMachineCode()));
+        }
+        if ("FAULT".equals(machine.getMaintainStatus())) {
+            violations.add(String.format("机台 %s 故障中", machine.getCxMachineCode()));
+        }
+        if (machine.getIsActive() == null || machine.getIsActive() != 1) {
+            violations.add(String.format("机台 %s 未启用", machine.getCxMachineCode()));
+        }
+
+        if (violations.isEmpty()) {
+            ConstraintCheckResult result = ConstraintCheckResult.pass();
+            result.setDetails(String.format("机台产能满足，计划量: %s，最大产能: %s", 
+                    planQty, capacity));
+            return result;
+        } else {
+            return ConstraintCheckResult.fail(violations);
+        }
+    }
+
+    @Override
+    public ConstraintCheckResult checkTypeLimitConstraint(String machineCode, int currentTypes, String newMaterial) {
+        // 每台成型机最多做4种不同的胎胚
+        if (currentTypes >= 4) {
+            // 检查是否为固定机台配置的物料
+            List<MdmCxMachineFixed> fixedConfigs = machineFixedMapper.selectList(
+                    new LambdaQueryWrapper<MdmCxMachineFixed>()
+                            .eq(MdmCxMachineFixed::getCxMachineCode, machineCode));
+
+            for (MdmCxMachineFixed fixed : fixedConfigs) {
+                if (containsValue(fixed.getFixedMaterialCode(), newMaterial)) {
+                    // 固定SKU不算新种类
+                    return ConstraintCheckResult.pass();
+                }
+            }
+
+            return ConstraintCheckResult.fail(String.format(
+                    "机台 %s 已达到种类上限（4种），无法分配新物料 %s", 
+                    machineCode, newMaterial));
+        }
+
+        return ConstraintCheckResult.pass();
+    }
+
+    @Override
+    public ConstraintCheckResult checkLhRatioConstraint(String structureName, String machineType, int lhMachineCount) {
+        List<MdmStructureLhRatio> ratios = structureLhRatioMapper.selectList(
+                new LambdaQueryWrapper<MdmStructureLhRatio>()
+                        .eq(MdmStructureLhRatio::getStructureName, structureName));
+
+        for (MdmStructureLhRatio ratio : ratios) {
+            // 检查机型匹配
+            if (ratio.getCxMachineTypeCode() != null && 
+                !ratio.getCxMachineTypeCode().equals(machineType)) {
+                continue;
+            }
+
+            // 检查硫化机数量是否超过上限
+            if (ratio.getLhMachineMaxQty() != null && lhMachineCount > ratio.getLhMachineMaxQty()) {
+                return ConstraintCheckResult.fail(String.format(
+                        "结构 %s 硫化机数量超过上限，当前: %d，上限: %d", 
+                        structureName, lhMachineCount, ratio.getLhMachineMaxQty()));
+            }
+        }
+
+        return ConstraintCheckResult.pass();
+    }
+
+    @Override
+    public ConstraintCheckResult checkKeyProductConstraint(CxMaterial material, boolean isOpeningDay, boolean isFirstShift) {
+        if (!isOpeningDay || !isFirstShift) {
+            return ConstraintCheckResult.pass();
+        }
+
+        // 检查是否为关键产品（这里简化处理，实际应根据业务规则判断）
+        if (material != null && material.getIsMainProduct() != null && material.getIsMainProduct() == 1) {
+            // TODO: 需要根据配置判断是否为关键产品
+            // 如果是关键产品且是开产首班，返回失败
+            // 但如果这个结构只有这一个产品，则允许排产
+            return ConstraintCheckResult.fail("开产首班不排关键产品");
+        }
+
+        return ConstraintCheckResult.pass();
+    }
+
+    @Override
+    public ConstraintCheckResult checkTrialConstraint(LocalDateTime scheduleDate, int trialTaskCount, String shiftCode, int quantity) {
+        List<String> violations = new ArrayList<>();
+
+        // 检查周日
+        if (scheduleDate != null && scheduleDate.getDayOfWeek() == DayOfWeek.SUNDAY) {
+            violations.add("周日不安排试制");
+        }
+
+        // 检查一天最多2个新胎胚
+        if (trialTaskCount >= 2) {
+            violations.add("当天已安排2个试制任务，无法再安排");
+        }
+
+        // 检查班次（只能安排在早班或中班）
+        if (shiftCode != null && "SHIFT_NIGHT".equals(shiftCode)) {
+            violations.add("试制任务只能安排在早班或中班");
+        }
+
+        // 检查数量必须是双数
+        if (quantity % 2 != 0) {
+            violations.add("试制数量必须是双数");
+        }
+
+        if (violations.isEmpty()) {
+            return ConstraintCheckResult.pass();
+        } else {
+            return ConstraintCheckResult.fail(violations);
+        }
+    }
+
+    @Override
+    public ConstraintCheckResult checkPrecisionPlanConstraint(String machineCode, LocalDateTime scheduleDate, String shiftCode) {
+        if (scheduleDate == null) {
+            return ConstraintCheckResult.pass();
+        }
+
+        List<CxPrecisionPlan> plans = precisionPlanMapper.selectList(
+                new LambdaQueryWrapper<CxPrecisionPlan>()
+                        .eq(CxPrecisionPlan::getMachineCode, machineCode)
+                        .eq(CxPrecisionPlan::getPlanDate, scheduleDate.toLocalDate()));
+
+        for (CxPrecisionPlan plan : plans) {
+            if ("PLANNED".equals(plan.getStatus()) || "IN_PROGRESS".equals(plan.getStatus())) {
+                // 检查班次是否在精度时间范围内
+                if (shiftCode != null && plan.getPlanShift() != null) {
+                    if (shiftCode.contains(plan.getPlanShift().toUpperCase()) || 
+                        plan.getPlanShift().toUpperCase().contains(shiftCode)) {
+                        return ConstraintCheckResult.fail(String.format(
+                                "机台 %s 在 %s 有精度计划，不可排产", 
+                                machineCode, scheduleDate.toLocalDate()));
+                    }
+                } else {
+                    return ConstraintCheckResult.fail(String.format(
+                            "机台 %s 在 %s 有精度计划，不可排产", 
+                            machineCode, scheduleDate.toLocalDate()));
+                }
+            }
+        }
+
+        return ConstraintCheckResult.pass();
+    }
+
+    @Override
+    public ConstraintCheckResult checkOperatorLeaveConstraint(String machineCode, String shiftCode, LocalDateTime scheduleDate) {
+        if (scheduleDate == null) {
+            return ConstraintCheckResult.pass();
+        }
+
+        List<CxOperatorLeave> leaves = operatorLeaveMapper.selectList(
+                new LambdaQueryWrapper<CxOperatorLeave>()
+                        .eq(CxOperatorLeave::getMachineCode, machineCode)
+                        .eq(CxOperatorLeave::getApprovalStatus, "APPROVED")
+                        .le(CxOperatorLeave::getStartDate, scheduleDate.toLocalDate())
+                        .ge(CxOperatorLeave::getEndDate, scheduleDate.toLocalDate()));
+
+        if (!CollectionUtils.isEmpty(leaves)) {
+            List<String> warnings = new ArrayList<>();
+            for (CxOperatorLeave leave : leaves) {
+                // 检查是否影响产能
+                if (leave.getAffectCapacity() != null && leave.getAffectCapacity() == 1) {
+                    warnings.add(String.format("操作工 %s 请假中，产能受影响", leave.getEmployeeName()));
+                }
+            }
+
+            if (!warnings.isEmpty()) {
+                ConstraintCheckResult result = ConstraintCheckResult.pass();
+                result.setWarnings(warnings);
+                return result;
+            }
+        }
+
+        return ConstraintCheckResult.pass();
+    }
+
+    @Override
+    public ConstraintCheckResult checkEndingConstraint(CxMaterial material, CxStock stock, BigDecimal remainingQty) {
+        if (remainingQty == null || remainingQty.compareTo(BigDecimal.ZERO) <= 0) {
+            return ConstraintCheckResult.pass();
+        }
+
+        List<String> warnings = new ArrayList<>();
+
+        // 检查是否为主销产品
+        boolean isMainProduct = material != null && 
+                material.getIsMainProduct() != null && 
+                material.getIsMainProduct() == 1;
+
+        if (isMainProduct) {
+            // 主销产品：收尾余量不够一整车时，按整车下
+            if (remainingQty.compareTo(BigDecimal.valueOf(12)) < 0) {
+                warnings.add(String.format("主销产品收尾余量 %s 不够一整车，建议按整车（12条）下达", remainingQty));
+            }
+        } else {
+            // 非主销产品：收尾余量≤2条时舍弃，>2条时按实际量下
+            if (remainingQty.compareTo(BigDecimal.valueOf(2)) <= 0) {
+                warnings.add(String.format("非主销产品收尾余量 %s ≤2条，建议舍弃", remainingQty));
+            }
+        }
+
+        if (!warnings.isEmpty()) {
+            ConstraintCheckResult result = ConstraintCheckResult.pass();
+            result.setWarnings(warnings);
+            return result;
+        }
+
+        return ConstraintCheckResult.pass();
+    }
+
+    @Override
+    public CxTreadParkingConfig getTreadParkingConfig(String structureCode) {
+        return treadParkingConfigMapper.selectOne(
+                new LambdaQueryWrapper<CxTreadParkingConfig>()
+                        .eq(CxTreadParkingConfig::getStructureCode, structureCode)
+                        .eq(CxTreadParkingConfig::getIsEnabled, 1)
+                        .last("LIMIT 1"));
+    }
+
+    /**
+     * 检查逗号分隔的字符串中是否包含指定值
+     */
+    private boolean containsValue(String commaSeparated, String value) {
+        if (commaSeparated == null || value == null) {
+            return false;
+        }
+        String[] values = commaSeparated.split(",");
+        for (String v : values) {
+            if (v.trim().equals(value)) {
+                return true;
+            }
+        }
+        return false;
+    }
+}
