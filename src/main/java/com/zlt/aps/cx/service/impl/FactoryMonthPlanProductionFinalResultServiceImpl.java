@@ -21,18 +21,18 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * 月度生产计划服务实现类
+ * 工厂月生产计划服务实现类
  * 
  * @author APS Team
  */
 @Service
-public class MonthPlanFinalServiceImpl extends ServiceImpl<MonthPlanFinalMapper, MonthPlanFinal> 
-        implements MonthPlanFinalService {
+public class FactoryMonthPlanProductionFinalResultServiceImpl extends ServiceImpl<FactoryMonthPlanProductionFinalResultMapper, FactoryMonthPlanProductionFinalResult> 
+        implements FactoryMonthPlanProductionFinalResultService {
 
-    private static final Logger logger = LoggerFactory.getLogger(MonthPlanFinalServiceImpl.class);
+    private static final Logger logger = LoggerFactory.getLogger(FactoryMonthPlanProductionFinalResultServiceImpl.class);
 
     @Autowired
-    private MonthPlanFinalMapper monthPlanFinalMapper;
+    private FactoryMonthPlanProductionFinalResultMapper factoryMonthPlanProductionFinalResultMapper;
 
     @Autowired
     private LhScheduleResultMapper lhScheduleResultMapper;
@@ -50,72 +50,72 @@ public class MonthPlanFinalServiceImpl extends ServiceImpl<MonthPlanFinalMapper,
     private AlgorithmService algorithmService;
 
     @Override
-    public List<MonthPlanFinal> getByYearMonth(Integer yearMonth) {
-        return monthPlanFinalMapper.selectByYearMonth(yearMonth);
+    public List<FactoryMonthPlanProductionFinalResult> getByYearMonth(Integer yearMonth) {
+        return factoryMonthPlanProductionFinalResultMapper.selectByYearMonth(yearMonth);
     }
 
     @Override
-    public List<MonthPlanFinal> getByYearAndMonth(Integer year, Integer month) {
-        return monthPlanFinalMapper.selectByYearAndMonth(year, month);
+    public List<FactoryMonthPlanProductionFinalResult> getByYearAndMonth(Integer year, Integer month) {
+        return factoryMonthPlanProductionFinalResultMapper.selectByYearAndMonth(year, month);
     }
 
     @Override
-    public List<MonthPlanFinal> getByFactoryAndYearMonth(String factoryCode, Integer yearMonth) {
-        return monthPlanFinalMapper.selectByFactoryAndYearMonth(factoryCode, yearMonth);
+    public List<FactoryMonthPlanProductionFinalResult> getByFactoryAndYearMonth(String factoryCode, Integer yearMonth) {
+        return factoryMonthPlanProductionFinalResultMapper.selectByFactoryAndYearMonth(factoryCode, yearMonth);
     }
 
     @Override
-    public MonthPlanFinal getByProductionNo(String productionNo) {
-        return monthPlanFinalMapper.selectByProductionNo(productionNo);
+    public FactoryMonthPlanProductionFinalResult getByProductionNo(String productionNo) {
+        return factoryMonthPlanProductionFinalResultMapper.selectByProductionNo(productionNo);
     }
 
     @Override
-    public Page<MonthPlanFinal> getPage(int pageNum, int pageSize, Integer yearMonth, String factoryCode) {
-        Page<MonthPlanFinal> page = new Page<>(pageNum, pageSize);
-        return (Page<MonthPlanFinal>) monthPlanFinalMapper.selectPageByYearMonth(page, yearMonth, factoryCode);
-    }
-
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public boolean save(MonthPlanFinal monthPlan) {
-        monthPlan.setCreateTime(LocalDateTime.now());
-        monthPlan.setUpdateTime(LocalDateTime.now());
-        return monthPlanFinalMapper.insert(monthPlan) > 0;
+    public Page<FactoryMonthPlanProductionFinalResult> getPage(int pageNum, int pageSize, Integer yearMonth, String factoryCode) {
+        Page<FactoryMonthPlanProductionFinalResult> page = new Page<>(pageNum, pageSize);
+        return (Page<FactoryMonthPlanProductionFinalResult>) factoryMonthPlanProductionFinalResultMapper.selectPageByYearMonth(page, yearMonth, factoryCode);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public boolean saveBatch(List<MonthPlanFinal> monthPlans) {
-        for (MonthPlanFinal plan : monthPlans) {
-            plan.setCreateTime(LocalDateTime.now());
-            plan.setUpdateTime(LocalDateTime.now());
+    public boolean save(FactoryMonthPlanProductionFinalResult result) {
+        result.setCreateTime(LocalDateTime.now());
+        result.setUpdateTime(LocalDateTime.now());
+        return factoryMonthPlanProductionFinalResultMapper.insert(result) > 0;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean saveBatch(List<FactoryMonthPlanProductionFinalResult> results) {
+        for (FactoryMonthPlanProductionFinalResult result : results) {
+            result.setCreateTime(LocalDateTime.now());
+            result.setUpdateTime(LocalDateTime.now());
         }
-        return super.saveBatch(monthPlans);
+        return super.saveBatch(results);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public boolean update(MonthPlanFinal monthPlan) {
-        monthPlan.setUpdateTime(LocalDateTime.now());
-        return monthPlanFinalMapper.updateById(monthPlan) > 0;
+    public boolean update(FactoryMonthPlanProductionFinalResult result) {
+        result.setUpdateTime(LocalDateTime.now());
+        return factoryMonthPlanProductionFinalResultMapper.updateById(result) > 0;
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean delete(Long id) {
-        return monthPlanFinalMapper.deleteById(id) > 0;
+        return factoryMonthPlanProductionFinalResultMapper.deleteById(id) > 0;
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean release(Integer yearMonth, String productionVersion) {
-        List<MonthPlanFinal> plans = monthPlanFinalMapper.selectByVersion(yearMonth, productionVersion);
-        for (MonthPlanFinal plan : plans) {
-            plan.setIsRelease("1");
-            plan.setUpdateTime(LocalDateTime.now());
-            monthPlanFinalMapper.updateById(plan);
+        List<FactoryMonthPlanProductionFinalResult> results = factoryMonthPlanProductionFinalResultMapper.selectByVersion(yearMonth, productionVersion);
+        for (FactoryMonthPlanProductionFinalResult result : results) {
+            result.setIsRelease("1");
+            result.setUpdateTime(LocalDateTime.now());
+            factoryMonthPlanProductionFinalResultMapper.updateById(result);
         }
-        logger.info("发布月计划成功，年月: {}, 版本: {}, 数量: {}", yearMonth, productionVersion, plans.size());
+        logger.info("发布月计划成功，年月: {}, 版本: {}, 数量: {}", yearMonth, productionVersion, results.size());
         return true;
     }
 
@@ -135,8 +135,8 @@ public class MonthPlanFinalServiceImpl extends ServiceImpl<MonthPlanFinalMapper,
         logger.info("开始拆分月计划到日硫化排程，年月: {}, 日期: {}", yearMonth, day);
         
         // 1. 查询当天有排产的月计划
-        List<MonthPlanFinal> monthPlans = monthPlanFinalMapper.selectWithPlanOnDay(yearMonth, day);
-        if (monthPlans == null || monthPlans.isEmpty()) {
+        List<FactoryMonthPlanProductionFinalResult> results = factoryMonthPlanProductionFinalResultMapper.selectWithPlanOnDay(yearMonth, day);
+        if (results == null || results.isEmpty()) {
             logger.info("未找到月计划数据，年月: {}, 日期: {}", yearMonth, day);
             return Collections.emptyList();
         }
@@ -146,8 +146,8 @@ public class MonthPlanFinalServiceImpl extends ServiceImpl<MonthPlanFinalMapper,
         int sortIndex = 1;
         LocalDate scheduleDate = convertToDate(yearMonth, day);
         
-        for (MonthPlanFinal monthPlan : monthPlans) {
-            Integer planQty = monthPlan.getDayQty(day);
+        for (FactoryMonthPlanProductionFinalResult result : results) {
+            Integer planQty = result.getDayQty(day);
             if (planQty == null || planQty <= 0) {
                 continue;
             }
@@ -155,9 +155,9 @@ public class MonthPlanFinalServiceImpl extends ServiceImpl<MonthPlanFinalMapper,
             LhScheduleResult dailyPlan = new LhScheduleResult();
             dailyPlan.setBatchNo(generateBatchNo(yearMonth, day, sortIndex));
             dailyPlan.setScheduleDate(scheduleDate);
-            dailyPlan.setMaterialCode(monthPlan.getMaterialCode());
+            dailyPlan.setMaterialCode(result.getMaterialCode());
             dailyPlan.setDailyPlanQty(planQty);
-            dailyPlan.setStructureName(monthPlan.getProductStructure());
+            dailyPlan.setStructureName(result.getStructureName());
             dailyPlan.setProductionStatus("PENDING");
             dailyPlan.setMachineOrder(sortIndex);
             dailyPlan.setCreateTime(LocalDateTime.now());
@@ -275,31 +275,31 @@ public class MonthPlanFinalServiceImpl extends ServiceImpl<MonthPlanFinalMapper,
             ));
         
         // 4. 更新月计划
-        List<MonthPlanFinal> monthPlans = monthPlanFinalMapper.selectByYearMonth(yearMonth);
-        for (MonthPlanFinal plan : monthPlans) {
-            String materialCode = plan.getMaterialCode();
+        List<FactoryMonthPlanProductionFinalResult> results = factoryMonthPlanProductionFinalResultMapper.selectByYearMonth(yearMonth);
+        for (FactoryMonthPlanProductionFinalResult planResult : results) {
+            String materialCode = planResult.getMaterialCode();
             Integer scheduledQty = materialQtyMap.get(materialCode);
-            Integer planQty = plan.getDayQty(day);
+            Integer planQty = planResult.getDayQty(day);
             
             if (planQty != null && planQty > 0) {
                 // 更新实际排产量
                 if (scheduledQty != null) {
-                    plan.setTotalQty(scheduledQty);
-                    plan.setDifferenceQty(planQty - scheduledQty);
+                    planResult.setTotalQty(scheduledQty);
+                    planResult.setDifferenceQty(planQty - scheduledQty);
                 }
                 
                 // 更新分配的机台
                 String machines = materialMachineMap.get(materialCode);
                 if (machines != null) {
-                    plan.setCxMachineCode(machines);
+                    planResult.setCxMachineCode(machines);
                 }
                 
-                plan.setUpdateTime(LocalDateTime.now());
-                monthPlanFinalMapper.updateById(plan);
+                planResult.setUpdateTime(LocalDateTime.now());
+                factoryMonthPlanProductionFinalResultMapper.updateById(planResult);
             }
         }
         
-        logger.info("同步排程结果完成，更新月计划数量: {}", monthPlans.size());
+        logger.info("同步排程结果完成，更新月计划数量: {}", results.size());
         return true;
     }
 
@@ -307,12 +307,12 @@ public class MonthPlanFinalServiceImpl extends ServiceImpl<MonthPlanFinalMapper,
 
     @Override
     public int countByYearMonth(Integer yearMonth) {
-        return monthPlanFinalMapper.countByYearMonth(yearMonth);
+        return factoryMonthPlanProductionFinalResultMapper.countByYearMonth(yearMonth);
     }
 
     @Override
     public Long sumTotalQtyByYearMonth(Integer yearMonth) {
-        return monthPlanFinalMapper.sumTotalQtyByYearMonth(yearMonth);
+        return factoryMonthPlanProductionFinalResultMapper.sumTotalQtyByYearMonth(yearMonth);
     }
 
     @Override
@@ -320,24 +320,24 @@ public class MonthPlanFinalServiceImpl extends ServiceImpl<MonthPlanFinalMapper,
         MonthPlanOverview overview = new MonthPlanOverview();
         overview.setYearMonth(yearMonth);
         
-        List<MonthPlanFinal> plans = monthPlanFinalMapper.selectByYearMonth(yearMonth);
+        List<FactoryMonthPlanProductionFinalResult> results = factoryMonthPlanProductionFinalResultMapper.selectByYearMonth(yearMonth);
         
-        overview.setTotalPlanCount(plans.size());
-        overview.setTotalPlanQty(plans.stream()
+        overview.setTotalPlanCount(results.size());
+        overview.setTotalPlanQty(results.stream()
             .mapToLong(p -> p.getProdReqPlan() != null ? p.getProdReqPlan() : 0)
             .sum());
-        overview.setTotalProductionQty(plans.stream()
+        overview.setTotalProductionQty(results.stream()
             .mapToLong(p -> p.getTotalQty() != null ? p.getTotalQty() : 0)
             .sum());
-        overview.setTotalDifferenceQty(plans.stream()
+        overview.setTotalDifferenceQty(results.stream()
             .mapToLong(p -> p.getDifferenceQty() != null ? p.getDifferenceQty() : 0)
             .sum());
         
-        long releasedCount = plans.stream()
+        long releasedCount = results.stream()
             .filter(p -> "1".equals(p.getIsRelease()))
             .count();
         overview.setReleasedCount((int) releasedCount);
-        overview.setUnreleasedCount(plans.size() - (int) releasedCount);
+        overview.setUnreleasedCount(results.size() - (int) releasedCount);
         
         return overview;
     }
