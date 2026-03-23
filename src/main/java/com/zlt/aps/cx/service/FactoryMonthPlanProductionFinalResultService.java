@@ -1,14 +1,14 @@
 package com.zlt.aps.cx.service;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.zlt.aps.cx.entity.MonthPlanFinal;
+import com.zlt.aps.cx.entity.FactoryMonthPlanProductionFinalResult;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
 
 import java.time.LocalDate;
 import java.util.List;
 
 /**
- * 月度生产计划服务接口
+ * 工厂月生产计划服务接口
  * 
  * 功能：
  * 1. 月计划查询与管理
@@ -17,14 +17,14 @@ import java.util.List;
  *
  * @author APS Team
  */
-public interface MonthPlanFinalService {
+public interface FactoryMonthPlanProductionFinalResultService {
 
     /**
      * 根据年月查询月计划
      * @param yearMonth 年月(YYYYMM)
      * @return 月计划列表
      */
-    List<MonthPlanFinal> getByYearMonth(Integer yearMonth);
+    List<FactoryMonthPlanProductionFinalResult> getByYearMonth(Integer yearMonth);
 
     /**
      * 根据年份和月份查询
@@ -32,7 +32,7 @@ public interface MonthPlanFinalService {
      * @param month 月份
      * @return 月计划列表
      */
-    List<MonthPlanFinal> getByYearAndMonth(Integer year, Integer month);
+    List<FactoryMonthPlanProductionFinalResult> getByYearAndMonth(Integer year, Integer month);
 
     /**
      * 根据工厂和年月查询
@@ -40,14 +40,14 @@ public interface MonthPlanFinalService {
      * @param yearMonth 年月
      * @return 月计划列表
      */
-    List<MonthPlanFinal> getByFactoryAndYearMonth(String factoryCode, Integer yearMonth);
+    List<FactoryMonthPlanProductionFinalResult> getByFactoryAndYearMonth(String factoryCode, Integer yearMonth);
 
     /**
      * 根据工单号查询
      * @param productionNo 工单号
      * @return 月计划
      */
-    MonthPlanFinal getByProductionNo(String productionNo);
+    FactoryMonthPlanProductionFinalResult getByProductionNo(String productionNo);
 
     /**
      * 分页查询月计划
@@ -57,28 +57,28 @@ public interface MonthPlanFinalService {
      * @param factoryCode 工厂编码(可选)
      * @return 分页结果
      */
-    Page<MonthPlanFinal> getPage(int pageNum, int pageSize, Integer yearMonth, String factoryCode);
+    Page<FactoryMonthPlanProductionFinalResult> getPage(int pageNum, int pageSize, Integer yearMonth, String factoryCode);
 
     /**
      * 保存月计划
-     * @param monthPlan 月计划
+     * @param result 月计划
      * @return 是否成功
      */
-    boolean save(MonthPlanFinal monthPlan);
+    boolean save(FactoryMonthPlanProductionFinalResult result);
 
     /**
      * 批量保存月计划
-     * @param monthPlans 月计划列表
+     * @param results 月计划列表
      * @return 是否成功
      */
-    boolean saveBatch(List<MonthPlanFinal> monthPlans);
+    boolean saveBatch(List<FactoryMonthPlanProductionFinalResult> results);
 
     /**
      * 更新月计划
-     * @param monthPlan 月计划
+     * @param result 月计划
      * @return 是否成功
      */
-    boolean update(MonthPlanFinal monthPlan);
+    boolean update(FactoryMonthPlanProductionFinalResult result);
 
     /**
      * 删除月计划
@@ -103,7 +103,7 @@ public interface MonthPlanFinalService {
      * 
      * 流程：
      * 1. 查询月计划中指定日期有排产的物料
-     * 2. 根据day_X字段值创建日硫化排程记录
+     * 2. 根据DAY_X字段值创建日硫化排程记录
      * 3. 设置优先级(根据productionType)
      * 
      * @param scheduleDate 计划日期
@@ -136,9 +136,9 @@ public interface MonthPlanFinalService {
      * 同步排程结果到月计划
      * 
      * 功能：
-     * 1. 更新total_qty(实际排产量)
-     * 2. 更新difference_qty(差异量)
-     * 3. 更新cx_machine_code(分配的机台)
+     * 1. 更新TOTAL_QTY(实际排产量)
+     * 2. 更新DIFFERENCE_QTY(差异量)
+     * 3. 更新CX_MACHINE_CODE(分配的机台)
      * 
      * @param scheduleDate 计划日期
      * @return 是否成功

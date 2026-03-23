@@ -47,7 +47,7 @@ public class DatabaseInitializer implements CommandLineRunner {
         createDailyEmbryoTaskTable();
 
         // ==================== 三之一、月度计划表 ====================
-        createMonthPlanFinalTable();
+        createFactoryMonthPlanProductionFinalResultTable();
 
         // ==================== 四、计算辅助表 ====================
         createTrialAllocationLogTable();
@@ -357,116 +357,116 @@ public class DatabaseInitializer implements CommandLineRunner {
     // ==================== 三之一、月度计划表 ====================
 
     /**
-     * 创建月度生产计划定稿表
+     * 创建工厂月生产计划-最终排产计划定稿表
      * 数据来源：ERP/MES系统月度生产计划
      */
-    private void createMonthPlanFinalTable() {
-        jdbcTemplate.execute("DROP TABLE IF EXISTS t_mp_month_plan_prod_final");
-        jdbcTemplate.execute("CREATE TABLE t_mp_month_plan_prod_final (" +
-                "id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', " +
-                "production_no VARCHAR(50) COMMENT '工单号', " +
-                "factory_code VARCHAR(50) COMMENT '工厂编码', " +
-                "`year` INT COMMENT '年份', " +
-                "`month` INT COMMENT '月份', " +
-                "`year_month` INT COMMENT '年月YYYYMM', " +
-                "month_plan_version VARCHAR(50) COMMENT '销售生产需求计划版本', " +
-                "last_month_plan_version VARCHAR(50) COMMENT '最新需求计划版本', " +
-                "production_version VARCHAR(50) COMMENT '排产计划版本', " +
-                "product_type_code VARCHAR(50) COMMENT '产品品类', " +
-                "material_code VARCHAR(50) COMMENT '物料编码', " +
-                "material_desc VARCHAR(200) COMMENT '物料描述', " +
-                "mes_material_code VARCHAR(50) COMMENT 'MES物料编码', " +
-                "structure_name VARCHAR(100) COMMENT '产品结构', " +
-                "pro_size VARCHAR(20) COMMENT '英寸', " +
-                "product_category VARCHAR(50) COMMENT '产品分类', " +
-                "product_status VARCHAR(20) COMMENT '产品状态', " +
-                "structure_type VARCHAR(20) COMMENT '结构类型', " +
-                "production_type VARCHAR(50) COMMENT '排产分类', " +
-                "embryo_code VARCHAR(50) COMMENT '生胎代码', " +
-                "main_material_desc VARCHAR(200) COMMENT '主物料胎胚号', " +
-                "construction_stage VARCHAR(20) COMMENT '施工阶段', " +
-                "is_zero_rack VARCHAR(10) COMMENT '是否零度材料', " +
-                "embryo_no VARCHAR(50) COMMENT '制造示方书号', " +
-                "text_no VARCHAR(50) COMMENT '文字示方书号', " +
-                "lh_no VARCHAR(50) COMMENT '硫化示方书号', " +
-                "brand VARCHAR(50) COMMENT '品牌', " +
-                "specifications VARCHAR(100) COMMENT '规格', " +
-                "main_pattern VARCHAR(100) COMMENT '主花纹', " +
-                "pattern VARCHAR(100) COMMENT '花纹', " +
-                "mould_cavity_qty INT COMMENT '型腔数量', " +
-                "type_block_qty INT COMMENT '活块数量', " +
-                "height_qty INT COMMENT '高优先级数量', " +
-                "average_sale_qty INT COMMENT '月均销量', " +
-                "inventory_sales_ratio DECIMAL(10,4) COMMENT '库销比', " +
-                "day_vulcanization_qty INT COMMENT '日硫化量', " +
-                "cx_machine_code VARCHAR(500) COMMENT '成型机台信息', " +
-                "mould_change_info VARCHAR(100) COMMENT '模具使用变化信息', " +
-                "dynamic_balance_qty VARCHAR(100) COMMENT '动平衡数量', " +
-                "uniformity_qty INT COMMENT '均匀性数量', " +
-                "curing_time INT COMMENT '单条硫化时间分钟', " +
-                "prod_req_plan INT COMMENT '生产需求计划净需求', " +
-                "trial_qty INT COMMENT '试制量试计划需求量', " +
-                "height_production_qty INT COMMENT '高优先级排产数量', " +
-                "fact_prod_req_qty INT COMMENT '实际生产需求含损耗', " +
-                "total_qty INT COMMENT '生产实际排产量', " +
-                "mid_production_qty INT COMMENT '中优先级排产数量', " +
-                "cycle_production_qty INT COMMENT '周期排产储备排产数量', " +
-                "convention_production_qty INT COMMENT '常规储备排产数量', " +
-                "postpone_production_qty INT COMMENT '暂缓订单排产数量', " +
-                "trial_production_qty INT COMMENT '试制量试排产量', " +
-                "difference_qty INT COMMENT '差异量未排产数量', " +
-                "adjust_qty1 INT COMMENT '第1周调整量', " +
-                "adjust_qty2 INT COMMENT '第2周调整量', " +
-                "adjust_qty3 INT COMMENT '第3周调整量', " +
-                "adjust_qty4 INT COMMENT '第4周调整量', " +
-                "reason VARCHAR(500) COMMENT '未排产原因', " +
-                "begin_day INT COMMENT '开始日期', " +
-                "end_day INT COMMENT '结束日期', " +
-                "day_1 INT COMMENT '第1天排产量', " +
-                "day_2 INT COMMENT '第2天排产量', " +
-                "day_3 INT COMMENT '第3天排产量', " +
-                "day_4 INT COMMENT '第4天排产量', " +
-                "day_5 INT COMMENT '第5天排产量', " +
-                "day_6 INT COMMENT '第6天排产量', " +
-                "day_7 INT COMMENT '第7天排产量', " +
-                "day_8 INT COMMENT '第8天排产量', " +
-                "day_9 INT COMMENT '第9天排产量', " +
-                "day_10 INT COMMENT '第10天排产量', " +
-                "day_11 INT COMMENT '第11天排产量', " +
-                "day_12 INT COMMENT '第12天排产量', " +
-                "day_13 INT COMMENT '第13天排产量', " +
-                "day_14 INT COMMENT '第14天排产量', " +
-                "day_15 INT COMMENT '第15天排产量', " +
-                "day_16 INT COMMENT '第16天排产量', " +
-                "day_17 INT COMMENT '第17天排产量', " +
-                "day_18 INT COMMENT '第18天排产量', " +
-                "day_19 INT COMMENT '第19天排产量', " +
-                "day_20 INT COMMENT '第20天排产量', " +
-                "day_21 INT COMMENT '第21天排产量', " +
-                "day_22 INT COMMENT '第22天排产量', " +
-                "day_23 INT COMMENT '第23天排产量', " +
-                "day_24 INT COMMENT '第24天排产量', " +
-                "day_25 INT COMMENT '第25天排产量', " +
-                "day_26 INT COMMENT '第26天排产量', " +
-                "day_27 INT COMMENT '第27天排产量', " +
-                "day_28 INT COMMENT '第28天排产量', " +
-                "day_29 INT COMMENT '第29天排产量', " +
-                "day_30 INT COMMENT '第30天排产量', " +
-                "day_31 INT COMMENT '第31天排产量', " +
-                "total_vulcanization_minutes DECIMAL(15,2) COMMENT '硫化总工时', " +
-                "display_seq INT COMMENT '显示顺序', " +
-                "is_release VARCHAR(10) COMMENT '发布状态', " +
-                "is_import VARCHAR(10) COMMENT '是否EXCEL导入', " +
-                "production_sequence BIGINT COMMENT '排产顺序', " +
-                "create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间', " +
-                "update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间', " +
-                "create_by VARCHAR(50) COMMENT '创建人', " +
-                "update_by VARCHAR(50) COMMENT '更新人', " +
-                "remark VARCHAR(500) COMMENT '备注', " +
-                "INDEX idx_year_month (`year_month`), " +
-                "INDEX idx_material_code (material_code), " +
-                "INDEX idx_production_no (production_no)" +
-                ") COMMENT='月度生产计划定稿表'");
+    private void createFactoryMonthPlanProductionFinalResultTable() {
+        jdbcTemplate.execute("DROP TABLE IF EXISTS T_FACTORY_MONTH_PLAN_PRODUCTION_FINAL_RESULT");
+        jdbcTemplate.execute("CREATE TABLE T_FACTORY_MONTH_PLAN_PRODUCTION_FINAL_RESULT (" +
+                "ID BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', " +
+                "PRODUCTION_NO VARCHAR(50) COMMENT '工单号', " +
+                "FACTORY_CODE VARCHAR(50) COMMENT '工厂编码', " +
+                "YEAR INT COMMENT '年份', " +
+                "MONTH INT COMMENT '月份', " +
+                "YEAR_MONTH INT COMMENT '年月YYYYMM', " +
+                "MONTH_PLAN_VERSION VARCHAR(50) COMMENT '销售生产需求计划版本', " +
+                "LAST_MONTH_PLAN_VERSION VARCHAR(50) COMMENT '最新需求计划版本', " +
+                "PRODUCTION_VERSION VARCHAR(50) COMMENT '排产计划版本', " +
+                "PRODUCT_TYPE_CODE VARCHAR(50) COMMENT '产品品类', " +
+                "MATERIAL_CODE VARCHAR(50) COMMENT '物料编码', " +
+                "MATERIAL_DESC VARCHAR(200) COMMENT '物料描述', " +
+                "MES_MATERIAL_CODE VARCHAR(50) COMMENT 'MES物料编码', " +
+                "STRUCTURE_NAME VARCHAR(100) COMMENT '产品结构', " +
+                "PRO_SIZE VARCHAR(20) COMMENT '英寸', " +
+                "PRODUCT_CATEGORY VARCHAR(50) COMMENT '产品分类', " +
+                "PRODUCT_STATUS VARCHAR(20) COMMENT '产品状态', " +
+                "STRUCTURE_TYPE VARCHAR(20) COMMENT '结构类型', " +
+                "PRODUCTION_TYPE VARCHAR(50) COMMENT '排产分类', " +
+                "EMBRYO_CODE VARCHAR(50) COMMENT '生胎代码', " +
+                "MAIN_MATERIAL_DESC VARCHAR(200) COMMENT '主物料胎胚号', " +
+                "CONSTRUCTION_STAGE VARCHAR(20) COMMENT '施工阶段', " +
+                "IS_ZERO_RACK VARCHAR(10) COMMENT '是否零度材料', " +
+                "EMBRYO_NO VARCHAR(50) COMMENT '制造示方书号', " +
+                "TEXT_NO VARCHAR(50) COMMENT '文字示方书号', " +
+                "LH_NO VARCHAR(50) COMMENT '硫化示方书号', " +
+                "BRAND VARCHAR(50) COMMENT '品牌', " +
+                "SPECIFICATIONS VARCHAR(100) COMMENT '规格', " +
+                "MAIN_PATTERN VARCHAR(100) COMMENT '主花纹', " +
+                "PATTERN VARCHAR(100) COMMENT '花纹', " +
+                "MOULD_CAVITY_QTY INT COMMENT '型腔数量', " +
+                "TYPE_BLOCK_QTY INT COMMENT '活块数量', " +
+                "HEIGHT_QTY INT COMMENT '高优先级数量', " +
+                "AVERAGE_SALE_QTY INT COMMENT '月均销量', " +
+                "INVENTORY_SALES_RATIO DECIMAL(10,4) COMMENT '库销比', " +
+                "DAY_VULCANIZATION_QTY INT COMMENT '日硫化量', " +
+                "CX_MACHINE_CODE VARCHAR(500) COMMENT '成型机台信息', " +
+                "MOULD_CHANGE_INFO VARCHAR(100) COMMENT '模具使用变化信息', " +
+                "DYNAMIC_BALANCE_QTY VARCHAR(100) COMMENT '动平衡数量', " +
+                "UNIFORMITY_QTY INT COMMENT '均匀性数量', " +
+                "CURING_TIME INT COMMENT '单条硫化时间分钟', " +
+                "PROD_REQ_PLAN INT COMMENT '生产需求计划净需求', " +
+                "TRIAL_QTY INT COMMENT '试制量试计划需求量', " +
+                "HEIGHT_PRODUCTION_QTY INT COMMENT '高优先级排产数量', " +
+                "FACT_PROD_REQ_QTY INT COMMENT '实际生产需求含损耗', " +
+                "TOTAL_QTY INT COMMENT '生产实际排产量', " +
+                "MID_PRODUCTION_QTY INT COMMENT '中优先级排产数量', " +
+                "CYCLE_PRODUCTION_QTY INT COMMENT '周期排产储备排产数量', " +
+                "CONVENTION_PRODUCTION_QTY INT COMMENT '常规储备排产数量', " +
+                "POSTPONE_PRODUCTION_QTY INT COMMENT '暂缓订单排产数量', " +
+                "TRIAL_PRODUCTION_QTY INT COMMENT '试制量试排产量', " +
+                "DIFFERENCE_QTY INT COMMENT '差异量未排产数量', " +
+                "ADJUST_QTY1 INT COMMENT '第1周调整量', " +
+                "ADJUST_QTY2 INT COMMENT '第2周调整量', " +
+                "ADJUST_QTY3 INT COMMENT '第3周调整量', " +
+                "ADJUST_QTY4 INT COMMENT '第4周调整量', " +
+                "REASON VARCHAR(500) COMMENT '未排产原因', " +
+                "BEGIN_DAY INT COMMENT '开始日期', " +
+                "END_DAY INT COMMENT '结束日期', " +
+                "DAY_1 INT COMMENT '第1天排产量', " +
+                "DAY_2 INT COMMENT '第2天排产量', " +
+                "DAY_3 INT COMMENT '第3天排产量', " +
+                "DAY_4 INT COMMENT '第4天排产量', " +
+                "DAY_5 INT COMMENT '第5天排产量', " +
+                "DAY_6 INT COMMENT '第6天排产量', " +
+                "DAY_7 INT COMMENT '第7天排产量', " +
+                "DAY_8 INT COMMENT '第8天排产量', " +
+                "DAY_9 INT COMMENT '第9天排产量', " +
+                "DAY_10 INT COMMENT '第10天排产量', " +
+                "DAY_11 INT COMMENT '第11天排产量', " +
+                "DAY_12 INT COMMENT '第12天排产量', " +
+                "DAY_13 INT COMMENT '第13天排产量', " +
+                "DAY_14 INT COMMENT '第14天排产量', " +
+                "DAY_15 INT COMMENT '第15天排产量', " +
+                "DAY_16 INT COMMENT '第16天排产量', " +
+                "DAY_17 INT COMMENT '第17天排产量', " +
+                "DAY_18 INT COMMENT '第18天排产量', " +
+                "DAY_19 INT COMMENT '第19天排产量', " +
+                "DAY_20 INT COMMENT '第20天排产量', " +
+                "DAY_21 INT COMMENT '第21天排产量', " +
+                "DAY_22 INT COMMENT '第22天排产量', " +
+                "DAY_23 INT COMMENT '第23天排产量', " +
+                "DAY_24 INT COMMENT '第24天排产量', " +
+                "DAY_25 INT COMMENT '第25天排产量', " +
+                "DAY_26 INT COMMENT '第26天排产量', " +
+                "DAY_27 INT COMMENT '第27天排产量', " +
+                "DAY_28 INT COMMENT '第28天排产量', " +
+                "DAY_29 INT COMMENT '第29天排产量', " +
+                "DAY_30 INT COMMENT '第30天排产量', " +
+                "DAY_31 INT COMMENT '第31天排产量', " +
+                "TOTAL_VULCANIZATION_MINUTES DECIMAL(15,2) COMMENT '硫化总工时', " +
+                "DISPLAY_SEQ INT COMMENT '显示顺序', " +
+                "IS_RELEASE VARCHAR(10) COMMENT '发布状态', " +
+                "IS_IMPORT VARCHAR(10) COMMENT '是否EXCEL导入', " +
+                "PRODUCTION_SEQUENCE BIGINT COMMENT '排产顺序', " +
+                "CREATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间', " +
+                "UPDATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间', " +
+                "CREATE_BY VARCHAR(50) COMMENT '创建人', " +
+                "UPDATE_BY VARCHAR(50) COMMENT '更新人', " +
+                "REMARK VARCHAR(500) COMMENT '备注', " +
+                "INDEX IDX_YEAR_MONTH (YEAR_MONTH), " +
+                "INDEX IDX_MATERIAL_CODE (MATERIAL_CODE), " +
+                "INDEX IDX_PRODUCTION_NO (PRODUCTION_NO)" +
+                ") COMMENT='工厂月生产计划-最终排产计划定稿表'");
     }
 
     // ==================== 四、计算辅助表 ====================
