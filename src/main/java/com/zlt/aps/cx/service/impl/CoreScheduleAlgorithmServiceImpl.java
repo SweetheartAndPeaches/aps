@@ -4,11 +4,15 @@ import com.zlt.aps.cx.dto.ScheduleContextDTO;
 import com.zlt.aps.cx.entity.*;
 import com.zlt.aps.cx.entity.config.CxParamConfig;
 import com.zlt.aps.cx.entity.config.CxStructurePriority;
+import com.zlt.aps.cx.entity.config.CxStructureShiftCapacity;
 import com.zlt.aps.cx.entity.mdm.*;
 import com.zlt.aps.cx.entity.schedule.CxScheduleDetail;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
+import com.zlt.aps.cx.mapper.CxStructureShiftCapacityMapper;
 import com.zlt.aps.cx.service.CoreScheduleAlgorithmService;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 
@@ -39,6 +43,9 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
     /** 波浪比例：夜班:早班:中班 = 1:2:1 */
     private static final int[] WAVE_RATIO = {1, 2, 1};
+
+    @Autowired
+    private CxStructureShiftCapacityMapper structureShiftCapacityMapper;
 
     @Override
     public List<CxScheduleResult> executeSchedule(ScheduleContextDTO context) {
@@ -238,6 +245,9 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         // 班次顺序：夜班、早班、中班
         String[] shiftCodes = {"SHIFT_NIGHT", "SHIFT_DAY", "SHIFT_AFTERNOON"};
         
+        // 加载结构班产配置
+        Map<String, Map<String, CxStructureShiftCapacity>> structureCapacityMap = loadStructureShiftCapacity();
+        
         for (MachineAllocationResult allocation : allocations) {
             ShiftAllocationResult shiftResult = new ShiftAllocationResult();
             shiftResult.setMachineCode(allocation.getMachineCode());
@@ -246,18 +256,29 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             
             Map<String, Integer> shiftPlanQty = new LinkedHashMap<>();
             int totalQty = allocation.getUsedCapacity();
-
-            // 计算波浪分配
-            int[] waveQty = calculateWaveAllocation(totalQty);
             
-            // 处理特殊情况
-            if (Boolean.TRUE.equals(context.getIsOpeningDay())) {
-                // 开产首班：只排6小时，计划量减半
-                waveQty[1] = waveQty[1] / 2; // 早班减半
+            // 获取机台最大产能
+            Integer maxDailyCapacity = allocation.getDailyCapacity();
+            
+            // 按任务结构获取班产整车数，计算波浪分配
+            Map<String, Integer> structureWaveAllocation = calculateStructureWaveAllocation(
+                    allocation.getTaskAllocations(), 
+                    structureCapacityMap, 
+                    maxDailyCapacity,
+                    shiftCodes,
+                    context);
+            
+            // 汇总各班次分配量
+            for (String shiftCode : shiftCodes) {
+                int shiftQty = structureWaveAllocation.getOrDefault(shiftCode, 0);
+                shiftPlanQty.put(shiftCode, shiftQty);
             }
-
-            for (int i = 0; i < shiftCodes.length; i++) {
-                shiftPlanQty.put(shiftCodes[i], waveQty[i]);
+            
+            // 处理特殊情况：开产首班
+            if (Boolean.TRUE.equals(context.getIsOpeningDay())) {
+                // 开产首班：只排6小时，早班计划量减半
+                int dayQty = shiftPlanQty.get("SHIFT_DAY");
+                shiftPlanQty.put("SHIFT_DAY", roundToTrip(dayQty / 2, "FLOOR"));
             }
             
             shiftResult.setShiftPlanQty(shiftPlanQty);
@@ -265,6 +286,156 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         }
 
         return results;
+    }
+    
+    /**
+     * 加载结构班产配置
+     * 返回：Map<结构编码, Map<班次编码, 班产配置>>
+     */
+    private Map<String, Map<String, CxStructureShiftCapacity>> loadStructureShiftCapacity() {
+        Map<String, Map<String, CxStructureShiftCapacity>> result = new HashMap<>();
+        
+        List<CxStructureShiftCapacity> capacities = structureShiftCapacityMapper.selectList(
+                new LambdaQueryWrapper<CxStructureShiftCapacity>()
+                        .eq(CxStructureShiftCapacity::getIsActive, 1));
+        
+        for (CxStructureShiftCapacity capacity : capacities) {
+            result.computeIfAbsent(capacity.getStructureCode(), k -> new HashMap<>())
+                    .put(capacity.getShiftCode(), capacity);
+        }
+        
+        return result;
+    }
+    
+    /**
+     * 按结构计算波浪分配
+     * 从结构班产表获取整车条数，按波浪方式生成硫化需求量
+     */
+    private Map<String, Integer> calculateStructureWaveAllocation(
+            List<TaskAllocation> tasks,
+            Map<String, Map<String, CxStructureShiftCapacity>> structureCapacityMap,
+            Integer maxDailyCapacity,
+            String[] shiftCodes,
+            ScheduleContextDTO context) {
+        
+        Map<String, Integer> shiftTotalQty = new LinkedHashMap<>();
+        for (String shiftCode : shiftCodes) {
+            shiftTotalQty.put(shiftCode, 0);
+        }
+        
+        int totalAssigned = 0;
+        
+        for (TaskAllocation task : tasks) {
+            String structureCode = task.getStructureName();
+            int taskQty = task.getQuantity();
+            
+            // 获取该结构的班产配置
+            Map<String, CxStructureShiftCapacity> shiftCapacityMap = structureCapacityMap.get(structureCode);
+            
+            if (shiftCapacityMap != null && !shiftCapacityMap.isEmpty()) {
+                // 按班产配置计算各班次分配量
+                int[] shiftQty = calculateShiftQtyByCapacity(taskQty, shiftCapacityMap, shiftCodes);
+                
+                for (int i = 0; i < shiftCodes.length; i++) {
+                    int qty = shiftQty[i];
+                    shiftTotalQty.merge(shiftCodes[i], qty, Integer::sum);
+                    totalAssigned += qty;
+                }
+            } else {
+                // 无班产配置，使用默认波浪比例
+                int[] waveQty = calculateWaveAllocation(taskQty);
+                
+                for (int i = 0; i < shiftCodes.length; i++) {
+                    shiftTotalQty.merge(shiftCodes[i], waveQty[i], Integer::sum);
+                    totalAssigned += waveQty[i];
+                }
+            }
+        }
+        
+        // 检查是否超过机台最大产能
+        if (maxDailyCapacity != null && totalAssigned > maxDailyCapacity) {
+            // 按比例缩减
+            double ratio = (double) maxDailyCapacity / totalAssigned;
+            int newTotal = 0;
+            
+            for (String shiftCode : shiftCodes) {
+                int originalQty = shiftTotalQty.get(shiftCode);
+                int adjustedQty = roundToTrip((int) (originalQty * ratio), "FLOOR");
+                shiftTotalQty.put(shiftCode, adjustedQty);
+                newTotal += adjustedQty;
+            }
+            
+            log.debug("班次分配量超过机台最大产能，已按比例缩减：{} -> {}", totalAssigned, newTotal);
+        }
+        
+        return shiftTotalQty;
+    }
+    
+    /**
+     * 根据结构班产配置计算各班次分配量
+     * 按波浪方式（夜班:早班:中班 = 1:2:1）分配
+     */
+    private int[] calculateShiftQtyByCapacity(
+            int taskQty,
+            Map<String, CxStructureShiftCapacity> shiftCapacityMap,
+            String[] shiftCodes) {
+        
+        int[] result = new int[shiftCodes.length];
+        
+        // 计算总班产整车数
+        int totalTripQty = 0;
+        int[] tripQtyPerShift = new int[shiftCodes.length];
+        
+        for (int i = 0; i < shiftCodes.length; i++) {
+            CxStructureShiftCapacity capacity = shiftCapacityMap.get(shiftCodes[i]);
+            if (capacity != null && capacity.getTripQty() != null) {
+                tripQtyPerShift[i] = capacity.getTripQty();
+                totalTripQty += capacity.getTripQty();
+            }
+        }
+        
+        // 如果没有班产配置，使用默认波浪比例
+        if (totalTripQty == 0) {
+            return calculateWaveAllocation(taskQty);
+        }
+        
+        // 按波浪比例（1:2:1）计算各班次应分配的整车数
+        // 波浪比例表示硫化需求量在各班次的分配比例
+        int totalRatio = WAVE_RATIO[0] + WAVE_RATIO[1] + WAVE_RATIO[2];
+        int remainingQty = taskQty;
+        
+        for (int i = 0; i < shiftCodes.length; i++) {
+            // 按波浪比例计算该班次分配量
+            int shiftQty = taskQty * WAVE_RATIO[i] / totalRatio;
+            
+            // 限制不超过该班次的班产整车条数
+            int maxShiftQty = tripQtyPerShift[i] * TRIP_CAPACITY;
+            shiftQty = Math.min(shiftQty, maxShiftQty);
+            
+            // 整车取整
+            shiftQty = roundToTrip(shiftQty, "ROUND");
+            
+            result[i] = shiftQty;
+            remainingQty -= shiftQty;
+        }
+        
+        // 分配余量（优先分配给早班）
+        if (remainingQty > 0) {
+            for (int i = 1; i < shiftCodes.length && remainingQty >= TRIP_CAPACITY; i++) {
+                int idx = (i + 1) % shiftCodes.length; // 早班优先
+                CxStructureShiftCapacity capacity = shiftCapacityMap.get(shiftCodes[idx]);
+                int maxQty = capacity != null && capacity.getTripQty() != null 
+                        ? capacity.getTripQty() * TRIP_CAPACITY 
+                        : Integer.MAX_VALUE;
+                
+                if (result[idx] + TRIP_CAPACITY <= maxQty) {
+                    result[idx] += TRIP_CAPACITY;
+                    remainingQty -= TRIP_CAPACITY;
+                }
+            }
+        }
+        
+        return result;
     }
 
     @Override

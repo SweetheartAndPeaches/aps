@@ -3,6 +3,7 @@ package com.zlt.aps.cx.dto;
 import com.zlt.aps.cx.entity.*;
 import com.zlt.aps.cx.entity.config.CxParamConfig;
 import com.zlt.aps.cx.entity.config.CxStructurePriority;
+import com.zlt.aps.cx.entity.config.CxStructureShiftCapacity;
 import com.zlt.aps.cx.entity.mdm.*;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
 import lombok.Data;
@@ -49,6 +50,12 @@ public class ScheduleContextDTO {
      * 结构硫化配比列表
      */
     private List<MdmStructureLhRatio> structureLhRatios;
+
+    /**
+     * 结构班产配置列表（整车条数）
+     * 按结构+班次定义的标准产能
+     */
+    private List<CxStructureShiftCapacity> structureShiftCapacities;
 
     /**
      * 结构优先级配置列表
