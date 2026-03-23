@@ -11,10 +11,9 @@ import org.springframework.context.annotation.Configuration;
 import java.time.LocalDateTime;
 
 /**
- * MyBatis-Plus配置类
+ * MyBatis Plus配置类
  *
  * @author APS Team
- * @since 2.0.0
  */
 @Configuration
 public class MybatisPlusConfig implements MetaObjectHandler {

@@ -8,10 +8,9 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * OpenAPI配置类
+ * OpenAPI配置类 (使用SpringDoc替代SpringFox)
  *
  * @author APS Team
- * @since 2.0.0
  */
 @Configuration
 public class OpenApiConfig {
@@ -20,12 +19,12 @@ public class OpenApiConfig {
     public OpenAPI customOpenAPI() {
         return new OpenAPI()
                 .info(new Info()
-                        .title("金宇轮胎APS成型排程系统API")
-                        .version("2.0.0")
-                        .description("金宇轮胎APS成型排程系统RESTful API文档")
+                        .title("金宇轮胎APS系统-成型排程模块 API文档")
+                        .description("成型排程系统RESTful API接口文档")
+                        .version("1.0.0")
                         .contact(new Contact()
                                 .name("APS Team")
-                                .email("aps@zlt.com"))
+                                .email(""))
                         .license(new License()
                                 .name("Apache 2.0")
                                 .url("https://www.apache.org/licenses/LICENSE-2.0")));
