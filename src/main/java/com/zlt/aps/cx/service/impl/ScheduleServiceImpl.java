@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.zlt.aps.cx.dto.ScheduleContextDTO;
 import com.zlt.aps.cx.entity.*;
 import com.zlt.aps.cx.entity.config.CxParamConfig;
+import com.zlt.aps.cx.entity.config.CxStructureShiftCapacity;
 import com.zlt.aps.cx.entity.mdm.MdmMoldingMachine;
 import com.zlt.aps.cx.entity.schedule.CxScheduleDetail;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
@@ -73,6 +74,9 @@ public class ScheduleServiceImpl implements ScheduleService {
 
     @Autowired
     private CxTrialPlanMapper trialPlanMapper;
+
+    @Autowired
+    private CxStructureShiftCapacityMapper structureShiftCapacityMapper;
 
     @Override
     public ScheduleResult executeSchedule(ScheduleRequest request) {
@@ -171,7 +175,13 @@ public class ScheduleServiceImpl implements ScheduleService {
             List<CxParamConfig> paramConfigs = paramConfigMapper.selectList(null);
             context.setParamConfigs(paramConfigs);
 
-            // 6. 设置排程参数
+            // 6. 获取结构班产配置（整车条数）
+            List<CxStructureShiftCapacity> structureShiftCapacities = structureShiftCapacityMapper.selectList(
+                    new LambdaQueryWrapper<CxStructureShiftCapacity>()
+                            .eq(CxStructureShiftCapacity::getIsActive, 1));
+            context.setStructureShiftCapacities(structureShiftCapacities);
+
+            // 7. 设置排程参数
             context.setScheduleDate(request.getScheduleDate());
             context.setScheduleMode(request.getScheduleMode());
             context.setReScheduleType(request.getReScheduleType());
