@@ -1,5 +1,6 @@
 package com.zlt.aps.cx.service;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.zlt.aps.cx.entity.CxStock;
 
@@ -29,7 +30,22 @@ public interface CxStockService extends IService<CxStock> {
     List<CxStock> listHighStock();
 
     /**
+     * 获取收尾预警列表
+     */
+    List<CxStock> listEndingStock();
+
+    /**
      * 计算库存可供硫化时长
      */
     BigDecimal calculateStockHours(String materialCode);
+
+    /**
+     * 刷新所有库存预警状态
+     */
+    void refreshAllAlertStatus();
+
+    /**
+     * 分页查询库存
+     */
+    Page<CxStock> pageList(Page<CxStock> page, String alertStatus);
 }
