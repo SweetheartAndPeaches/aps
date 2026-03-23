@@ -1,7 +1,7 @@
 package com.zlt.aps.cx.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import com.zlt.aps.cx.entity.Stock;
+import com.zlt.aps.cx.entity.CxStock;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
@@ -15,23 +15,23 @@ import java.util.List;
  * @author APS Team
  */
 @Mapper
-public interface StockMapper extends BaseMapper<Stock> {
+public interface CxStockMapper extends BaseMapper<CxStock> {
 
     /**
      * 查询所有库存
      */
-    @Select("SELECT * FROM t_cx_stock ORDER BY material_code")
-    List<Stock> selectAll();
+    @Select("SELECT * FROM T_CX_STOCK ORDER BY MATERIAL_CODE")
+    List<CxStock> selectAll();
 
     /**
      * 根据物料编码查询库存
      */
-    @Select("SELECT * FROM t_cx_stock WHERE material_code = #{materialCode}")
-    Stock selectByMaterialCode(@Param("materialCode") String materialCode);
+    @Select("SELECT * FROM T_CX_STOCK WHERE MATERIAL_CODE = #{materialCode}")
+    CxStock selectByMaterialCode(@Param("materialCode") String materialCode);
 
     /**
      * 更新库存数量
      */
-    @Update("UPDATE t_cx_stock SET current_stock = #{currentStock}, update_time = NOW() WHERE material_code = #{materialCode}")
+    @Update("UPDATE T_CX_STOCK SET CURRENT_STOCK = #{currentStock}, UPDATE_TIME = NOW() WHERE MATERIAL_CODE = #{materialCode}")
     int updateStock(@Param("materialCode") String materialCode, @Param("currentStock") Integer currentStock);
 }

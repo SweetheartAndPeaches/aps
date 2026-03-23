@@ -1,7 +1,7 @@
 package com.zlt.aps.cx.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
-import com.zlt.aps.cx.entity.Stock;
+import com.zlt.aps.cx.entity.CxStock;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -11,22 +11,22 @@ import java.util.List;
  *
  * @author APS Team
  */
-public interface StockService extends IService<Stock> {
+public interface CxStockService extends IService<CxStock> {
 
     /**
      * 根据物料编码获取库存
      */
-    Stock getByMaterialCode(String materialCode);
+    CxStock getByMaterialCode(String materialCode);
 
     /**
      * 获取低库存预警列表
      */
-    List<Stock> listLowStock();
+    List<CxStock> listLowStock();
 
     /**
      * 获取高库存预警列表
      */
-    List<Stock> listHighStock();
+    List<CxStock> listHighStock();
 
     /**
      * 计算库存可供硫化时长

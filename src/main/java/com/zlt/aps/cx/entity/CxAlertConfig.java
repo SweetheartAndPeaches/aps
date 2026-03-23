@@ -9,65 +9,66 @@ import java.time.LocalDateTime;
 
 /**
  * 预警配置实体类
+ * 对应数据库表：T_CX_ALERT_CONFIG
  *
  * @author APS Team
  */
 @Data
-@TableName(value = "t_cx_alert_config", keepGlobalPrefix = false)
+@TableName(value = "T_CX_ALERT_CONFIG", keepGlobalPrefix = false)
 @Schema(description = "预警配置")
-public class AlertConfig implements Serializable {
+public class CxAlertConfig implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
     @Schema(description = "主键ID")
-    @TableId(value = "id", type = IdType.AUTO)
+    @TableId(value = "ID", type = IdType.AUTO)
     private Long id;
 
     @Schema(description = "配置编码")
-    @TableField("config_code")
+    @TableField("CONFIG_CODE")
     private String configCode;
 
     @Schema(description = "配置名称")
-    @TableField("config_name")
+    @TableField("CONFIG_NAME")
     private String configName;
 
     @Schema(description = "配置值")
-    @TableField("config_value")
+    @TableField("CONFIG_VALUE")
     private String configValue;
 
     @Schema(description = "配置类型")
-    @TableField("config_type")
+    @TableField("CONFIG_TYPE")
     private String configType;
 
     @Schema(description = "单位")
-    @TableField("config_unit")
+    @TableField("CONFIG_UNIT")
     private String configUnit;
 
     @Schema(description = "配置说明")
-    @TableField("description")
+    @TableField("DESCRIPTION")
     private String description;
 
     @Schema(description = "是否启用")
-    @TableField("is_active")
+    @TableField("IS_ACTIVE")
     private Integer isActive;
 
     @Schema(description = "生效日期")
-    @TableField("effective_date")
+    @TableField("EFFECTIVE_DATE")
     private LocalDateTime effectiveDate;
 
     @Schema(description = "创建时间")
-    @TableField(value = "create_time", fill = FieldFill.INSERT)
+    @TableField(value = "CREATE_TIME", fill = FieldFill.INSERT)
     private LocalDateTime createTime;
 
     @Schema(description = "更新时间")
-    @TableField(value = "update_time", fill = FieldFill.INSERT_UPDATE)
+    @TableField(value = "UPDATE_TIME", fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updateTime;
 
     @Schema(description = "创建人")
-    @TableField("create_by")
+    @TableField("CREATE_BY")
     private String createBy;
 
     @Schema(description = "更新人")
-    @TableField("update_by")
+    @TableField("UPDATE_BY")
     private String updateBy;
 }

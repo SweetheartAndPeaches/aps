@@ -1,7 +1,7 @@
 package com.zlt.aps.cx.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
-import com.zlt.aps.cx.entity.Material;
+import com.zlt.aps.cx.entity.CxMaterial;
 
 import java.util.List;
 
@@ -10,15 +10,15 @@ import java.util.List;
  *
  * @author APS Team
  */
-public interface MaterialService extends IService<Material> {
+public interface CxMaterialService extends IService<CxMaterial> {
 
     /**
      * 根据产品结构获取物料
      */
-    List<Material> listByProductStructure(String productStructure);
+    List<CxMaterial> listByProductStructure(String productStructure);
 
     /**
      * 根据物料编码获取物料
      */
-    Material getByMaterialCode(String materialCode);
+    CxMaterial getByMaterialCode(String materialCode);
 }

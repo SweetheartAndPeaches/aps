@@ -1,14 +1,14 @@
 package com.zlt.aps.cx.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
-import com.zlt.aps.cx.entity.AlertConfig;
+import com.zlt.aps.cx.entity.CxAlertConfig;
 
 /**
  * 预警配置Service接口
  *
  * @author APS Team
  */
-public interface AlertConfigService extends IService<AlertConfig> {
+public interface CxAlertConfigService extends IService<CxAlertConfig> {
 
     /**
      * 根据配置编码获取配置值

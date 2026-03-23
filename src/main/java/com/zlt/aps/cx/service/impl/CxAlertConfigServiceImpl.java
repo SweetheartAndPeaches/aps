@@ -2,9 +2,9 @@ package com.zlt.aps.cx.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.zlt.aps.cx.entity.AlertConfig;
-import com.zlt.aps.cx.mapper.AlertConfigMapper;
-import com.zlt.aps.cx.service.AlertConfigService;
+import com.zlt.aps.cx.entity.CxAlertConfig;
+import com.zlt.aps.cx.mapper.CxAlertConfigMapper;
+import com.zlt.aps.cx.service.CxAlertConfigService;
 import org.springframework.stereotype.Service;
 
 /**
@@ -13,14 +13,14 @@ import org.springframework.stereotype.Service;
  * @author APS Team
  */
 @Service
-public class AlertConfigServiceImpl extends ServiceImpl<AlertConfigMapper, AlertConfig> implements AlertConfigService {
+public class CxAlertConfigServiceImpl extends ServiceImpl<CxAlertConfigMapper, CxAlertConfig> implements CxAlertConfigService {
 
     @Override
     public String getConfigValue(String configCode) {
-        LambdaQueryWrapper<AlertConfig> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(AlertConfig::getConfigCode, configCode)
-                .eq(AlertConfig::getIsActive, 1);
-        AlertConfig config = getOne(wrapper);
+        LambdaQueryWrapper<CxAlertConfig> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(CxAlertConfig::getConfigCode, configCode)
+                .eq(CxAlertConfig::getIsActive, 1);
+        CxAlertConfig config = getOne(wrapper);
         return config != null ? config.getConfigValue() : null;
     }
 
