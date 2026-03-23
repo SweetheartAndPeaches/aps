@@ -11,66 +11,67 @@ import java.time.LocalDateTime;
 
 /**
  * 日胎胚任务实体类
+ * 对应数据库表：T_CX_DAILY_EMBRYO_TASK
  *
  * @author APS Team
  */
 @Data
-@TableName(value = "t_cx_daily_embryo_task", keepGlobalPrefix = false)
+@TableName(value = "T_CX_DAILY_EMBRYO_TASK", keepGlobalPrefix = false)
 @Schema(description = "日胎胚任务")
-public class DailyEmbryoTask implements Serializable {
+public class CxDailyEmbryoTask implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
     @Schema(description = "主键ID")
-    @TableId(value = "id", type = IdType.AUTO)
+    @TableId(value = "ID", type = IdType.AUTO)
     private Long id;
 
     @Schema(description = "排程主表ID")
-    @TableField("schedule_main_id")
+    @TableField("SCHEDULE_MAIN_ID")
     private Long scheduleMainId;
 
     @Schema(description = "任务分组ID")
-    @TableField("task_group_id")
+    @TableField("TASK_GROUP_ID")
     private String taskGroupId;
 
     @Schema(description = "胎胚物料编码")
-    @TableField("material_code")
+    @TableField("MATERIAL_CODE")
     private String materialCode;
 
     @Schema(description = "任务量")
-    @TableField("task_quantity")
+    @TableField("TASK_QUANTITY")
     private Integer taskQuantity;
 
     @Schema(description = "产品结构")
-    @TableField("product_structure")
+    @TableField("PRODUCT_STRUCTURE")
     private String productStructure;
 
     @Schema(description = "是否主销产品")
-    @TableField("is_main_product")
+    @TableField("IS_MAIN_PRODUCT")
     private Integer isMainProduct;
 
     @Schema(description = "优先级")
-    @TableField("priority")
+    @TableField("PRIORITY")
     private Integer priority;
 
     @Schema(description = "排序")
-    @TableField("sort_order")
+    @TableField("SORT_ORDER")
     private Integer sortOrder;
 
     @Schema(description = "已分配量")
-    @TableField("assigned_quantity")
+    @TableField("ASSIGNED_QUANTITY")
     private Integer assignedQuantity;
 
     @Schema(description = "剩余量")
-    @TableField("remainder_quantity")
+    @TableField("REMAINDER_QUANTITY")
     private Integer remainderQuantity;
 
     @Schema(description = "是否全部分配")
-    @TableField("is_fully_assigned")
+    @TableField("IS_FULLY_ASSIGNED")
     private Integer isFullyAssigned;
 
     @Schema(description = "创建时间")
-    @TableField("create_time")
+    @TableField("CREATE_TIME")
     private LocalDateTime createTime;
 
     // ==================== 扩展字段（用于算法计算，不映射到数据库） ====================

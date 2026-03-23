@@ -2,9 +2,9 @@ package com.zlt.aps.cx.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.zlt.aps.cx.entity.Stock;
-import com.zlt.aps.cx.mapper.StockMapper;
-import com.zlt.aps.cx.service.StockService;
+import com.zlt.aps.cx.entity.CxStock;
+import com.zlt.aps.cx.mapper.CxStockMapper;
+import com.zlt.aps.cx.service.CxStockService;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -17,32 +17,32 @@ import java.util.List;
  * @author APS Team
  */
 @Service
-public class StockServiceImpl extends ServiceImpl<StockMapper, Stock> implements StockService {
+public class CxStockServiceImpl extends ServiceImpl<CxStockMapper, CxStock> implements CxStockService {
 
     @Override
-    public Stock getByMaterialCode(String materialCode) {
-        LambdaQueryWrapper<Stock> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Stock::getMaterialCode, materialCode);
+    public CxStock getByMaterialCode(String materialCode) {
+        LambdaQueryWrapper<CxStock> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(CxStock::getMaterialCode, materialCode);
         return getOne(wrapper);
     }
 
     @Override
-    public List<Stock> listLowStock() {
-        LambdaQueryWrapper<Stock> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Stock::getAlertStatus, "LOW");
+    public List<CxStock> listLowStock() {
+        LambdaQueryWrapper<CxStock> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(CxStock::getAlertStatus, "LOW");
         return list(wrapper);
     }
 
     @Override
-    public List<Stock> listHighStock() {
-        LambdaQueryWrapper<Stock> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Stock::getAlertStatus, "HIGH");
+    public List<CxStock> listHighStock() {
+        LambdaQueryWrapper<CxStock> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(CxStock::getAlertStatus, "HIGH");
         return list(wrapper);
     }
 
     @Override
     public BigDecimal calculateStockHours(String materialCode) {
-        Stock stock = getByMaterialCode(materialCode);
+        CxStock stock = getByMaterialCode(materialCode);
         if (stock == null || stock.getCurrentStock() == null || stock.getCurrentStock() <= 0) {
             return BigDecimal.ZERO;
         }
