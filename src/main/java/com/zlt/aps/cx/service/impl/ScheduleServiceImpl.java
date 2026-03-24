@@ -9,6 +9,7 @@ import com.zlt.aps.cx.entity.config.CxStructureShiftCapacity;
 import com.zlt.aps.cx.entity.mdm.MdmCxMachineOnlineInfo;
 import com.zlt.aps.cx.entity.mdm.MdmMaterialInfo;
 import com.zlt.aps.cx.entity.mdm.MdmMoldingMachine;
+import com.zlt.aps.cx.entity.mdm.MdmMonthSurplus;
 import com.zlt.aps.cx.entity.schedule.CxScheduleDetail;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
 import com.zlt.aps.cx.entity.schedule.CxTrialPlan;
@@ -22,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -102,6 +104,9 @@ public class ScheduleServiceImpl implements ScheduleService {
 
     @Autowired
     private CxStructureEndingMapper structureEndingMapper;
+
+    @Autowired
+    private FactoryMonthPlanProductionFinalResultMapper monthPlanMapper;
 
     @Override
     public ScheduleResult executeSchedule(ScheduleRequest request) {
@@ -263,22 +268,21 @@ public class ScheduleServiceImpl implements ScheduleService {
             }
             context.setKeyProductCodes(keyProductCodes);
 
-            // 10. 获取结构收尾管理列表
-            List<CxStructureEnding> structureEndings = structureEndingMapper.selectList(
-                    new LambdaQueryWrapper<CxStructureEnding>()
-                            .eq(CxStructureEnding::getIsActive, 1));
-            context.setStructureEndings(structureEndings);
-
-            // 11. 获取月度计划余量（用于收尾计算）
+            // 10. 获取结构收尾管理列表（从FactoryMonthPlanProductionFinalResult计算生成）
             int year = scheduleDate.getYear();
             int month = scheduleDate.getMonthValue();
-            List<com.zlt.aps.cx.entity.mdm.MdmMonthSurplus> monthSurplusList = 
+            List<CxStructureEnding> structureEndings = calculateStructureEndings(scheduleDate, year, month);
+            context.setStructureEndings(structureEndings);
+            log.info("从月计划计算生成结构收尾信息 {} 条", structureEndings.size());
+
+            // 11. 获取月度计划余量（用于收尾计算）
+            List<MdmMonthSurplus> monthSurplusList = 
                     monthSurplusMapper.selectByYearMonth(year, month);
             context.setMonthSurplusList(monthSurplusList);
             // 构建物料编码映射
-            Map<String, com.zlt.aps.cx.entity.mdm.MdmMonthSurplus> monthSurplusMap = monthSurplusList.stream()
+            Map<String, MdmMonthSurplus> monthSurplusMap = monthSurplusList.stream()
                     .collect(Collectors.toMap(
-                            com.zlt.aps.cx.entity.mdm.MdmMonthSurplus::getMaterialCode, 
+                            MdmMonthSurplus::getMaterialCode, 
                             s -> s, (a, b) -> a));
             context.setMonthSurplusMap(monthSurplusMap);
             log.info("加载月度计划余量 {} 条", monthSurplusList.size());
@@ -499,5 +503,165 @@ public class ScheduleServiceImpl implements ScheduleService {
         }
 
         return validCount == results.size();
+    }
+
+    /**
+     * 从FactoryMonthPlanProductionFinalResult计算生成结构收尾管理列表
+     * 
+     * 计算逻辑：
+     * 1. 从月计划获取当月排产数据
+     * 2. 按结构分组，计算剩余需求量（从当前日期到月底的排产量）
+     * 3. 结合胎胚库存、硫化余量等数据
+     * 4. 计算成型余量 = 硫化余量 - 胎胚库存
+     * 5. 计算预计收尾天数、是否紧急收尾等
+     *
+     * @param scheduleDate 排程日期
+     * @param year 年份
+     * @param month 月份
+     * @return 结构收尾管理列表
+     */
+    private List<CxStructureEnding> calculateStructureEndings(LocalDate scheduleDate, int year, int month) {
+        List<CxStructureEnding> resultList = new ArrayList<>();
+        
+        try {
+            // 1. 获取当月月计划数据
+            Integer yearMonth = year * 100 + month;
+            List<FactoryMonthPlanProductionFinalResult> monthPlans = monthPlanMapper.selectByYearMonth(yearMonth);
+            
+            if (CollectionUtils.isEmpty(monthPlans)) {
+                log.warn("未找到 {} 年 {} 月的月计划数据", year, month);
+                return resultList;
+            }
+            
+            // 2. 获取月度计划余量（硫化余量）
+            List<MdmMonthSurplus> monthSurplusList = monthSurplusMapper.selectByYearMonth(year, month);
+            Map<String, MdmMonthSurplus> surplusMap = monthSurplusList.stream()
+                    .collect(Collectors.toMap(MdmMonthSurplus::getMaterialCode, s -> s, (a, b) -> a));
+            
+            // 3. 获取胎胚库存
+            List<CxStock> stocks = stockMapper.selectList(
+                    new LambdaQueryWrapper<CxStock>().gt(CxStock::getCurrentStock, 0));
+            Map<String, CxStock> stockMap = stocks.stream()
+                    .collect(Collectors.toMap(CxStock::getMaterialCode, s -> s, (a, b) -> a));
+            
+            // 4. 按结构分组汇总
+            // Key: structureName, Value: 该结构的月计划列表
+            Map<String, List<FactoryMonthPlanProductionFinalResult>> structurePlanMap = monthPlans.stream()
+                    .filter(p -> p.getStructureName() != null)
+                    .collect(Collectors.groupingBy(FactoryMonthPlanProductionFinalResult::getStructureName));
+            
+            // 5. 计算当前日期到月底的剩余天数
+            int currentDay = scheduleDate.getDayOfMonth();
+            int lastDayOfMonth = scheduleDate.lengthOfMonth();
+            
+            // 6. 遍历每个结构，计算收尾信息
+            for (Map.Entry<String, List<FactoryMonthPlanProductionFinalResult>> entry : structurePlanMap.entrySet()) {
+                String structureName = entry.getKey();
+                List<FactoryMonthPlanProductionFinalResult> plans = entry.getValue();
+                
+                // 创建收尾记录
+                CxStructureEnding ending = new CxStructureEnding();
+                ending.setStructureName(structureName);
+                ending.setStructureCode(structureName); // 结构编码暂用结构名称
+                ending.setStatDate(scheduleDate);
+                
+                // 计算剩余排产量（从当前日期到月底）
+                int remainingPlanQty = 0;
+                for (FactoryMonthPlanProductionFinalResult plan : plans) {
+                    for (int day = currentDay; day <= lastDayOfMonth; day++) {
+                        Integer dayQty = plan.getDayQty(day);
+                        if (dayQty != null && dayQty > 0) {
+                            remainingPlanQty += dayQty;
+                        }
+                    }
+                }
+                
+                // 获取该结构对应的物料（取第一个）
+                FactoryMonthPlanProductionFinalResult firstPlan = plans.get(0);
+                String materialCode = firstPlan.getMaterialCode();
+                
+                // 硫化余量（从月度计划余量表获取）
+                MdmMonthSurplus surplus = surplusMap.get(materialCode);
+                int vulcanizingRemainder = surplus != null && surplus.getPlanSurplusQty() != null 
+                        ? surplus.getPlanSurplusQty() : remainingPlanQty;
+                ending.setVulcanizingRemainder(vulcanizingRemainder);
+                
+                // 胎胚库存
+                CxStock stock = stockMap.get(materialCode);
+                int embryoStock = stock != null && stock.getCurrentStock() != null 
+                        ? stock.getCurrentStock() : 0;
+                ending.setEmbryoStock(embryoStock);
+                
+                // 成型余量 = 硫化余量 - 胎胚库存
+                int formingRemainder = Math.max(0, vulcanizingRemainder - embryoStock);
+                ending.setFormingRemainder(formingRemainder);
+                
+                // 日产能（取日硫化量）
+                Integer dailyCapacity = firstPlan.getDayVulcanizationQty();
+                if (dailyCapacity == null || dailyCapacity <= 0) {
+                    dailyCapacity = 200; // 默认日产能
+                }
+                ending.setDailyCapacity(dailyCapacity);
+                
+                // 预计收尾天数 = 成型余量 / 日产能
+                BigDecimal estimatedDays = BigDecimal.ZERO;
+                if (dailyCapacity > 0 && formingRemainder > 0) {
+                    estimatedDays = BigDecimal.valueOf(formingRemainder)
+                            .divide(BigDecimal.valueOf(dailyCapacity), 2, RoundingMode.HALF_UP);
+                }
+                ending.setEstimatedEndingDays(estimatedDays);
+                
+                // 计划收尾日期 = 当前日期 + 预计收尾天数
+                LocalDate plannedEndingDate = scheduleDate.plusDays(estimatedDays.intValue());
+                ending.setPlannedEndingDate(plannedEndingDate);
+                
+                // 是否紧急收尾（3天内）
+                int isUrgentEnding = estimatedDays.compareTo(BigDecimal.valueOf(3)) <= 0 && formingRemainder > 0 ? 1 : 0;
+                ending.setIsUrgentEnding(isUrgentEnding);
+                
+                // 是否10天内收尾
+                int isNearEnding = estimatedDays.compareTo(BigDecimal.valueOf(10)) <= 0 && formingRemainder > 0 ? 1 : 0;
+                ending.setIsNearEnding(isNearEnding);
+                
+                // 延误量计算（如果预计收尾日期超过月底）
+                LocalDate lastDateOfMonth = scheduleDate.withDayOfMonth(lastDayOfMonth);
+                if (plannedEndingDate.isAfter(lastDateOfMonth) && formingRemainder > 0) {
+                    // 延误量 = 成型余量 - 剩余天数 * 日产能
+                    int remainingDays = lastDayOfMonth - currentDay + 1;
+                    int canProduce = remainingDays * dailyCapacity;
+                    int delayQty = Math.max(0, formingRemainder - canProduce);
+                    ending.setDelayQuantity(delayQty);
+                    
+                    // 平摊到未来3天
+                    if (delayQty > 0) {
+                        ending.setDistributedQuantity(delayQty / 3);
+                    }
+                    ending.setNeedMonthPlanAdjust(1);
+                } else {
+                    ending.setDelayQuantity(0);
+                    ending.setDistributedQuantity(0);
+                    ending.setNeedMonthPlanAdjust(0);
+                }
+                
+                ending.setCreateTime(LocalDateTime.now());
+                ending.setUpdateTime(LocalDateTime.now());
+                
+                resultList.add(ending);
+            }
+            
+            // 按预计收尾天数排序（紧急的排前面）
+            resultList.sort((a, b) -> {
+                if (a.getEstimatedEndingDays() == null) return 1;
+                if (b.getEstimatedEndingDays() == null) return -1;
+                return a.getEstimatedEndingDays().compareTo(b.getEstimatedEndingDays());
+            });
+            
+            log.info("计算结构收尾信息完成，共 {} 个结构", resultList.size());
+            
+        } catch (Exception e) {
+            log.error("计算结构收尾信息失败", e);
+        }
+        
+        return resultList;
     }
 }
