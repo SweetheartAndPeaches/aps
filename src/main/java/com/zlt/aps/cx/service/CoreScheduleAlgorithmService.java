@@ -222,6 +222,12 @@ public interface CoreScheduleAlgorithmService {
         private java.time.LocalDate endingDate;
         /** 距离收尾日天数 */
         private Integer daysToEnding;
+        /** 是否紧急收尾（3天内收尾） */
+        private Boolean isUrgentEnding;
+        /** 是否需要月计划调整（满产追不上时为true） */
+        private Boolean needMonthPlanAdjust;
+        /** 追赶量（平摊到未来3天的延误量） */
+        private Integer catchUpQuantity;
     }
 
     /**
