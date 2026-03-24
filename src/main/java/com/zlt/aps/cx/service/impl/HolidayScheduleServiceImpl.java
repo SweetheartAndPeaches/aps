@@ -4,7 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.zlt.aps.cx.dto.ScheduleContextDTO;
 import com.zlt.aps.cx.entity.CxMaterial;
 import com.zlt.aps.cx.entity.CxStock;
-import com.zlt.aps.cx.entity.config.CxHolidayConfig;
+import com.zlt.aps.cx.entity.mdm.MdmWorkCalendar;
 import com.zlt.aps.cx.entity.config.CxKeyProduct;
 import com.zlt.aps.cx.entity.config.CxParamConfig;
 import com.zlt.aps.cx.entity.mdm.MdmMoldingMachine;
@@ -19,6 +19,7 @@ import org.springframework.util.CollectionUtils;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.sql.Date;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -36,7 +37,7 @@ import java.util.*;
 public class HolidayScheduleServiceImpl implements HolidayScheduleService {
 
     @Autowired
-    private CxHolidayConfigMapper holidayConfigMapper;
+    private MdmWorkCalendarMapper workCalendarMapper;
 
     @Autowired
     private CxStockMapper stockMapper;
@@ -67,17 +68,19 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
 
     @Override
     public boolean isHoliday(LocalDate date) {
-        // 先检查配置的节假日
-        CxHolidayConfig config = holidayConfigMapper.selectOne(
-                new LambdaQueryWrapper<CxHolidayConfig>()
-                        .eq(CxHolidayConfig::getHolidayDate, date)
-                        .eq(CxHolidayConfig::getIsEnabled, 1));
+        // 使用工作日历判断是否停产
+        // MdmWorkCalendar.dayFlag: 0-停,1-开
+        Date queryDate = Date.valueOf(date);
+        MdmWorkCalendar workCalendar = workCalendarMapper.selectOne(
+                new LambdaQueryWrapper<MdmWorkCalendar>()
+                        .eq(MdmWorkCalendar::getProductionDate, queryDate));
 
-        if (config != null) {
-            return true;
+        if (workCalendar != null) {
+            // dayFlag = '0' 表示停产
+            return "0".equals(workCalendar.getDayFlag());
         }
 
-        // 检查是否为周日
+        // 如果工作日历中没有配置，检查是否为周日
         if (date.getDayOfWeek() == DayOfWeek.SUNDAY) {
             return true;
         }
@@ -120,17 +123,18 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
         builder.isHoliday(isHoliday(date));
         builder.isBeforeHoliday(isBeforeHoliday(date));
 
-        // 获取节假日配置
-        CxHolidayConfig config = holidayConfigMapper.selectOne(
-                new LambdaQueryWrapper<CxHolidayConfig>()
-                        .eq(CxHolidayConfig::getHolidayDate, date)
-                        .eq(CxHolidayConfig::getIsEnabled, 1));
+        // 使用工作日历获取节假日信息
+        Date queryDate = Date.valueOf(date);
+        MdmWorkCalendar workCalendar = workCalendarMapper.selectOne(
+                new LambdaQueryWrapper<MdmWorkCalendar>()
+                        .eq(MdmWorkCalendar::getProductionDate, queryDate));
 
-        if (config != null) {
-            builder.holidayName(config.getHolidayName())
-                    .startDate(config.getStartDate())
-                    .endDate(config.getEndDate())
-                    .totalDays((int) ChronoUnit.DAYS.between(config.getStartDate(), config.getEndDate()) + 1);
+        if (workCalendar != null && "0".equals(workCalendar.getDayFlag())) {
+            // 停产日
+            builder.holidayName("停产日")
+                    .startDate(date)
+                    .endDate(date)
+                    .totalDays(1);
         } else if (date.getDayOfWeek() == DayOfWeek.SUNDAY) {
             builder.holidayName("周日")
                     .startDate(date)

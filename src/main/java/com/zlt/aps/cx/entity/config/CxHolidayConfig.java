@@ -11,7 +11,9 @@ import java.time.LocalDate;
  * 节假日配置实体
  *
  * @author APS Team
+ * @deprecated 已弃用，请使用 {@link com.zlt.aps.cx.entity.mdm.MdmWorkCalendar} 工作日历来判断开产停产
  */
+@Deprecated
 @Data
 @TableName("cx_holiday_config")
 public class CxHolidayConfig {
