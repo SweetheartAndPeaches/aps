@@ -173,9 +173,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 boolean isTrialTask = lhResults.stream()
                         .anyMatch(r -> "1".equals(r.getIsTrial()));
 
-                // 判断是否首排（非续作、非试制/量试就是首排）
-                boolean isFirstTask = lhResults.stream()
-                        .anyMatch(r -> "1".equals(r.getIsFirst()));
+                // 判断是否首排：非续作、非试制/量试的任务
+                boolean isFirstTask = !isContinueTask && !isTrialTask;
 
                 // 计算收尾余量
                 // 收尾余量 = 硫化余量(PLAN_SURPLUS_QTY) - 胎胚库存
