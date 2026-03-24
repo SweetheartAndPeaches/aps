@@ -212,11 +212,11 @@ public interface CoreScheduleAlgorithmService {
         private Integer currentStock;
         
         // ==================== 收尾相关字段 ====================
-        /** 是否收尾任务（收尾余量=0时为true） */
+        /** 是否收尾任务（收尾余量<=0时为true） */
         private Boolean isEndingTask;
-        /** 收尾余量 = 硫化余量 - 胎胚库存 */
+        /** 收尾余量 = 硫化余量(PLAN_SURPLUS_QTY) - 胎胚库存 */
         private Integer endingSurplusQty;
-        /** 硫化余量 = 总计划量 - 硫化真实完成量 */
+        /** 硫化余量（来自t_mdm_month_surplus.PLAN_SURPLUS_QTY，已由系统计算） */
         private Integer vulcanizeSurplusQty;
         /** 收尾日（月计划的最后排产日期） */
         private java.time.LocalDate endingDate;

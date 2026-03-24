@@ -240,12 +240,13 @@ public class ScheduleContextDTO {
 
     /**
      * 月度计划余量列表
-     * 用于计算收尾余量：硫化余量 - 胎胚库存
+     * 硫化余量(PLAN_SURPLUS_QTY)已由系统计算好（总计划量 - 硫化真实完成量）
+     * 用于计算收尾余量：收尾余量 = 硫化余量 - 胎胚库存
      */
     private List<com.zlt.aps.cx.entity.mdm.MdmMonthSurplus> monthSurplusList;
 
     /**
-     * 月度计划余量映射（物料编码 -> 余量）
+     * 月度计划余量映射（物料编码 -> 余量信息）
      * 快速查询用
      */
     private Map<String, com.zlt.aps.cx.entity.mdm.MdmMonthSurplus> monthSurplusMap;
