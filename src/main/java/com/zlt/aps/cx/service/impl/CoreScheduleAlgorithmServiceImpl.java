@@ -52,7 +52,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     public List<CxScheduleResult> executeSchedule(ScheduleContextDTO context) {
         log.info("开始执行排程算法，日期: {}", context.getScheduleDate());
 
-        // 第一步：计算日胎胚任务
+        // 第一步：任务分组并计算日胎胚任务
         List<DailyEmbryoTask> tasks = calculateDailyEmbryoTasks(context);
         log.info("第一步完成，日胎胚任务数: {}", tasks.size());
 
