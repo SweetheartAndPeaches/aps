@@ -8,7 +8,9 @@ import org.apache.ibatis.annotations.Mapper;
  * 节假日配置Mapper
  *
  * @author APS Team
+ * @deprecated 已弃用，请使用 {@link MdmWorkCalendarMapper} 工作日历Mapper
  */
+@Deprecated
 @Mapper
 public interface CxHolidayConfigMapper extends BaseMapper<CxHolidayConfig> {
 }
