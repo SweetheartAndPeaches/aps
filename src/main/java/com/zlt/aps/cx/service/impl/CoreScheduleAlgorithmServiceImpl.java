@@ -178,8 +178,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                         .anyMatch(r -> "1".equals(r.getIsFirst()));
 
                 // 计算收尾余量
-                // 收尾余量 = 硫化余量 - 胎胚库存
-                // 硫化余量来自 t_mdm_month_surplus 表
+                // 收尾余量 = 硫化余量(PLAN_SURPLUS_QTY) - 胎胚库存
+                // 硫化余量来自 t_mdm_month_surplus.PLAN_SURPLUS_QTY（已由系统计算好，无需再计算）
                 Integer vulcanizeSurplusQty = null;
                 Integer endingSurplusQty = null;
                 boolean isEndingTask = false;
@@ -188,8 +188,10 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                     com.zlt.aps.cx.entity.mdm.MdmMonthSurplus monthSurplus = 
                             context.getMonthSurplusMap().get(embryoCode);
                     if (monthSurplus != null && monthSurplus.getPlanSurplusQty() != null) {
+                        // 硫化余量 = 总计划量 - 硫化真实完成量（已由系统计算）
                         vulcanizeSurplusQty = monthSurplus.getPlanSurplusQty();
                         int stockQty = currentStock != null ? currentStock : 0;
+                        // 收尾余量 = 硫化余量 - 胎胚库存
                         endingSurplusQty = vulcanizeSurplusQty - stockQty;
                         // 收尾余量 <= 0 表示该任务需要收尾
                         isEndingTask = endingSurplusQty <= 0;
@@ -851,13 +853,15 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         
         int score = 0;
 
-        // 收尾任务通过月度计划余量计算（收尾余量 = 硫化余量 - 胎胚库存）
-        // 不再使用CxStructureEnding表的isUrgentEnding字段
+        // 收尾任务通过月度计划余量计算
+        // 收尾余量 = 硫化余量(PLAN_SURPLUS_QTY) - 胎胚库存
+        // 硫化余量来自 t_mdm_month_surplus.PLAN_SURPLUS_QTY（已由系统计算）
         if (context.getMonthSurplusMap() != null) {
             com.zlt.aps.cx.entity.mdm.MdmMonthSurplus monthSurplus = 
                     context.getMonthSurplusMap().get(material.getMaterialCode());
             if (monthSurplus != null && monthSurplus.getPlanSurplusQty() != null) {
                 int stockQty = stock != null && stock.getCurrentStock() != null ? stock.getCurrentStock() : 0;
+                // 收尾余量 = 硫化余量 - 胎胚库存
                 int endingSurplusQty = monthSurplus.getPlanSurplusQty() - stockQty;
                 if (endingSurplusQty <= 0) {
                     score += 2000; // 收尾任务加分

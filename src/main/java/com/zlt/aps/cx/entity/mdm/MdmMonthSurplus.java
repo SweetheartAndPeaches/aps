@@ -62,7 +62,7 @@ public class MdmMonthSurplus implements Serializable {
     @TableField("MATERIAL_DESC")
     private String materialDesc;
 
-    @Schema(description = "计划余量（硫化余量 = 总计划量 - 硫化真实完成量）")
+    @Schema(description = "计划余量（硫化余量 = 总计划量 - 硫化真实完成量，已由系统计算好）")
     @TableField("PLAN_SURPLUS_QTY")
     private Integer planSurplusQty;
 
