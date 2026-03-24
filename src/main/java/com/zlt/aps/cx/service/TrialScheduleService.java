@@ -1,6 +1,5 @@
 package com.zlt.aps.cx.service;
 
-import com.zlt.aps.cx.entity.CxMaterial;
 import com.zlt.aps.cx.entity.schedule.CxScheduleDetail;
 import com.zlt.aps.cx.entity.schedule.CxTrialPlan;
 

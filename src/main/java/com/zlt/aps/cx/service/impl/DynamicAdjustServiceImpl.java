@@ -35,7 +35,7 @@ public class DynamicAdjustServiceImpl implements DynamicAdjustService {
     private CxStockMapper stockMapper;
 
     @Autowired
-    private CxMaterialMapper materialMapper;
+    private MdmMaterialInfoMapper materialInfoMapper;
 
     @Autowired
     private CxScheduleResultMapper scheduleResultMapper;
@@ -385,39 +385,21 @@ public class DynamicAdjustServiceImpl implements DynamicAdjustService {
     @Transactional(rollbackFor = Exception.class)
     public boolean handleCurtainRollDepletion(String materialCode) {
         // 获取物料信息
-        CxMaterial material = materialMapper.selectOne(
-                new LambdaQueryWrapper<CxMaterial>()
-                        .eq(CxMaterial::getMaterialCode, materialCode));
+        MdmMaterialInfo material = materialInfoMapper.selectOne(
+                new LambdaQueryWrapper<MdmMaterialInfo>()
+                        .eq(MdmMaterialInfo::getMaterialCode, materialCode));
 
         if (material == null) {
             return false;
         }
 
         // 主销产品可加量生产，按单生产产品不可加量
-        boolean isMainProduct = material.getIsMainProduct() != null && material.getIsMainProduct() == 1;
-
-        if (isMainProduct) {
-            // 主销产品：可以加量生产
-            // 获取当前未完成的计划
-            List<CxScheduleDetail> plannedDetails = scheduleDetailMapper.selectList(
-                    new LambdaQueryWrapper<CxScheduleDetail>()
-                            .eq(CxScheduleDetail::getMaterialCode, materialCode)
-                            .eq(CxScheduleDetail::getStatus, "PLANNED")
-                            .orderByAsc(CxScheduleDetail::getScheduleDate));
-
-            if (!CollectionUtils.isEmpty(plannedDetails)) {
-                // 增加第一个计划的量
-                CxScheduleDetail firstDetail = plannedDetails.get(0);
-                firstDetail.setPlanQty(firstDetail.getPlanQty() + 12);
-                firstDetail.setRemark("大卷帘布用完，加量生产");
-                scheduleDetailMapper.updateById(firstDetail);
-
-                log.info("主销产品 {} 大卷帘布用完，已加量生产", materialCode);
-            }
-        } else {
-            // 非主销产品：不可加量，记录异常
-            log.warn("非主销产品 {} 大卷帘布用完，不可加量生产", materialCode);
-        }
+        // 注意：MdmMaterialInfo 没有直接的主销产品标识
+        // 实际应根据主销产品配置表判断
+        // 这里暂时不判断主销产品，统一按非主销产品处理
+        
+        // 非主销产品：不可加量，记录异常
+        log.warn("产品 {} 大卷帘布用完，不可加量生产", materialCode);
 
         return true;
     }

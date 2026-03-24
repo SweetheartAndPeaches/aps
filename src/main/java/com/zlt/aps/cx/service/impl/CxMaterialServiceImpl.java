@@ -15,7 +15,9 @@ import java.util.List;
  * 物料Service实现类
  *
  * @author APS Team
+ * @deprecated 已弃用，请使用 {@link com.zlt.aps.cx.mapper.MdmMaterialInfoMapper}
  */
+@Deprecated
 @Service
 public class CxMaterialServiceImpl extends ServiceImpl<CxMaterialMapper, CxMaterial> implements CxMaterialService {
 

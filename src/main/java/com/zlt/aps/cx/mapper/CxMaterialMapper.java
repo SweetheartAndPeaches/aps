@@ -11,7 +11,9 @@ import java.util.List;
  * 物料Mapper接口
  *
  * @author APS Team
+ * @deprecated 已弃用，请使用 {@link MdmMaterialInfoMapper}
  */
+@Deprecated
 @Mapper
 public interface CxMaterialMapper extends BaseMapper<CxMaterial> {
 

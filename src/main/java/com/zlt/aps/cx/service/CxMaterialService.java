@@ -10,7 +10,9 @@ import java.util.List;
  * 物料Service接口
  *
  * @author APS Team
+ * @deprecated 已弃用，请使用 {@link com.zlt.aps.cx.mapper.MdmMaterialInfoMapper}
  */
+@Deprecated
 public interface CxMaterialService extends IService<CxMaterial> {
 
     /**

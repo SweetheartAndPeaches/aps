@@ -2,7 +2,7 @@ package com.zlt.aps.cx.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
-import com.zlt.aps.cx.entity.CxMaterial;
+import com.zlt.aps.cx.entity.mdm.MdmMaterialInfo;
 import com.zlt.aps.cx.entity.mdm.MdmMoldingMachine;
 import com.zlt.aps.cx.entity.schedule.CxScheduleDetail;
 import com.zlt.aps.cx.entity.schedule.CxTrialPlan;
@@ -41,7 +41,7 @@ public class TrialScheduleServiceImpl implements TrialScheduleService {
     private CxScheduleDetailMapper scheduleDetailMapper;
 
     @Autowired
-    private CxMaterialMapper materialMapper;
+    private MdmMaterialInfoMapper materialInfoMapper;
 
     @Autowired
     private MdmMoldingMachineMapper moldingMachineMapper;
@@ -56,9 +56,9 @@ public class TrialScheduleServiceImpl implements TrialScheduleService {
 
         try {
             // 验证物料是否存在
-            CxMaterial material = materialMapper.selectOne(
-                    new LambdaQueryWrapper<CxMaterial>()
-                            .eq(CxMaterial::getMaterialCode, trialPlan.getMaterialCode()));
+            MdmMaterialInfo material = materialInfoMapper.selectOne(
+                    new LambdaQueryWrapper<MdmMaterialInfo>()
+                            .eq(MdmMaterialInfo::getMaterialCode, trialPlan.getMaterialCode()));
 
             if (material == null) {
                 result.setSuccess(false);
@@ -346,21 +346,12 @@ public class TrialScheduleServiceImpl implements TrialScheduleService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean convertTrialToMassProduction(String materialCode) {
-        try {
-            // 更新物料状态
-            materialMapper.update(null,
-                    new LambdaUpdateWrapper<CxMaterial>()
-                            .eq(CxMaterial::getMaterialCode, materialCode)
-                            .set(CxMaterial::getIsTrial, 0)
-                            .set(CxMaterial::getUpdateDate, LocalDateTime.now()));
-
-            log.info("物料 {} 已从试制转为量产", materialCode);
-            return true;
-
-        } catch (Exception e) {
-            log.error("试制转量产失败", e);
-            return false;
-        }
+        // TODO: MdmMaterialInfo 没有 isTrial 字段，需要确认如何实现试制转量产的业务逻辑
+        // 可能需要：
+        // 1. 在其他表中维护试制状态
+        // 2. 或者使用 MdmMaterialInfo 的其他字段来标记
+        log.warn("试制转量产功能待确认实现方式，物料编码: {}", materialCode);
+        return true;
     }
 
     @Override

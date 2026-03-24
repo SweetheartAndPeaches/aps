@@ -1,8 +1,8 @@
 package com.zlt.aps.cx.service;
 
-import com.zlt.aps.cx.entity.CxMaterial;
 import com.zlt.aps.cx.entity.CxStock;
 import com.zlt.aps.cx.entity.CxTreadParkingConfig;
+import com.zlt.aps.cx.entity.mdm.MdmMaterialInfo;
 import com.zlt.aps.cx.entity.mdm.MdmMoldingMachine;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
 
@@ -40,7 +40,7 @@ public interface ConstraintCheckService {
      * @param material 物料信息
      * @return 校验结果
      */
-    ConstraintCheckResult checkStructureConstraint(MdmMoldingMachine machine, CxMaterial material);
+    ConstraintCheckResult checkStructureConstraint(MdmMoldingMachine machine, MdmMaterialInfo material);
 
     /**
      * 检查库存约束
@@ -106,7 +106,7 @@ public interface ConstraintCheckService {
      * @param isFirstShift 是否首班
      * @return 校验结果
      */
-    ConstraintCheckResult checkKeyProductConstraint(CxMaterial material, boolean isOpeningDay, boolean isFirstShift);
+    ConstraintCheckResult checkKeyProductConstraint(MdmMaterialInfo material, boolean isOpeningDay, boolean isFirstShift);
 
     /**
      * 检查试制约束
@@ -152,7 +152,7 @@ public interface ConstraintCheckService {
      * @param remainingQty 剩余量
      * @return 校验结果
      */
-    ConstraintCheckResult checkEndingConstraint(CxMaterial material, CxStock stock, BigDecimal remainingQty);
+    ConstraintCheckResult checkEndingConstraint(MdmMaterialInfo material, CxStock stock, BigDecimal remainingQty);
 
     /**
      * 获取胎面停放配置

@@ -1,10 +1,10 @@
 package com.zlt.aps.cx.service;
 
 import com.zlt.aps.cx.dto.ScheduleContextDTO;
-import com.zlt.aps.cx.entity.CxMaterial;
 import com.zlt.aps.cx.entity.CxStock;
 import com.zlt.aps.cx.entity.schedule.CxScheduleDetail;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
+import com.zlt.aps.cx.entity.mdm.MdmMaterialInfo;
 import com.zlt.aps.cx.entity.mdm.MdmMoldingMachine;
 
 import java.math.BigDecimal;
@@ -107,7 +107,7 @@ public interface CoreScheduleAlgorithmService {
      * @return 日需求量
      */
     BigDecimal calculateDailyDemand(
-            CxMaterial material,
+            MdmMaterialInfo material,
             CxStock stock,
             ScheduleContextDTO context);
 
@@ -122,7 +122,7 @@ public interface CoreScheduleAlgorithmService {
      */
     boolean checkStructureConstraint(
             MdmMoldingMachine machine,
-            CxMaterial material,
+            MdmMaterialInfo material,
             ScheduleContextDTO context);
 
     /**
@@ -138,7 +138,7 @@ public interface CoreScheduleAlgorithmService {
     boolean checkTypeLimit(
             MdmMoldingMachine machine,
             int currentTypes,
-            CxMaterial newMaterial,
+            MdmMaterialInfo newMaterial,
             ScheduleContextDTO context);
 
     /**
@@ -151,7 +151,7 @@ public interface CoreScheduleAlgorithmService {
      * @return 优先级分数（越大越优先）
      */
     int calculatePriorityScore(
-            CxMaterial material,
+            MdmMaterialInfo material,
             CxStock stock,
             ScheduleContextDTO context);
 

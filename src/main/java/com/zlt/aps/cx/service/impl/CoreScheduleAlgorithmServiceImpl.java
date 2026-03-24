@@ -77,10 +77,10 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         List<DailyEmbryoTask> tasks = new ArrayList<>();
 
         // 构建物料和库存映射
-        Map<String, CxMaterial> materialMap = new HashMap<>();
+        Map<String, MdmMaterialInfo> materialMap = new HashMap<>();
         if (context.getMaterials() != null) {
             materialMap = context.getMaterials().stream()
-                    .collect(Collectors.toMap(CxMaterial::getMaterialCode, m -> m, (a, b) -> a));
+                    .collect(Collectors.toMap(MdmMaterialInfo::getMaterialCode, m -> m, (a, b) -> a));
         }
         
         Map<String, CxStock> stockMap = new HashMap<>();
@@ -206,11 +206,11 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 task.setMaterialCode(embryoCode);
                 
                 // 获取物料名称
-                CxMaterial material = materialMap.get(embryoCode);
+                MdmMaterialInfo material = materialMap.get(embryoCode);
                 if (material != null) {
-                    task.setMaterialName(material.getMaterialName());
-                    task.setStructureCode(material.getProductStructure());
-                    task.setStructureName(material.getProductStructure());
+                    task.setMaterialName(material.getMaterialDesc());
+                    task.setStructureCode(material.getStructureName());
+                    task.setStructureName(material.getStructureName());
                 } else {
                     task.setMaterialName(embryoCode);
                     task.setStructureCode(structureCode);
@@ -751,7 +751,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
     @Override
     public BigDecimal calculateDailyDemand(
-            CxMaterial material,
+            MdmMaterialInfo material,
             CxStock stock,
             ScheduleContextDTO context) {
         
@@ -784,14 +784,14 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     @Override
     public boolean checkStructureConstraint(
             MdmMoldingMachine machine,
-            CxMaterial material,
+            MdmMaterialInfo material,
             ScheduleContextDTO context) {
         
         if (machine == null || material == null) {
             return false;
         }
 
-        String structure = material.getProductStructure();
+        String structure = material.getStructureName();
 
         // 检查固定机台配置
         for (MdmCxMachineFixed fixed : context.getMachineFixedConfigs()) {
@@ -827,7 +827,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     public boolean checkTypeLimit(
             MdmMoldingMachine machine,
             int currentTypes,
-            CxMaterial newMaterial,
+            MdmMaterialInfo newMaterial,
             ScheduleContextDTO context) {
         
         // 检查固定机台配置（强制保留的情况）
@@ -846,7 +846,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
     @Override
     public int calculatePriorityScore(
-            CxMaterial material,
+            MdmMaterialInfo material,
             CxStock stock,
             ScheduleContextDTO context) {
         
@@ -887,7 +887,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         // 结构优先级加分
         if (context.getStructurePriorities() != null) {
             for (CxStructurePriority priority : context.getStructurePriorities()) {
-                if (priority.getStructureName().equals(material.getProductStructure())) {
+                if (priority.getStructureName().equals(material.getStructureName())) {
                     score += priority.getPriorityLevel() * 10;
                     break;
                 }
@@ -902,7 +902,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
      */
     private int calculatePriorityScoreNew(
             DailyEmbryoTask task,
-            CxMaterial material,
+            MdmMaterialInfo material,
             CxStock stock,
             ScheduleContextDTO context) {
         
@@ -957,7 +957,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         // 7. 结构优先级
         if (material != null && context.getStructurePriorities() != null) {
             for (CxStructurePriority priority : context.getStructurePriorities()) {
-                if (priority.getStructureName().equals(material.getProductStructure())) {
+                if (priority.getStructureName().equals(material.getStructureName())) {
                     score += priority.getPriorityLevel() * 10;
                     break;
                 }
