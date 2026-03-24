@@ -66,13 +66,17 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
     /** 胎胚最长停放时间默认值（小时） */
     private static final int DEFAULT_MAX_PARKING_HOURS = 24;
 
+    /** 成型工序编码 */
+    private static final String PROC_CODE_CX = "CX";
+
     @Override
     public boolean isHoliday(LocalDate date) {
-        // 使用工作日历判断是否停产
+        // 使用工作日历判断是否停产（按工序CX查询）
         // MdmWorkCalendar.dayFlag: 0-停,1-开
         Date queryDate = Date.valueOf(date);
         MdmWorkCalendar workCalendar = workCalendarMapper.selectOne(
                 new LambdaQueryWrapper<MdmWorkCalendar>()
+                        .eq(MdmWorkCalendar::getProcCode, PROC_CODE_CX)
                         .eq(MdmWorkCalendar::getProductionDate, queryDate));
 
         if (workCalendar != null) {
@@ -123,10 +127,11 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
         builder.isHoliday(isHoliday(date));
         builder.isBeforeHoliday(isBeforeHoliday(date));
 
-        // 使用工作日历获取节假日信息
+        // 使用工作日历获取节假日信息（按工序CX查询）
         Date queryDate = Date.valueOf(date);
         MdmWorkCalendar workCalendar = workCalendarMapper.selectOne(
                 new LambdaQueryWrapper<MdmWorkCalendar>()
+                        .eq(MdmWorkCalendar::getProcCode, PROC_CODE_CX)
                         .eq(MdmWorkCalendar::getProductionDate, queryDate));
 
         if (workCalendar != null && "0".equals(workCalendar.getDayFlag())) {
