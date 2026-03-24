@@ -36,8 +36,8 @@ import java.util.stream.Collectors;
 @Service
 public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmService {
 
-    /** 整车容量（12条/车） */
-    private static final int TRIP_CAPACITY = 12;
+    /** 默认整车容量（当结构班产配置中没有该结构时使用） */
+    private static final int DEFAULT_TRIP_CAPACITY = 12;
 
     /** 机台种类上限 */
     private static final int MAX_TYPES_PER_MACHINE = 4;
@@ -148,8 +148,15 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 }
                 int dailyDemand = (int) Math.ceil(netDemand * (1 + lossRate.doubleValue()));
 
-                // 整车取整（向上取整到12的倍数）
-                dailyDemand = roundToTrip(dailyDemand, "CEILING");
+                // 获取结构编码
+                String structureCode = lhResults.get(0).getStructureName();
+                String structureName = lhResults.get(0).getStructureName();
+
+                // 获取该结构的整车容量（不同结构整车条数可能不同，如12、18等）
+                int tripCapacity = getTripCapacity(structureCode, context);
+                
+                // 整车取整（向上取整到整车容量的倍数）
+                dailyDemand = roundToTrip(dailyDemand, "CEILING", tripCapacity);
 
                 // 判断续作：检查是否有在机机台
                 List<String> continueMachineCodes = new ArrayList<>();
@@ -173,10 +180,6 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 // 判断是否首排
                 boolean isFirstTask = lhResults.stream()
                         .anyMatch(r -> "1".equals(r.getIsFirst()));
-
-                // 获取结构编码
-                String structureCode = lhResults.get(0).getStructureName();
-                String structureName = lhResults.get(0).getStructureName();
 
                 // 构建任务
                 DailyEmbryoTask task = new DailyEmbryoTask();
@@ -508,7 +511,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             
             if (shiftCapacityMap != null && !shiftCapacityMap.isEmpty()) {
                 // 按班产配置计算各班次分配量
-                int[] shiftQty = calculateShiftQtyByCapacity(taskQty, shiftCapacityMap, shiftCodes);
+                int[] shiftQty = calculateShiftQtyByCapacity(taskQty, structureCode, shiftCapacityMap, shiftCodes);
                 
                 for (int i = 0; i < shiftCodes.length; i++) {
                     int qty = shiftQty[i];
@@ -551,6 +554,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
      */
     private int[] calculateShiftQtyByCapacity(
             int taskQty,
+            String structureCode,
             Map<String, CxStructureShiftCapacity> shiftCapacityMap,
             String[] shiftCodes) {
         
@@ -578,16 +582,19 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         int totalRatio = WAVE_RATIO[0] + WAVE_RATIO[1] + WAVE_RATIO[2];
         int remainingQty = taskQty;
         
+        // 获取整车容量（用于取整）
+        int tripCapacity = getTripCapacity(structureCode, shiftCapacityMap);
+        
         for (int i = 0; i < shiftCodes.length; i++) {
             // 按波浪比例计算该班次分配量
             int shiftQty = taskQty * WAVE_RATIO[i] / totalRatio;
             
             // 限制不超过该班次的班产整车条数
-            int maxShiftQty = tripQtyPerShift[i] * TRIP_CAPACITY;
+            int maxShiftQty = tripQtyPerShift[i];  // tripQtyPerShift已经是条数，不需要再乘整车容量
             shiftQty = Math.min(shiftQty, maxShiftQty);
             
             // 整车取整
-            shiftQty = roundToTrip(shiftQty, "ROUND");
+            shiftQty = roundToTripQty(shiftQty, tripCapacity, "ROUND");
             
             result[i] = shiftQty;
             remainingQty -= shiftQty;
@@ -595,16 +602,16 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         
         // 分配余量（优先分配给早班）
         if (remainingQty > 0) {
-            for (int i = 1; i < shiftCodes.length && remainingQty >= TRIP_CAPACITY; i++) {
+            for (int i = 1; i < shiftCodes.length && remainingQty >= tripCapacity; i++) {
                 int idx = (i + 1) % shiftCodes.length; // 早班优先
                 CxStructureShiftCapacity capacity = shiftCapacityMap.get(shiftCodes[idx]);
                 int maxQty = capacity != null && capacity.getTripQty() != null 
-                        ? capacity.getTripQty() * TRIP_CAPACITY 
+                        ? capacity.getTripQty()  // tripQty已经是条数
                         : Integer.MAX_VALUE;
                 
-                if (result[idx] + TRIP_CAPACITY <= maxQty) {
-                    result[idx] += TRIP_CAPACITY;
-                    remainingQty -= TRIP_CAPACITY;
+                if (result[idx] + tripCapacity <= maxQty) {
+                    result[idx] += tripCapacity;
+                    remainingQty -= tripCapacity;
                 }
             }
         }
@@ -650,7 +657,11 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             int tripNo = 1;
             for (TaskAllocation task : sortedTasks) {
                 int qty = task.getQuantity();
-                int tripCount = (int) Math.ceil((double) qty / TRIP_CAPACITY);
+                
+                // 获取该结构的整车容量
+                int tripCapacity = getTripCapacity(task.getStructureName(), shiftAllocation.getMachineCode(), context);
+                
+                int tripCount = (int) Math.ceil((double) qty / tripCapacity);
 
                 for (int t = 1; t <= tripCount; t++) {
                     CxScheduleDetail detail = new CxScheduleDetail();
@@ -659,7 +670,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                     detail.setCxMachineName(shiftAllocation.getMachineName());
                     detail.setEmbryoCode(task.getMaterialCode());
                     detail.setTripNo(tripNo++);
-                    detail.setTripCapacity(TRIP_CAPACITY);
+                    detail.setTripCapacity(tripCapacity);  // 使用结构对应的整车容量
                     detail.setTripActualQty(0);
                     detail.setSequence(globalSequence++);
                     detail.setSequenceInGroup(t);
@@ -920,6 +931,19 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
     @Override
     public int roundToTrip(int quantity, String mode) {
+        // 默认使用12条/车
+        return roundToTrip(quantity, mode, DEFAULT_TRIP_CAPACITY);
+    }
+
+    /**
+     * 整车取整（支持不同整车容量）
+     * 
+     * @param quantity 原始数量
+     * @param mode 取整模式（CEILING向上/FLOOR向下/ROUND四舍五入）
+     * @param tripCapacity 整车容量（每车多少条）
+     * @return 取整后的数量
+     */
+    public int roundToTrip(int quantity, String mode, int tripCapacity) {
         if (quantity <= 0) {
             return 0;
         }
@@ -927,18 +951,80 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         int trips;
         switch (mode) {
             case "CEILING":
-                trips = (int) Math.ceil((double) quantity / TRIP_CAPACITY);
+                trips = (int) Math.ceil((double) quantity / tripCapacity);
                 break;
             case "FLOOR":
-                trips = (int) Math.floor((double) quantity / TRIP_CAPACITY);
+                trips = (int) Math.floor((double) quantity / tripCapacity);
                 break;
             case "ROUND":
             default:
-                trips = (int) Math.round((double) quantity / TRIP_CAPACITY);
+                trips = (int) Math.round((double) quantity / tripCapacity);
                 break;
         }
 
-        return trips * TRIP_CAPACITY;
+        return trips * tripCapacity;
+    }
+
+    /**
+     * 获取结构的整车容量
+     * 从结构班产配置表获取，如果没有配置则返回默认值12
+     * 
+     * @param structureCode 结构编码
+     * @param machineCode 机台编码
+     * @param context 排程上下文
+     * @return 整车容量
+     */
+    private int getTripCapacity(String structureCode, String machineCode, ScheduleContextDTO context) {
+        if (context.getStructureShiftCapacities() != null) {
+            for (CxStructureShiftCapacity capacity : context.getStructureShiftCapacities()) {
+                if (capacity.getStructureCode() != null && 
+                    capacity.getStructureCode().equals(structureCode)) {
+                    // 如果指定了机台，需要匹配机台
+                    if (capacity.getCxMachineCode() == null || 
+                        capacity.getCxMachineCode().isEmpty() ||
+                        capacity.getCxMachineCode().equals(machineCode)) {
+                        if (capacity.getTripQty() != null && capacity.getTripQty() > 0) {
+                            return capacity.getTripQty();
+                        }
+                    }
+                }
+            }
+        }
+        // 没有配置则返回默认值
+        return DEFAULT_TRIP_CAPACITY;
+    }
+
+    /**
+     * 获取结构的整车容量（不指定机台）
+     */
+    private int getTripCapacity(String structureCode, ScheduleContextDTO context) {
+        return getTripCapacity(structureCode, null, context);
+    }
+    
+    /**
+     * 从班产配置Map获取整车容量
+     * 取第一个有效配置的整车容量
+     * 
+     * @param structureCode 结构编码
+     * @param shiftCapacityMap 班次班产配置Map
+     * @return 整车容量
+     */
+    private int getTripCapacity(String structureCode, Map<String, CxStructureShiftCapacity> shiftCapacityMap) {
+        if (shiftCapacityMap != null) {
+            for (CxStructureShiftCapacity capacity : shiftCapacityMap.values()) {
+                if (capacity.getTripQty() != null && capacity.getTripQty() > 0) {
+                    return capacity.getTripQty();
+                }
+            }
+        }
+        return DEFAULT_TRIP_CAPACITY;
+    }
+    
+    /**
+     * 按整车容量取整（别名方法）
+     */
+    private int roundToTripQty(int quantity, int tripCapacity, String mode) {
+        return roundToTrip(quantity, mode, tripCapacity);
     }
 
     // ==================== 私有方法 ====================
@@ -1097,7 +1183,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     }
 
     /**
-     * 计算波浪分配
+     * 计算波浪分配（无班产配置时使用默认整车容量）
      */
     private int[] calculateWaveAllocation(int totalQty) {
         int[] result = new int[3];
@@ -1108,15 +1194,15 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
         for (int i = 0; i < 3; i++) {
             int qty = totalQty * WAVE_RATIO[i] / totalRatio;
-            // 整车取整
-            qty = roundToTrip(qty, "ROUND");
+            // 整车取整（使用默认整车容量）
+            qty = roundToTripQty(qty, DEFAULT_TRIP_CAPACITY, "ROUND");
             result[i] = qty;
             remaining -= qty;
         }
 
-        // 分配余量
+        // 分配余量（使用默认整车容量）
         for (int i = 0; i < remaining && i < 3; i++) {
-            result[i % 3] += TRIP_CAPACITY;
+            result[i % 3] += DEFAULT_TRIP_CAPACITY;
         }
 
         return result;
