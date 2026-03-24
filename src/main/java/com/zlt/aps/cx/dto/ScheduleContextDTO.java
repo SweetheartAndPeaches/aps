@@ -64,7 +64,7 @@ public class ScheduleContextDTO {
     /**
      * 物料主数据列表
      */
-    private List<CxMaterial> materials;
+    private List<MdmMaterialInfo> materials;
 
     /**
      * 库存列表

@@ -16,7 +16,9 @@ import java.util.List;
  * 物料Controller
  *
  * @author APS Team
+ * @deprecated 已弃用，物料信息请使用 MdmMaterialInfo 相关接口
  */
+@Deprecated
 @Tag(name = "物料管理", description = "物料相关接口")
 @RestController
 @RequestMapping("/material")

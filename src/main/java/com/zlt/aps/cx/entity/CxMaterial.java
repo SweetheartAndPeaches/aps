@@ -13,7 +13,9 @@ import java.time.LocalDateTime;
  * 对应数据库表：T_CX_MATERIAL
  *
  * @author APS Team
+ * @deprecated 已弃用，请使用 {@link com.zlt.aps.cx.entity.mdm.MdmMaterialInfo}
  */
+@Deprecated
 @Data
 @TableName(value = "T_CX_MATERIAL", keepGlobalPrefix = false)
 @Schema(description = "物料主数据")

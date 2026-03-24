@@ -2,7 +2,6 @@ package com.zlt.aps.cx.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.zlt.aps.cx.dto.ScheduleContextDTO;
-import com.zlt.aps.cx.entity.CxMaterial;
 import com.zlt.aps.cx.entity.CxStock;
 import com.zlt.aps.cx.entity.mdm.MdmWorkCalendar;
 import com.zlt.aps.cx.entity.config.CxKeyProduct;
@@ -41,9 +40,6 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
 
     @Autowired
     private CxStockMapper stockMapper;
-
-    @Autowired
-    private CxMaterialMapper materialMapper;
 
     @Autowired
     private CxLhPlanMapper lhPlanMapper;

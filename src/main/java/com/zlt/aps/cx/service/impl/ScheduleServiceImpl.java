@@ -7,6 +7,7 @@ import com.zlt.aps.cx.entity.config.CxKeyProduct;
 import com.zlt.aps.cx.entity.config.CxParamConfig;
 import com.zlt.aps.cx.entity.config.CxStructureShiftCapacity;
 import com.zlt.aps.cx.entity.mdm.MdmCxMachineOnlineInfo;
+import com.zlt.aps.cx.entity.mdm.MdmMaterialInfo;
 import com.zlt.aps.cx.entity.mdm.MdmMoldingMachine;
 import com.zlt.aps.cx.entity.schedule.CxScheduleDetail;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
@@ -61,7 +62,7 @@ public class ScheduleServiceImpl implements ScheduleService {
     private MdmMoldingMachineMapper moldingMachineMapper;
 
     @Autowired
-    private CxMaterialMapper materialMapper;
+    private MdmMaterialInfoMapper materialInfoMapper;
 
     @Autowired
     private CxStockMapper stockMapper;
@@ -177,9 +178,8 @@ public class ScheduleServiceImpl implements ScheduleService {
             context.setAvailableMachines(machines);
 
             // 2. 获取物料信息
-            List<CxMaterial> materials = materialMapper.selectList(
-                    new LambdaQueryWrapper<CxMaterial>()
-                            .eq(CxMaterial::getIsActive, 1));
+            List<MdmMaterialInfo> materials = materialInfoMapper.selectList(
+                    new LambdaQueryWrapper<MdmMaterialInfo>());
             context.setMaterials(materials);
 
             // 3. 获取库存信息
