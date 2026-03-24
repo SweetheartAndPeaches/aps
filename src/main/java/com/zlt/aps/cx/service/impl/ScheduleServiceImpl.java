@@ -6,10 +6,12 @@ import com.zlt.aps.cx.entity.*;
 import com.zlt.aps.cx.entity.config.CxKeyProduct;
 import com.zlt.aps.cx.entity.config.CxParamConfig;
 import com.zlt.aps.cx.entity.config.CxStructureShiftCapacity;
+import com.zlt.aps.cx.entity.mdm.MdmCxMachineOnlineInfo;
 import com.zlt.aps.cx.entity.mdm.MdmMoldingMachine;
 import com.zlt.aps.cx.entity.schedule.CxScheduleDetail;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
 import com.zlt.aps.cx.entity.schedule.CxTrialPlan;
+import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
 import com.zlt.aps.cx.mapper.*;
 import com.zlt.aps.cx.service.*;
 import lombok.extern.slf4j.Slf4j;
@@ -22,6 +24,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -83,6 +86,15 @@ public class ScheduleServiceImpl implements ScheduleService {
 
     @Autowired
     private CxKeyProductMapper keyProductMapper;
+
+    @Autowired
+    private LhScheduleResultMapper lhScheduleResultMapper;
+
+    @Autowired
+    private MdmCxMachineOnlineInfoMapper onlineInfoMapper;
+
+    @Autowired
+    private CxStructureEndingMapper structureEndingMapper;
 
     @Override
     public ScheduleResult executeSchedule(ScheduleRequest request) {
@@ -150,6 +162,7 @@ public class ScheduleServiceImpl implements ScheduleService {
     public ScheduleContextDTO buildScheduleContext(ScheduleRequest request) {
         try {
             ScheduleContextDTO context = new ScheduleContextDTO();
+            LocalDate scheduleDate = request.getScheduleDate();
 
             // 1. 获取机台信息
             List<MdmMoldingMachine> machines = moldingMachineMapper.selectList(
@@ -157,6 +170,7 @@ public class ScheduleServiceImpl implements ScheduleService {
                             .eq(MdmMoldingMachine::getIsActive, 1)
                             .ne(MdmMoldingMachine::getMaintainStatus, "FAULT"));
             context.setMachines(machines);
+            context.setAvailableMachines(machines);
 
             // 2. 获取物料信息
             List<CxMaterial> materials = materialMapper.selectList(
@@ -170,24 +184,69 @@ public class ScheduleServiceImpl implements ScheduleService {
                             .gt(CxStock::getCurrentStock, 0));
             context.setStocks(stocks);
 
-            // 4. 获取硫化计划（需求）
-            List<CxLhPlan> lhPlans = lhPlanMapper.selectList(
-                    new LambdaQueryWrapper<CxLhPlan>()
-                            .eq(CxLhPlan::getPlanDate, request.getScheduleDate())
-                            .eq(CxLhPlan::getStatus, "PENDING"));
-            context.setLhPlans(lhPlans);
+            // 4. 【主要任务来源】获取硫化排程结果
+            // 从T_LH_SCHEDULE_RESULT获取今日硫化计划
+            List<LhScheduleResult> lhScheduleResults = lhScheduleResultMapper.selectByDate(scheduleDate);
+            context.setLhScheduleResults(lhScheduleResults);
+            log.info("加载硫化排程结果 {} 条", lhScheduleResults.size());
 
-            // 5. 获取参数配置
+            // 5. 【续作判断】获取成型在机信息
+            // 从T_MDM_CX_MACHINE_ONLINE_INFO获取当前机台正在做的胎胚
+            // 查询今天和昨天在机的信息（可能跨班次生产）
+            List<MdmCxMachineOnlineInfo> onlineInfos = onlineInfoMapper.selectByDateRange(
+                    scheduleDate, scheduleDate.minusDays(1));
+            context.setOnlineInfos(onlineInfos);
+            log.info("加载成型在机信息 {} 条", onlineInfos.size());
+
+            // 6. 构建机台在机胎胚映射（快速查询用）
+            // Key: 成型机台编码, Value: 该机台正在做的胎胚编码集合
+            Map<String, Set<String>> machineOnlineEmbryoMap = new HashMap<>();
+            for (MdmCxMachineOnlineInfo onlineInfo : onlineInfos) {
+                String cxCode = onlineInfo.getCxCode();
+                String embryoCode = onlineInfo.getMesMaterialCode();
+                if (cxCode != null && embryoCode != null) {
+                    machineOnlineEmbryoMap.computeIfAbsent(cxCode, k -> new HashSet<>())
+                            .add(embryoCode);
+                }
+            }
+            context.setMachineOnlineEmbryoMap(machineOnlineEmbryoMap);
+            log.info("构建机台在机胎胚映射，共 {} 个机台有在机任务", machineOnlineEmbryoMap.size());
+
+            // 7. 获取参数配置
             List<CxParamConfig> paramConfigs = paramConfigMapper.selectList(null);
-            context.setParamConfigs(paramConfigs);
+            // 转换为Map方便查询
+            Map<String, CxParamConfig> paramConfigMap = paramConfigs.stream()
+                    .collect(Collectors.toMap(CxParamConfig::getParamCode, p -> p, (a, b) -> a));
+            context.setParamConfigMap(paramConfigMap);
+            
+            // 加载损耗率
+            CxParamConfig lossRateConfig = paramConfigMap.get("LOSS_RATE");
+            java.math.BigDecimal lossRate = lossRateConfig != null 
+                    ? new java.math.BigDecimal(lossRateConfig.getParamValue()) 
+                    : new java.math.BigDecimal("0.02");
+            context.setLossRate(lossRate);
+            
+            // 加载预留消化时间
+            CxParamConfig reservedHoursConfig = paramConfigMap.get("RESERVED_DIGEST_HOURS");
+            Integer reservedDigestHours = reservedHoursConfig != null 
+                    ? Integer.parseInt(reservedHoursConfig.getParamValue()) 
+                    : 1;
+            context.setReservedDigestHours(reservedDigestHours);
+            
+            // 加载胎胚最长停放时间
+            CxParamConfig maxParkingConfig = paramConfigMap.get("MAX_PARKING_HOURS");
+            Integer maxParkingHours = maxParkingConfig != null 
+                    ? Integer.parseInt(maxParkingConfig.getParamValue()) 
+                    : 24;
+            context.setMaxParkingHours(maxParkingHours);
 
-            // 6. 获取结构班产配置（整车条数）
+            // 8. 获取结构班产配置（整车条数）
             List<CxStructureShiftCapacity> structureShiftCapacities = structureShiftCapacityMapper.selectList(
                     new LambdaQueryWrapper<CxStructureShiftCapacity>()
                             .eq(CxStructureShiftCapacity::getIsActive, 1));
             context.setStructureShiftCapacities(structureShiftCapacities);
 
-            // 7. 获取关键产品配置
+            // 9. 获取关键产品配置
             List<CxKeyProduct> keyProducts = keyProductMapper.selectList(
                     new LambdaQueryWrapper<CxKeyProduct>()
                             .eq(CxKeyProduct::getIsActive, 1));
@@ -200,13 +259,19 @@ public class ScheduleServiceImpl implements ScheduleService {
             }
             context.setKeyProductCodes(keyProductCodes);
 
-            // 8. 设置节假日相关标记
-            context.setIsOpeningDay(holidayScheduleService.isStartProductionDay(request.getScheduleDate()));
-            context.setIsClosingDay(holidayScheduleService.isStopProductionDay(request.getScheduleDate()));
-            context.setIsBeforeClosingDay(holidayScheduleService.isBeforeHoliday(request.getScheduleDate()));
+            // 10. 获取结构收尾管理列表
+            List<CxStructureEnding> structureEndings = structureEndingMapper.selectList(
+                    new LambdaQueryWrapper<CxStructureEnding>()
+                            .eq(CxStructureEnding::getIsActive, 1));
+            context.setStructureEndings(structureEndings);
 
-            // 9. 设置排程参数
-            context.setScheduleDate(request.getScheduleDate());
+            // 11. 设置节假日相关标记
+            context.setIsOpeningDay(holidayScheduleService.isStartProductionDay(scheduleDate));
+            context.setIsClosingDay(holidayScheduleService.isStopProductionDay(scheduleDate));
+            context.setIsBeforeClosingDay(holidayScheduleService.isBeforeHoliday(scheduleDate));
+
+            // 12. 设置排程参数
+            context.setScheduleDate(scheduleDate);
             context.setScheduleMode(request.getScheduleMode());
             context.setReScheduleType(request.getReScheduleType());
 

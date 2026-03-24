@@ -8,6 +8,7 @@ import com.zlt.aps.cx.entity.config.CxStructureShiftCapacity;
 import com.zlt.aps.cx.entity.mdm.*;
 import com.zlt.aps.cx.entity.schedule.CxScheduleDetail;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
+import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
 import com.zlt.aps.cx.mapper.CxStructureShiftCapacityMapper;
 import com.zlt.aps.cx.service.CoreScheduleAlgorithmService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -76,16 +77,153 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         List<DailyEmbryoTask> tasks = new ArrayList<>();
 
         // 构建物料和库存映射
-        Map<String, CxMaterial> materialMap = context.getMaterials().stream()
-                .collect(Collectors.toMap(CxMaterial::getMaterialCode, m -> m));
-        Map<String, CxStock> stockMap = context.getStocks().stream()
-                .collect(Collectors.toMap(CxStock::getMaterialCode, s -> s, (a, b) -> a));
+        Map<String, CxMaterial> materialMap = new HashMap<>();
+        if (context.getMaterials() != null) {
+            materialMap = context.getMaterials().stream()
+                    .collect(Collectors.toMap(CxMaterial::getMaterialCode, m -> m, (a, b) -> a));
+        }
+        
+        Map<String, CxStock> stockMap = new HashMap<>();
+        if (context.getStocks() != null) {
+            stockMap = context.getStocks().stream()
+                    .collect(Collectors.toMap(CxStock::getMaterialCode, s -> s, (a, b) -> a));
+        }
 
         // 构建结构收尾映射
-        Map<String, CxStructureEnding> endingMap = context.getStructureEndings().stream()
-                .collect(Collectors.toMap(CxStructureEnding::getStructureCode, e -> e, (a, b) -> a));
+        Map<String, CxStructureEnding> endingMap = new HashMap<>();
+        if (context.getStructureEndings() != null) {
+            endingMap = context.getStructureEndings().stream()
+                    .collect(Collectors.toMap(CxStructureEnding::getStructureCode, e -> e, (a, b) -> a));
+        }
 
-        // 处理试制任务（优先级最高）
+        // 获取机台在机胎胚映射（用于续作判断）
+        Map<String, Set<String>> machineOnlineEmbryoMap = context.getMachineOnlineEmbryoMap();
+        if (machineOnlineEmbryoMap == null) {
+            machineOnlineEmbryoMap = new HashMap<>();
+        }
+
+        // ==================== 主要任务来源：硫化排程结果 ====================
+        List<LhScheduleResult> lhScheduleResults = context.getLhScheduleResults();
+        if (lhScheduleResults != null && !lhScheduleResults.isEmpty()) {
+            // 按胎胚编码分组汇总
+            Map<String, List<LhScheduleResult>> embryoTaskMap = lhScheduleResults.stream()
+                    .filter(r -> r.getEmbryoCode() != null)
+                    .collect(Collectors.groupingBy(LhScheduleResult::getEmbryoCode));
+
+            for (Map.Entry<String, List<LhScheduleResult>> entry : embryoTaskMap.entrySet()) {
+                String embryoCode = entry.getKey();
+                List<LhScheduleResult> lhResults = entry.getValue();
+
+                // 计算硫化需求量（汇总所有硫化机的需求）
+                int totalVulcanizeDemand = lhResults.stream()
+                        .mapToInt(r -> r.getDailyPlanQty() != null ? r.getDailyPlanQty() : 0)
+                        .sum();
+
+                // 获取当前库存
+                int currentStock = 0;
+                Integer embryoStock = lhResults.get(0).getEmbryoStock();
+                if (embryoStock != null) {
+                    currentStock = embryoStock;
+                } else {
+                    CxStock stock = stockMap.get(embryoCode);
+                    if (stock != null && stock.getCurrentStock() != null) {
+                        currentStock = stock.getCurrentStock();
+                    }
+                }
+
+                // 计算净需求
+                int netDemand = totalVulcanizeDemand - currentStock;
+                
+                // 如果库存充足，跳过
+                if (netDemand <= 0) {
+                    log.debug("胎胚 {} 库存充足，无需生产，硫化需求: {}, 库存: {}", 
+                            embryoCode, totalVulcanizeDemand, currentStock);
+                    continue;
+                }
+
+                // 考虑损耗率
+                BigDecimal lossRate = context.getLossRate();
+                if (lossRate == null) {
+                    lossRate = new BigDecimal("0.02"); // 默认2%
+                }
+                int dailyDemand = (int) Math.ceil(netDemand * (1 + lossRate.doubleValue()));
+
+                // 整车取整（向上取整到12的倍数）
+                dailyDemand = roundToTrip(dailyDemand, "CEILING");
+
+                // 判断续作：检查是否有在机机台
+                List<String> continueMachineCodes = new ArrayList<>();
+                for (Map.Entry<String, Set<String>> machineEntry : machineOnlineEmbryoMap.entrySet()) {
+                    String machineCode = machineEntry.getKey();
+                    Set<String> onlineEmbryos = machineEntry.getValue();
+                    if (onlineEmbryos != null && onlineEmbryos.contains(embryoCode)) {
+                        continueMachineCodes.add(machineCode);
+                    }
+                }
+                boolean isContinueTask = !continueMachineCodes.isEmpty();
+
+                // 判断是否试制
+                boolean isTrialTask = lhResults.stream()
+                        .anyMatch(r -> "1".equals(r.getIsTrial()));
+
+                // 判断是否收尾
+                boolean isEndTask = lhResults.stream()
+                        .anyMatch(r -> "1".equals(r.getIsEnd()));
+
+                // 判断是否首排
+                boolean isFirstTask = lhResults.stream()
+                        .anyMatch(r -> "1".equals(r.getIsFirst()));
+
+                // 获取结构编码
+                String structureCode = lhResults.get(0).getStructureName();
+                String structureName = lhResults.get(0).getStructureName();
+
+                // 构建任务
+                DailyEmbryoTask task = new DailyEmbryoTask();
+                task.setMaterialCode(embryoCode);
+                
+                // 获取物料名称
+                CxMaterial material = materialMap.get(embryoCode);
+                if (material != null) {
+                    task.setMaterialName(material.getMaterialName());
+                    task.setStructureCode(material.getProductStructure());
+                    task.setStructureName(material.getProductStructure());
+                } else {
+                    task.setMaterialName(embryoCode);
+                    task.setStructureCode(structureCode);
+                    task.setStructureName(structureName);
+                }
+                
+                task.setDemandQuantity(dailyDemand);
+                task.setAssignedQuantity(0);
+                task.setRemainingQuantity(dailyDemand);
+                task.setIsTrialTask(isTrialTask);
+                task.setIsUrgentEnding(isEndTask);
+                task.setIsFirstTask(isFirstTask);
+                task.setIsContinueTask(isContinueTask);
+                task.setContinueMachineCodes(continueMachineCodes);
+
+                // 计算库存时长
+                CxStock stock = stockMap.get(embryoCode);
+                if (stock != null) {
+                    task.setStockHours(stock.getStockHours());
+                    task.setVulcanizeMachineCount(stock.getVulcanizeMachineCount());
+                    task.setVulcanizeMoldCount(stock.getVulcanizeMoldCount());
+                }
+
+                // 计算优先级分数
+                task.setPriority(calculatePriorityScoreNew(task, material, stock, context));
+
+                tasks.add(task);
+                
+                if (isContinueTask) {
+                    log.info("续作任务: 胎胚={}, 需求量={}, 续作机台={}", 
+                            embryoCode, dailyDemand, continueMachineCodes);
+                }
+            }
+        }
+
+        // ==================== 处理试制任务 ====================
         if (!CollectionUtils.isEmpty(context.getTrialTasks())) {
             for (CxTrialTask trialTask : context.getTrialTasks()) {
                 if ("PENDING".equals(trialTask.getStatus()) || "SCHEDULED".equals(trialTask.getStatus())) {
@@ -96,55 +234,50 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                     if (task != null) {
                         task.setIsTrialTask(true);
                         task.setTrialNo(trialTask.getTrialNo());
-                        task.setPriority(1000); // 试制任务最高优先级
+                        task.setPriority(1500); // 试制任务高优先级
                         tasks.add(task);
                     }
                 }
             }
         }
 
-        // 计算常规任务
-        for (CxMaterial material : context.getMaterials()) {
-            if (material.getIsActive() == null || material.getIsActive() != 1) {
-                continue;
-            }
-
-            CxStock stock = stockMap.get(material.getMaterialCode());
-
-            // 计算日需求量
-            BigDecimal dailyDemand = calculateDailyDemand(material, stock, context);
-            if (dailyDemand.compareTo(BigDecimal.ZERO) <= 0) {
-                continue;
-            }
-
-            DailyEmbryoTask task = createDailyEmbryoTask(
-                    material.getMaterialCode(),
-                    dailyDemand.intValue(),
-                    materialMap, stockMap, endingMap, context);
-            if (task != null) {
-                tasks.add(task);
-            }
-        }
-
-        // 按优先级排序
+        // ==================== 按优先级排序 ====================
         tasks.sort((a, b) -> {
-            // 紧急收尾优先
+            // 1. 收尾任务优先
             if (Boolean.TRUE.equals(a.getIsUrgentEnding()) && !Boolean.TRUE.equals(b.getIsUrgentEnding())) {
                 return -1;
             }
             if (!Boolean.TRUE.equals(a.getIsUrgentEnding()) && Boolean.TRUE.equals(b.getIsUrgentEnding())) {
                 return 1;
             }
-            // 试制任务优先
+            // 2. 试制任务优先
             if (Boolean.TRUE.equals(a.getIsTrialTask()) && !Boolean.TRUE.equals(b.getIsTrialTask())) {
                 return -1;
             }
             if (!Boolean.TRUE.equals(a.getIsTrialTask()) && Boolean.TRUE.equals(b.getIsTrialTask())) {
                 return 1;
             }
-            // 按优先级分数排序
+            // 3. 首排任务优先
+            if (Boolean.TRUE.equals(a.getIsFirstTask()) && !Boolean.TRUE.equals(b.getIsFirstTask())) {
+                return -1;
+            }
+            if (!Boolean.TRUE.equals(a.getIsFirstTask()) && Boolean.TRUE.equals(b.getIsFirstTask())) {
+                return 1;
+            }
+            // 4. 续作任务优先
+            if (Boolean.TRUE.equals(a.getIsContinueTask()) && !Boolean.TRUE.equals(b.getIsContinueTask())) {
+                return -1;
+            }
+            if (!Boolean.TRUE.equals(a.getIsContinueTask()) && Boolean.TRUE.equals(b.getIsContinueTask())) {
+                return 1;
+            }
+            // 5. 按优先级分数排序
             return Integer.compare(b.getPriority(), a.getPriority());
         });
+
+        log.info("计算完成，日胎胚任务数: {}, 其中续作任务数: {}", 
+                tasks.size(), 
+                tasks.stream().filter(t -> Boolean.TRUE.equals(t.getIsContinueTask())).count());
 
         return tasks;
     }
@@ -679,13 +812,15 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         int score = 0;
 
         // 检查紧急收尾
-        for (CxStructureEnding ending : context.getStructureEndings()) {
-            if (ending.getStructureCode().equals(material.getProductStructure())) {
-                if (Boolean.TRUE.equals(ending.getIsUrgentEnding())) {
-                    score += 1000; // 紧急收尾加分
-                }
-                if (Boolean.TRUE.equals(ending.getIsNearEnding())) {
-                    score += 500; // 10天内收尾加分
+        if (context.getStructureEndings() != null) {
+            for (CxStructureEnding ending : context.getStructureEndings()) {
+                if (ending.getStructureCode().equals(material.getProductStructure())) {
+                    if (Boolean.TRUE.equals(ending.getIsUrgentEnding())) {
+                        score += 1000; // 紧急收尾加分
+                    }
+                    if (Boolean.TRUE.equals(ending.getIsNearEnding())) {
+                        score += 500; // 10天内收尾加分
+                    }
                 }
             }
         }
@@ -706,10 +841,77 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         }
 
         // 结构优先级加分
-        for (CxStructurePriority priority : context.getStructurePriorities()) {
-            if (priority.getStructureName().equals(material.getProductStructure())) {
-                score += priority.getPriorityLevel() * 10;
-                break;
+        if (context.getStructurePriorities() != null) {
+            for (CxStructurePriority priority : context.getStructurePriorities()) {
+                if (priority.getStructureName().equals(material.getProductStructure())) {
+                    score += priority.getPriorityLevel() * 10;
+                    break;
+                }
+            }
+        }
+
+        return score;
+    }
+
+    /**
+     * 计算优先级分数（新方法，支持任务对象）
+     */
+    private int calculatePriorityScoreNew(
+            DailyEmbryoTask task,
+            CxMaterial material,
+            CxStock stock,
+            ScheduleContextDTO context) {
+        
+        int score = 0;
+
+        // 1. 收尾任务（从硫化排程结果的IS_END字段判断）
+        if (Boolean.TRUE.equals(task.getIsUrgentEnding())) {
+            score += 2000;
+        }
+
+        // 2. 试制任务（从硫化排程结果的IS_TRIAL字段判断）
+        if (Boolean.TRUE.equals(task.getIsTrialTask())) {
+            score += 1500;
+        }
+
+        // 3. 续作任务
+        if (Boolean.TRUE.equals(task.getIsContinueTask())) {
+            score += 800;
+        }
+
+        // 4. 首排任务
+        if (Boolean.TRUE.equals(task.getIsFirstTask())) {
+            score += 500;
+        }
+
+        // 5. 库存紧张（断料风险）
+        if (task.getStockHours() != null) {
+            if (task.getStockHours().compareTo(new BigDecimal("4")) < 0) {
+                score += 800;
+            } else if (task.getStockHours().compareTo(new BigDecimal("6")) < 0) {
+                score += 400;
+            }
+        } else if (stock != null && stock.getStockHours() != null) {
+            if (stock.getStockHours().compareTo(new BigDecimal("4")) < 0) {
+                score += 800;
+            } else if (stock.getStockHours().compareTo(new BigDecimal("6")) < 0) {
+                score += 400;
+            }
+        }
+
+        // 6. 关键产品（从关键产品配置表判断）
+        Set<String> keyProductCodes = context.getKeyProductCodes();
+        if (keyProductCodes != null && keyProductCodes.contains(task.getMaterialCode())) {
+            score += 200;
+        }
+
+        // 7. 结构优先级
+        if (material != null && context.getStructurePriorities() != null) {
+            for (CxStructurePriority priority : context.getStructurePriorities()) {
+                if (priority.getStructureName().equals(material.getProductStructure())) {
+                    score += priority.getPriorityLevel() * 10;
+                    break;
+                }
             }
         }
 
@@ -838,6 +1040,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
     /**
      * 计算机台得分
+     * 续作机台获得最高加分（+1000分）
      */
     private int calculateMachineScore(
             MdmMoldingMachine machine,
@@ -847,12 +1050,24 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         
         int score = 0;
 
-        // 优先选昨日做过该胎胚的机台（续作）
-        for (CxScheduleResult yesterday : context.getYesterdayResults()) {
-            if (yesterday.getCxMachineCode().equals(machine.getCxMachineCode()) &&
-                yesterday.getEmbryoCode().equals(task.getMaterialCode())) {
-                score += 500;
-                break;
+        // 【最高优先】续作任务：该机台正在做这个胎胚
+        if (Boolean.TRUE.equals(task.getIsContinueTask()) && 
+            task.getContinueMachineCodes() != null &&
+            task.getContinueMachineCodes().contains(machine.getCxMachineCode())) {
+            score += 1000; // 续作最高加分，无需换产
+            log.debug("机台 {} 是胎胚 {} 的续作机台，加分1000", 
+                    machine.getCxMachineCode(), task.getMaterialCode());
+        }
+
+        // 昨日做过该胎胚（但有换产）
+        if (context.getYesterdayResults() != null) {
+            for (CxScheduleResult yesterday : context.getYesterdayResults()) {
+                if (yesterday.getCxMachineCode().equals(machine.getCxMachineCode()) &&
+                    yesterday.getEmbryoCode() != null &&
+                    yesterday.getEmbryoCode().equals(task.getMaterialCode())) {
+                    score += 500;
+                    break;
+                }
             }
         }
 
@@ -863,15 +1078,17 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         score += (MAX_TYPES_PER_MACHINE - status.getAssignedTypes()) * 50;
 
         // 优先选固定生产该结构的机台
-        for (MdmCxMachineFixed fixed : context.getMachineFixedConfigs()) {
-            if (fixed.getCxMachineCode().equals(machine.getCxMachineCode())) {
-                if (fixed.getFixedStructure1() != null && 
-                    fixed.getFixedStructure1().contains(task.getStructureName())) {
-                    score += 200;
-                }
-                if (fixed.getFixedMaterialCode() != null && 
-                    fixed.getFixedMaterialCode().contains(task.getMaterialCode())) {
-                    score += 300;
+        if (context.getMachineFixedConfigs() != null) {
+            for (MdmCxMachineFixed fixed : context.getMachineFixedConfigs()) {
+                if (fixed.getCxMachineCode().equals(machine.getCxMachineCode())) {
+                    if (fixed.getFixedStructure1() != null && 
+                        fixed.getFixedStructure1().contains(task.getStructureName())) {
+                        score += 200;
+                    }
+                    if (fixed.getFixedMaterialCode() != null && 
+                        fixed.getFixedMaterialCode().contains(task.getMaterialCode())) {
+                        score += 300;
+                    }
                 }
             }
         }

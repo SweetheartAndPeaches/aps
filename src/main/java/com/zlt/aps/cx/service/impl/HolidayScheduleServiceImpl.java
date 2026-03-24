@@ -9,6 +9,7 @@ import com.zlt.aps.cx.entity.config.CxKeyProduct;
 import com.zlt.aps.cx.entity.config.CxParamConfig;
 import com.zlt.aps.cx.entity.mdm.MdmMoldingMachine;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
+import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
 import com.zlt.aps.cx.mapper.*;
 import com.zlt.aps.cx.service.HolidayScheduleService;
 import lombok.extern.slf4j.Slf4j;
@@ -45,6 +46,9 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
 
     @Autowired
     private CxLhPlanMapper lhPlanMapper;
+
+    @Autowired
+    private LhScheduleResultMapper lhScheduleResultMapper;
 
     @Autowired
     private CxKeyProductMapper keyProductMapper;
@@ -274,25 +278,35 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
         // 获取损耗率配置
         BigDecimal lossRate = getLossRate();
 
-        // 获取节假日期间的硫化计划
+        // 从硫化排程结果表获取节假日期间的硫化计划
         for (int i = 0; i < holidayDays; i++) {
             LocalDate planDate = holidayStartDate.plusDays(i);
 
-            // 从硫化计划表获取需求（简化处理，实际需要查询硫化计划）
-            // TODO: 根据实际硫化计划表结构实现
+            // 从硫化排程结果表获取该日期的计划
+            List<LhScheduleResult> lhResults = lhScheduleResultMapper.selectByDate(planDate);
+            
+            if (lhResults != null && !lhResults.isEmpty()) {
+                for (LhScheduleResult result : lhResults) {
+                    String embryoCode = result.getEmbryoCode();
+                    Integer dailyPlanQty = result.getDailyPlanQty();
+                    
+                    if (embryoCode != null && dailyPlanQty != null && dailyPlanQty > 0) {
+                        // 累加该胎胚在节假日期间的需求
+                        minDemand.merge(embryoCode, dailyPlanQty, Integer::sum);
+                    }
+                }
+            }
         }
 
-        // 简化处理：假设每个物料每天最低需求100条
-        List<CxMaterial> materials = materialMapper.selectList(
-                new LambdaQueryWrapper<CxMaterial>().eq(CxMaterial::getIsActive, 1));
-
-        for (CxMaterial material : materials) {
-            // 最低需求 = 日需求 × 天数 × (1 + 损耗率)
-            int dailyDemand = 100; // 默认值，实际应从硫化计划获取
-            int demand = (int) Math.ceil(dailyDemand * holidayDays * (1 + lossRate.doubleValue()));
-            minDemand.put(material.getMaterialCode(), demand);
+        // 应用损耗率
+        for (Map.Entry<String, Integer> entry : minDemand.entrySet()) {
+            int demand = entry.getValue();
+            int demandWithLoss = (int) Math.ceil(demand * (1 + lossRate.doubleValue()));
+            entry.setValue(demandWithLoss);
         }
 
+        log.info("计算节假日最低需求完成，共 {} 种胎胚", minDemand.size());
+        
         return minDemand;
     }
 
