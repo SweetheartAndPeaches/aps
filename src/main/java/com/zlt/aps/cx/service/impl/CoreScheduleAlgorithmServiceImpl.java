@@ -245,36 +245,38 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         }
 
         // ==================== 按优先级排序 ====================
+        // 优先级顺序：续作 > 收尾 > 试制 > 首排 > 正常任务
+        // 试制任务在有空出产能时优先，但不挤掉实单（实单都在LhScheduleResult中）
         tasks.sort((a, b) -> {
-            // 1. 收尾任务优先
-            if (Boolean.TRUE.equals(a.getIsUrgentEnding()) && !Boolean.TRUE.equals(b.getIsUrgentEnding())) {
-                return -1;
-            }
-            if (!Boolean.TRUE.equals(a.getIsUrgentEnding()) && Boolean.TRUE.equals(b.getIsUrgentEnding())) {
-                return 1;
-            }
-            // 2. 试制任务优先
-            if (Boolean.TRUE.equals(a.getIsTrialTask()) && !Boolean.TRUE.equals(b.getIsTrialTask())) {
-                return -1;
-            }
-            if (!Boolean.TRUE.equals(a.getIsTrialTask()) && Boolean.TRUE.equals(b.getIsTrialTask())) {
-                return 1;
-            }
-            // 3. 首排任务优先
-            if (Boolean.TRUE.equals(a.getIsFirstTask()) && !Boolean.TRUE.equals(b.getIsFirstTask())) {
-                return -1;
-            }
-            if (!Boolean.TRUE.equals(a.getIsFirstTask()) && Boolean.TRUE.equals(b.getIsFirstTask())) {
-                return 1;
-            }
-            // 4. 续作任务优先
+            // 1. 续作任务最高优先级（必须在原机台继续生产）
             if (Boolean.TRUE.equals(a.getIsContinueTask()) && !Boolean.TRUE.equals(b.getIsContinueTask())) {
                 return -1;
             }
             if (!Boolean.TRUE.equals(a.getIsContinueTask()) && Boolean.TRUE.equals(b.getIsContinueTask())) {
                 return 1;
             }
-            // 5. 按优先级分数排序
+            // 2. 收尾任务优先
+            if (Boolean.TRUE.equals(a.getIsUrgentEnding()) && !Boolean.TRUE.equals(b.getIsUrgentEnding())) {
+                return -1;
+            }
+            if (!Boolean.TRUE.equals(a.getIsUrgentEnding()) && Boolean.TRUE.equals(b.getIsUrgentEnding())) {
+                return 1;
+            }
+            // 3. 试制任务优先（在有空出产能时优先上，比如关单、减量收尾空出产能时）
+            if (Boolean.TRUE.equals(a.getIsTrialTask()) && !Boolean.TRUE.equals(b.getIsTrialTask())) {
+                return -1;
+            }
+            if (!Boolean.TRUE.equals(a.getIsTrialTask()) && Boolean.TRUE.equals(b.getIsTrialTask())) {
+                return 1;
+            }
+            // 4. 首排任务优先
+            if (Boolean.TRUE.equals(a.getIsFirstTask()) && !Boolean.TRUE.equals(b.getIsFirstTask())) {
+                return -1;
+            }
+            if (!Boolean.TRUE.equals(a.getIsFirstTask()) && Boolean.TRUE.equals(b.getIsFirstTask())) {
+                return 1;
+            }
+            // 5. 按优先级分数排序（库存时长越短越急）
             return Integer.compare(b.getPriority(), a.getPriority());
         });
 

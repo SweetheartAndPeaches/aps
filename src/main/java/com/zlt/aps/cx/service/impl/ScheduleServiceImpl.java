@@ -127,20 +127,18 @@ public class ScheduleServiceImpl implements ScheduleService {
                 log.info("停产前一天处理结果：{}", holidayResult.getMessage());
             }
 
-            // 4. 执行试制排程
-            executeTrialScheduleInternal(request.getScheduleDate());
-
-            // 5. 执行核心排程算法
+            // 4. 执行核心排程算法（包含续作、试制、正常任务的统一处理）
+            // 任务优先级：续作 > 新增任务（试制在有空出产能时优先，但不挤掉实单）
             List<CxScheduleResult> scheduleResults = coreAlgorithmService.executeSchedule(context);
 
-            // 6. 应用节假日调整
+            // 5. 应用节假日调整
             scheduleResults = holidayScheduleService.adjustHolidaySchedule(
                     request.getScheduleDate(), scheduleResults);
 
-            // 7. 保存排程结果
+            // 6. 保存排程结果
             saveScheduleResults(scheduleResults);
 
-            // 8. 验证排程结果
+            // 7. 验证排程结果
             boolean validated = validateScheduleResults(scheduleResults);
 
             result.setSuccess(validated);
@@ -418,27 +416,6 @@ public class ScheduleServiceImpl implements ScheduleService {
         }
 
         return result;
-    }
-
-    /**
-     * 执行内部试制排程
-     */
-    private void executeTrialScheduleInternal(LocalDate scheduleDate) {
-        try {
-            // 获取待排程的试制计划
-            List<CxTrialPlan> trialPlans = trialScheduleService.getPendingTrialPlans();
-
-            if (!CollectionUtils.isEmpty(trialPlans)) {
-                // 执行试制排程
-                TrialScheduleService.TrialScheduleResult trialResult = 
-                        trialScheduleService.executeTrialSchedule(scheduleDate, trialPlans);
-
-                log.info("试制排程完成：{}", trialResult.getMessage());
-            }
-
-        } catch (Exception e) {
-            log.error("试制排程失败", e);
-        }
     }
 
     /**
