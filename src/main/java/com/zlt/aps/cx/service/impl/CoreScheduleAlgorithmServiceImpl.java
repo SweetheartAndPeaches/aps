@@ -173,13 +173,32 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 boolean isTrialTask = lhResults.stream()
                         .anyMatch(r -> "1".equals(r.getIsTrial()));
 
-                // 判断是否收尾
-                boolean isEndTask = lhResults.stream()
-                        .anyMatch(r -> "1".equals(r.getIsEnd()));
-
-                // 判断是否首排
+                // 判断是否首排（非续作、非试制/量试就是首排）
                 boolean isFirstTask = lhResults.stream()
                         .anyMatch(r -> "1".equals(r.getIsFirst()));
+
+                // 计算收尾余量
+                // 收尾余量 = 硫化余量 - 胎胚库存
+                // 硫化余量来自 t_mdm_month_surplus 表
+                Integer vulcanizeSurplusQty = null;
+                Integer endingSurplusQty = null;
+                boolean isEndingTask = false;
+                
+                if (context.getMonthSurplusMap() != null) {
+                    com.zlt.aps.cx.entity.mdm.MdmMonthSurplus monthSurplus = 
+                            context.getMonthSurplusMap().get(embryoCode);
+                    if (monthSurplus != null && monthSurplus.getPlanSurplusQty() != null) {
+                        vulcanizeSurplusQty = monthSurplus.getPlanSurplusQty();
+                        int stockQty = currentStock != null ? currentStock : 0;
+                        endingSurplusQty = vulcanizeSurplusQty - stockQty;
+                        // 收尾余量 <= 0 表示该任务需要收尾
+                        isEndingTask = endingSurplusQty <= 0;
+                    }
+                }
+                
+                // 判断是否主销产品（月均销量 >= 500条）
+                boolean isMainProduct = context.getMainProductCodes() != null 
+                        && context.getMainProductCodes().contains(embryoCode);
 
                 // 构建任务
                 DailyEmbryoTask task = new DailyEmbryoTask();
@@ -201,10 +220,16 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 task.setAssignedQuantity(0);
                 task.setRemainingQuantity(dailyDemand);
                 task.setIsTrialTask(isTrialTask);
-                task.setIsUrgentEnding(isEndTask);
                 task.setIsFirstTask(isFirstTask);
                 task.setIsContinueTask(isContinueTask);
                 task.setContinueMachineCodes(continueMachineCodes);
+                task.setIsMainProduct(isMainProduct);
+                
+                // 收尾相关属性
+                task.setIsEndingTask(isEndingTask);
+                task.setEndingSurplusQty(endingSurplusQty);
+                task.setVulcanizeSurplusQty(vulcanizeSurplusQty);
+                task.setCurrentStock(currentStock);
 
                 // 计算库存时长
                 CxStock stock = stockMap.get(embryoCode);
@@ -214,14 +239,18 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                     task.setVulcanizeMoldCount(stock.getVulcanizeMoldCount());
                 }
 
-                // 计算优先级分数
+                // 计算优先级分数（收尾任务通过分数体现紧急程度）
                 task.setPriority(calculatePriorityScoreNew(task, material, stock, context));
 
                 tasks.add(task);
                 
                 if (isContinueTask) {
-                    log.info("续作任务: 胎胚={}, 需求量={}, 续作机台={}", 
-                            embryoCode, dailyDemand, continueMachineCodes);
+                    log.info("续作任务: 胎胚={}, 需求量={}, 续作机台={}, 收尾余量={}", 
+                            embryoCode, dailyDemand, continueMachineCodes, endingSurplusQty);
+                }
+                if (isEndingTask) {
+                    log.info("收尾任务: 胎胚={}, 硫化余量={}, 库存={}, 收尾余量={}", 
+                            embryoCode, vulcanizeSurplusQty, currentStock, endingSurplusQty);
                 }
             }
         }
@@ -245,44 +274,39 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         }
 
         // ==================== 按优先级排序 ====================
-        // 优先级顺序：续作 > 收尾 > 试制 > 首排 > 正常任务
-        // 试制任务在有空出产能时优先，但不挤掉实单（实单都在LhScheduleResult中）
+        // 正确优先级顺序：续作 > 试制 > 首排
+        // 收尾是任务属性，不是独立的优先级层级（续作/试制/首排任务都可能需要收尾）
         tasks.sort((a, b) -> {
-            // 1. 续作任务最高优先级（必须在原机台继续生产）
+            // 1. 续作任务最高优先级（必须在原机台继续生产，不可中断）
             if (Boolean.TRUE.equals(a.getIsContinueTask()) && !Boolean.TRUE.equals(b.getIsContinueTask())) {
                 return -1;
             }
             if (!Boolean.TRUE.equals(a.getIsContinueTask()) && Boolean.TRUE.equals(b.getIsContinueTask())) {
                 return 1;
             }
-            // 2. 收尾任务优先
-            if (Boolean.TRUE.equals(a.getIsUrgentEnding()) && !Boolean.TRUE.equals(b.getIsUrgentEnding())) {
-                return -1;
-            }
-            if (!Boolean.TRUE.equals(a.getIsUrgentEnding()) && Boolean.TRUE.equals(b.getIsUrgentEnding())) {
-                return 1;
-            }
-            // 3. 试制任务优先（在有空出产能时优先上，比如关单、减量收尾空出产能时）
+            // 2. 试制任务优先（试制/量试优先级大于首排任务）
             if (Boolean.TRUE.equals(a.getIsTrialTask()) && !Boolean.TRUE.equals(b.getIsTrialTask())) {
                 return -1;
             }
             if (!Boolean.TRUE.equals(a.getIsTrialTask()) && Boolean.TRUE.equals(b.getIsTrialTask())) {
                 return 1;
             }
-            // 4. 首排任务优先
+            // 3. 首排任务（非续作、非试制/量试就是首排）
             if (Boolean.TRUE.equals(a.getIsFirstTask()) && !Boolean.TRUE.equals(b.getIsFirstTask())) {
                 return -1;
             }
             if (!Boolean.TRUE.equals(a.getIsFirstTask()) && Boolean.TRUE.equals(b.getIsFirstTask())) {
                 return 1;
             }
-            // 5. 按优先级分数排序（库存时长越短越急）
+            // 4. 按优先级分数排序（库存时长越短越急，收尾任务通过分数体现）
             return Integer.compare(b.getPriority(), a.getPriority());
         });
 
-        log.info("计算完成，日胎胚任务数: {}, 其中续作任务数: {}", 
+        log.info("计算完成，日胎胚任务数: {}, 其中续作任务数: {}, 试制任务数: {}, 收尾任务数: {}", 
                 tasks.size(), 
-                tasks.stream().filter(t -> Boolean.TRUE.equals(t.getIsContinueTask())).count());
+                tasks.stream().filter(t -> Boolean.TRUE.equals(t.getIsContinueTask())).count(),
+                tasks.stream().filter(t -> Boolean.TRUE.equals(t.getIsTrialTask())).count(),
+                tasks.stream().filter(t -> Boolean.TRUE.equals(t.getIsEndingTask())).count());
 
         return tasks;
     }
@@ -341,7 +365,9 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                     allocation.setQuantity(assignQty);
                     allocation.setPriority(task.getPriority());
                     allocation.setStockHours(task.getStockHours());
-                    allocation.setIsUrgentEnding(task.getIsUrgentEnding());
+                    allocation.setIsEndingTask(task.getIsEndingTask());
+                    allocation.setEndingSurplusQty(task.getEndingSurplusQty());
+                    allocation.setIsMainProduct(task.getIsMainProduct());
                     allocation.setIsTrialTask(task.getIsTrialTask());
 
                     machineResult.getTaskAllocations().add(allocation);
@@ -638,14 +664,15 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         int globalSequence = 1;
 
         for (ShiftAllocationResult shiftAllocation : shiftAllocations) {
-            // 对每个班次的任务按紧急程度排序
+            // 对每个班次的任务按优先级排序
+            // 排序顺序：续作 > 试制 > 收尾 > 按库存时长
             List<TaskAllocation> sortedTasks = shiftAllocation.getTasks().stream()
                     .sorted((a, b) -> {
-                        // 紧急收尾优先
-                        if (Boolean.TRUE.equals(a.getIsUrgentEnding()) && !Boolean.TRUE.equals(b.getIsUrgentEnding())) {
+                        // 收尾任务优先（在班次内排序）
+                        if (Boolean.TRUE.equals(a.getIsEndingTask()) && !Boolean.TRUE.equals(b.getIsEndingTask())) {
                             return -1;
                         }
-                        if (!Boolean.TRUE.equals(a.getIsUrgentEnding()) && Boolean.TRUE.equals(b.getIsUrgentEnding())) {
+                        if (!Boolean.TRUE.equals(a.getIsEndingTask()) && Boolean.TRUE.equals(b.getIsEndingTask())) {
                             return 1;
                         }
                         // 按库存时长排序（越短越急）
@@ -676,7 +703,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                     detail.setTripActualQty(0);
                     detail.setSequence(globalSequence++);
                     detail.setSequenceInGroup(t);
-                    detail.setIsEnding(Boolean.TRUE.equals(task.getIsUrgentEnding()) ? 1 : 0);
+                    detail.setIsEnding(Boolean.TRUE.equals(task.getIsEndingTask()) ? 1 : 0);
                     detail.setIsTrial(Boolean.TRUE.equals(task.getIsTrialTask()) ? 1 : 0);
                     detail.setIsPrecision(0);
                     detail.setIsContinue(0);
@@ -824,16 +851,17 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         
         int score = 0;
 
-        // 检查紧急收尾
-        if (context.getStructureEndings() != null) {
-            for (CxStructureEnding ending : context.getStructureEndings()) {
-                if (ending.getStructureCode().equals(material.getProductStructure())) {
-                    if (Boolean.TRUE.equals(ending.getIsUrgentEnding())) {
-                        score += 1000; // 紧急收尾加分
-                    }
-                    if (Boolean.TRUE.equals(ending.getIsNearEnding())) {
-                        score += 500; // 10天内收尾加分
-                    }
+        // 收尾任务通过月度计划余量计算（收尾余量 = 硫化余量 - 胎胚库存）
+        // 不再使用CxStructureEnding表的isUrgentEnding字段
+        if (context.getMonthSurplusMap() != null) {
+            com.zlt.aps.cx.entity.mdm.MdmMonthSurplus monthSurplus = 
+                    context.getMonthSurplusMap().get(material.getMaterialCode());
+            if (monthSurplus != null && monthSurplus.getPlanSurplusQty() != null) {
+                int stockQty = stock != null && stock.getCurrentStock() != null ? stock.getCurrentStock() : 0;
+                int endingSurplusQty = monthSurplus.getPlanSurplusQty() - stockQty;
+                if (endingSurplusQty <= 0) {
+                    score += 2000; // 收尾任务加分
+                    score += Math.max(0, 500 - endingSurplusQty * 10); // 余量越小越紧急
                 }
             }
         }
@@ -877,9 +905,14 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         
         int score = 0;
 
-        // 1. 收尾任务（从硫化排程结果的IS_END字段判断）
-        if (Boolean.TRUE.equals(task.getIsUrgentEnding())) {
+        // 1. 收尾任务（收尾余量 <= 0 表示需要收尾）
+        // 收尾任务通过分数体现紧急程度，不作为独立的优先级层级
+        if (Boolean.TRUE.equals(task.getIsEndingTask())) {
             score += 2000;
+            // 收尾余量越小越紧急
+            if (task.getEndingSurplusQty() != null) {
+                score += Math.max(0, 500 - task.getEndingSurplusQty() * 10);
+            }
         }
 
         // 2. 试制任务（从硫化排程结果的IS_TRIAL字段判断）
@@ -1244,19 +1277,33 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             task.setVulcanizeMoldCount(stock.getVulcanizeMoldCount());
         }
 
-        // 检查紧急收尾
-        CxStructureEnding ending = endingMap.get(material.getProductStructure());
-        if (ending != null) {
-            task.setIsUrgentEnding(ending.getIsUrgentEnding() != null && ending.getIsUrgentEnding() == 1);
-        } else {
-            task.setIsUrgentEnding(false);
+        // 计算收尾余量
+        Integer vulcanizeSurplusQty = null;
+        Integer endingSurplusQty = null;
+        boolean isEndingTask = false;
+        
+        if (context.getMonthSurplusMap() != null) {
+            com.zlt.aps.cx.entity.mdm.MdmMonthSurplus monthSurplus = 
+                    context.getMonthSurplusMap().get(materialCode);
+            if (monthSurplus != null && monthSurplus.getPlanSurplusQty() != null) {
+                vulcanizeSurplusQty = monthSurplus.getPlanSurplusQty();
+                int stockQty = stock != null && stock.getCurrentStock() != null ? stock.getCurrentStock() : 0;
+                endingSurplusQty = vulcanizeSurplusQty - stockQty;
+                isEndingTask = endingSurplusQty <= 0;
+            }
         }
+        
+        task.setIsEndingTask(isEndingTask);
+        task.setEndingSurplusQty(endingSurplusQty);
+        task.setVulcanizeSurplusQty(vulcanizeSurplusQty);
 
-        // 是否主销产品
-        task.setIsMainProduct(material.getIsMainProduct() != null && material.getIsMainProduct() == 1);
+        // 是否主销产品（从SKU排产分类表判断）
+        boolean isMainProduct = context.getMainProductCodes() != null 
+                && context.getMainProductCodes().contains(materialCode);
+        task.setIsMainProduct(isMainProduct);
 
         // 计算优先级
-        task.setPriority(calculatePriorityScore(material, stock, context));
+        task.setPriority(calculatePriorityScoreNew(task, material, stock, context));
 
         return task;
     }

@@ -188,8 +188,6 @@ public interface CoreScheduleAlgorithmService {
         private Integer remainingQuantity;
         /** 优先级分数 */
         private Integer priority;
-        /** 是否紧急收尾 */
-        private Boolean isUrgentEnding;
         /** 是否主销产品 */
         private Boolean isMainProduct;
         /** 是否试制任务 */
@@ -212,6 +210,18 @@ public interface CoreScheduleAlgorithmService {
         private Integer vulcanizeDemand;
         /** 当前库存 */
         private Integer currentStock;
+        
+        // ==================== 收尾相关字段 ====================
+        /** 是否收尾任务（收尾余量=0时为true） */
+        private Boolean isEndingTask;
+        /** 收尾余量 = 硫化余量 - 胎胚库存 */
+        private Integer endingSurplusQty;
+        /** 硫化余量 = 总计划量 - 硫化真实完成量 */
+        private Integer vulcanizeSurplusQty;
+        /** 收尾日（月计划的最后排产日期） */
+        private java.time.LocalDate endingDate;
+        /** 距离收尾日天数 */
+        private Integer daysToEnding;
     }
 
     /**
@@ -241,8 +251,10 @@ public interface CoreScheduleAlgorithmService {
         private Integer quantity;
         private Integer priority;
         private BigDecimal stockHours;
-        private Boolean isUrgentEnding;
         private Boolean isTrialTask;
+        private Boolean isEndingTask;
+        private Integer endingSurplusQty;
+        private Boolean isMainProduct;
     }
 
     /**

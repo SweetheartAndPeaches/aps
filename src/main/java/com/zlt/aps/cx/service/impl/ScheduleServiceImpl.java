@@ -88,6 +88,12 @@ public class ScheduleServiceImpl implements ScheduleService {
     private CxKeyProductMapper keyProductMapper;
 
     @Autowired
+    private MdmMonthSurplusMapper monthSurplusMapper;
+
+    @Autowired
+    private MdmSkuScheduleCategoryMapper skuScheduleCategoryMapper;
+
+    @Autowired
     private LhScheduleResultMapper lhScheduleResultMapper;
 
     @Autowired
@@ -263,12 +269,38 @@ public class ScheduleServiceImpl implements ScheduleService {
                             .eq(CxStructureEnding::getIsActive, 1));
             context.setStructureEndings(structureEndings);
 
-            // 11. 设置节假日相关标记
+            // 11. 获取月度计划余量（用于收尾计算）
+            int year = scheduleDate.getYear();
+            int month = scheduleDate.getMonthValue();
+            List<com.zlt.aps.cx.entity.mdm.MdmMonthSurplus> monthSurplusList = 
+                    monthSurplusMapper.selectByYearMonth(year, month);
+            context.setMonthSurplusList(monthSurplusList);
+            // 构建物料编码映射
+            Map<String, com.zlt.aps.cx.entity.mdm.MdmMonthSurplus> monthSurplusMap = monthSurplusList.stream()
+                    .collect(Collectors.toMap(
+                            com.zlt.aps.cx.entity.mdm.MdmMonthSurplus::getMaterialCode, 
+                            s -> s, (a, b) -> a));
+            context.setMonthSurplusMap(monthSurplusMap);
+            log.info("加载月度计划余量 {} 条", monthSurplusList.size());
+
+            // 12. 获取SKU排产分类（用于判断主销产品）
+            List<com.zlt.aps.cx.entity.mdm.MdmSkuScheduleCategory> skuCategories = 
+                    skuScheduleCategoryMapper.selectAllCategories();
+            context.setSkuScheduleCategories(skuCategories);
+            // 构建主销产品编码集合（SCHEDULE_TYPE='01'）
+            Set<String> mainProductCodes = skuCategories.stream()
+                    .filter(c -> "01".equals(c.getScheduleType()))
+                    .map(com.zlt.aps.cx.entity.mdm.MdmSkuScheduleCategory::getMaterialCode)
+                    .collect(Collectors.toSet());
+            context.setMainProductCodes(mainProductCodes);
+            log.info("加载SKU排产分类 {} 条，其中主销产品 {} 个", skuCategories.size(), mainProductCodes.size());
+
+            // 13. 设置节假日相关标记
             context.setIsOpeningDay(holidayScheduleService.isStartProductionDay(scheduleDate));
             context.setIsClosingDay(holidayScheduleService.isStopProductionDay(scheduleDate));
             context.setIsBeforeClosingDay(holidayScheduleService.isBeforeHoliday(scheduleDate));
 
-            // 12. 设置排程参数
+            // 14. 设置排程参数
             context.setScheduleDate(scheduleDate);
             context.setScheduleMode(request.getScheduleMode());
             context.setReScheduleType(request.getReScheduleType());
