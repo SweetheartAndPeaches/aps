@@ -899,6 +899,12 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
     /**
      * 计算优先级分数（新方法，支持任务对象）
+     * 
+     * 优先级规则：
+     * 1. 紧急收尾任务（3天内收尾）> 普通收尾任务 > 试制任务 > 续作任务 > 首排任务 > 其他
+     * 2. 同级别内按库存紧张程度排序
+     * 3. 库存 < 4小时：最紧急
+     * 4. 库存 < 6小时：次紧急
      */
     private int calculatePriorityScoreNew(
             DailyEmbryoTask task,
@@ -908,9 +914,13 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         
         int score = 0;
 
-        // 1. 收尾任务（收尾余量 <= 0 表示需要收尾）
-        // 收尾任务通过分数体现紧急程度，不作为独立的优先级层级
-        if (Boolean.TRUE.equals(task.getIsEndingTask())) {
+        // 1. 紧急收尾任务（3天内收尾，最高优先级）
+        if (Boolean.TRUE.equals(task.getIsUrgentEnding())) {
+            score += 3000; // 最高优先级
+            log.debug("紧急收尾任务: {} 获得3000优先级加分", task.getMaterialCode());
+        }
+        // 2. 普通收尾任务（收尾余量 <= 0 表示需要收尾）
+        else if (Boolean.TRUE.equals(task.getIsEndingTask())) {
             score += 2000;
             // 收尾余量越小越紧急
             if (task.getEndingSurplusQty() != null) {
@@ -918,22 +928,22 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             }
         }
 
-        // 2. 试制任务（从硫化排程结果的IS_TRIAL字段判断）
+        // 3. 试制任务（从硫化排程结果的IS_TRIAL字段判断）
         if (Boolean.TRUE.equals(task.getIsTrialTask())) {
             score += 1500;
         }
 
-        // 3. 续作任务
+        // 4. 续作任务
         if (Boolean.TRUE.equals(task.getIsContinueTask())) {
             score += 800;
         }
 
-        // 4. 首排任务
+        // 5. 首排任务
         if (Boolean.TRUE.equals(task.getIsFirstTask())) {
             score += 500;
         }
 
-        // 5. 库存紧张（断料风险）
+        // 6. 库存紧张（断料风险）
         if (task.getStockHours() != null) {
             if (task.getStockHours().compareTo(new BigDecimal("4")) < 0) {
                 score += 800;
@@ -948,13 +958,13 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             }
         }
 
-        // 6. 关键产品（从关键产品配置表判断）
+        // 7. 关键产品（从关键产品配置表判断）
         Set<String> keyProductCodes = context.getKeyProductCodes();
         if (keyProductCodes != null && keyProductCodes.contains(task.getMaterialCode())) {
             score += 200;
         }
 
-        // 7. 结构优先级
+        // 8. 结构优先级
         if (material != null && context.getStructurePriorities() != null) {
             for (CxStructurePriority priority : context.getStructurePriorities()) {
                 if (priority.getStructureName().equals(material.getStructureName())) {
@@ -962,6 +972,11 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                     break;
                 }
             }
+        }
+
+        // 9. 需要月计划调整的任务，额外加分以确保优先排产
+        if (Boolean.TRUE.equals(task.getNeedMonthPlanAdjust())) {
+            score += 300;
         }
 
         return score;
@@ -1252,21 +1267,21 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     private DailyEmbryoTask createDailyEmbryoTask(
             String materialCode,
             Integer demandQuantity,
-            Map<String, CxMaterial> materialMap,
+            Map<String, MdmMaterialInfo> materialMap,
             Map<String, CxStock> stockMap,
             Map<String, CxStructureEnding> endingMap,
             ScheduleContextDTO context) {
         
-        CxMaterial material = materialMap.get(materialCode);
+        MdmMaterialInfo material = materialMap.get(materialCode);
         if (material == null) {
             return null;
         }
 
         DailyEmbryoTask task = new DailyEmbryoTask();
         task.setMaterialCode(materialCode);
-        task.setMaterialName(material.getMaterialName());
-        task.setStructureCode(material.getProductStructure());
-        task.setStructureName(material.getProductStructure());
+        task.setMaterialName(material.getMaterialDesc());
+        task.setStructureCode(material.getStructureName());
+        task.setStructureName(material.getStructureName());
         task.setDemandQuantity(demandQuantity);
         task.setAssignedQuantity(0);
         task.setRemainingQuantity(demandQuantity);
@@ -1305,7 +1320,33 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 && context.getMainProductCodes().contains(materialCode);
         task.setIsMainProduct(isMainProduct);
 
-        // 计算优先级
+        // ========== 收尾管理：应用追赶量和优先级 ==========
+        String structureName = material.getProductStructure();
+        CxStructureEnding structureEnding = endingMap.get(structureName);
+        
+        if (structureEnding != null) {
+            // 设置紧急收尾标记
+            boolean isUrgentEnding = structureEnding.getIsUrgentEnding() != null 
+                    && structureEnding.getIsUrgentEnding() == 1;
+            task.setIsUrgentEnding(isUrgentEnding);
+            
+            // 如果需要追赶，增加需求量（平摊量）
+            if (structureEnding.getDistributedQuantity() != null 
+                    && structureEnding.getDistributedQuantity() > 0) {
+                int originalDemand = task.getDemandQuantity();
+                int catchUpQty = structureEnding.getDistributedQuantity();
+                task.setDemandQuantity(originalDemand + catchUpQty);
+                task.setRemainingQuantity(originalDemand + catchUpQty);
+                log.info("收尾追赶：物料 {} 原需求 {}，增加追赶量 {}，新需求 {}", 
+                        materialCode, originalDemand, catchUpQty, task.getDemandQuantity());
+            }
+            
+            // 标记是否需要月计划调整
+            task.setNeedMonthPlanAdjust(structureEnding.getNeedMonthPlanAdjust() != null 
+                    && structureEnding.getNeedMonthPlanAdjust() == 1);
+        }
+
+        // 计算优先级（紧急收尾会获得更高优先级）
         task.setPriority(calculatePriorityScoreNew(task, material, stock, context));
 
         return task;
@@ -1314,10 +1355,10 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     /**
      * 获取硫化消耗量
      */
-    private BigDecimal getVulcanizeDemand(CxMaterial material, ScheduleContextDTO context) {
+    private BigDecimal getVulcanizeDemand(MdmMaterialInfo material, ScheduleContextDTO context) {
         // 从结构硫化配比中获取硫化需求
         for (MdmStructureLhRatio ratio : context.getStructureLhRatios()) {
-            if (ratio.getStructureName().equals(material.getProductStructure())) {
+            if (ratio.getStructureName().equals(material.getStructureName())) {
                 // 简化处理：假设每日硫化需求为最大胎胚数
                 return ratio.getMaxEmbryoQty() != null 
                         ? new BigDecimal(ratio.getMaxEmbryoQty()) 

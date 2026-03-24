@@ -508,12 +508,16 @@ public class ScheduleServiceImpl implements ScheduleService {
     /**
      * 从FactoryMonthPlanProductionFinalResult计算生成结构收尾管理列表
      * 
-     * 计算逻辑：
-     * 1. 从月计划获取当月排产数据
-     * 2. 按结构分组，计算剩余需求量（从当前日期到月底的排产量）
-     * 3. 结合胎胚库存、硫化余量等数据
-     * 4. 计算成型余量 = 硫化余量 - 胎胚库存
-     * 5. 计算预计收尾天数、是否紧急收尾等
+     * 收尾管理规则（严格依据月计划收尾日）：
+     * 1. 收尾日判断：从月计划day_1到day_31找到最后一个有排产的日期
+     * 2. 收尾前10天检查：
+     *    - 计算：成型余量 = 硫化余量 - 胎胚库存
+     *    - 判断：能否在收尾日前完成？
+     * 3. 延误量追赶：
+     *    - 如果做不完，计算延误量，平摊到未来3天
+     *    - 检查未来3天满产是否能追上
+     * 4. 满产判断：
+     *    - 如果未来3天满产仍追不上，通知月计划调整（调用硫化接口）
      *
      * @param scheduleDate 排程日期
      * @param year 年份
@@ -544,31 +548,56 @@ public class ScheduleServiceImpl implements ScheduleService {
             Map<String, CxStock> stockMap = stocks.stream()
                     .collect(Collectors.toMap(CxStock::getMaterialCode, s -> s, (a, b) -> a));
             
-            // 4. 按结构分组汇总
-            // Key: structureName, Value: 该结构的月计划列表
+            // 4. 获取成型机台列表（用于计算满产能力）
+            List<MdmMoldingMachine> machines = moldingMachineMapper.selectList(
+                    new LambdaQueryWrapper<MdmMoldingMachine>()
+                            .eq(MdmMoldingMachine::getIsActive, 1)
+                            .ne(MdmMoldingMachine::getMaintainStatus, "FAULT"));
+            
+            // 5. 按结构分组汇总
             Map<String, List<FactoryMonthPlanProductionFinalResult>> structurePlanMap = monthPlans.stream()
                     .filter(p -> p.getStructureName() != null)
                     .collect(Collectors.groupingBy(FactoryMonthPlanProductionFinalResult::getStructureName));
             
-            // 5. 计算当前日期到月底的剩余天数
+            // 6. 当前日期信息
             int currentDay = scheduleDate.getDayOfMonth();
             int lastDayOfMonth = scheduleDate.lengthOfMonth();
             
-            // 6. 遍历每个结构，计算收尾信息
+            // 7. 遍历每个结构，计算收尾信息
             for (Map.Entry<String, List<FactoryMonthPlanProductionFinalResult>> entry : structurePlanMap.entrySet()) {
                 String structureName = entry.getKey();
                 List<FactoryMonthPlanProductionFinalResult> plans = entry.getValue();
                 
+                // ========== Step 1: 确定收尾日 ==========
+                // 从月计划中找到该结构最后一个有排产的日期
+                int endingDay = findEndingDay(plans, lastDayOfMonth);
+                LocalDate endingDate = scheduleDate.withDayOfMonth(endingDay);
+                
+                // 如果收尾日已经过了，跳过
+                if (endingDay < currentDay) {
+                    log.debug("结构 {} 收尾日 {} 已过，跳过", structureName, endingDate);
+                    continue;
+                }
+                
                 // 创建收尾记录
                 CxStructureEnding ending = new CxStructureEnding();
                 ending.setStructureName(structureName);
-                ending.setStructureCode(structureName); // 结构编码暂用结构名称
+                ending.setStructureCode(structureName);
                 ending.setStatDate(scheduleDate);
+                ending.setPlannedEndingDate(endingDate);
                 
-                // 计算剩余排产量（从当前日期到月底）
+                // ========== Step 2: 计算成型余量 ==========
+                // 获取该结构对应的物料信息
+                FactoryMonthPlanProductionFinalResult firstPlan = plans.get(0);
+                String materialCode = firstPlan.getMaterialCode();
+                
+                // 硫化余量（从月度计划余量表获取）
+                MdmMonthSurplus surplus = surplusMap.get(materialCode);
+                
+                // 计算剩余排产量（从当前日期到收尾日）
                 int remainingPlanQty = 0;
                 for (FactoryMonthPlanProductionFinalResult plan : plans) {
-                    for (int day = currentDay; day <= lastDayOfMonth; day++) {
+                    for (int day = currentDay; day <= endingDay; day++) {
                         Integer dayQty = plan.getDayQty(day);
                         if (dayQty != null && dayQty > 0) {
                             remainingPlanQty += dayQty;
@@ -576,12 +605,6 @@ public class ScheduleServiceImpl implements ScheduleService {
                     }
                 }
                 
-                // 获取该结构对应的物料（取第一个）
-                FactoryMonthPlanProductionFinalResult firstPlan = plans.get(0);
-                String materialCode = firstPlan.getMaterialCode();
-                
-                // 硫化余量（从月度计划余量表获取）
-                MdmMonthSurplus surplus = surplusMap.get(materialCode);
                 int vulcanizingRemainder = surplus != null && surplus.getPlanSurplusQty() != null 
                         ? surplus.getPlanSurplusQty() : remainingPlanQty;
                 ending.setVulcanizingRemainder(vulcanizingRemainder);
@@ -592,16 +615,19 @@ public class ScheduleServiceImpl implements ScheduleService {
                         ? stock.getCurrentStock() : 0;
                 ending.setEmbryoStock(embryoStock);
                 
-                // 成型余量 = 硫化余量 - 胎胚库存
+                // 成型余量 = 硫化余量 - 胎胚库存（需要生产的量）
                 int formingRemainder = Math.max(0, vulcanizingRemainder - embryoStock);
                 ending.setFormingRemainder(formingRemainder);
                 
-                // 日产能（取日硫化量）
+                // 日产能（取日硫化量，或从结构班产配置获取）
                 Integer dailyCapacity = firstPlan.getDayVulcanizationQty();
                 if (dailyCapacity == null || dailyCapacity <= 0) {
-                    dailyCapacity = 200; // 默认日产能
+                    dailyCapacity = calculateStructureDailyCapacity(structureName, machines);
                 }
                 ending.setDailyCapacity(dailyCapacity);
+                
+                // ========== Step 3: 计算距离收尾日的天数 ==========
+                int daysToEnding = endingDay - currentDay + 1;
                 
                 // 预计收尾天数 = 成型余量 / 日产能
                 BigDecimal estimatedDays = BigDecimal.ZERO;
@@ -611,33 +637,63 @@ public class ScheduleServiceImpl implements ScheduleService {
                 }
                 ending.setEstimatedEndingDays(estimatedDays);
                 
-                // 计划收尾日期 = 当前日期 + 预计收尾天数
-                LocalDate plannedEndingDate = scheduleDate.plusDays(estimatedDays.intValue());
-                ending.setPlannedEndingDate(plannedEndingDate);
+                // ========== Step 4: 判断是否紧急收尾（3天内） ==========
+                boolean isUrgentEnding = daysToEnding <= 3 && formingRemainder > 0;
+                ending.setIsUrgentEnding(isUrgentEnding ? 1 : 0);
                 
-                // 是否紧急收尾（3天内）
-                int isUrgentEnding = estimatedDays.compareTo(BigDecimal.valueOf(3)) <= 0 && formingRemainder > 0 ? 1 : 0;
-                ending.setIsUrgentEnding(isUrgentEnding);
+                // ========== Step 5: 判断是否10天内收尾 ==========
+                boolean isNearEnding = daysToEnding <= 10 && formingRemainder > 0;
+                ending.setIsNearEnding(isNearEnding ? 1 : 0);
                 
-                // 是否10天内收尾
-                int isNearEnding = estimatedDays.compareTo(BigDecimal.valueOf(10)) <= 0 && formingRemainder > 0 ? 1 : 0;
-                ending.setIsNearEnding(isNearEnding);
-                
-                // 延误量计算（如果预计收尾日期超过月底）
-                LocalDate lastDateOfMonth = scheduleDate.withDayOfMonth(lastDayOfMonth);
-                if (plannedEndingDate.isAfter(lastDateOfMonth) && formingRemainder > 0) {
-                    // 延误量 = 成型余量 - 剩余天数 * 日产能
-                    int remainingDays = lastDayOfMonth - currentDay + 1;
-                    int canProduce = remainingDays * dailyCapacity;
-                    int delayQty = Math.max(0, formingRemainder - canProduce);
-                    ending.setDelayQuantity(delayQty);
+                // ========== Step 6: 收尾前10天检查 - 核心逻辑 ==========
+                if (isNearEnding && formingRemainder > 0) {
+                    // 收尾日前能生产的量
+                    int canProduceBeforeEnding = daysToEnding * dailyCapacity;
                     
-                    // 平摊到未来3天
-                    if (delayQty > 0) {
-                        ending.setDistributedQuantity(delayQty / 3);
+                    // 判断能否按计划收尾
+                    if (formingRemainder <= canProduceBeforeEnding) {
+                        // 能按计划收尾，无需追赶
+                        ending.setDelayQuantity(0);
+                        ending.setDistributedQuantity(0);
+                        ending.setNeedMonthPlanAdjust(0);
+                        log.info("结构 {} 可以按计划收尾，成型余量 {}，收尾日前产能 {}", 
+                                structureName, formingRemainder, canProduceBeforeEnding);
+                    } else {
+                        // ========== 会延误，计算延误量 ==========
+                        int delayQty = formingRemainder - canProduceBeforeEnding;
+                        ending.setDelayQuantity(delayQty);
+                        
+                        // ========== 计算未来3天追赶能力 ==========
+                        // 未来3天满产能力 = 3天 × 日产能
+                        int next3DaysFullCapacity = 3 * dailyCapacity;
+                        
+                        // 未来3天计划产量（从月计划获取）
+                        int next3DaysPlanQty = calculateNext3DaysPlanQty(plans, currentDay);
+                        
+                        // 未来3天可追加产能 = 满产能力 - 计划产量
+                        int next3DaysAvailableCapacity = Math.max(0, next3DaysFullCapacity - next3DaysPlanQty);
+                        
+                        // 判断能否追赶
+                        if (delayQty <= next3DaysAvailableCapacity) {
+                            // 可以追赶上，平摊到未来3天
+                            int distributedQty = (int) Math.ceil(delayQty / 3.0);
+                            ending.setDistributedQuantity(distributedQty);
+                            ending.setNeedMonthPlanAdjust(0);
+                            log.info("结构 {} 延误量 {} 可追赶上，平摊到未来3天每天增加 {}", 
+                                    structureName, delayQty, distributedQty);
+                        } else {
+                            // ========== 满产也追不上，需要通知月计划调整 ==========
+                            ending.setDistributedQuantity(next3DaysAvailableCapacity / 3);
+                            ending.setNeedMonthPlanAdjust(1);
+                            log.warn("结构 {} 延误量 {} 超过未来3天满产能力 {}，需要调整月计划！", 
+                                    structureName, delayQty, next3DaysAvailableCapacity);
+                            
+                            // TODO: 调用硫化调整接口通知月计划调整
+                            // notifyMonthPlanAdjustment(structureName, delayQty, endingDate);
+                        }
                     }
-                    ending.setNeedMonthPlanAdjust(1);
                 } else {
+                    // 10天以外，正常安排
                     ending.setDelayQuantity(0);
                     ending.setDistributedQuantity(0);
                     ending.setNeedMonthPlanAdjust(0);
@@ -649,19 +705,74 @@ public class ScheduleServiceImpl implements ScheduleService {
                 resultList.add(ending);
             }
             
-            // 按预计收尾天数排序（紧急的排前面）
+            // 按紧急程度和收尾天数排序
             resultList.sort((a, b) -> {
+                // 紧急收尾的排最前面
+                if (a.getIsUrgentEnding() != b.getIsUrgentEnding()) {
+                    return b.getIsUrgentEnding() - a.getIsUrgentEnding();
+                }
+                // 需要月计划调整的排前面
+                if (a.getNeedMonthPlanAdjust() != b.getNeedMonthPlanAdjust()) {
+                    return b.getNeedMonthPlanAdjust() - a.getNeedMonthPlanAdjust();
+                }
+                // 按预计收尾天数排序
                 if (a.getEstimatedEndingDays() == null) return 1;
                 if (b.getEstimatedEndingDays() == null) return -1;
                 return a.getEstimatedEndingDays().compareTo(b.getEstimatedEndingDays());
             });
             
-            log.info("计算结构收尾信息完成，共 {} 个结构", resultList.size());
+            log.info("计算结构收尾信息完成，共 {} 个结构，其中紧急收尾 {} 个，需调整月计划 {} 个", 
+                    resultList.size(),
+                    resultList.stream().filterToInt(e -> e.getIsUrgentEnding()).sum(),
+                    resultList.stream().filterToInt(e -> e.getNeedMonthPlanAdjust()).sum());
             
         } catch (Exception e) {
             log.error("计算结构收尾信息失败", e);
         }
         
         return resultList;
+    }
+    
+    /**
+     * 找到该结构的收尾日（最后一个有排产的日期）
+     */
+    private int findEndingDay(List<FactoryMonthPlanProductionFinalResult> plans, int lastDayOfMonth) {
+        int endingDay = 0;
+        for (FactoryMonthPlanProductionFinalResult plan : plans) {
+            for (int day = 1; day <= lastDayOfMonth; day++) {
+                Integer dayQty = plan.getDayQty(day);
+                if (dayQty != null && dayQty > 0 && day > endingDay) {
+                    endingDay = day;
+                }
+            }
+        }
+        // 如果没找到，默认月底
+        return endingDay > 0 ? endingDay : lastDayOfMonth;
+    }
+    
+    /**
+     * 计算结构日产能（从可用机台汇总）
+     */
+    private int calculateStructureDailyCapacity(String structureName, List<MdmMoldingMachine> machines) {
+        // 简化处理：默认每个机台日产200条
+        // TODO: 从结构班产配置获取实际产能
+        int machineCount = machines.size();
+        return machineCount * 200;
+    }
+    
+    /**
+     * 计算未来3天的计划产量
+     */
+    private int calculateNext3DaysPlanQty(List<FactoryMonthPlanProductionFinalResult> plans, int currentDay) {
+        int totalQty = 0;
+        for (FactoryMonthPlanProductionFinalResult plan : plans) {
+            for (int day = currentDay; day <= Math.min(currentDay + 2, 31); day++) {
+                Integer dayQty = plan.getDayQty(day);
+                if (dayQty != null && dayQty > 0) {
+                    totalQty += dayQty;
+                }
+            }
+        }
+        return totalQty;
     }
 }
