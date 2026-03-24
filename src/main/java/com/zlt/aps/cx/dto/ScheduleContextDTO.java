@@ -236,6 +236,32 @@ public class ScheduleContextDTO {
      */
     private Map<String, Integer> excessStockToConsume;
 
+    // ==================== 收尾相关数据 ====================
+
+    /**
+     * 月度计划余量列表
+     * 用于计算收尾余量：硫化余量 - 胎胚库存
+     */
+    private List<com.zlt.aps.cx.entity.mdm.MdmMonthSurplus> monthSurplusList;
+
+    /**
+     * 月度计划余量映射（物料编码 -> 余量）
+     * 快速查询用
+     */
+    private Map<String, com.zlt.aps.cx.entity.mdm.MdmMonthSurplus> monthSurplusMap;
+
+    /**
+     * SKU排产分类列表
+     * 用于判断是否为主销产品（SCHEDULE_TYPE='01'表示主销产品，月均销量>=500条）
+     */
+    private List<com.zlt.aps.cx.entity.mdm.MdmSkuScheduleCategory> skuScheduleCategories;
+
+    /**
+     * 主销产品编码集合
+     * 快速查询用
+     */
+    private Set<String> mainProductCodes;
+
     /**
      * 班次信息
      */
