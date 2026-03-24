@@ -1,6 +1,7 @@
 package com.zlt.aps.cx.dto;
 
 import com.zlt.aps.cx.entity.*;
+import com.zlt.aps.cx.entity.config.CxKeyProduct;
 import com.zlt.aps.cx.entity.config.CxParamConfig;
 import com.zlt.aps.cx.entity.config.CxStructurePriority;
 import com.zlt.aps.cx.entity.config.CxStructureShiftCapacity;
@@ -11,6 +12,7 @@ import lombok.Data;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 排程上下文DTO
@@ -61,6 +63,17 @@ public class ScheduleContextDTO {
      * 结构优先级配置列表
      */
     private List<CxStructurePriority> structurePriorities;
+
+    /**
+     * 关键产品配置列表
+     * 用于开产首班排除等场景判断
+     */
+    private List<CxKeyProduct> keyProducts;
+
+    /**
+     * 关键产品编码集合（快速查询用）
+     */
+    private Set<String> keyProductCodes;
 
     /**
      * 排程参数配置
@@ -128,9 +141,55 @@ public class ScheduleContextDTO {
     private Boolean isClosingDay;
 
     /**
+     * 是否停产前一天
+     */
+    private Boolean isBeforeClosingDay;
+
+    /**
      * 停产剩余天数
      */
     private Integer daysToClose;
+
+    /**
+     * 节假日天数
+     */
+    private Integer holidayDays;
+
+    /**
+     * 成型开产班次（开产日第一个班次）
+     */
+    private String formingStartShift;
+
+    /**
+     * 硫化开模班次（开产日第二个班次）
+     */
+    private String vulcanizingStartShift;
+
+    /**
+     * 硫化停机时间（停产前一天）
+     */
+    private LocalDateTime vulcanizingStopTime;
+
+    /**
+     * 成型停机时间（停产前一天，早于硫化停机时间）
+     */
+    private LocalDateTime formingStopTime;
+
+    /**
+     * 预留消化时间（小时）
+     * 成型停机时间 = 硫化停机时间 - 预留消化时间
+     */
+    private Integer reservedDigestHours;
+
+    /**
+     * 成型可排产时长（小时，停产前一天）
+     */
+    private Integer formingAvailableHours;
+
+    /**
+     * 过剩库存需要消耗的量
+     */
+    private Map<String, Integer> excessStockToConsume;
 
     /**
      * 班次信息

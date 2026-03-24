@@ -3,6 +3,7 @@ package com.zlt.aps.cx.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.zlt.aps.cx.dto.ScheduleContextDTO;
 import com.zlt.aps.cx.entity.*;
+import com.zlt.aps.cx.entity.config.CxKeyProduct;
 import com.zlt.aps.cx.entity.config.CxParamConfig;
 import com.zlt.aps.cx.entity.config.CxStructureShiftCapacity;
 import com.zlt.aps.cx.entity.mdm.MdmMoldingMachine;
@@ -21,8 +22,10 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -77,6 +80,9 @@ public class ScheduleServiceImpl implements ScheduleService {
 
     @Autowired
     private CxStructureShiftCapacityMapper structureShiftCapacityMapper;
+
+    @Autowired
+    private CxKeyProductMapper keyProductMapper;
 
     @Override
     public ScheduleResult executeSchedule(ScheduleRequest request) {
@@ -181,7 +187,25 @@ public class ScheduleServiceImpl implements ScheduleService {
                             .eq(CxStructureShiftCapacity::getIsActive, 1));
             context.setStructureShiftCapacities(structureShiftCapacities);
 
-            // 7. 设置排程参数
+            // 7. 获取关键产品配置
+            List<CxKeyProduct> keyProducts = keyProductMapper.selectList(
+                    new LambdaQueryWrapper<CxKeyProduct>()
+                            .eq(CxKeyProduct::getIsActive, 1));
+            context.setKeyProducts(keyProducts);
+            
+            // 构建关键产品编码集合（快速查询用）
+            Set<String> keyProductCodes = new HashSet<>();
+            for (CxKeyProduct product : keyProducts) {
+                keyProductCodes.add(product.getEmbryoCode());
+            }
+            context.setKeyProductCodes(keyProductCodes);
+
+            // 8. 设置节假日相关标记
+            context.setIsOpeningDay(holidayScheduleService.isStartProductionDay(request.getScheduleDate()));
+            context.setIsClosingDay(holidayScheduleService.isStopProductionDay(request.getScheduleDate()));
+            context.setIsBeforeClosingDay(holidayScheduleService.isBeforeHoliday(request.getScheduleDate()));
+
+            // 9. 设置排程参数
             context.setScheduleDate(request.getScheduleDate());
             context.setScheduleMode(request.getScheduleMode());
             context.setReScheduleType(request.getReScheduleType());
