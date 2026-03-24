@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zlt.aps.cx.entity.*;
+import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
 import com.zlt.aps.cx.mapper.*;
 import com.zlt.aps.cx.mapper.LhScheduleResultMapper;
@@ -45,9 +46,9 @@ public class FactoryMonthPlanProductionFinalResultServiceImpl extends ServiceImp
 
     @Autowired
     private MachineMapper machineMapper;
-
+    
     @Autowired
-    private AlgorithmService algorithmService;
+    private ScheduleService scheduleService;
 
     @Override
     public List<FactoryMonthPlanProductionFinalResult> getByYearMonth(Integer yearMonth) {
@@ -193,41 +194,25 @@ public class FactoryMonthPlanProductionFinalResultServiceImpl extends ServiceImp
                 return result;
             }
             
-            // 2. 转换为日胎胚任务
-            List<DailyEmbryoTask> tasks = convertToTasks(dailyPlans, scheduleDate);
-            result.setTotalTasks(tasks.size());
-            result.setTotalQuantity(tasks.stream().mapToInt(DailyEmbryoTask::getTaskQuantity).sum());
+            result.setTotalTasks(dailyPlans.size());
+            result.setTotalQuantity(dailyPlans.stream()
+                    .mapToInt(LhScheduleResult::getDailyPlanQty)
+                    .sum());
             
-            // 3. 获取可用机台
-            List<Machine> machines = machineMapper.selectRunningMachines();
-            if (machines.isEmpty()) {
+            // 2. 调用排程服务生成排程
+            List<CxScheduleResult> scheduleResults = scheduleService.generateDailySchedule(scheduleDate);
+            
+            if (scheduleResults == null || scheduleResults.isEmpty()) {
                 result.setSuccess(false);
-                result.setMessage("没有可用的成型机台");
+                result.setMessage("排程生成失败，无排程结果");
                 return result;
             }
             
-            // 4. 创建排程主表
-            ScheduleMain scheduleMain = createScheduleMain(scheduleDate);
-            result.setScheduleMainId(scheduleMain.getId());
-            
-            // 5. 调用APS核心算法进行排程
-            AlgorithmService.AllocationResult allocationResult = algorithmService.allocateTasks(
-                tasks, machines, scheduleMain);
-            
-            if (!allocationResult.isSuccess()) {
-                result.setSuccess(false);
-                result.setMessage(allocationResult.getMessage());
-                return result;
-            }
-            
-            // 6. 保存排程结果
-            saveScheduleDetails(allocationResult, scheduleMain, scheduleDate);
-            
-            // 7. 同步结果到月计划
+            // 3. 同步结果到月计划
             syncScheduleResult(scheduleDate);
             
             result.setSuccess(true);
-            result.setMessage("排程生成成功");
+            result.setMessage("排程生成成功，共生成 " + scheduleResults.size() + " 条排程记录");
             
             logger.info("========== 从月计划生成排程完成 ==========");
             
@@ -358,60 +343,5 @@ public class FactoryMonthPlanProductionFinalResultServiceImpl extends ServiceImp
         int year = yearMonth / 100;
         int month = yearMonth % 100;
         return LocalDate.of(year, month, day);
-    }
-
-    /**
-     * 转换为日胎胚任务
-     */
-    private List<DailyEmbryoTask> convertToTasks(List<LhScheduleResult> dailyPlans, LocalDate scheduleDate) {
-        return dailyPlans.stream()
-            .map(plan -> {
-                DailyEmbryoTask task = new DailyEmbryoTask();
-                task.setMaterialCode(plan.getMaterialCode());
-                task.setTaskQuantity(plan.getDailyPlanQty());
-                task.setProductStructure(plan.getStructureName());
-                task.setAssignedQuantity(0);
-                task.setRemainderQuantity(plan.getDailyPlanQty());
-                task.setIsFullyAssigned(0);
-                task.setCreateTime(LocalDateTime.now());
-                return task;
-            })
-            .collect(Collectors.toList());
-    }
-
-    /**
-     * 创建排程主表
-     */
-    private ScheduleMain createScheduleMain(LocalDate scheduleDate) {
-        ScheduleMain main = new ScheduleMain();
-        main.setScheduleCode("APS" + scheduleDate.toString().replace("-", "") + 
-            String.format("%04d", System.currentTimeMillis() % 10000));
-        main.setScheduleDate(scheduleDate);
-        main.setScheduleType("NORMAL");
-        main.setStatus("DRAFT");
-        main.setCreateTime(LocalDateTime.now());
-        main.setCreateBy("SYSTEM");
-        
-        scheduleMainMapper.insert(main);
-        return main;
-    }
-
-    /**
-     * 保存排程明细
-     */
-    private void saveScheduleDetails(AlgorithmService.AllocationResult allocationResult,
-                                    ScheduleMain scheduleMain, LocalDate scheduleDate) {
-        for (AlgorithmService.AllocationDetail detail : allocationResult.getDetails()) {
-            ScheduleDetail scheduleDetail = new ScheduleDetail();
-            scheduleDetail.setMainId(scheduleMain.getId());
-            scheduleDetail.setScheduleDate(scheduleDate);
-            scheduleDetail.setMachineCode(detail.getMachineCode());
-            scheduleDetail.setMaterialCode(detail.getMaterialCode());
-            scheduleDetail.setPlanQuantity(detail.getPlanQuantity());
-            scheduleDetail.setCompletedQuantity(0);
-            scheduleDetail.setStatus("PLANNED");
-            
-            scheduleDetailMapper.insert(scheduleDetail);
-        }
     }
 }
