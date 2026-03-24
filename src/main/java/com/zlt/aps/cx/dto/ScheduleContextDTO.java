@@ -7,9 +7,11 @@ import com.zlt.aps.cx.entity.config.CxStructurePriority;
 import com.zlt.aps.cx.entity.config.CxStructureShiftCapacity;
 import com.zlt.aps.cx.entity.mdm.*;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
+import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
 import lombok.Data;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -32,6 +34,27 @@ public class ScheduleContextDTO {
      * 可用成型机台列表
      */
     private List<MdmMoldingMachine> availableMachines;
+
+    // ==================== 任务来源数据 ====================
+
+    /**
+     * 硫化排程结果列表（主要任务来源）
+     * 从T_LH_SCHEDULE_RESULT获取今日硫化计划
+     */
+    private List<LhScheduleResult> lhScheduleResults;
+
+    /**
+     * 成型在机信息列表（续作判断）
+     * 从T_MDM_CX_MACHINE_ONLINE_INFO获取当前机台正在做的胎胚
+     */
+    private List<MdmCxMachineOnlineInfo> onlineInfos;
+
+    /**
+     * 机台在机胎胚映射（快速查询用）
+     * Key: 成型机台编码
+     * Value: 该机台正在做的胎胚编码集合
+     */
+    private Map<String, Set<String>> machineOnlineEmbryoMap;
 
     /**
      * 固定机台配置列表
@@ -129,6 +152,28 @@ public class ScheduleContextDTO {
      * 班次配置
      */
     private Map<String, ShiftInfo> shiftConfigs;
+
+    /**
+     * 损耗率
+     */
+    private java.math.BigDecimal lossRate;
+
+    /**
+     * 预留消化时间（小时）
+     * 默认1小时
+     */
+    private Integer reservedDigestHours;
+
+    /**
+     * 胎胚最长停放时间（小时）
+     * 默认24小时
+     */
+    private Integer maxParkingHours;
+
+    /**
+     * 机台小时产能（条/小时）
+     */
+    private Integer machineHourlyCapacity;
 
     /**
      * 是否开产日

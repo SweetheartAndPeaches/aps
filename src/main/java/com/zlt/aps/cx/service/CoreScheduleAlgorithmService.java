@@ -172,21 +172,46 @@ public interface CoreScheduleAlgorithmService {
      */
     @lombok.Data
     class DailyEmbryoTask {
+        /** 胎胚编码 */
         private String materialCode;
+        /** 物料名称 */
         private String materialName;
+        /** 结构编码 */
         private String structureCode;
+        /** 结构名称 */
         private String structureName;
+        /** 日需求量 */
         private Integer demandQuantity;
+        /** 已分配量 */
         private Integer assignedQuantity;
+        /** 剩余待分配量 */
         private Integer remainingQuantity;
+        /** 优先级分数 */
         private Integer priority;
+        /** 是否紧急收尾 */
         private Boolean isUrgentEnding;
+        /** 是否主销产品 */
         private Boolean isMainProduct;
+        /** 是否试制任务 */
         private Boolean isTrialTask;
+        /** 试制号 */
         private String trialNo;
+        /** 库存可供时长 */
         private BigDecimal stockHours;
+        /** 硫化机台数 */
         private Integer vulcanizeMachineCount;
+        /** 硫化模数 */
         private Integer vulcanizeMoldCount;
+        /** 是否首排 */
+        private Boolean isFirstTask;
+        /** 是否续作任务 */
+        private Boolean isContinueTask;
+        /** 续作机台列表 */
+        private List<String> continueMachineCodes;
+        /** 硫化需求量（来自硫化排程） */
+        private Integer vulcanizeDemand;
+        /** 当前库存 */
+        private Integer currentStock;
     }
 
     /**
