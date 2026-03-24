@@ -1,9 +1,13 @@
 package com.zlt.aps.cx.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.zlt.aps.cx.dto.ScheduleContextDTO;
 import com.zlt.aps.cx.entity.CxMaterial;
 import com.zlt.aps.cx.entity.CxStock;
 import com.zlt.aps.cx.entity.config.CxHolidayConfig;
+import com.zlt.aps.cx.entity.config.CxKeyProduct;
+import com.zlt.aps.cx.entity.config.CxParamConfig;
+import com.zlt.aps.cx.entity.mdm.MdmMoldingMachine;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
 import com.zlt.aps.cx.mapper.*;
 import com.zlt.aps.cx.service.HolidayScheduleService;
@@ -13,12 +17,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.stream.Collectors;
+import java.util.*;
 
 /**
  * 节假日处理服务实现类
@@ -41,6 +46,21 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
     @Autowired
     private CxLhPlanMapper lhPlanMapper;
 
+    @Autowired
+    private CxKeyProductMapper keyProductMapper;
+
+    @Autowired
+    private CxParamConfigMapper paramConfigMapper;
+
+    @Autowired
+    private MdmMoldingMachineMapper moldingMachineMapper;
+
+    /** 预留消化时间默认值（小时） */
+    private static final int DEFAULT_RESERVED_DIGEST_HOURS = 1;
+
+    /** 胎胚最长停放时间默认值（小时） */
+    private static final int DEFAULT_MAX_PARKING_HOURS = 24;
+
     @Override
     public boolean isHoliday(LocalDate date) {
         // 先检查配置的节假日
@@ -53,7 +73,7 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
             return true;
         }
 
-        // 检查是否为周末（如果配置了周末休息）
+        // 检查是否为周日
         if (date.getDayOfWeek() == DayOfWeek.SUNDAY) {
             return true;
         }
@@ -63,7 +83,6 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
 
     @Override
     public boolean isStopProductionDay(LocalDate date) {
-        // 停产日 = 节假日首日
         if (!isHoliday(date)) {
             return false;
         }
@@ -75,7 +94,6 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
 
     @Override
     public boolean isStartProductionDay(LocalDate date) {
-        // 开产日 = 节假日后首个工作日
         if (isHoliday(date)) {
             return false;
         }
@@ -96,6 +114,7 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
     public HolidayInfo getHolidayInfo(LocalDate date) {
         HolidayInfo.HolidayInfoBuilder builder = HolidayInfo.builder();
         builder.isHoliday(isHoliday(date));
+        builder.isBeforeHoliday(isBeforeHoliday(date));
 
         // 获取节假日配置
         CxHolidayConfig config = holidayConfigMapper.selectOne(
@@ -122,10 +141,12 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
     }
 
     @Override
-    public HolidayScheduleResult handleBeforeHoliday(LocalDate scheduleDate) {
+    public HolidayScheduleResult handleBeforeHoliday(ScheduleContextDTO context) {
         HolidayScheduleResult result = new HolidayScheduleResult();
         result.setAdjusted(false);
         result.setAdjustments(new ArrayList<>());
+
+        LocalDate scheduleDate = context.getScheduleDate();
 
         if (!isBeforeHoliday(scheduleDate)) {
             result.setMessage("非停产前一天，无需特殊处理");
@@ -134,102 +155,257 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
 
         log.info("处理停产前一天排程调整: {}", scheduleDate);
 
-        // 1. 检查胎面库存，避免积压
-        List<TreadConsumptionSuggestion> treadSuggestions = checkTreadStockBeforeHoliday(scheduleDate);
-        for (TreadConsumptionSuggestion suggestion : treadSuggestions) {
-            result.getAdjustments().add(String.format("胎面 %s 需消耗 %d 条，原因：%s",
-                    suggestion.getTreadName(), suggestion.getSuggestedConsumption(), suggestion.getReason()));
+        // 获取节假日信息
+        HolidayInfo holidayInfo = getHolidayInfo(scheduleDate.plusDays(1));
+        int holidayDays = holidayInfo.getTotalDays() > 0 ? holidayInfo.getTotalDays() : 1;
+
+        // 1. 计算硫化最低需求
+        Map<String, Integer> minDemand = calculateMinDemandForHoliday(
+                holidayInfo.getStartDate() != null ? holidayInfo.getStartDate() : scheduleDate.plusDays(1),
+                holidayDays);
+
+        // 2. 获取当前库存
+        Map<String, Integer> currentStock = new HashMap<>();
+        for (CxStock stock : context.getStocks()) {
+            currentStock.put(stock.getMaterialCode(), stock.getCurrentStock());
         }
 
-        // 2. 计算安全库存
-        HolidayInfo holidayInfo = getHolidayInfo(scheduleDate.plusDays(1));
-        List<SafetyStockSuggestion> stockSuggestions = calculateSafetyStockForHoliday(
-                holidayInfo.getStartDate() != null ? holidayInfo.getStartDate() : scheduleDate.plusDays(1),
-                holidayInfo.getTotalDays() > 0 ? holidayInfo.getTotalDays() : 1);
+        // 3. 计算过剩库存
+        Map<String, Integer> excessStock = calculateExcessStock(minDemand, currentStock);
+        result.setExcessStockToConsume(excessStock);
 
-        for (SafetyStockSuggestion suggestion : stockSuggestions) {
-            if (suggestion.getAdditionalNeeded() != null && suggestion.getAdditionalNeeded() > 0) {
-                result.getAdjustments().add(String.format("物料 %s 需增加库存 %d 条，原因：%s",
-                        suggestion.getMaterialName(), suggestion.getAdditionalNeeded(), suggestion.getReason()));
+        // 4. 确定停机时间
+        // 假设硫化停机时间为最后一个班次结束时间（如20:00）
+        LocalDateTime vulcanizingStopTime = LocalDateTime.of(scheduleDate, LocalTime.of(20, 0));
+        Integer reservedDigestHours = getReservedDigestHours();
+        LocalDateTime formingStopTime = determineFormingStopTime(vulcanizingStopTime, reservedDigestHours);
+        result.setFormingStopTime(formingStopTime);
+
+        // 5. 计算成型可排产时长
+        // 假设班次开始时间为早班8点
+        LocalDateTime shiftStartTime = LocalDateTime.of(scheduleDate, LocalTime.of(8, 0));
+        Integer formingAvailableHours = calculateFormingAvailableHours(shiftStartTime, formingStopTime);
+        result.setFormingAvailableHours(formingAvailableHours);
+
+        // 6. 检查胎胚停放时间约束
+        List<EmbryoConsumptionSuggestion> parkingViolations = checkEmbryoParkingTime(scheduleDate, formingStopTime);
+
+        // 7. 生成调整建议
+        for (Map.Entry<String, Integer> entry : excessStock.entrySet()) {
+            if (entry.getValue() > 0) {
+                result.getAdjustments().add(String.format("物料 %s 过剩库存 %d 条，需停产前消耗",
+                        entry.getKey(), entry.getValue()));
             }
         }
 
+        for (EmbryoConsumptionSuggestion suggestion : parkingViolations) {
+            result.getAdjustments().add(String.format("胎胚 %s 停放时间 %.2f 小时，需强制消耗",
+                    suggestion.getEmbryoCode(), suggestion.getParkingHours()));
+        }
+
+        // 设置到上下文
+        context.setIsBeforeClosingDay(true);
+        context.setHolidayDays(holidayDays);
+        context.setVulcanizingStopTime(vulcanizingStopTime);
+        context.setFormingStopTime(formingStopTime);
+        context.setReservedDigestHours(reservedDigestHours);
+        context.setFormingAvailableHours(formingAvailableHours);
+        context.setExcessStockToConsume(excessStock);
+
         result.setAdjusted(!CollectionUtils.isEmpty(result.getAdjustments()));
-        result.setMessage(result.isAdjusted() ? "已完成停产前调整" : "无需调整");
+        result.setMessage(result.isAdjusted() ? "已完成停产前一天调整" : "无需调整");
 
         return result;
     }
 
     @Override
-    public HolidayScheduleResult handleAfterHoliday(LocalDate scheduleDate) {
+    public HolidayScheduleResult handleOpeningDay(ScheduleContextDTO context) {
         HolidayScheduleResult result = new HolidayScheduleResult();
         result.setAdjusted(false);
         result.setAdjustments(new ArrayList<>());
+
+        LocalDate scheduleDate = context.getScheduleDate();
 
         if (!isStartProductionDay(scheduleDate)) {
             result.setMessage("非开产日，无需特殊处理");
             return result;
         }
 
-        log.info("处理开产后排程调整: {}", scheduleDate);
+        log.info("处理开产日排程调整: {}", scheduleDate);
 
-        // 1. 首班不排关键产品
-        result.getAdjustments().add("开产首班不排关键产品");
+        // 1. 确定成型开产班次和硫化开模班次
+        // 假设班次顺序：夜班(0-8) -> 早班(8-16) -> 中班(16-24)
+        // 成型开产班次 = 早班（第一个班次）
+        // 硫化开模班次 = 中班（第二个班次）
+        String formingStartShift = "SHIFT_DAY";
+        String vulcanizingStartShift = "SHIFT_AFTERNOON";
 
-        // 2. 检查库存水平
-        List<CxStock> stocks = stockMapper.selectList(
-                new LambdaQueryWrapper<CxStock>()
-                        .gt(CxStock::getCurrentStock, 0));
+        result.setFormingStartShift(formingStartShift);
+        result.setVulcanizingStartShift(vulcanizingStartShift);
 
-        for (CxStock stock : stocks) {
-            BigDecimal stockHours = stock.getStockHours() != null ? stock.getStockHours() : BigDecimal.ZERO;
-            
-            // 检查库存是否过低
-            if (stockHours.compareTo(new BigDecimal("4")) < 0) {
-                result.getAdjustments().add(String.format("物料 %s 库存过低，可供时长 %.2f 小时",
-                        stock.getMaterialName(), stockHours));
-            }
+        // 2. 加载关键产品配置
+        Set<String> keyProductCodes = context.getKeyProductCodes();
+        if (keyProductCodes == null) {
+            keyProductCodes = loadKeyProductCodes();
+            context.setKeyProductCodes(keyProductCodes);
         }
 
+        // 3. 首班不排关键产品
+        if (!CollectionUtils.isEmpty(keyProductCodes)) {
+            result.getAdjustments().add(String.format("开产首班(%s)不排关键产品，共 %d 个",
+                    formingStartShift, keyProductCodes.size()));
+        }
+
+        // 设置到上下文
+        context.setIsOpeningDay(true);
+        context.setFormingStartShift(formingStartShift);
+        context.setVulcanizingStartShift(vulcanizingStartShift);
+
         result.setAdjusted(true);
-        result.setMessage("已完成开产后调整");
+        result.setMessage("已完成开产日调整：成型早于硫化1个班开产，首班不排关键产品");
 
         return result;
     }
 
     @Override
-    public List<CxScheduleResult> adjustHolidaySchedule(LocalDate scheduleDate, List<CxScheduleResult> originalResult) {
+    public Map<String, Integer> calculateMinDemandForHoliday(LocalDate holidayStartDate, int holidayDays) {
+        Map<String, Integer> minDemand = new HashMap<>();
+
+        // 获取损耗率配置
+        BigDecimal lossRate = getLossRate();
+
+        // 获取节假日期间的硫化计划
+        for (int i = 0; i < holidayDays; i++) {
+            LocalDate planDate = holidayStartDate.plusDays(i);
+
+            // 从硫化计划表获取需求（简化处理，实际需要查询硫化计划）
+            // TODO: 根据实际硫化计划表结构实现
+        }
+
+        // 简化处理：假设每个物料每天最低需求100条
+        List<CxMaterial> materials = materialMapper.selectList(
+                new LambdaQueryWrapper<CxMaterial>().eq(CxMaterial::getIsActive, 1));
+
+        for (CxMaterial material : materials) {
+            // 最低需求 = 日需求 × 天数 × (1 + 损耗率)
+            int dailyDemand = 100; // 默认值，实际应从硫化计划获取
+            int demand = (int) Math.ceil(dailyDemand * holidayDays * (1 + lossRate.doubleValue()));
+            minDemand.put(material.getMaterialCode(), demand);
+        }
+
+        return minDemand;
+    }
+
+    @Override
+    public Map<String, Integer> calculateExcessStock(Map<String, Integer> minDemand, Map<String, Integer> currentStock) {
+        Map<String, Integer> excessStock = new HashMap<>();
+
+        for (Map.Entry<String, Integer> entry : minDemand.entrySet()) {
+            String materialCode = entry.getKey();
+            int demand = entry.getValue();
+            int stock = currentStock.getOrDefault(materialCode, 0);
+
+            int excess = stock - demand;
+            excessStock.put(materialCode, Math.max(excess, 0));
+        }
+
+        return excessStock;
+    }
+
+    @Override
+    public LocalDateTime determineFormingStopTime(LocalDateTime vulcanizingStopTime, Integer reservedDigestHours) {
+        if (reservedDigestHours == null) {
+            reservedDigestHours = DEFAULT_RESERVED_DIGEST_HOURS;
+        }
+        return vulcanizingStopTime.minusHours(reservedDigestHours);
+    }
+
+    @Override
+    public Integer calculateFormingAvailableHours(LocalDateTime shiftStartTime, LocalDateTime formingStopTime) {
+        if (shiftStartTime == null || formingStopTime == null) {
+            return 8; // 默认8小时
+        }
+
+        long hours = ChronoUnit.HOURS.between(shiftStartTime, formingStopTime);
+        return Math.max((int) hours, 0);
+    }
+
+    @Override
+    public List<EmbryoConsumptionSuggestion> checkEmbryoParkingTime(LocalDate scheduleDate, LocalDateTime formingStopTime) {
+        List<EmbryoConsumptionSuggestion> suggestions = new ArrayList<>();
+
+        // 获取胎胚停放时间配置
+        int maxParkingHours = getMaxParkingHours();
+        int reservedDigestHours = getReservedDigestHours();
+
+        // 获取所有胎胚库存
+        List<CxStock> stocks = stockMapper.selectList(
+                new LambdaQueryWrapper<CxStock>().gt(CxStock::getCurrentStock, 0));
+
+        for (CxStock stock : stocks) {
+            // 获取胎胚已停放时间（从生产时间计算）
+            // TODO: 需要从库存记录获取生产时间
+            BigDecimal parkingHours = stock.getStockHours();
+
+            if (parkingHours != null) {
+                // 预测停放时间 = 已停放时间 + 预留消化时间
+                BigDecimal predictedParkingHours = parkingHours.add(BigDecimal.valueOf(reservedDigestHours));
+
+                if (predictedParkingHours.compareTo(BigDecimal.valueOf(maxParkingHours)) > 0) {
+                    EmbryoConsumptionSuggestion suggestion = new EmbryoConsumptionSuggestion();
+                    suggestion.setEmbryoCode(stock.getMaterialCode());
+                    suggestion.setEmbryoName(stock.getMaterialName());
+                    suggestion.setCurrentStock(stock.getCurrentStock());
+                    suggestion.setParkingHours(parkingHours);
+                    suggestion.setSuggestedConsumption(stock.getCurrentStock());
+                    suggestion.setReason(String.format("停放时间 %.2f 小时，加预留时间后将超过 %d 小时限制",
+                            parkingHours, maxParkingHours));
+                    suggestions.add(suggestion);
+                }
+            }
+        }
+
+        return suggestions;
+    }
+
+    @Override
+    public List<CxScheduleResult> adjustHolidaySchedule(LocalDate scheduleDate, List<CxScheduleResult> originalResult, ScheduleContextDTO context) {
         if (CollectionUtils.isEmpty(originalResult)) {
             return originalResult;
         }
 
         // 检查是否需要特殊处理
         if (isStopProductionDay(scheduleDate)) {
-            // 停产日：暂停排程
             log.info("停产日 {} 不排程", scheduleDate);
             return new ArrayList<>();
         }
 
         if (isBeforeHoliday(scheduleDate)) {
-            // 停产前一天：调整策略
-            HolidayScheduleResult adjustResult = handleBeforeHoliday(scheduleDate);
+            HolidayScheduleResult adjustResult = handleBeforeHoliday(context);
             if (adjustResult.isAdjusted()) {
                 log.info("停产前一天 {} 已调整排程: {}", scheduleDate, adjustResult.getAdjustments());
-                // TODO: 根据调整建议修改排程结果
             }
         }
 
         if (isStartProductionDay(scheduleDate)) {
-            // 开产日：调整策略
-            HolidayScheduleResult adjustResult = handleAfterHoliday(scheduleDate);
+            HolidayScheduleResult adjustResult = handleOpeningDay(context);
             if (adjustResult.isAdjusted()) {
                 log.info("开产日 {} 已调整排程: {}", scheduleDate, adjustResult.getAdjustments());
-                
+
                 // 首班不排关键产品
-                for (CxScheduleResult result : originalResult) {
-                    if ("SHIFT_MORNING".equals(result.getShiftCode())) {
-                        // 标记首班，后续在分配时会跳过关键产品
-                        result.setRemark("开产首班 - 不排关键产品");
+                String firstShift = context.getFormingStartShift();
+                Set<String> keyProductCodes = context.getKeyProductCodes();
+
+                if (keyProductCodes != null && !keyProductCodes.isEmpty()) {
+                    for (CxScheduleResult result : originalResult) {
+                        // 一班=夜班，二班=早班，三班=中班
+                        // 成型开产班次默认为早班（二班）
+                        if ("SHIFT_DAY".equals(firstShift) && 
+                            result.getClass2PlanQty() != null && 
+                            result.getClass2PlanQty().compareTo(BigDecimal.ZERO) > 0) {
+                            // 标记早班需要排除关键产品
+                            result.setRemark("开产首班(早班) - 不排关键产品");
+                        }
                     }
                 }
             }
@@ -238,91 +414,74 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
         return originalResult;
     }
 
-    @Override
-    public List<SafetyStockSuggestion> calculateSafetyStockForHoliday(LocalDate holidayStartDate, int holidayDays) {
-        List<SafetyStockSuggestion> suggestions = new ArrayList<>();
+    /**
+     * 加载关键产品编码集合
+     */
+    private Set<String> loadKeyProductCodes() {
+        List<CxKeyProduct> keyProducts = keyProductMapper.selectList(
+                new LambdaQueryWrapper<CxKeyProduct>().eq(CxKeyProduct::getIsActive, 1));
 
-        // 获取所有物料及其当前库存
-        List<CxStock> stocks = stockMapper.selectList(
-                new LambdaQueryWrapper<CxStock>()
-                        .gt(CxStock::getCurrentStock, 0));
-
-        for (CxStock stock : stocks) {
-            SafetyStockSuggestion suggestion = new SafetyStockSuggestion();
-            suggestion.setMaterialCode(stock.getMaterialCode());
-            suggestion.setMaterialName(stock.getMaterialName());
-            suggestion.setCurrentStock(stock.getCurrentStock());
-
-            // 计算节假日期间的硫化需求（简化处理）
-            int dailyLhDemand = estimateDailyLhDemand(stock.getMaterialCode());
-            int holidayDemand = dailyLhDemand * holidayDays;
-
-            // 建议库存 = 节假日需求 + 安全缓冲（20%）
-            int suggestedStock = (int) (holidayDemand * 1.2);
-            suggestion.setSuggestedStock(suggestedStock);
-
-            // 计算缺口
-            int additionalNeeded = suggestedStock - stock.getCurrentStock();
-            suggestion.setAdditionalNeeded(Math.max(additionalNeeded, 0));
-
-            if (additionalNeeded > 0) {
-                suggestion.setReason(String.format("节假日%d天，预计需求%d条", holidayDays, holidayDemand));
-            } else {
-                suggestion.setReason("库存充足");
-            }
-
-            suggestions.add(suggestion);
+        Set<String> codes = new HashSet<>();
+        for (CxKeyProduct product : keyProducts) {
+            codes.add(product.getEmbryoCode());
         }
-
-        return suggestions;
-    }
-
-    @Override
-    public List<TreadConsumptionSuggestion> checkTreadStockBeforeHoliday(LocalDate scheduleDate) {
-        List<TreadConsumptionSuggestion> suggestions = new ArrayList<>();
-
-        // 获取所有胎面库存（假设胎面编码以"-T"结尾）
-        List<CxStock> treadStocks = stockMapper.selectList(
-                new LambdaQueryWrapper<CxStock>()
-                        .likeRight(CxStock::getMaterialCode, "TREAD") // 简化处理
-                        .gt(CxStock::getCurrentStock, 0));
-
-        for (CxStock tread : treadStocks) {
-            TreadConsumptionSuggestion suggestion = new TreadConsumptionSuggestion();
-            suggestion.setTreadCode(tread.getMaterialCode());
-            suggestion.setTreadName(tread.getMaterialName());
-            suggestion.setCurrentStock(tread.getCurrentStock());
-            suggestion.setStockHours(tread.getStockHours());
-
-            // 胎面停放时间限制（假设最大24小时）
-            BigDecimal maxParkingHours = new BigDecimal("24");
-            if (tread.getStockHours() != null && tread.getStockHours().compareTo(maxParkingHours) > 0) {
-                // 停放时间过长，需要消耗
-                int suggestedConsumption = tread.getCurrentStock();
-                suggestion.setSuggestedConsumption(suggestedConsumption);
-                suggestion.setReason(String.format("停放时间%.2f小时超过限制，建议全部消耗",
-                        tread.getStockHours()));
-                suggestions.add(suggestion);
-            } else if (tread.getStockHours() != null && 
-                       tread.getStockHours().compareTo(new BigDecimal("16")) > 0) {
-                // 接近停放时间限制，部分消耗
-                int suggestedConsumption = tread.getCurrentStock() / 2;
-                suggestion.setSuggestedConsumption(suggestedConsumption);
-                suggestion.setReason(String.format("停放时间%.2f小时接近限制，建议消耗一半",
-                        tread.getStockHours()));
-                suggestions.add(suggestion);
-            }
-        }
-
-        return suggestions;
+        return codes;
     }
 
     /**
-     * 估算每日硫化需求
+     * 获取预留消化时间（小时）
      */
-    private int estimateDailyLhDemand(String materialCode) {
-        // 简化处理：假设每个物料每天平均需求为100条
-        // 实际应该根据历史数据或硫化计划计算
-        return 100;
+    private Integer getReservedDigestHours() {
+        CxParamConfig config = paramConfigMapper.selectOne(
+                new LambdaQueryWrapper<CxParamConfig>()
+                        .eq(CxParamConfig::getParamCode, "RESERVED_DIGEST_HOURS")
+                        .eq(CxParamConfig::getIsActive, 1));
+
+        if (config != null && config.getParamValue() != null) {
+            try {
+                return Integer.parseInt(config.getParamValue());
+            } catch (NumberFormatException e) {
+                log.warn("预留消化时间配置值无效: {}", config.getParamValue());
+            }
+        }
+        return DEFAULT_RESERVED_DIGEST_HOURS;
+    }
+
+    /**
+     * 获取胎胚最长停放时间（小时）
+     */
+    private int getMaxParkingHours() {
+        CxParamConfig config = paramConfigMapper.selectOne(
+                new LambdaQueryWrapper<CxParamConfig>()
+                        .eq(CxParamConfig::getParamCode, "MAX_PARKING_HOURS")
+                        .eq(CxParamConfig::getIsActive, 1));
+
+        if (config != null && config.getParamValue() != null) {
+            try {
+                return Integer.parseInt(config.getParamValue());
+            } catch (NumberFormatException e) {
+                log.warn("胎胚最长停放时间配置值无效: {}", config.getParamValue());
+            }
+        }
+        return DEFAULT_MAX_PARKING_HOURS;
+    }
+
+    /**
+     * 获取损耗率
+     */
+    private BigDecimal getLossRate() {
+        CxParamConfig config = paramConfigMapper.selectOne(
+                new LambdaQueryWrapper<CxParamConfig>()
+                        .eq(CxParamConfig::getParamCode, "LOSS_RATE")
+                        .eq(CxParamConfig::getIsActive, 1));
+
+        if (config != null && config.getParamValue() != null) {
+            try {
+                return new BigDecimal(config.getParamValue());
+            } catch (NumberFormatException e) {
+                log.warn("损耗率配置值无效: {}", config.getParamValue());
+            }
+        }
+        return new BigDecimal("0.02"); // 默认2%
     }
 }

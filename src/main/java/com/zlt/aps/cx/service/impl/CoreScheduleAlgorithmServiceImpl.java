@@ -274,11 +274,39 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 shiftPlanQty.put(shiftCode, shiftQty);
             }
             
-            // 处理特殊情况：开产首班
+            // 处理特殊情况：开产首班不排关键产品
             if (Boolean.TRUE.equals(context.getIsOpeningDay())) {
-                // 开产首班：只排6小时，早班计划量减半
-                int dayQty = shiftPlanQty.get("SHIFT_DAY");
-                shiftPlanQty.put("SHIFT_DAY", roundToTrip(dayQty / 2, "FLOOR"));
+                String firstShift = context.getFormingStartShift();
+                if (firstShift == null) {
+                    firstShift = "SHIFT_DAY"; // 默认早班为开产首班
+                }
+                
+                Set<String> keyProductCodes = context.getKeyProductCodes();
+                if (keyProductCodes != null && !keyProductCodes.isEmpty()) {
+                    // 计算首班中关键产品的量，移到下一班次
+                    int keyProductQty = 0;
+                    for (TaskAllocation task : allocation.getTaskAllocations()) {
+                        if (keyProductCodes.contains(task.getMaterialCode())) {
+                            // 关键产品，从首班移出
+                            keyProductQty += task.getQuantity();
+                        }
+                    }
+                    
+                    if (keyProductQty > 0) {
+                        // 首班减去关键产品量
+                        int firstShiftQty = shiftPlanQty.getOrDefault(firstShift, 0);
+                        int adjustedQty = Math.max(firstShiftQty - keyProductQty, 0);
+                        shiftPlanQty.put(firstShift, roundToTrip(adjustedQty, "FLOOR"));
+                        
+                        // 关键产品量加到下一班次
+                        String secondShift = getNextShift(firstShift);
+                        int secondShiftQty = shiftPlanQty.getOrDefault(secondShift, 0);
+                        shiftPlanQty.put(secondShift, secondShiftQty + roundToTrip(keyProductQty, "CEILING"));
+                        
+                        log.debug("开产首班 {} 移出关键产品 {} 条到 {}", 
+                                firstShift, keyProductQty, secondShift);
+                    }
+                }
             }
             
             shiftResult.setShiftPlanQty(shiftPlanQty);
@@ -286,6 +314,19 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         }
 
         return results;
+    }
+    
+    /**
+     * 获取下一个班次
+     */
+    private String getNextShift(String currentShift) {
+        if ("SHIFT_NIGHT".equals(currentShift)) {
+            return "SHIFT_DAY";
+        } else if ("SHIFT_DAY".equals(currentShift)) {
+            return "SHIFT_AFTERNOON";
+        } else {
+            return "SHIFT_NIGHT";
+        }
     }
     
     /**
@@ -658,8 +699,9 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             }
         }
 
-        // 主销产品加分
-        if (material.getIsMainProduct() != null && material.getIsMainProduct() == 1) {
+        // 关键产品加分（从关键产品配置表判断）
+        Set<String> keyProductCodes = context.getKeyProductCodes();
+        if (keyProductCodes != null && keyProductCodes.contains(material.getMaterialCode())) {
             score += 200;
         }
 
