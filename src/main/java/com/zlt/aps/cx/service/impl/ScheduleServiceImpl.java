@@ -103,6 +103,12 @@ public class ScheduleServiceImpl implements ScheduleService {
     private CxPrecisionPlanMapper precisionPlanMapper;
 
     @Autowired
+    private CxMachineStructureCapacityMapper machineStructureCapacityMapper;
+
+    @Autowired
+    private CxMachineCurrentStatusMapper machineCurrentStatusMapper;
+
+    @Autowired
     private MdmCxMachineOnlineInfoMapper onlineInfoMapper;
 
     @Autowired
@@ -309,12 +315,25 @@ public class ScheduleServiceImpl implements ScheduleService {
             context.setPrecisionPlans(precisionPlans);
             log.info("加载精度计划 {} 条", precisionPlans.size());
 
-            // 14. 设置节假日相关标记
+            // 14. 获取机台结构产能配置
+            List<CxMachineStructureCapacity> machineCapacities = machineStructureCapacityMapper.selectList(
+                    new LambdaQueryWrapper<CxMachineStructureCapacity>()
+                            .eq(CxMachineStructureCapacity::getIsActive, 1));
+            context.setMachineStructureCapacities(machineCapacities);
+            log.info("加载机台结构产能配置 {} 条", machineCapacities.size());
+
+            // 15. 获取机台当前状态
+            List<CxMachineCurrentStatus> machineStatuses = machineCurrentStatusMapper.selectList(
+                    new LambdaQueryWrapper<CxMachineCurrentStatus>());
+            context.setMachineCurrentStatuses(machineStatuses);
+            log.info("加载机台当前状态 {} 条", machineStatuses.size());
+
+            // 16. 设置节假日相关标记
             context.setIsOpeningDay(holidayScheduleService.isStartProductionDay(scheduleDate));
             context.setIsClosingDay(holidayScheduleService.isStopProductionDay(scheduleDate));
             context.setIsBeforeClosingDay(holidayScheduleService.isBeforeHoliday(scheduleDate));
 
-            // 15. 设置排程参数
+            // 17. 设置排程参数
             context.setScheduleDate(scheduleDate);
             context.setScheduleMode(request.getScheduleMode());
 

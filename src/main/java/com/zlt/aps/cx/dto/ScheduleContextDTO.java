@@ -40,6 +40,32 @@ public class ScheduleContextDTO {
      */
     private List<MdmMoldingMachine> availableMachines;
 
+    /**
+     * 机台结构产能配置列表
+     * 用于获取机台-结构维度的小时产能、班次产能
+     */
+    private List<CxMachineStructureCapacity> machineStructureCapacities;
+
+    /**
+     * 机台结构产能映射（快速查询用）
+     * Key: 机台编码_结构编码
+     * Value: 产能配置
+     */
+    private Map<String, CxMachineStructureCapacity> machineCapacityMap;
+
+    /**
+     * 机台当前状态列表
+     * 用于获取机台的实时状态（当前在产结构、胎胚、进度等）
+     */
+    private List<CxMachineCurrentStatus> machineCurrentStatuses;
+
+    /**
+     * 机台当前状态映射（快速查询用）
+     * Key: 机台编码
+     * Value: 当前状态
+     */
+    private Map<String, CxMachineCurrentStatus> machineStatusMap;
+
     // ==================== 任务来源数据 ====================
 
     /**
