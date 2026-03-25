@@ -274,10 +274,11 @@ public class PrecisionPlanServiceImpl extends ServiceImpl<CxPrecisionPlanMapper,
             return 0;
         }
 
-        return update(new LambdaUpdateWrapper<CxPrecisionPlan>()
+        boolean success = update(new LambdaUpdateWrapper<CxPrecisionPlan>()
                 .in(CxPrecisionPlan::getId, planIds)
                 .set(CxPrecisionPlan::getStatus, status)
                 .set(CxPrecisionPlan::getUpdateTime, LocalDateTime.now()));
+        return success ? planIds.size() : 0;
     }
 
     @Override
@@ -340,10 +341,8 @@ public class PrecisionPlanServiceImpl extends ServiceImpl<CxPrecisionPlanMapper,
         plan.setStatus("PLANNED");
         plan.setArrangeReason("SCHEDULED");
 
-        // 获取机台当前在产结构的胎胚
-        if (machine.getCurrentStructure() != null) {
-            plan.setEmbryoCode(machine.getCurrentStructure());
-        }
+        // 获取机台当前在产结构的胎胚（需要从 MdmCxMachineOnlineInfo 获取）
+        // 暂时不设置 embryoCode，由排程时动态获取
 
         // 设置上次精度日期（需要查询）
         CxPrecisionPlan lastPlan = getOne(
