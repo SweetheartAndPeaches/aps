@@ -53,19 +53,6 @@ public class ScheduleContextDTO {
      */
     private Map<String, CxMachineStructureCapacity> machineCapacityMap;
 
-    /**
-     * 机台当前状态列表
-     * 用于获取机台的实时状态（当前在产结构、胎胚、进度等）
-     */
-    private List<CxMachineCurrentStatus> machineCurrentStatuses;
-
-    /**
-     * 机台当前状态映射（快速查询用）
-     * Key: 机台编码
-     * Value: 当前状态
-     */
-    private Map<String, CxMachineCurrentStatus> machineStatusMap;
-
     // ==================== 任务来源数据 ====================
 
     /**

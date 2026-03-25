@@ -106,9 +106,6 @@ public class ScheduleServiceImpl implements ScheduleService {
     private CxMachineStructureCapacityMapper machineStructureCapacityMapper;
 
     @Autowired
-    private CxMachineCurrentStatusMapper machineCurrentStatusMapper;
-
-    @Autowired
     private MdmCxMachineOnlineInfoMapper onlineInfoMapper;
 
     @Autowired
@@ -321,12 +318,6 @@ public class ScheduleServiceImpl implements ScheduleService {
                             .eq(CxMachineStructureCapacity::getIsActive, 1));
             context.setMachineStructureCapacities(machineCapacities);
             log.info("加载机台结构产能配置 {} 条", machineCapacities.size());
-
-            // 15. 获取机台当前状态
-            List<CxMachineCurrentStatus> machineStatuses = machineCurrentStatusMapper.selectList(
-                    new LambdaQueryWrapper<CxMachineCurrentStatus>());
-            context.setMachineCurrentStatuses(machineStatuses);
-            log.info("加载机台当前状态 {} 条", machineStatuses.size());
 
             // 16. 设置节假日相关标记
             context.setIsOpeningDay(holidayScheduleService.isStartProductionDay(scheduleDate));
