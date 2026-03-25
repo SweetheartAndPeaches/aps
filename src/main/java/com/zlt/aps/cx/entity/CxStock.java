@@ -1,129 +1,95 @@
 package com.zlt.aps.cx.entity;
 
-import com.baomidou.mybatisplus.annotation.*;
+import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableName;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.ruoyi.common.core.annotation.Excel;
+import com.ruoyi.common.core.web.domain.BaseEntity;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
 
-import java.io.Serializable;
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 import java.util.Date;
 
 /**
- * 成型库存信息实体类
- * 对应数据库表：T_CX_STOCK
+ * Copyright (c) 2022, All rights reserved。
+ * 文件名称：CxStock.java
+ * 描    述：成型库存信息对象 t_cx_stock
+ *@author zlt
+ *@date 2025-02-17
+ *@version 1.0
  *
- * @author APS Team
+ *  修改记录：
+ *     修改时间：...
+ *     修 改 人：zlt
+ *     修改内容：...
  */
-@ApiModel(value = "成型库存信息对象", description = "成型库存信息对象")
+
+@ApiModel(value = "成型库存信息对象", description = "成型库存信息对象 ")
 @Data
 @TableName(value = "T_CX_STOCK")
-public class CxStock implements Serializable {
+public class CxStock extends BaseEntity {
 
     private static final long serialVersionUID = 1L;
 
-    /** 主键ID */
-    @ApiModelProperty(value = "主键ID")
-    @TableId(value = "ID", type = IdType.AUTO)
-    private Long id;
-
-    /** 库存日期，格式：yyyy-MM-dd */
+     /** 库存日期，格式：yyyy-MM-dd */
     @JsonFormat(pattern = "yyyy-MM-dd")
-    @Excel(name = "库存日期", width = 30, dateFormat = "yyyy-MM-dd")
-    @ApiModelProperty(value = "库存日期，格式：yyyy-MM-dd")
+    @Excel(name = "ui.data.column.cxStock.stockDate", width = 30, dateFormat = "yyyy-MM-dd")
+    @ApiModelProperty(value = "库存日期，格式：yyyy-MM-dd", name = "stockDate")
     @TableField(value = "STOCK_DATE")
     private Date stockDate;
 
     /** 胎胚代码 */
-    @Excel(name = "胎胚代码")
-    @ApiModelProperty(value = "胎胚代码")
+    @Excel(name = "ui.data.column.cxStock.embryoCode")
+    @ApiModelProperty(value = "胎胚代码", name = "embryoCode")
     @TableField(value = "EMBRYO_CODE")
     private String embryoCode;
 
-    /** 胎胚名称（非数据库字段，关联查询） */
-    @Excel(name = "胎胚名称")
-    @ApiModelProperty(value = "胎胚名称")
-    @TableField(exist = false)
-    private String materialName;
-
     /** 库存量 */
-    @Excel(name = "库存量")
-    @ApiModelProperty(value = "库存量")
+    @Excel(name = "ui.data.column.cxStock.stockNum")
+    @ApiModelProperty(value = "库存量", name = "stockNum")
     @TableField(value = "STOCK_NUM")
     private Integer stockNum;
 
     /** 超期库存 */
-    @Excel(name = "超期库存")
-    @ApiModelProperty(value = "超期库存")
+    @Excel(name = "ui.data.column.cxStock.overTimeStock")
+    @ApiModelProperty(value = "超期库存", name = "overTimeStock")
     @TableField(value = "OVER_TIME_STOCK")
     private Integer overTimeStock;
 
     /** 修正数量 */
-    @Excel(name = "修正数量")
-    @ApiModelProperty(value = "修正数量")
+    @Excel(name = "ui.data.column.cxStock.modifyNum")
+    @ApiModelProperty(value = "修正数量", name = "modifyNum")
     @TableField(value = "MODIFY_NUM")
     private Integer modifyNum;
 
     /** 不良数量 */
-    @Excel(name = "不良数量")
-    @ApiModelProperty(value = "不良数量")
+    @Excel(name = "ui.data.column.cxStock.badNum")
+    @ApiModelProperty(value = "不良数量", name = "badNum")
     @TableField(value = "BAD_NUM")
     private Integer badNum;
 
-    /** 预警状态 */
-    @Excel(name = "预警状态")
-    @ApiModelProperty(value = "预警状态：NORMAL-正常，LOW-低库存，HIGH-高库存")
-    @TableField(value = "ALERT_STATUS")
-    private String alertStatus;
+    // ============== 非数据库字段（用于业务计算） ==============
 
-    /** 预警触发时间 */
-    @ApiModelProperty(value = "预警触发时间")
-    @TableField(value = "ALERT_TIME")
-    private LocalDateTime alertTime;
-
-    /** 库存可供硫化时长(小时) */
-    @Excel(name = "可供时长")
-    @ApiModelProperty(value = "库存可供硫化时长(小时)")
-    @TableField(value = "STOCK_HOURS")
-    private BigDecimal stockHours;
-
-    /** 是否收尾SKU */
-    @Excel(name = "是否收尾SKU")
-    @ApiModelProperty(value = "是否收尾SKU：0-否，1-是")
-    @TableField(value = "IS_ENDING_SKU")
-    private Integer isEndingSku;
-
-    /** 预计收尾日期 */
-    @ApiModelProperty(value = "预计收尾日期")
-    @TableField(value = "ENDING_DATE")
-    private LocalDateTime endingDate;
-
-    /** 计算时间 */
-    @ApiModelProperty(value = "计算时间")
-    @TableField(value = "CALC_TIME")
-    private LocalDateTime calcTime;
-
-    /** 创建时间 */
-    @ApiModelProperty(value = "创建时间")
-    @TableField(value = "CREATE_TIME", fill = FieldFill.INSERT)
-    private LocalDateTime createTime;
-
-    /** 更新时间 */
-    @ApiModelProperty(value = "更新时间")
-    @TableField(value = "UPDATE_TIME", fill = FieldFill.INSERT_UPDATE)
-    private LocalDateTime updateTime;
-
-    /** 
-     * 排程使用库存（非数据库字段，用于排程计算）
-     * 表示已被其他排程计划占用的库存量
-     */
-    @Excel(name = "排程使用库存")
-    @ApiModelProperty(value = "排程使用库存（非数据库字段）")
+    /** 排程使用库存 */
+    @Excel(name = "ui.data.column.stock.scheduleUseStock")
     @TableField(exist = false)
     private Long scheduleUseStock;
+
+    /** 胎胚名称（关联查询） */
+    @TableField(exist = false)
+    private String materialName;
+
+    /** 库存可供硫化时长(小时) */
+    @TableField(exist = false)
+    private BigDecimal stockHours;
+
+    /** 预警状态：NORMAL-正常，LOW-低库存，HIGH-高库存 */
+    @TableField(exist = false)
+    private String alertStatus;
+
+    // ============== 业务计算方法 ==============
 
     /**
      * 计算有效库存
