@@ -5,7 +5,7 @@ import com.zlt.aps.cx.entity.*;
 import com.zlt.aps.cx.entity.config.CxParamConfig;
 import com.zlt.aps.cx.entity.config.CxStructurePriority;
 import com.zlt.aps.cx.entity.config.CxStructureShiftCapacity;
-import com.zlt.aps.cx.entity.mdm.*;
+import com.zlt.aps.mp.api.domain.entity.*;
 import com.zlt.aps.cx.entity.schedule.CxScheduleDetail;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
@@ -193,7 +193,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 boolean isEndingTask = false;
                 
                 if (context.getMonthSurplusMap() != null) {
-                    com.zlt.aps.cx.entity.mdm.MdmMonthSurplus monthSurplus = 
+                    com.zlt.aps.mp.api.domain.entity.MdmMonthSurplus monthSurplus = 
                             context.getMonthSurplusMap().get(embryoCode);
                     if (monthSurplus != null && monthSurplus.getPlanSurplusQty() != null) {
                         // 硫化余量 = 总计划量 - 硫化真实完成量（已由系统计算）
@@ -896,7 +896,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         // 收尾余量 = 硫化余量(PLAN_SURPLUS_QTY) - 胎胚库存
         // 硫化余量来自 t_mdm_month_surplus.PLAN_SURPLUS_QTY（已由系统计算）
         if (context.getMonthSurplusMap() != null) {
-            com.zlt.aps.cx.entity.mdm.MdmMonthSurplus monthSurplus = 
+            com.zlt.aps.mp.api.domain.entity.MdmMonthSurplus monthSurplus = 
                     context.getMonthSurplusMap().get(material.getMaterialCode());
             if (monthSurplus != null && monthSurplus.getPlanSurplusQty() != null) {
                 int stockQty = stock != null ? stock.getEffectiveStock() : 0;
@@ -1521,7 +1521,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         boolean isEndingTask = false;
         
         if (context.getMonthSurplusMap() != null) {
-            com.zlt.aps.cx.entity.mdm.MdmMonthSurplus monthSurplus = 
+            com.zlt.aps.mp.api.domain.entity.MdmMonthSurplus monthSurplus = 
                     context.getMonthSurplusMap().get(materialCode);
             if (monthSurplus != null && monthSurplus.getPlanSurplusQty() != null) {
                 vulcanizeSurplusQty = monthSurplus.getPlanSurplusQty();

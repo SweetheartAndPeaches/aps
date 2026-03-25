@@ -9,10 +9,10 @@ import com.zlt.aps.cx.entity.config.CxKeyProduct;
 import com.zlt.aps.cx.entity.config.CxParamConfig;
 import com.zlt.aps.cx.entity.config.CxShiftConfig;
 import com.zlt.aps.cx.entity.config.CxStructureShiftCapacity;
-import com.zlt.aps.cx.entity.mdm.MdmCxMachineOnlineInfo;
-import com.zlt.aps.cx.entity.mdm.MdmMaterialInfo;
-import com.zlt.aps.cx.entity.mdm.MdmMoldingMachine;
-import com.zlt.aps.cx.entity.mdm.MdmMonthSurplus;
+import com.zlt.aps.mp.api.domain.entity.MdmCxMachineOnlineInfo;
+import com.zlt.aps.mp.api.domain.entity.MdmMaterialInfo;
+import com.zlt.aps.mp.api.domain.entity.MdmMoldingMachine;
+import com.zlt.aps.mp.api.domain.entity.MdmMonthSurplus;
 import com.zlt.aps.cx.entity.schedule.CxScheduleDetail;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
 import com.zlt.aps.cx.entity.schedule.CxTrialPlan;
@@ -353,13 +353,13 @@ public class ScheduleServiceImpl implements ScheduleService {
             log.info("加载月度计划余量 {} 条", monthSurplusList.size());
 
             // 12. 获取SKU排产分类（用于判断主销产品）
-            List<com.zlt.aps.cx.entity.mdm.MdmSkuScheduleCategory> skuCategories = 
+            List<com.zlt.aps.mp.api.domain.entity.MdmSkuScheduleCategory> skuCategories = 
                     skuScheduleCategoryMapper.selectAllCategories();
             context.setSkuScheduleCategories(skuCategories);
             // 构建主销产品编码集合（SCHEDULE_TYPE='01'）
             Set<String> mainProductCodes = skuCategories.stream()
                     .filter(c -> "01".equals(c.getScheduleType()))
-                    .map(com.zlt.aps.cx.entity.mdm.MdmSkuScheduleCategory::getMaterialCode)
+                    .map(com.zlt.aps.mp.api.domain.entity.MdmSkuScheduleCategory::getMaterialCode)
                     .collect(Collectors.toSet());
             context.setMainProductCodes(mainProductCodes);
             log.info("加载SKU排产分类 {} 条，其中主销产品 {} 个", skuCategories.size(), mainProductCodes.size());

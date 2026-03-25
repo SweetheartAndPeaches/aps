@@ -6,7 +6,7 @@ import com.zlt.aps.cx.entity.config.CxParamConfig;
 import com.zlt.aps.cx.entity.config.CxShiftConfig;
 import com.zlt.aps.cx.entity.config.CxStructurePriority;
 import com.zlt.aps.cx.entity.config.CxStructureShiftCapacity;
-import com.zlt.aps.cx.entity.mdm.*;
+import com.zlt.aps.mp.api.domain.entity.*;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
 import lombok.Data;
@@ -305,19 +305,19 @@ public class ScheduleContextDTO {
      * 硫化余量(PLAN_SURPLUS_QTY)已由系统计算好（总计划量 - 硫化真实完成量）
      * 用于计算收尾余量：收尾余量 = 硫化余量 - 胎胚库存
      */
-    private List<com.zlt.aps.cx.entity.mdm.MdmMonthSurplus> monthSurplusList;
+    private List<com.zlt.aps.mp.api.domain.entity.MdmMonthSurplus> monthSurplusList;
 
     /**
      * 月度计划余量映射（物料编码 -> 余量信息）
      * 快速查询用
      */
-    private Map<String, com.zlt.aps.cx.entity.mdm.MdmMonthSurplus> monthSurplusMap;
+    private Map<String, com.zlt.aps.mp.api.domain.entity.MdmMonthSurplus> monthSurplusMap;
 
     /**
      * SKU排产分类列表
      * 用于判断是否为主销产品（SCHEDULE_TYPE='01'表示主销产品，月均销量>=500条）
      */
-    private List<com.zlt.aps.cx.entity.mdm.MdmSkuScheduleCategory> skuScheduleCategories;
+    private List<com.zlt.aps.mp.api.domain.entity.MdmSkuScheduleCategory> skuScheduleCategories;
 
     /**
      * 主销产品编码集合

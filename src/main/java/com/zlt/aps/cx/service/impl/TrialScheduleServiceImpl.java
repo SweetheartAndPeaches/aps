@@ -2,8 +2,8 @@ package com.zlt.aps.cx.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
-import com.zlt.aps.cx.entity.mdm.MdmMaterialInfo;
-import com.zlt.aps.cx.entity.mdm.MdmMoldingMachine;
+import com.zlt.aps.mp.api.domain.entity.MdmMaterialInfo;
+import com.zlt.aps.mp.api.domain.entity.MdmMoldingMachine;
 import com.zlt.aps.cx.entity.schedule.CxScheduleDetail;
 import com.zlt.aps.cx.entity.schedule.CxTrialPlan;
 import com.zlt.aps.cx.mapper.*;

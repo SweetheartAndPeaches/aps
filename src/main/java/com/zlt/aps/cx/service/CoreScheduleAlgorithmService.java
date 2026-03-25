@@ -5,8 +5,8 @@ import com.zlt.aps.cx.entity.CxPrecisionPlan;
 import com.zlt.aps.cx.entity.CxStock;
 import com.zlt.aps.cx.entity.schedule.CxScheduleDetail;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
-import com.zlt.aps.cx.entity.mdm.MdmMaterialInfo;
-import com.zlt.aps.cx.entity.mdm.MdmMoldingMachine;
+import com.zlt.aps.mp.api.domain.entity.MdmMaterialInfo;
+import com.zlt.aps.mp.api.domain.entity.MdmMoldingMachine;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
