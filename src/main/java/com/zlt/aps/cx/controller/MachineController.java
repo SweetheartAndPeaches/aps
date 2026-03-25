@@ -26,13 +26,11 @@ public class MachineController {
     @Autowired
     private MdmMoldingMachineMapper mdmMoldingMachineMapper;
 
-    @ApiOperation(value = "获取所有可用机台", notes = "获取所有状态为运行中的机台列表")
+    @ApiOperation(value = "获取所有可用机台", notes = "获取所有状态为启用且未禁用的机台列表")
     @GetMapping("/available")
     public AjaxResult listAvailableMachines() {
         LambdaQueryWrapper<MdmMoldingMachine> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(MdmMoldingMachine::getIsActive, 1)
-                .and(w -> w.eq(MdmMoldingMachine::getMaintainStatus, "RUNNING")
-                        .or().isNull(MdmMoldingMachine::getMaintainStatus));
+        wrapper.eq(MdmMoldingMachine::getIsActive, 1);
         return AjaxResult.success(mdmMoldingMachineMapper.selectList(wrapper));
     }
 
@@ -60,12 +58,12 @@ public class MachineController {
     public AjaxResult pageList(
             @ApiParam(value = "页码") @RequestParam(defaultValue = "1") Integer pageNum,
             @ApiParam(value = "每页数量") @RequestParam(defaultValue = "10") Integer pageSize,
-            @ApiParam(value = "机台状态") @RequestParam(required = false) String status) {
+            @ApiParam(value = "是否启用") @RequestParam(required = false) Integer isActive) {
         Page<MdmMoldingMachine> page = new Page<>(pageNum, pageSize);
         LambdaQueryWrapper<MdmMoldingMachine> wrapper = new LambdaQueryWrapper<>();
         
-        if (status != null && !status.isEmpty()) {
-            wrapper.eq(MdmMoldingMachine::getMaintainStatus, status);
+        if (isActive != null) {
+            wrapper.eq(MdmMoldingMachine::getIsActive, isActive);
         }
         
         wrapper.orderByAsc(MdmMoldingMachine::getCxMachineCode);
@@ -98,14 +96,14 @@ public class MachineController {
         return AjaxResult.success(mdmMoldingMachineMapper.deleteById(id) > 0);
     }
 
-    @ApiOperation(value = "更新机台状态", notes = "更新机台的维护状态")
+    @ApiOperation(value = "更新机台状态", notes = "更新机台的启用状态")
     @PutMapping("/status/{id}")
     public AjaxResult updateStatus(
             @ApiParam(value = "机台ID") @PathVariable Long id,
-            @ApiParam(value = "状态") @RequestParam String status) {
+            @ApiParam(value = "是否启用：0-禁用 1-启用") @RequestParam Integer isActive) {
         MdmMoldingMachine machine = new MdmMoldingMachine();
         machine.setId(id);
-        machine.setMaintainStatus(status);
+        machine.setIsActive(isActive);
         return AjaxResult.success(mdmMoldingMachineMapper.updateById(machine) > 0);
     }
 }

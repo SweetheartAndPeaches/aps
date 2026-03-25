@@ -317,13 +317,7 @@ public class ConstraintCheckServiceImpl implements ConstraintCheckService {
                     planQty, capacity, capacitySource));
         }
 
-        // 检查机台状态
-        if ("MAINTAINING".equals(machine.getMaintainStatus())) {
-            violations.add(String.format("机台 %s 正在维护中", machine.getCxMachineCode()));
-        }
-        if ("FAULT".equals(machine.getMaintainStatus())) {
-            violations.add(String.format("机台 %s 故障中", machine.getCxMachineCode()));
-        }
+        // 检查机台是否启用
         if (machine.getIsActive() == null || machine.getIsActive() != 1) {
             violations.add(String.format("机台 %s 未启用", machine.getCxMachineCode()));
         }
