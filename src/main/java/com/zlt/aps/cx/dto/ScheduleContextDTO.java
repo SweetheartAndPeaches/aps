@@ -179,23 +179,33 @@ public class ScheduleContextDTO {
     private List<CxShiftConfig> shiftConfigList;
 
     /**
-     * 班次编码数组（按班次顺序排列，用于排程）
-     * 默认8个班次
+     * 排产天数
+     * 默认3天
+     * 班次数量 = 天数 * 3 - 1（第一天的夜班跳过）
+     * 例如：3天 → 早中 + 夜早中 + 夜早中 = 8个班次
+     */
+    private Integer scheduleDays;
+
+    /**
+     * 班次编码数组（按排产顺序排列）
+     * 例如3天排产：[早班, 中班, 夜班, 早班, 中班, 夜班, 早班, 中班]
+     * 即：早中、夜早中、夜早中
      */
     private String[] shiftCodes;
 
     /**
-     * 排程班次数量
-     * 默认8个班次
+     * 每个班次对应的日期（与shiftCodes一一对应）
+     * 用于确定每个班次属于哪一天
      */
-    private Integer scheduleShiftCount;
+    private LocalDate[] shiftDates;
 
     // ==================== 算法可配置参数 ====================
 
     /**
      * 波浪比例（班次分配比例）
+     * 按夜班:早班:中班顺序配置
      * 默认 {1, 2, 1} 表示夜班:早班:中班 = 1:2:1
-     * 8班次时为 {1,2,1, 1,2,1, 1,2}
+     * 实际使用时会根据班次顺序重新映射
      */
     private int[] waveRatio;
 
