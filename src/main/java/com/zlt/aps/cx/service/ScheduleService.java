@@ -1,6 +1,9 @@
 package com.zlt.aps.cx.service;
 
+import com.zlt.aps.cx.dto.ReScheduleRequest;
+import com.zlt.aps.cx.dto.ScheduleContextDTO;
 import com.zlt.aps.cx.dto.ScheduleGenerateDTO;
+import com.zlt.aps.cx.dto.ScheduleRequest;
 import com.zlt.aps.cx.dto.ScheduleResultDTO;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
 
@@ -19,6 +22,30 @@ import java.util.List;
  * @author APS Team
  */
 public interface ScheduleService {
+
+    /**
+     * 执行排程（核心方法）
+     *
+     * @param request 排程请求
+     * @return 排程结果
+     */
+    ScheduleResult executeSchedule(ScheduleRequest request);
+
+    /**
+     * 执行重排程
+     *
+     * @param request 重排程请求
+     * @return 是否成功
+     */
+    boolean executeReSchedule(ReScheduleRequest request);
+
+    /**
+     * 构建排程上下文
+     *
+     * @param request 排程请求
+     * @return 排程上下文
+     */
+    ScheduleContextDTO buildScheduleContext(ScheduleRequest request);
 
     /**
      * 生成排程
