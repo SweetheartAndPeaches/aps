@@ -305,7 +305,6 @@ public class ScheduleServiceImpl implements ScheduleService {
             // 14. 设置排程参数
             context.setScheduleDate(scheduleDate);
             context.setScheduleMode(request.getScheduleMode());
-            context.setReScheduleType(request.getReScheduleType());
 
             return context;
 
@@ -387,15 +386,12 @@ public class ScheduleServiceImpl implements ScheduleService {
     @Override
     public boolean executeReSchedule(ReScheduleRequest request) {
         try {
-            log.info("执行重排程，类型：{}，原因：{}", 
-                    request.getReScheduleType(), request.getReason());
+            log.info("执行重排程，原因：{}", request.getReason());
 
             // 构建排程请求
             ScheduleRequest scheduleRequest = new ScheduleRequest();
             scheduleRequest.setScheduleDate(request.getScheduleDate());
             scheduleRequest.setScheduleMode("RE_SCHEDULE");
-            scheduleRequest.setReScheduleType(request.getReScheduleType());
-            scheduleRequest.setAffectedMachineCodes(request.getAffectedMachineCodes());
 
             // 执行排程
             ScheduleResult result = executeSchedule(scheduleRequest);

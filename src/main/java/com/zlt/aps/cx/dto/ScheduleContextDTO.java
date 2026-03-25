@@ -31,14 +31,9 @@ public class ScheduleContextDTO {
     private LocalDate scheduleDate;
 
     /**
-     * 排程模式
+     * 排程模式：NORMAL-正常排程，RE_SCHEDULE-重排程，STRUCTURE_RE_SCHEDULE-结构重排
      */
     private String scheduleMode;
-
-    /**
-     * 重排程类型
-     */
-    private String reScheduleType;
 
     /**
      * 可用成型机台列表
