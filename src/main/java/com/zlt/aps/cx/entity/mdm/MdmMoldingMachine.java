@@ -83,7 +83,7 @@ public class MdmMoldingMachine extends ApsBaseEntity {
      * 设备最大日产能（条）
      * 
      * 注：具体结构的产能请查询 CxMachineStructureCapacity 表
-     * 当前在产结构请查询 CxMachineCurrentStatus 表
+     * 当前在产结构请查询 MdmCxMachineOnlineInfo 表
      */
     @ApiModelProperty(value = "设备最大日产能（条）")
     @TableField("MAX_DAILY_CAPACITY")

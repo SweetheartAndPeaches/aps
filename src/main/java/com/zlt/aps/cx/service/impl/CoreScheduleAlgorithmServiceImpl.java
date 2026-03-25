@@ -1112,17 +1112,14 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             }
         }
 
-        // 构建机台当前状态映射
-        Map<String, CxMachineCurrentStatus> machineStatusMap = context.getMachineStatusMap();
-        if (machineStatusMap == null && context.getMachineCurrentStatuses() != null) {
-            machineStatusMap = context.getMachineCurrentStatuses().stream()
-                    .collect(Collectors.toMap(
-                            CxMachineCurrentStatus::getCxMachineCode, 
-                            s -> s, (a, b) -> a));
-            context.setMachineStatusMap(machineStatusMap);
-        }
-        if (machineStatusMap == null) {
-            machineStatusMap = new HashMap<>();
+        // 构建机台在线信息映射
+        Map<String, MdmCxMachineOnlineInfo> machineOnlineInfoMap = new HashMap<>();
+        if (context.getOnlineInfos() != null) {
+            for (MdmCxMachineOnlineInfo info : context.getOnlineInfos()) {
+                if (info.getCxCode() != null) {
+                    machineOnlineInfoMap.put(info.getCxCode(), info);
+                }
+            }
         }
 
         for (MdmMoldingMachine machine : context.getAvailableMachines()) {
@@ -1148,10 +1145,10 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             result.setAssignedTypes(0);
             result.setTaskAllocations(new ArrayList<>());
 
-            // 从机台当前状态表获取当前在产结构
-            CxMachineCurrentStatus currentStatus = machineStatusMap.get(machine.getCxMachineCode());
-            if (currentStatus != null) {
-                result.setCurrentStructure(currentStatus.getCurrentStructureCode());
+            // 从机台在线信息表获取当前在产胎胚描述（用于续作判断）
+            MdmCxMachineOnlineInfo onlineInfo = machineOnlineInfoMap.get(machine.getCxMachineCode());
+            if (onlineInfo != null && onlineInfo.getEmbryoSpec() != null) {
+                result.setCurrentStructure(onlineInfo.getEmbryoSpec());
             }
 
             // 检查精度计划
