@@ -187,8 +187,9 @@ public class ScheduleServiceImpl implements ScheduleService {
             // 3. 获取库存信息
             List<CxStock> stocks = stockMapper.selectList(
                     new LambdaQueryWrapper<CxStock>()
-                            .gt(CxStock::getCurrentStock, 0));
+                            .gt(CxStock::getStockNum, 0));
             context.setStocks(stocks);
+            log.info("加载胎胚库存 {} 条", stocks.size());
 
             // 4. 【主要任务来源】获取硫化排程结果
             // 从T_LH_SCHEDULE_RESULT获取今日硫化计划
@@ -540,9 +541,10 @@ public class ScheduleServiceImpl implements ScheduleService {
             
             // 3. 获取胎胚库存
             List<CxStock> stocks = stockMapper.selectList(
-                    new LambdaQueryWrapper<CxStock>().gt(CxStock::getCurrentStock, 0));
+                    new LambdaQueryWrapper<CxStock>().gt(CxStock::getStockNum, 0));
+            // 使用胎胚代码构建映射
             Map<String, CxStock> stockMap = stocks.stream()
-                    .collect(Collectors.toMap(CxStock::getMaterialCode, s -> s, (a, b) -> a));
+                    .collect(Collectors.toMap(CxStock::getEmbryoCode, s -> s, (a, b) -> a));
             
             // 4. 获取成型机台列表（用于计算满产能力）
             List<MdmMoldingMachine> machines = moldingMachineMapper.selectList(
@@ -605,10 +607,9 @@ public class ScheduleServiceImpl implements ScheduleService {
                         ? surplus.getPlanSurplusQty() : remainingPlanQty;
                 ending.setVulcanizingRemainder(vulcanizingRemainder);
                 
-                // 胎胚库存
+                // 胎胚库存（使用有效库存：库存量 - 超期库存 - 不良数量 + 修正数量）
                 CxStock stock = stockMap.get(materialCode);
-                int embryoStock = stock != null && stock.getCurrentStock() != null 
-                        ? stock.getCurrentStock() : 0;
+                int embryoStock = stock != null ? stock.getEffectiveStock() : 0;
                 ending.setEmbryoStock(embryoStock);
                 
                 // 成型余量 = 硫化余量 - 胎胚库存（需要生产的量）

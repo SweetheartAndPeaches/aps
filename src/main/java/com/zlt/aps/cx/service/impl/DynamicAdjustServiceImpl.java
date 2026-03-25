@@ -111,13 +111,13 @@ public class DynamicAdjustServiceImpl implements DynamicAdjustService {
         // 获取当前库存
         CxStock stock = stockMapper.selectOne(
                 new LambdaQueryWrapper<CxStock>()
-                        .eq(CxStock::getMaterialCode, materialCode));
+                        .eq(CxStock::getEmbryoCode, materialCode));
 
         if (stock == null) {
             return 0;
         }
 
-        Integer currentStock = stock.getCurrentStock() != null ? stock.getCurrentStock() : 0;
+        Integer currentStock = stock.getStockNum() != null ? stock.getStockNum() : 0;
 
         // 获取本班已完成的数量
         List<CxScheduleDetail> completedDetails = scheduleDetailMapper.selectList(
@@ -262,9 +262,9 @@ public class DynamicAdjustServiceImpl implements DynamicAdjustService {
 
         Map<String, CxStock> stockMap = stockMapper.selectList(
                 new LambdaQueryWrapper<CxStock>()
-                        .in(CxStock::getMaterialCode, materialCodes))
+                        .in(CxStock::getEmbryoCode, materialCodes))
                 .stream()
-                .collect(Collectors.toMap(CxStock::getMaterialCode, s -> s));
+                .collect(Collectors.toMap(CxStock::getEmbryoCode, s -> s));
 
         // 按库存可供时长排序（库存低的优先）
         details.sort((d1, d2) -> {
@@ -299,9 +299,9 @@ public class DynamicAdjustServiceImpl implements DynamicAdjustService {
         // 获取胎面库存
         CxStock treadStock = stockMapper.selectOne(
                 new LambdaQueryWrapper<CxStock>()
-                        .eq(CxStock::getMaterialCode, treadCode));
+                        .eq(CxStock::getEmbryoCode, treadCode));
 
-        if (treadStock == null || treadStock.getCurrentStock() == null || treadStock.getCurrentStock() <= 0) {
+        if (treadStock == null || treadStock.getStockNum() == null || treadStock.getStockNum() <= 0) {
             return false;
         }
 
@@ -430,19 +430,19 @@ public class DynamicAdjustServiceImpl implements DynamicAdjustService {
         // 获取所有在制物料
         List<CxStock> stocks = stockMapper.selectList(
                 new LambdaQueryWrapper<CxStock>()
-                        .gt(CxStock::getCurrentStock, 0));
+                        .gt(CxStock::getStockNum, 0));
 
         for (CxStock stock : stocks) {
             BigDecimal availableHours = stock.getStockHours() != null 
                     ? stock.getStockHours() 
                     : BigDecimal.ZERO;
 
-            String alertType = checkStockAlert(stock.getMaterialCode(), availableHours);
+            String alertType = checkStockAlert(stock.getEmbryoCode(), availableHours);
 
             StockInfo stockInfo = new StockInfo();
-            stockInfo.setMaterialCode(stock.getMaterialCode());
+            stockInfo.setMaterialCode(stock.getEmbryoCode());
             stockInfo.setMaterialName(stock.getMaterialName());
-            stockInfo.setCurrentStock(stock.getCurrentStock());
+            stockInfo.setCurrentStock(stock.getStockNum());
             stockInfo.setStockHours(stock.getStockHours());
             stockInfo.setAvailableHours(availableHours);
 
