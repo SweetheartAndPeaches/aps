@@ -207,4 +207,46 @@ public interface ScheduleService {
             this.violations = violations;
         }
     }
+
+    /**
+     * 排程执行结果
+     */
+    class ScheduleResult {
+        private boolean success;
+        private String message;
+        private LocalDate scheduleDate;
+        private List<CxScheduleResult> results;
+
+        public boolean isSuccess() {
+            return success;
+        }
+
+        public void setSuccess(boolean success) {
+            this.success = success;
+        }
+
+        public String getMessage() {
+            return message;
+        }
+
+        public void setMessage(String message) {
+            this.message = message;
+        }
+
+        public LocalDate getScheduleDate() {
+            return scheduleDate;
+        }
+
+        public void setScheduleDate(LocalDate scheduleDate) {
+            this.scheduleDate = scheduleDate;
+        }
+
+        public List<CxScheduleResult> getResults() {
+            return results;
+        }
+
+        public void setResults(List<CxScheduleResult> results) {
+            this.results = results;
+        }
+    }
 }
