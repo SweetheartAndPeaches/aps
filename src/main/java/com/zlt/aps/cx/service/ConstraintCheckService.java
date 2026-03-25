@@ -76,6 +76,19 @@ public interface ConstraintCheckService {
     ConstraintCheckResult checkCapacityConstraint(MdmMoldingMachine machine, BigDecimal planQty, Integer shiftHours);
 
     /**
+     * 检查产能约束（根据机台-结构维度）
+     * 从CxMachineStructureCapacity获取该机台-结构的产能
+     *
+     * @param machine      机台信息
+     * @param structureCode 结构编码
+     * @param planQty      计划量
+     * @param shiftCode    班次编码（SHIFT_DAY/SHIFT_AFTERNOON/SHIFT_NIGHT），为null时计算日产能
+     * @return 校验结果
+     */
+    ConstraintCheckResult checkCapacityConstraint(MdmMoldingMachine machine, String structureCode, 
+            BigDecimal planQty, String shiftCode);
+
+    /**
      * 检查机台种类上限约束
      * 每台成型机最多做4种不同的胎胚
      *
