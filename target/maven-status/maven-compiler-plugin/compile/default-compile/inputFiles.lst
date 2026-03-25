@@ -41,7 +41,6 @@
 /workspace/projects/src/main/java/com/zlt/aps/cx/service/ConstraintCheckService.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/controller/ScheduleMainController.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/entity/config/CxStructureShiftCapacity.java
-/workspace/projects/src/main/java/com/zlt/aps/cx/mapper/CxLhPlanMapper.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/mapper/CxStockMapper.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/mapper/CxOperatorLeaveMapper.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/entity/mdm/MdmStructureName.java
@@ -50,7 +49,6 @@
 /workspace/projects/src/main/java/com/zlt/aps/cx/mapper/CxScheduleDetailMapper.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/service/impl/CxScheduleResultServiceImpl.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/controller/AlertConfigController.java
-/workspace/projects/src/main/java/com/zlt/aps/cx/entity/CxLhPlan.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/model/entity/MaterialGroup.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/service/impl/CxMaterialServiceImpl.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/entity/CxAlertConfig.java

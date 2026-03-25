@@ -1,4 +1,3 @@
-com/zlt/aps/cx/mapper/CxLhPlanMapper.class
 com/zlt/aps/cx/service/impl/LhScheduleResultServiceImpl.class
 com/zlt/aps/cx/entity/mdm/MdmSkuConstructionRef.class
 com/zlt/aps/cx/controller/AlertConfigController.class
@@ -29,7 +28,6 @@ com/zlt/aps/cx/entity/config/CxParamConfig.class
 com/zlt/aps/cx/mapper/LhScheduleResultMapper.class
 com/zlt/aps/cx/service/CxScheduleDetailService.class
 com/zlt/aps/cx/mapper/MdmSkuConstructionRefMapper.class
-com/zlt/aps/cx/entity/CxLhPlan.class
 com/zlt/aps/cx/service/CoreScheduleAlgorithmService$TaskAllocation.class
 com/zlt/aps/cx/mapper/CxMaterialMapper.class
 com/zlt/aps/cx/service/HolidayScheduleService.class
