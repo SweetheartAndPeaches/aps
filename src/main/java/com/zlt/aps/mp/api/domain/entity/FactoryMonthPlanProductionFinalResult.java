@@ -1,4 +1,4 @@
-package com.zlt.aps.cx.entity;
+package com.zlt.aps.mp.api.domain.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
 import io.swagger.annotations.ApiModel;

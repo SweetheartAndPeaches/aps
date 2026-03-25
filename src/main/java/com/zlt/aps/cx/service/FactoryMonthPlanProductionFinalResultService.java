@@ -1,7 +1,7 @@
 package com.zlt.aps.cx.service;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.zlt.aps.cx.entity.FactoryMonthPlanProductionFinalResult;
+import com.zlt.aps.mp.api.domain.entity.FactoryMonthPlanProductionFinalResult;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
 
 import java.time.LocalDate;
