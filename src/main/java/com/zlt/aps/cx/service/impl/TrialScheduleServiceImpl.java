@@ -116,8 +116,7 @@ public class TrialScheduleServiceImpl implements TrialScheduleService {
         // 获取可用机台
         List<MdmMoldingMachine> availableMachines = moldingMachineMapper.selectList(
                 new LambdaQueryWrapper<MdmMoldingMachine>()
-                        .eq(MdmMoldingMachine::getIsActive, 1)
-                        .ne(MdmMoldingMachine::getMaintainStatus, "FAULT"));
+                        .eq(MdmMoldingMachine::getIsActive, 1));
 
         List<String> machineCodes = availableMachines.stream()
                 .map(MdmMoldingMachine::getCxMachineCode)

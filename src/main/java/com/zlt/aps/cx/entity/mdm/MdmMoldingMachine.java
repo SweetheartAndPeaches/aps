@@ -93,11 +93,11 @@ public class MdmMoldingMachine extends ApsBaseEntity {
     private Integer lineNumber;
 
     /**
-     * 机台状态：RUNNING-正常运行 MAINTAIN-维护中 FAULT-故障 STOP-停用
+     * 是否启用：0-禁用 1-启用
      */
-    @ApiModelProperty(value = "机台状态：RUNNING-正常运行 MAINTAIN-维护中 FAULT-故障 STOP-停用")
-    @TableField("MAINTAIN_STATUS")
-    private String maintainStatus;
+    @ApiModelProperty(value = "是否启用：0-禁用 1-启用")
+    @TableField("IS_ACTIVE")
+    private Integer isActive;
 
     /**
      * 备注
@@ -105,13 +105,6 @@ public class MdmMoldingMachine extends ApsBaseEntity {
     @ApiModelProperty(value = "备注")
     @TableField("REMARK")
     private String remark;
-
-    /**
-     * 是否启用：0-禁用 1-启用
-     */
-    @ApiModelProperty(value = "是否启用：0-禁用 1-启用")
-    @TableField("IS_ACTIVE")
-    private Integer isActive;
 
     // ==================== 非数据库字段 ====================
 

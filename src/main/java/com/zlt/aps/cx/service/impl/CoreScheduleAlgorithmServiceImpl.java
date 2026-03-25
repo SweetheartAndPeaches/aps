@@ -1158,13 +1158,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
         for (MdmMoldingMachine machine : context.getAvailableMachines()) {
             if (machine.getIsActive() == null || machine.getIsActive() != 1) {
-                continue;
-            }
-            // 检查维护状态
-            if ("MAINTAINING".equals(machine.getMaintainStatus()) || 
-                "FAULT".equals(machine.getMaintainStatus())) {
-                log.debug("机台 {} 状态异常（{}），跳过", 
-                        machine.getCxMachineCode(), machine.getMaintainStatus());
+                log.debug("机台 {} 未启用，跳过", machine.getCxMachineCode());
                 continue;
             }
 

@@ -627,8 +627,7 @@ public class ScheduleServiceImpl implements ScheduleService {
             // 4. 获取成型机台列表（用于计算满产能力）
             List<MdmMoldingMachine> machines = moldingMachineMapper.selectList(
                     new LambdaQueryWrapper<MdmMoldingMachine>()
-                            .eq(MdmMoldingMachine::getIsActive, 1)
-                            .ne(MdmMoldingMachine::getMaintainStatus, "FAULT"));
+                            .eq(MdmMoldingMachine::getIsActive, 1));
             
             // 5. 按结构分组汇总
             Map<String, List<FactoryMonthPlanProductionFinalResult>> structurePlanMap = monthPlans.stream()
