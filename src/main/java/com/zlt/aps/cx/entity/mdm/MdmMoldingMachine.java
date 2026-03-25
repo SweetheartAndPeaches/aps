@@ -8,6 +8,8 @@ import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
+import java.math.BigDecimal;
+
 /**
  * 成型机台信息对象
  * 对应表：T_MDM_MOLDING_MACHINE
@@ -80,10 +82,21 @@ public class MdmMoldingMachine extends ApsBaseEntity {
     private Integer hasZeroDegreeFeeder;
 
     /**
+     * 当前在产结构
+     */
+    @ApiModelProperty(value = "当前在产结构")
+    @TableField("CURRENT_STRUCTURE")
+    private String currentStructure;
+
+    /**
+     * 每小时产能（条）
+     */
+    @ApiModelProperty(value = "每小时产能（条）")
+    @TableField("PRODUCTION_CAPACITY")
+    private BigDecimal productionCapacity;
+
+    /**
      * 设备最大日产能（条）
-     * 
-     * 注：具体结构的产能请查询 CxMachineStructureCapacity 表
-     * 当前在产结构请查询 MdmCxMachineOnlineInfo 表
      */
     @ApiModelProperty(value = "设备最大日产能（条）")
     @TableField("MAX_DAILY_CAPACITY")

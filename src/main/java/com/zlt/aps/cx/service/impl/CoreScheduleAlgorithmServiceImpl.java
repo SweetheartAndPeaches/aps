@@ -1098,8 +1098,6 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
      * 2. 处理精度计划：
      *    - 精度期间的机台在对应班次不可用（扣减该班次全部产能）
      *    - 根据胎胚库存判断是否影响硫化
-     * 3. 从机台当前状态表获取当前在产结构
-     * 4. 从机台结构产能表获取小时产能
      */
     private Map<String, MachineAllocationResult> initMachineStatus(ScheduleContextDTO context) {
         Map<String, MachineAllocationResult> map = new LinkedHashMap<>();
@@ -1112,15 +1110,9 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             }
         }
 
-        // 构建机台在线信息映射
-        Map<String, MdmCxMachineOnlineInfo> machineOnlineInfoMap = new HashMap<>();
-        if (context.getOnlineInfos() != null) {
-            for (MdmCxMachineOnlineInfo info : context.getOnlineInfos()) {
-                if (info.getCxCode() != null) {
-                    machineOnlineInfoMap.put(info.getCxCode(), info);
-                }
-            }
-        }
+        // 班次产能比例（早班:中班:夜班 = 8:8:8小时）
+        int[] shiftCapacityRatio = {1, 1, 1}; // 三个班次各占1/3
+        int totalRatio = 3;
 
         for (MdmMoldingMachine machine : context.getAvailableMachines()) {
             if (machine.getIsActive() == null || machine.getIsActive() != 1) {
@@ -1144,12 +1136,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             result.setRemainingCapacity(result.getDailyCapacity());
             result.setAssignedTypes(0);
             result.setTaskAllocations(new ArrayList<>());
-
-            // 从机台在线信息表获取当前在产胎胚描述（用于续作判断）
-            MdmCxMachineOnlineInfo onlineInfo = machineOnlineInfoMap.get(machine.getCxMachineCode());
-            if (onlineInfo != null && onlineInfo.getEmbryoSpec() != null) {
-                result.setCurrentStructure(onlineInfo.getEmbryoSpec());
-            }
+            result.setCurrentStructure(machine.getCurrentStructure());
 
             // 检查精度计划
             CxPrecisionPlan precisionPlan = precisionPlanMap.get(machine.getCxMachineCode());
@@ -1161,11 +1148,9 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 int precisionHours = precisionPlan.getEstimatedHours() != null 
                         ? precisionPlan.getEstimatedHours() : 4;
                 
-                // 机台小时产能（条/小时）- 从机台结构产能表获取，或使用默认值
-                int hourlyCapacity = getMachineHourlyCapacity(
-                        machine.getCxMachineCode(), 
-                        precisionPlan.getEmbryoCode(), 
-                        context);
+                // 机台小时产能（条/小时）
+                int hourlyCapacity = machine.getProductionCapacity() != null 
+                        ? machine.getProductionCapacity().intValue() : 50;
                 
                 // 扣减产能 = 精度时长 × 小时产能
                 int precisionDeduction = precisionHours * hourlyCapacity;
@@ -1314,52 +1299,6 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         }
 
         return score;
-    }
-
-    /**
-     * 获取机台小时产能
-     * 从机台结构产能表查询，如果找不到则返回默认值50条/小时
-     *
-     * @param machineCode 机台编码
-     * @param structureCode 结构编码（可选）
-     * @param context 排程上下文
-     * @return 小时产能（条/小时）
-     */
-    private int getMachineHourlyCapacity(String machineCode, String structureCode, ScheduleContextDTO context) {
-        // 构建机台结构产能映射（懒加载）
-        Map<String, CxMachineStructureCapacity> capacityMap = context.getMachineCapacityMap();
-        if (capacityMap == null && context.getMachineStructureCapacities() != null) {
-            capacityMap = new HashMap<>();
-            for (CxMachineStructureCapacity capacity : context.getMachineStructureCapacities()) {
-                // Key: 机台编码_结构编码
-                String key = capacity.getCxMachineCode() + "_" + capacity.getStructureCode();
-                capacityMap.put(key, capacity);
-                // 同时添加只有机台编码的key作为默认
-                if (!capacityMap.containsKey(capacity.getCxMachineCode())) {
-                    capacityMap.put(capacity.getCxMachineCode(), capacity);
-                }
-            }
-            context.setMachineCapacityMap(capacityMap);
-        }
-        
-        if (capacityMap != null) {
-            // 先尝试精确匹配（机台+结构）
-            if (structureCode != null) {
-                String key = machineCode + "_" + structureCode;
-                CxMachineStructureCapacity capacity = capacityMap.get(key);
-                if (capacity != null && capacity.getHourlyCapacity() != null) {
-                    return capacity.getHourlyCapacity();
-                }
-            }
-            // 再尝试只匹配机台
-            CxMachineStructureCapacity capacity = capacityMap.get(machineCode);
-            if (capacity != null && capacity.getHourlyCapacity() != null) {
-                return capacity.getHourlyCapacity();
-            }
-        }
-        
-        // 默认50条/小时
-        return 50;
     }
 
     /**
