@@ -5,7 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zlt.aps.cx.entity.CxPrecisionPlan;
 import com.zlt.aps.cx.entity.CxStock;
-import com.zlt.aps.cx.entity.mdm.MdmMoldingMachine;
+import com.zlt.aps.mp.api.domain.entity.MdmMoldingMachine;
 import com.zlt.aps.cx.mapper.CxPrecisionPlanMapper;
 import com.zlt.aps.cx.mapper.CxStockMapper;
 import com.zlt.aps.cx.mapper.MdmMoldingMachineMapper;

@@ -7,7 +7,7 @@ import java.io.Serializable;
  * 对应数据库表：T_CX_MATERIAL
  *
  * @author APS Team
- * @deprecated 已弃用，请使用 {@link com.zlt.aps.cx.entity.mdm.MdmMaterialInfo}
+ * @deprecated 已弃用，请使用 {@link com.zlt.aps.mp.api.domain.entity.MdmMaterialInfo}
  */
 @Deprecated
 public class CxMaterial implements Serializable {

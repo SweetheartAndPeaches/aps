@@ -3,7 +3,7 @@ package com.zlt.aps.cx.controller;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.ruoyi.common.core.web.domain.AjaxResult;
-import com.zlt.aps.cx.entity.mdm.MdmMoldingMachine;
+import com.zlt.aps.mp.api.domain.entity.MdmMoldingMachine;
 import com.zlt.aps.cx.mapper.MdmMoldingMachineMapper;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
