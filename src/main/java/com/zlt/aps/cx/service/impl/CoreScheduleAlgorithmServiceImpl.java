@@ -29,6 +29,12 @@ import java.util.stream.Collectors;
  * 核心排程算法服务实现类
  * 
  * 实现试错分配、班次均衡、顺位排序等核心算法
+ * 
+ * 算法参数从 ScheduleContextDTO 获取，支持动态配置：
+ * - 班次数量：context.getScheduleShiftCount()，默认8个班次
+ * - 波浪比例：context.getWaveRatio()，默认 {1,2,1}
+ * - 机台种类上限：context.getMaxTypesPerMachine()，默认4
+ * - 默认整车容量：context.getDefaultTripCapacity()，默认12
  *
  * @author APS Team
  */
@@ -36,14 +42,17 @@ import java.util.stream.Collectors;
 @Service
 public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmService {
 
-    /** 默认整车容量（当结构班产配置中没有该结构时使用） */
+    /** 默认整车容量（当配置中没有时使用） */
     private static final int DEFAULT_TRIP_CAPACITY = 12;
 
-    /** 机台种类上限 */
-    private static final int MAX_TYPES_PER_MACHINE = 4;
+    /** 默认机台种类上限 */
+    private static final int DEFAULT_MAX_TYPES_PER_MACHINE = 4;
 
-    /** 波浪比例：夜班:早班:中班 = 1:2:1 */
-    private static final int[] WAVE_RATIO = {1, 2, 1};
+    /** 默认波浪比例：夜班:早班:中班 = 1:2:1 */
+    private static final int[] DEFAULT_WAVE_RATIO = {1, 2, 1};
+
+    /** 默认班次编码 */
+    private static final String[] DEFAULT_SHIFT_CODES = {"SHIFT_NIGHT", "SHIFT_DAY", "SHIFT_AFTERNOON"};
 
     @Autowired
     private CxStructureShiftCapacityMapper structureShiftCapacityMapper;
@@ -350,7 +359,10 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 // 检查种类上限
                 Set<String> materials = machineMaterialMap.computeIfAbsent(
                         bestMachine.getCxMachineCode(), k -> new HashSet<>());
-                if (!materials.contains(task.getMaterialCode()) && materials.size() >= MAX_TYPES_PER_MACHINE) {
+                int maxTypes = context.getMaxTypesPerMachine() != null 
+                        ? context.getMaxTypesPerMachine() 
+                        : DEFAULT_MAX_TYPES_PER_MACHINE;
+                if (!materials.contains(task.getMaterialCode()) && materials.size() >= maxTypes) {
                     // 种类已满，跳过此机台
                     machineResult = null;
                     retryCount++;
@@ -407,8 +419,11 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         
         List<ShiftAllocationResult> results = new ArrayList<>();
         
-        // 班次顺序：夜班、早班、中班
-        String[] shiftCodes = {"SHIFT_NIGHT", "SHIFT_DAY", "SHIFT_AFTERNOON"};
+        // 从上下文获取班次配置
+        String[] shiftCodes = context.getShiftCodes();
+        if (shiftCodes == null || shiftCodes.length == 0) {
+            shiftCodes = DEFAULT_SHIFT_CODES;
+        }
         
         // 加载结构班产配置
         Map<String, Map<String, CxStructureShiftCapacity>> structureCapacityMap = loadStructureShiftCapacity();
@@ -540,7 +555,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             
             if (shiftCapacityMap != null && !shiftCapacityMap.isEmpty()) {
                 // 按班产配置计算各班次分配量
-                int[] shiftQty = calculateShiftQtyByCapacity(taskQty, structureCode, shiftCapacityMap, shiftCodes);
+                int[] shiftQty = calculateShiftQtyByCapacity(taskQty, structureCode, shiftCapacityMap, shiftCodes, context);
                 
                 for (int i = 0; i < shiftCodes.length; i++) {
                     int qty = shiftQty[i];
@@ -549,7 +564,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 }
             } else {
                 // 无班产配置，使用默认波浪比例
-                int[] waveQty = calculateWaveAllocation(taskQty);
+                int[] waveQty = calculateWaveAllocation(taskQty, shiftCodes, context);
                 
                 for (int i = 0; i < shiftCodes.length; i++) {
                     shiftTotalQty.merge(shiftCodes[i], waveQty[i], Integer::sum);
@@ -579,13 +594,14 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     
     /**
      * 根据结构班产配置计算各班次分配量
-     * 按波浪方式（夜班:早班:中班 = 1:2:1）分配
+     * 按波浪方式分配
      */
     private int[] calculateShiftQtyByCapacity(
             int taskQty,
             String structureCode,
             Map<String, CxStructureShiftCapacity> shiftCapacityMap,
-            String[] shiftCodes) {
+            String[] shiftCodes,
+            ScheduleContextDTO context) {
         
         int[] result = new int[shiftCodes.length];
         
@@ -603,12 +619,24 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         
         // 如果没有班产配置，使用默认波浪比例
         if (totalTripQty == 0) {
-            return calculateWaveAllocation(taskQty);
+            return calculateWaveAllocation(taskQty, shiftCodes, context);
         }
         
-        // 按波浪比例（1:2:1）计算各班次应分配的整车数
-        // 波浪比例表示硫化需求量在各班次的分配比例
-        int totalRatio = WAVE_RATIO[0] + WAVE_RATIO[1] + WAVE_RATIO[2];
+        // 获取波浪比例
+        int[] waveRatio = context.getWaveRatio();
+        if (waveRatio == null) {
+            waveRatio = DEFAULT_WAVE_RATIO;
+        }
+        
+        // 根据班次数量调整波浪比例
+        int[] adjustedRatio = adjustWaveRatio(waveRatio, shiftCodes.length);
+        
+        // 计算总比例
+        int totalRatio = 0;
+        for (int ratio : adjustedRatio) {
+            totalRatio += ratio;
+        }
+        
         int remainingQty = taskQty;
         
         // 获取整车容量（用于取整）
@@ -616,7 +644,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         
         for (int i = 0; i < shiftCodes.length; i++) {
             // 按波浪比例计算该班次分配量
-            int shiftQty = taskQty * WAVE_RATIO[i] / totalRatio;
+            int shiftQty = taskQty * adjustedRatio[i] / totalRatio;
             
             // 限制不超过该班次的班产整车条数
             int maxShiftQty = tripQtyPerShift[i];  // tripQtyPerShift已经是条数，不需要再乘整车容量
@@ -838,6 +866,10 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             MdmMaterialInfo newMaterial,
             ScheduleContextDTO context) {
         
+        int maxTypes = context.getMaxTypesPerMachine() != null 
+                ? context.getMaxTypesPerMachine() 
+                : DEFAULT_MAX_TYPES_PER_MACHINE;
+        
         // 检查固定机台配置（强制保留的情况）
         for (MdmCxMachineFixed fixed : context.getMachineFixedConfigs()) {
             if (fixed.getCxMachineCode().equals(machine.getCxMachineCode())) {
@@ -849,7 +881,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             }
         }
 
-        return currentTypes < MAX_TYPES_PER_MACHINE;
+        return currentTypes < maxTypes;
     }
 
     @Override
@@ -1052,7 +1084,9 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             }
         }
         // 没有配置则返回默认值
-        return DEFAULT_TRIP_CAPACITY;
+        return context.getDefaultTripCapacity() != null 
+                ? context.getDefaultTripCapacity() 
+                : DEFAULT_TRIP_CAPACITY;
     }
 
     /**
@@ -1295,7 +1329,10 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         score += status.getRemainingCapacity() / 10;
 
         // 优先选种类最少的（均衡）
-        score += (MAX_TYPES_PER_MACHINE - status.getAssignedTypes()) * 50;
+        int maxTypes = context.getMaxTypesPerMachine() != null 
+                ? context.getMaxTypesPerMachine() 
+                : DEFAULT_MAX_TYPES_PER_MACHINE;
+        score += (maxTypes - status.getAssignedTypes()) * 50;
 
         // 优先选固定生产该结构的机台
         if (context.getMachineFixedConfigs() != null) {
@@ -1364,27 +1401,74 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
     /**
      * 计算波浪分配（无班产配置时使用默认整车容量）
+     * 
+     * @param totalQty 总数量
+     * @param shiftCodes 班次编码数组
+     * @param context 排程上下文
      */
-    private int[] calculateWaveAllocation(int totalQty) {
-        int[] result = new int[3];
+    private int[] calculateWaveAllocation(int totalQty, String[] shiftCodes, ScheduleContextDTO context) {
+        int shiftCount = shiftCodes.length;
+        int[] result = new int[shiftCount];
         
-        // 按比例计算
-        int totalRatio = WAVE_RATIO[0] + WAVE_RATIO[1] + WAVE_RATIO[2];
+        // 获取波浪比例
+        int[] waveRatio = context.getWaveRatio();
+        if (waveRatio == null) {
+            waveRatio = DEFAULT_WAVE_RATIO;
+        }
+        
+        // 获取默认整车容量
+        int tripCapacity = context.getDefaultTripCapacity() != null 
+                ? context.getDefaultTripCapacity() 
+                : DEFAULT_TRIP_CAPACITY;
+        
+        // 根据班次数量调整波浪比例
+        // 如果班次数量与波浪比例数组长度不一致，需要进行调整
+        int[] adjustedRatio = adjustWaveRatio(waveRatio, shiftCount);
+        
+        // 计算总比例
+        int totalRatio = 0;
+        for (int ratio : adjustedRatio) {
+            totalRatio += ratio;
+        }
+        
         int remaining = totalQty;
 
-        for (int i = 0; i < 3; i++) {
-            int qty = totalQty * WAVE_RATIO[i] / totalRatio;
-            // 整车取整（使用默认整车容量）
-            qty = roundToTripQty(qty, DEFAULT_TRIP_CAPACITY, "ROUND");
+        for (int i = 0; i < shiftCount; i++) {
+            int qty = totalQty * adjustedRatio[i] / totalRatio;
+            // 整车取整
+            qty = roundToTripQty(qty, tripCapacity, "ROUND");
             result[i] = qty;
             remaining -= qty;
         }
 
-        // 分配余量（使用默认整车容量）
-        for (int i = 0; i < remaining && i < 3; i++) {
-            result[i % 3] += DEFAULT_TRIP_CAPACITY;
+        // 分配余量
+        for (int i = 0; i < remaining / tripCapacity && i < shiftCount; i++) {
+            result[i % shiftCount] += tripCapacity;
+            remaining -= tripCapacity;
         }
 
+        return result;
+    }
+    
+    /**
+     * 调整波浪比例以匹配班次数量
+     * 支持将基础比例模式扩展到任意班次数
+     */
+    private int[] adjustWaveRatio(int[] baseRatio, int shiftCount) {
+        int[] result = new int[shiftCount];
+        int baseLength = baseRatio.length;
+        
+        if (shiftCount <= baseLength) {
+            // 班次数量不超过基础比例长度，直接截取
+            System.arraycopy(baseRatio, 0, result, 0, shiftCount);
+        } else {
+            // 班次数量超过基础比例长度，循环复制
+            // 例如：基础 {1,2,1}，8班次 -> {1,2,1,1,2,1,1,2}
+            for (int i = 0; i < shiftCount; i++) {
+                result[i] = baseRatio[i % baseLength];
+            }
+        }
+        
         return result;
     }
 

@@ -172,6 +172,45 @@ public class ScheduleContextDTO {
     private Map<String, ShiftInfo> shiftConfigs;
 
     /**
+     * 班次配置列表（从T_CX_SHIFT_CONFIG加载）
+     * 用于排程时获取班次顺序、产能比例等信息
+     */
+    private List<CxShiftConfig> shiftConfigList;
+
+    /**
+     * 班次编码数组（按班次顺序排列，用于排程）
+     * 默认8个班次
+     */
+    private String[] shiftCodes;
+
+    /**
+     * 排程班次数量
+     * 默认8个班次
+     */
+    private Integer scheduleShiftCount;
+
+    // ==================== 算法可配置参数 ====================
+
+    /**
+     * 波浪比例（班次分配比例）
+     * 默认 {1, 2, 1} 表示夜班:早班:中班 = 1:2:1
+     * 8班次时为 {1,2,1, 1,2,1, 1,2}
+     */
+    private int[] waveRatio;
+
+    /**
+     * 机台种类上限
+     * 默认4种
+     */
+    private Integer maxTypesPerMachine;
+
+    /**
+     * 默认整车容量（条）
+     * 当结构班产配置中没有该结构时使用
+     */
+    private Integer defaultTripCapacity;
+
+    /**
      * 损耗率
      */
     private java.math.BigDecimal lossRate;
