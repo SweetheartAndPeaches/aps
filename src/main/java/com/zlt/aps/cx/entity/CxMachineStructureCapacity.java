@@ -19,7 +19,8 @@ import java.time.LocalDateTime;
  * 用于排程计算时获取：
  * - 小时产能：用于计算精度计划产能扣减
  * - 班次产能：用于计算单班最大产量
- * - 整车条数：用于生产排整车取整
+ * 
+ * 注：整车条数由 CxStructureShiftCapacity 表配置
  *
  * @author APS Team
  */
@@ -65,10 +66,6 @@ public class CxMachineStructureCapacity implements Serializable {
     @ApiModelProperty(value = "夜班产能（条/班）")
     @TableField("NIGHT_SHIFT_CAPACITY")
     private Integer nightShiftCapacity;
-
-    @ApiModelProperty(value = "整车条数（该结构每车的条数）")
-    @TableField("TRIP_QTY")
-    private Integer tripQty;
 
     @ApiModelProperty(value = "换产时间（分钟）")
     @TableField("CHANGE_OVER_TIME")
@@ -136,12 +133,5 @@ public class CxMachineStructureCapacity implements Serializable {
         int night = nightShiftCapacity != null ? nightShiftCapacity : 
                     (hourlyCapacity != null ? hourlyCapacity * 8 : 400);
         return morning + afternoon + night;
-    }
-
-    /**
-     * 获取整车条数（默认12条）
-     */
-    public Integer getTripQty() {
-        return tripQty != null ? tripQty : 12;
     }
 }
