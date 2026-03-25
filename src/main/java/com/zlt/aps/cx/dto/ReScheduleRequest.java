@@ -6,7 +6,6 @@ import lombok.Data;
 
 import java.io.Serializable;
 import java.time.LocalDate;
-import java.util.List;
 
 /**
  * 重排程请求DTO
@@ -22,21 +21,15 @@ public class ReScheduleRequest implements Serializable {
     @ApiModelProperty(value = "排程日期", example = "2024-01-01", required = true)
     private LocalDate scheduleDate;
 
-    @ApiModelProperty(value = "重排程类型：MACHINE_BREAKDOWN-机台故障，URGENT_ORDER-紧急订单，MATERIAL_SHORTAGE-物料短缺", required = true)
-    private String reScheduleType;
-
     @ApiModelProperty(value = "重排程原因")
     private String reason;
 
-    @ApiModelProperty(value = "受影响的机台编码列表")
-    private List<String> affectedMachineCodes;
-
-    @ApiModelProperty(value = "紧急订单编号（当类型为URGENT_ORDER时）")
+    @ApiModelProperty(value = "紧急订单编号（可选）")
     private String urgentOrderId;
 
-    @ApiModelProperty(value = "故障机台编码（当类型为MACHINE_BREAKDOWN时）")
+    @ApiModelProperty(value = "故障机台编码（可选）")
     private String breakdownMachineCode;
 
-    @ApiModelProperty(value = "预计恢复时间（当类型为MACHINE_BREAKDOWN时）")
+    @ApiModelProperty(value = "预计恢复时间（可选）")
     private LocalDate estimatedRecoveryDate;
 }
