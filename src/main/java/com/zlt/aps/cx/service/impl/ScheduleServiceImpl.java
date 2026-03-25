@@ -681,7 +681,7 @@ public class ScheduleServiceImpl implements ScheduleService {
                 }
                 
                 int vulcanizingRemainder = surplus != null && surplus.getPlanSurplusQty() != null 
-                        ? surplus.getPlanSurplusQty() : remainingPlanQty;
+                        ? surplus.getPlanSurplusQty().intValue() : remainingPlanQty;
                 ending.setVulcanizingRemainder(vulcanizingRemainder);
                 
                 // 胎胚库存（使用有效库存：库存量 - 超期库存 - 不良数量 + 修正数量）

@@ -197,7 +197,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                             context.getMonthSurplusMap().get(embryoCode);
                     if (monthSurplus != null && monthSurplus.getPlanSurplusQty() != null) {
                         // 硫化余量 = 总计划量 - 硫化真实完成量（已由系统计算）
-                        vulcanizeSurplusQty = monthSurplus.getPlanSurplusQty();
+                        vulcanizeSurplusQty = monthSurplus.getPlanSurplusQty().intValue();
                         int stockQty = currentStock;
                         // 收尾余量 = 硫化余量 - 胎胚库存
                         endingSurplusQty = vulcanizeSurplusQty - stockQty;
@@ -901,7 +901,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             if (monthSurplus != null && monthSurplus.getPlanSurplusQty() != null) {
                 int stockQty = stock != null ? stock.getEffectiveStock() : 0;
                 // 收尾余量 = 硫化余量 - 胎胚库存
-                int endingSurplusQty = monthSurplus.getPlanSurplusQty() - stockQty;
+                int endingSurplusQty = monthSurplus.getPlanSurplusQty().intValue() - stockQty;
                 if (endingSurplusQty <= 0) {
                     score += 2000; // 收尾任务加分
                     score += Math.max(0, 500 - endingSurplusQty * 10); // 余量越小越紧急
@@ -1524,7 +1524,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             com.zlt.aps.mp.api.domain.entity.MdmMonthSurplus monthSurplus = 
                     context.getMonthSurplusMap().get(materialCode);
             if (monthSurplus != null && monthSurplus.getPlanSurplusQty() != null) {
-                vulcanizeSurplusQty = monthSurplus.getPlanSurplusQty();
+                vulcanizeSurplusQty = monthSurplus.getPlanSurplusQty().intValue();
                 int stockQty = stock != null ? stock.getEffectiveStock() : 0;
                 endingSurplusQty = vulcanizeSurplusQty - stockQty;
                 isEndingTask = endingSurplusQty <= 0;
