@@ -29,6 +29,7 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -457,7 +458,7 @@ public class ScheduleServiceImpl implements ScheduleService {
         }
 
         for (CxScheduleResult result : results) {
-            result.setCreateTime(LocalDateTime.now());
+            result.setCreateTime(new Date());
             result.setStatus("PLANNED");
             scheduleResultMapper.insert(result);
 
@@ -465,7 +466,7 @@ public class ScheduleServiceImpl implements ScheduleService {
             if (!CollectionUtils.isEmpty(result.getDetails())) {
                 for (CxScheduleDetail detail : result.getDetails()) {
                     detail.setResultId(result.getId());
-                    detail.setCreateTime(LocalDateTime.now());
+                    detail.setCreateTime(new Date());
                     scheduleDetailMapper.insert(detail);
                 }
             }

@@ -9,8 +9,6 @@ import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
-import java.time.LocalDateTime;
-
 /**
  * 排程参数配置表
  * 对应表：T_CX_PARAM_CONFIG
@@ -65,13 +63,4 @@ public class CxParamConfig extends BaseEntity {
     @ApiModelProperty(value = "是否启用：0-禁用 1-启用")
     @TableField("IS_ACTIVE")
     private Integer isActive;
-
-    @ApiModelProperty(value = "最后修改时间")
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
-    @TableField(value = "UPDATE_TIME", fill = FieldFill.UPDATE)
-    private LocalDateTime updateTime;
-
-    @ApiModelProperty(value = "最后修改人")
-    @TableField(value = "UPDATE_BY", fill = FieldFill.UPDATE)
-    private String updateBy;
 }

@@ -163,7 +163,7 @@ public class FactoryMonthPlanProductionFinalResultServiceImpl extends ServiceImp
             dailyPlan.setStructureName(result.getStructureName());
             dailyPlan.setProductionStatus("PENDING");
             dailyPlan.setMachineOrder(sortIndex);
-            dailyPlan.setCreateTime(LocalDateTime.now());
+            dailyPlan.setCreateTime(new Date());
             dailyPlan.setCreateBy("SYSTEM");
             
             dailyPlans.add(dailyPlan);
