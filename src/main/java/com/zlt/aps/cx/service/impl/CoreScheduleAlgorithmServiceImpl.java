@@ -189,11 +189,11 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                     if (monthSurplus != null && monthSurplus.getPlanSurplusQty() != null) {
                         // 硫化余量 = 总计划量 - 硫化真实完成量（已由系统计算）
                         vulcanizeSurplusQty = monthSurplus.getPlanSurplusQty();
-                        int stockQty = currentStock != null ? currentStock : 0;
+                        int stockQty = currentStock;
                         // 收尾余量 = 硫化余量 - 胎胚库存
                         endingSurplusQty = vulcanizeSurplusQty - stockQty;
                         // 收尾余量 <= 0 表示该任务需要收尾
-                        isEndingTask = endingSurplusQty <= 0;
+                        isEndingTask = endingSurplusQty != null && endingSurplusQty <= 0;
                     }
                 }
                 

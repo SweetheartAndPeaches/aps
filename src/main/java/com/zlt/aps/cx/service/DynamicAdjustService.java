@@ -147,12 +147,47 @@ public interface DynamicAdjustService {
     /**
      * 班次调整结果
      */
-    @lombok.Data
     class ShiftAdjustResult {
         private boolean adjusted;
         private List<String> adjustedMaterials;
         private List<String> warningMaterials;
         private String message;
+
+        public boolean isAdjusted() {
+            return adjusted;
+        }
+
+        public boolean getAdjusted() {
+            return adjusted;
+        }
+
+        public void setAdjusted(boolean adjusted) {
+            this.adjusted = adjusted;
+        }
+
+        public List<String> getAdjustedMaterials() {
+            return adjustedMaterials;
+        }
+
+        public void setAdjustedMaterials(List<String> adjustedMaterials) {
+            this.adjustedMaterials = adjustedMaterials;
+        }
+
+        public List<String> getWarningMaterials() {
+            return warningMaterials;
+        }
+
+        public void setWarningMaterials(List<String> warningMaterials) {
+            this.warningMaterials = warningMaterials;
+        }
+
+        public String getMessage() {
+            return message;
+        }
+
+        public void setMessage(String message) {
+            this.message = message;
+        }
     }
 
     /**

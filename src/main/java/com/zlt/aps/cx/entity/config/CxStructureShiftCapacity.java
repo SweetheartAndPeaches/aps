@@ -38,6 +38,10 @@ public class CxStructureShiftCapacity implements Serializable {
     @TableField("CX_MACHINE_CODE")
     private String cxMachineCode;
 
+    @Schema(description = "班次编码")
+    @TableField(exist = false)
+    private String shiftCode;
+
     @Schema(description = "是否启用：0-禁用 1-启用")
     @TableField("IS_ACTIVE")
     private Integer isActive;

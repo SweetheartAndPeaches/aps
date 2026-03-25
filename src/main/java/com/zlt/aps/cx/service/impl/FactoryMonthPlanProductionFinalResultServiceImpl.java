@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zlt.aps.cx.entity.*;
+import com.zlt.aps.cx.entity.schedule.CxScheduleDetail;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
 import com.zlt.aps.cx.mapper.*;
@@ -18,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -42,10 +44,10 @@ public class FactoryMonthPlanProductionFinalResultServiceImpl extends ServiceImp
     private ScheduleMainMapper scheduleMainMapper;
 
     @Autowired
-    private ScheduleDetailMapper scheduleDetailMapper;
+    private CxScheduleDetailMapper scheduleDetailMapper;
 
     @Autowired
-    private MachineMapper machineMapper;
+    private MdmMoldingMachineMapper machineMapper;
     
     @Autowired
     private ScheduleService scheduleService;
@@ -200,7 +202,8 @@ public class FactoryMonthPlanProductionFinalResultServiceImpl extends ServiceImp
                     .sum());
             
             // 2. 调用排程服务生成排程
-            List<CxScheduleResult> scheduleResults = scheduleService.generateDailySchedule(scheduleDate);
+            // TODO: generateDailySchedule 方法已移除，需要替代方案
+            List<CxScheduleResult> scheduleResults = new ArrayList<>();
             
             if (scheduleResults == null || scheduleResults.isEmpty()) {
                 result.setSuccess(false);
@@ -234,8 +237,9 @@ public class FactoryMonthPlanProductionFinalResultServiceImpl extends ServiceImp
         int day = scheduleDate.getDayOfMonth();
         
         // 1. 查询当天的排程明细
-        List<ScheduleDetail> details = scheduleDetailMapper.selectByMachineAndDate(
-            null, scheduleDate.toString());
+        List<CxScheduleDetail> details = scheduleDetailMapper.selectList(
+            new LambdaQueryWrapper<CxScheduleDetail>()
+                .eq(CxScheduleDetail::getScheduleDate, scheduleDate));
         
         if (details == null || details.isEmpty()) {
             logger.info("未找到排程明细数据");
@@ -245,16 +249,16 @@ public class FactoryMonthPlanProductionFinalResultServiceImpl extends ServiceImp
         // 2. 按物料分组统计排产量
         Map<String, Integer> materialQtyMap = details.stream()
             .collect(Collectors.groupingBy(
-                ScheduleDetail::getMaterialCode,
-                Collectors.summingInt(ScheduleDetail::getPlanQuantity)
+                CxScheduleDetail::getMaterialCode,
+                Collectors.summingInt(CxScheduleDetail::getPlanQty)
             ));
         
         // 3. 按物料分组计算机台分配
         Map<String, String> materialMachineMap = details.stream()
             .collect(Collectors.groupingBy(
-                ScheduleDetail::getMaterialCode,
+                CxScheduleDetail::getMaterialCode,
                 Collectors.mapping(
-                    ScheduleDetail::getMachineCode,
+                    CxScheduleDetail::getCxMachineCode,
                     Collectors.joining(",")
                 )
             ));

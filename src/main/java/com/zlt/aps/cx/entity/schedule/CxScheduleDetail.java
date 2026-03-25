@@ -35,6 +35,10 @@ public class CxScheduleDetail extends BaseEntity {
     @TableField("MAIN_ID")
     private Long mainId;
 
+    @ApiModelProperty(value = "结果ID（同mainId）")
+    @TableField(exist = false)
+    private Long resultId;
+
     @ApiModelProperty(value = "计划日期")
     @JsonFormat(pattern = "yyyy-MM-dd")
     @TableField("SCHEDULE_DATE")
@@ -55,6 +59,34 @@ public class CxScheduleDetail extends BaseEntity {
     @ApiModelProperty(value = "胎胚代码")
     @TableField("EMBRYO_CODE")
     private String embryoCode;
+
+    @ApiModelProperty(value = "物料编码（同胎胚代码）")
+    @TableField("MATERIAL_CODE")
+    private String materialCode;
+
+    @ApiModelProperty(value = "状态：PLANNED-计划中，COMPLETED-已完成，CANCELLED-已取消")
+    @TableField("STATUS")
+    private String status;
+
+    @ApiModelProperty(value = "计划数量")
+    @TableField("PLAN_QTY")
+    private Integer planQty;
+
+    @ApiModelProperty(value = "实际数量")
+    @TableField("ACTUAL_QTY")
+    private Integer actualQty;
+
+    @ApiModelProperty(value = "机台编码")
+    @TableField("MACHINE_CODE")
+    private String machineCode;
+
+    @ApiModelProperty(value = "试制计划ID")
+    @TableField(exist = false)
+    private Long trialPlanId;
+
+    @ApiModelProperty(value = "完成率")
+    @TableField(exist = false)
+    private BigDecimal completionRate;
 
     @ApiModelProperty(value = "车次号")
     @TableField("TRIP_NO")

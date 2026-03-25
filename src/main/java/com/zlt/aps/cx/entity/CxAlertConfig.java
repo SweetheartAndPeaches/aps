@@ -35,6 +35,15 @@ public class CxAlertConfig {
     /** 是否启用 */
     private Integer isEnabled;
 
+    /** 是否启用（别名） */
+    private Integer isActive;
+
+    /** 配置编码 */
+    private String configCode;
+
+    /** 配置值 */
+    private String configValue;
+
     /** 备注 */
     private String remark;
 

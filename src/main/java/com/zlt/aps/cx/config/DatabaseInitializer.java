@@ -368,7 +368,7 @@ public class DatabaseInitializer implements CommandLineRunner {
                 "FACTORY_CODE VARCHAR(50) COMMENT '工厂编码', " +
                 "YEAR INT COMMENT '年份', " +
                 "MONTH INT COMMENT '月份', " +
-                "YEAR_MONTH INT COMMENT '年月YYYYMM', " +
+                "`YEAR_MONTH` INT COMMENT '年月YYYYMM', " +
                 "MONTH_PLAN_VERSION VARCHAR(50) COMMENT '销售生产需求计划版本', " +
                 "LAST_MONTH_PLAN_VERSION VARCHAR(50) COMMENT '最新需求计划版本', " +
                 "PRODUCTION_VERSION VARCHAR(50) COMMENT '排产计划版本', " +
@@ -463,7 +463,7 @@ public class DatabaseInitializer implements CommandLineRunner {
                 "CREATE_BY VARCHAR(50) COMMENT '创建人', " +
                 "UPDATE_BY VARCHAR(50) COMMENT '更新人', " +
                 "REMARK VARCHAR(500) COMMENT '备注', " +
-                "INDEX IDX_YEAR_MONTH (YEAR_MONTH), " +
+                "INDEX IDX_YEAR_MONTH (`YEAR_MONTH`), " +
                 "INDEX IDX_MATERIAL_CODE (MATERIAL_CODE), " +
                 "INDEX IDX_PRODUCTION_NO (PRODUCTION_NO)" +
                 ") COMMENT='工厂月生产计划-最终排产计划定稿表'");

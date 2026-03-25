@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.zlt.aps.cx.entity.*;
 import com.zlt.aps.cx.entity.config.CxParamConfig;
+import com.zlt.aps.cx.entity.mdm.MdmMaterialInfo;
 import com.zlt.aps.cx.entity.schedule.CxScheduleDetail;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
 import com.zlt.aps.cx.mapper.*;
@@ -265,8 +266,8 @@ public class DynamicAdjustServiceImpl implements DynamicAdjustService {
 
         // 按库存可供时长排序（库存低的优先）
         details.sort((d1, d2) -> {
-            CxStock s1 = stockMap.get(d1.getMaterialCode());
-            CxStock s2 = stockMap.get(d2.getMaterialCode());
+            CxStock s1 = stockMap.get(d1.getEmbryoCode());
+            CxStock s2 = stockMap.get(d2.getEmbryoCode());
             
             BigDecimal hours1 = s1 != null && s1.getStockHours() != null ? s1.getStockHours() : BigDecimal.ZERO;
             BigDecimal hours2 = s2 != null && s2.getStockHours() != null ? s2.getStockHours() : BigDecimal.ZERO;
@@ -286,12 +287,12 @@ public class DynamicAdjustServiceImpl implements DynamicAdjustService {
 
     @Override
     public boolean checkTreadAvailability(CxScheduleDetail detail) {
-        if (detail == null || detail.getStartTime() == null) {
+        if (detail == null || detail.getPlanStartTime() == null) {
             return false;
         }
 
         // 获取胎面信息（假设胎面编码规则）
-        String treadCode = deriveTreadCode(detail.getMaterialCode());
+        String treadCode = deriveTreadCode(detail.getEmbryoCode());
         
         // 获取胎面库存
         CxStock treadStock = stockMapper.selectOne(
