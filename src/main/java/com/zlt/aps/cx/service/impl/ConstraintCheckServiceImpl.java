@@ -50,6 +50,9 @@ public class ConstraintCheckServiceImpl implements ConstraintCheckService {
     private CxParamConfigMapper paramConfigMapper;
 
     @Autowired
+    private CxMachineStructureCapacityMapper machineStructureCapacityMapper;
+
+    @Autowired
     private MdmMoldingMachineMapper moldingMachineMapper;
 
     @Autowired
@@ -78,10 +81,11 @@ public class ConstraintCheckServiceImpl implements ConstraintCheckService {
             }
         }
 
-        // 2. 检查产能约束
+        // 2. 检查产能约束（使用机台-结构维度产能）
         if (machine != null) {
+            String structureCode = material != null ? material.getStructureName() : null;
             ConstraintCheckResult capacityResult = checkCapacityConstraint(
-                    machine, scheduleResult.getProductNum(), 24);
+                    machine, structureCode, scheduleResult.getProductNum(), null);
             if (!capacityResult.isPassed()) {
                 violations.addAll(capacityResult.getViolations());
             }
@@ -254,21 +258,63 @@ public class ConstraintCheckServiceImpl implements ConstraintCheckService {
 
     @Override
     public ConstraintCheckResult checkCapacityConstraint(MdmMoldingMachine machine, BigDecimal planQty, Integer shiftHours) {
+        // 向后兼容：使用机台最大日产能作为兜底
+        return checkCapacityConstraint(machine, null, planQty, null);
+    }
+
+    @Override
+    public ConstraintCheckResult checkCapacityConstraint(MdmMoldingMachine machine, String structureCode, 
+            BigDecimal planQty, String shiftCode) {
         if (machine == null) {
             return ConstraintCheckResult.fail("机台信息为空");
         }
 
         List<String> violations = new ArrayList<>();
 
-        // 计算机台产能
-        BigDecimal capacity = machine.getMaxDailyCapacity() != null 
-                ? BigDecimal.valueOf(machine.getMaxDailyCapacity())
-                : BigDecimal.valueOf(1200); // 默认1200条/天
+        // 计算机台产能：优先从机台结构产能表获取
+        BigDecimal capacity;
+        String capacitySource;
+        
+        if (structureCode != null && !structureCode.isEmpty()) {
+            // 从机台结构产能表获取
+            CxMachineStructureCapacity machineCapacity = machineStructureCapacityMapper.selectOne(
+                    new LambdaQueryWrapper<CxMachineStructureCapacity>()
+                            .eq(CxMachineStructureCapacity::getCxMachineCode, machine.getCxMachineCode())
+                            .eq(CxMachineStructureCapacity::getStructureCode, structureCode)
+                            .eq(CxMachineStructureCapacity::getIsActive, 1));
+            
+            if (machineCapacity != null) {
+                if (shiftCode != null) {
+                    // 获取班次产能
+                    Integer shiftCapacity = machineCapacity.getShiftCapacity(shiftCode);
+                    capacity = BigDecimal.valueOf(shiftCapacity);
+                    capacitySource = String.format("机台结构产能表(班次:%s)", shiftCode);
+                } else {
+                    // 获取日产能
+                    capacity = BigDecimal.valueOf(machineCapacity.getDailyCapacity());
+                    capacitySource = "机台结构产能表(日产能)";
+                }
+            } else {
+                // 未找到配置，使用机台最大日产能兜底
+                capacity = machine.getMaxDailyCapacity() != null 
+                        ? BigDecimal.valueOf(machine.getMaxDailyCapacity())
+                        : BigDecimal.valueOf(1200);
+                capacitySource = "机台最大日产能(兜底)";
+                log.warn("未找到机台 {} 结构 {} 的产能配置，使用默认值", 
+                        machine.getCxMachineCode(), structureCode);
+            }
+        } else {
+            // 无结构信息，使用机台最大日产能
+            capacity = machine.getMaxDailyCapacity() != null 
+                    ? BigDecimal.valueOf(machine.getMaxDailyCapacity())
+                    : BigDecimal.valueOf(1200);
+            capacitySource = "机台最大日产能";
+        }
 
         // 检查产能是否满足
         if (planQty != null && planQty.compareTo(capacity) > 0) {
-            violations.add(String.format("机台产能不足，计划量: %s，最大产能: %s", 
-                    planQty, capacity));
+            violations.add(String.format("机台产能不足，计划量: %s，最大产能: %s（来源:%s）", 
+                    planQty, capacity, capacitySource));
         }
 
         // 检查机台状态
@@ -284,8 +330,8 @@ public class ConstraintCheckServiceImpl implements ConstraintCheckService {
 
         if (violations.isEmpty()) {
             ConstraintCheckResult result = ConstraintCheckResult.pass();
-            result.setDetails(String.format("机台产能满足，计划量: %s，最大产能: %s", 
-                    planQty, capacity));
+            result.setDetails(String.format("机台产能满足，计划量: %s，最大产能: %s（来源:%s）", 
+                    planQty, capacity, capacitySource));
             return result;
         } else {
             return ConstraintCheckResult.fail(violations);
