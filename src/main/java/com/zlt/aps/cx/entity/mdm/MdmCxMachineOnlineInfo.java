@@ -2,7 +2,8 @@ package com.zlt.aps.cx.entity.mdm;
 
 import com.baomidou.mybatisplus.annotation.*;
 import com.fasterxml.jackson.annotation.JsonFormat;
-import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.annotations.ApiModel;
+import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
 
 import java.io.Serializable;
@@ -19,73 +20,73 @@ import java.time.LocalDateTime;
  */
 @Data
 @TableName("T_MDM_CX_MACHINE_ONLINE_INFO")
-@Schema(description = "成型在机信息")
+@ApiModel(value = "成型在机信息")
 public class MdmCxMachineOnlineInfo implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
-    @Schema(description = "主键ID")
+    @ApiModelProperty(value = "主键ID")
     @TableId(value = "ID", type = IdType.AUTO)
     private Long id;
 
-    @Schema(description = "在机日期")
+    @ApiModelProperty(value = "在机日期")
     @JsonFormat(pattern = "yyyy-MM-dd")
     @TableField("ONLINE_DATE")
     private LocalDate onlineDate;
 
-    @Schema(description = "成型机台编码")
+    @ApiModelProperty(value = "成型机台编码")
     @TableField("CX_CODE")
     private String cxCode;
 
-    @Schema(description = "在机物料编码（NC系统）")
+    @ApiModelProperty(value = "在机物料编码（NC系统）")
     @TableField("MATERIAL_CODE")
     private String materialCode;
 
-    @Schema(description = "在机物料编码（MES系统）")
+    @ApiModelProperty(value = "在机物料编码（MES系统）")
     @TableField("MES_MATERIAL_CODE")
     private String mesMaterialCode;
 
-    @Schema(description = "在机物料描述")
+    @ApiModelProperty(value = "在机物料描述")
     @TableField("SPEC_DESC")
     private String specDesc;
 
-    @Schema(description = "在机胎胚描述")
+    @ApiModelProperty(value = "在机胎胚描述")
     @TableField("EMBRYO_SPEC")
     private String embryoSpec;
 
-    @Schema(description = "版本号")
+    @ApiModelProperty(value = "版本号")
     @TableField("DATA_VERSION")
     private String dataVersion;
 
-    @Schema(description = "分公司编码")
+    @ApiModelProperty(value = "分公司编码")
     @TableField("COMPANY_CODE")
     private String companyCode;
 
-    @Schema(description = "厂别")
+    @ApiModelProperty(value = "厂别")
     @TableField("FACTORY_CODE")
     private String factoryCode;
 
-    @Schema(description = "删除标识")
+    @ApiModelProperty(value = "删除标识")
     @TableField("IS_DELETE")
     private Integer isDelete;
 
-    @Schema(description = "创建人")
+    @ApiModelProperty(value = "创建人")
     @TableField("CREATE_BY")
     private String createBy;
 
-    @Schema(description = "创建时间")
+    @ApiModelProperty(value = "创建时间")
     @TableField(value = "CREATE_TIME", fill = FieldFill.INSERT)
     private LocalDateTime createTime;
 
-    @Schema(description = "更新人")
+    @ApiModelProperty(value = "更新人")
     @TableField("UPDATE_BY")
     private String updateBy;
 
-    @Schema(description = "更新时间")
+    @ApiModelProperty(value = "更新时间")
     @TableField(value = "UPDATE_TIME", fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updateTime;
 
-    @Schema(description = "备注")
+    @ApiModelProperty(value = "备注")
     @TableField("REMARK")
     private String remark;
 }

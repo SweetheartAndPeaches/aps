@@ -1,6 +1,7 @@
 package com.zlt.aps.cx.dto;
 
-import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.annotations.ApiModel;
+import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
 
 import java.io.Serializable;
@@ -12,33 +13,33 @@ import java.math.BigDecimal;
  * @author APS Team
  */
 @Data
-@Schema(description = "库存计算参数")
+@ApiModel(description = "库存计算参数")
 public class StockCalcDTO implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
-    @Schema(description = "物料编码")
+    @ApiModelProperty(value = "物料编码")
     private String materialCode;
 
-    @Schema(description = "当前库存")
+    @ApiModelProperty(value = "当前库存")
     private Integer currentStock;
 
-    @Schema(description = "可用硫化机台数")
+    @ApiModelProperty(value = "可用硫化机台数")
     private Integer vulcanizeMachineCount;
 
-    @Schema(description = "总模数")
+    @ApiModelProperty(value = "总模数")
     private Integer vulcanizeMoldCount;
 
-    @Schema(description = "硫化时间(分钟)")
+    @ApiModelProperty(value = "硫化时间(分钟)")
     private BigDecimal vulcanizeTimeMinutes;
 
-    @Schema(description = "单班硫化量（每模每班产能）")
+    @ApiModelProperty(value = "单班硫化量（每模每班产能）")
     private Integer singleMouldShiftQty;
 
-    @Schema(description = "计算的库存可供硫化时长(小时)")
+    @ApiModelProperty(value = "计算的库存可供硫化时长(小时)")
     private BigDecimal stockHours;
 
-    @Schema(description = "计算公式记录")
+    @ApiModelProperty(value = "计算公式记录")
     private String stockHoursFormula;
 
     /**

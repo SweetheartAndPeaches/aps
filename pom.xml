@@ -56,18 +56,39 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- SpringDoc OpenAPI (替代SpringFox) -->
+        <!-- Swagger Bootstrap UI (Knife4j风格UI) -->
         <dependency>
-            <groupId>org.springdoc</groupId>
-            <artifactId>springdoc-openapi-ui</artifactId>
-            <version>1.7.0</version>
+            <groupId>com.github.xiaoymin</groupId>
+            <artifactId>swagger-bootstrap-ui</artifactId>
+            <version>1.9.6</version>
         </dependency>
 
-        <!-- Swagger2 Annotations (for @ApiModelProperty) -->
+        <!-- SpringFox Swagger2 -->
+        <dependency>
+            <groupId>io.springfox</groupId>
+            <artifactId>springfox-swagger2</artifactId>
+            <version>2.9.2</version>
+        </dependency>
+
+        <!-- Swagger Models (解决SpringFox 2.9.2的model依赖问题) -->
+        <dependency>
+            <groupId>io.swagger</groupId>
+            <artifactId>swagger-models</artifactId>
+            <version>1.6.2</version>
+        </dependency>
+
+        <!-- Swagger Annotations (for @ApiModelProperty) -->
         <dependency>
             <groupId>io.swagger</groupId>
             <artifactId>swagger-annotations</artifactId>
             <version>1.6.2</version>
+        </dependency>
+
+        <!-- Apache Commons Lang3 -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-lang3</artifactId>
+            <version>3.12.0</version>
         </dependency>
 
         <!-- Hutool工具类 -->
