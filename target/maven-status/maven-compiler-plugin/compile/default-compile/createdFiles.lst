@@ -35,7 +35,6 @@ com/zlt/aps/cx/service/TrialScheduleService$TrialConstraintResult.class
 com/zlt/aps/cx/service/impl/ScheduleServiceImpl.class
 com/zlt/aps/cx/service/DynamicAdjustService$AdjustmentMaterialList.class
 com/zlt/aps/cx/service/CxMaterialService.class
-com/zlt/aps/cx/entity/FactoryMonthPlanProductionFinalResult.class
 com/zlt/aps/cx/service/ScheduleService$ScheduleResult.class
 com/zlt/aps/cx/entity/base/ApsBaseEntity.class
 com/zlt/aps/cx/service/impl/PrecisionPlanServiceImpl.class
@@ -67,6 +66,7 @@ com/zlt/aps/cx/entity/config/CxStructureShiftCapacity.class
 com/zlt/aps/cx/service/CoreScheduleAlgorithmService.class
 com/zlt/aps/cx/mapper/MdmMonthSurplusMapper.class
 com/zlt/aps/cx/service/CxScheduleResultService.class
+com/zlt/aps/mp/api/domain/entity/FactoryMonthPlanProductionFinalResult.class
 com/zlt/aps/cx/common/enums/ShiftCode.class
 com/zlt/aps/cx/mapper/CxMachineStructureCapacityMapper.class
 com/zlt/aps/cx/service/ConstraintCheckService.class

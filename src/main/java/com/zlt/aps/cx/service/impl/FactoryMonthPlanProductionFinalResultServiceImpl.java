@@ -10,6 +10,7 @@ import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
 import com.zlt.aps.cx.mapper.*;
 import com.zlt.aps.cx.mapper.LhScheduleResultMapper;
 import com.zlt.aps.cx.service.*;
+import com.zlt.aps.mp.api.domain.entity.FactoryMonthPlanProductionFinalResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;

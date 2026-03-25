@@ -6,7 +6,6 @@
 /workspace/projects/src/main/java/com/zlt/aps/cx/common/enums/DataSource.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/mapper/LhScheduleResultMapper.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/controller/MaterialController.java
-/workspace/projects/src/main/java/com/zlt/aps/cx/entity/FactoryMonthPlanProductionFinalResult.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/mapper/CxParamConfigMapper.java
 /workspace/projects/src/main/java/com/zlt/aps/mp/api/domain/entity/MdmCxMachineFixed.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/dto/StockCalcDTO.java
@@ -15,6 +14,7 @@
 /workspace/projects/src/main/java/com/zlt/aps/cx/mapper/CxDailyEmbryoTaskMapper.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/service/FactoryMonthPlanProductionFinalResultService.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/service/impl/CoreScheduleAlgorithmServiceImpl.java
+/workspace/projects/src/main/java/com/zlt/aps/mp/api/domain/entity/FactoryMonthPlanProductionFinalResult.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/entity/CxStructureEnding.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/service/impl/TrialScheduleServiceImpl.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/common/enums/YesNo.java
