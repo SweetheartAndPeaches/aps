@@ -247,13 +247,13 @@ public class TrialScheduleServiceImpl implements TrialScheduleService {
         List<String> shiftsToRemove = new ArrayList<>();
         for (String shift : availableShifts) {
             // 检查该班次是否已有其他任务
-            int taskCount = scheduleDetailMapper.selectCount(
+            Long taskCount = scheduleDetailMapper.selectCount(
                     new LambdaQueryWrapper<CxScheduleDetail>()
                             .eq(CxScheduleDetail::getScheduleDate, scheduleDate)
-                            .eq(CxScheduleDetail::getMachineCode, machineCode)
+                            .eq(CxScheduleDetail::getCxMachineCode, machineCode)
                             .eq(CxScheduleDetail::getShiftCode, shift));
 
-            if (taskCount > 0) {
+            if (taskCount != null && taskCount > 0) {
                 shiftsToRemove.add(shift);
             }
         }
@@ -357,10 +357,11 @@ public class TrialScheduleServiceImpl implements TrialScheduleService {
     @Override
     public int getTodayTrialTaskCount(LocalDate scheduleDate) {
         // 查询当天已安排的试制任务数量
-        return (int) trialPlanMapper.selectCount(
+        Long count = trialPlanMapper.selectCount(
                 new LambdaQueryWrapper<CxTrialPlan>()
                         .eq(CxTrialPlan::getPlanDate, scheduleDate)
                         .in(CxTrialPlan::getStatus, Arrays.asList("SCHEDULED", "IN_PROGRESS")));
+        return count != null ? count.intValue() : 0;
     }
 
     @Override

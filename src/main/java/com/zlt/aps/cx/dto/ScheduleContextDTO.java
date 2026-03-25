@@ -31,6 +31,16 @@ public class ScheduleContextDTO {
     private LocalDate scheduleDate;
 
     /**
+     * 排程模式
+     */
+    private String scheduleMode;
+
+    /**
+     * 重排程类型
+     */
+    private String reScheduleType;
+
+    /**
      * 可用成型机台列表
      */
     private List<MdmMoldingMachine> availableMachines;
@@ -219,12 +229,6 @@ public class ScheduleContextDTO {
      * 成型停机时间（停产前一天，早于硫化停机时间）
      */
     private LocalDateTime formingStopTime;
-
-    /**
-     * 预留消化时间（小时）
-     * 成型停机时间 = 硫化停机时间 - 预留消化时间
-     */
-    private Integer reservedDigestHours;
 
     /**
      * 成型可排产时长（小时，停产前一天）

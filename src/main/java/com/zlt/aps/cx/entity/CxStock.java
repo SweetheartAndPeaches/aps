@@ -29,6 +29,10 @@ public class CxStock implements Serializable {
     @TableField("MATERIAL_CODE")
     private String materialCode;
 
+    @Schema(description = "胎胚物料名称")
+    @TableField(exist = false)
+    private String materialName;
+
     @Schema(description = "实时库存数量")
     @TableField("CURRENT_STOCK")
     private Integer currentStock;

@@ -57,6 +57,14 @@ public class MdmMaterialInfo extends ApsBaseEntity {
     @TableField("MATERIAL_CODE")
     private String materialCode;
 
+    @ApiModelProperty(value = "物料名称")
+    @TableField(exist = false)
+    private String materialName;
+
+    @ApiModelProperty(value = "产品结构")
+    @TableField(exist = false)
+    private String productStructure;
+
     @ApiModelProperty(value = "物料编号(查询参数)")
     @TableField(exist = false)
     private String materialCodes;

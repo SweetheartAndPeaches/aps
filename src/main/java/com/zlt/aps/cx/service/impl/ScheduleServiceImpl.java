@@ -137,7 +137,7 @@ public class ScheduleServiceImpl implements ScheduleService {
             // 3. 处理节假日特殊逻辑
             if (holidayScheduleService.isBeforeHoliday(request.getScheduleDate())) {
                 HolidayScheduleService.HolidayScheduleResult holidayResult = 
-                        holidayScheduleService.handleBeforeHoliday(request.getScheduleDate());
+                        holidayScheduleService.handleBeforeHoliday(context);
                 log.info("停产前一天处理结果：{}", holidayResult.getMessage());
             }
 
@@ -147,7 +147,7 @@ public class ScheduleServiceImpl implements ScheduleService {
 
             // 5. 应用节假日调整
             scheduleResults = holidayScheduleService.adjustHolidaySchedule(
-                    request.getScheduleDate(), scheduleResults);
+                    request.getScheduleDate(), scheduleResults, context);
 
             // 6. 保存排程结果
             saveScheduleResults(scheduleResults);
@@ -179,9 +179,7 @@ public class ScheduleServiceImpl implements ScheduleService {
             // 1. 获取机台信息
             List<MdmMoldingMachine> machines = moldingMachineMapper.selectList(
                     new LambdaQueryWrapper<MdmMoldingMachine>()
-                            .eq(MdmMoldingMachine::getIsActive, 1)
-                            .ne(MdmMoldingMachine::getMaintainStatus, "FAULT"));
-            context.setMachines(machines);
+                            .eq(MdmMoldingMachine::getIsActive, 1));
             context.setAvailableMachines(machines);
 
             // 2. 获取物料信息
@@ -367,11 +365,10 @@ public class ScheduleServiceImpl implements ScheduleService {
                 List<CxScheduleResult> results = new ArrayList<>();
                 for (CxScheduleDetail detail : trialResult.getScheduledDetails()) {
                     CxScheduleResult sr = new CxScheduleResult();
-                    sr.setCxMachineCode(detail.getMachineCode());
-                    sr.setEmbryoCode(detail.getMaterialCode());
-                    sr.setProductNum(BigDecimal.valueOf(detail.getPlanQty()));
-                    sr.setScheduleDate(detail.getScheduleDate());
-                    sr.setShiftCode(detail.getShiftCode());
+                    sr.setCxMachineCode(detail.getCxMachineCode());
+                    sr.setEmbryoCode(detail.getEmbryoCode());
+                    sr.setProductNum(BigDecimal.valueOf(detail.getPlanQty() != null ? detail.getPlanQty() : 0));
+                    sr.setScheduleDate(detail.getScheduleDate() != null ? detail.getScheduleDate().atStartOfDay() : null);
                     sr.setIsTrial(1);
                     results.add(sr);
                 }
@@ -725,8 +722,8 @@ public class ScheduleServiceImpl implements ScheduleService {
             
             log.info("计算结构收尾信息完成，共 {} 个结构，其中紧急收尾 {} 个，需调整月计划 {} 个", 
                     resultList.size(),
-                    resultList.stream().filterToInt(e -> e.getIsUrgentEnding()).sum(),
-                    resultList.stream().filterToInt(e -> e.getNeedMonthPlanAdjust()).sum());
+                    resultList.stream().mapToInt(e -> e.getIsUrgentEnding() != null ? e.getIsUrgentEnding() : 0).sum(),
+                    resultList.stream().mapToInt(e -> e.getNeedMonthPlanAdjust() != null ? e.getNeedMonthPlanAdjust() : 0).sum());
             
         } catch (Exception e) {
             log.error("计算结构收尾信息失败", e);
