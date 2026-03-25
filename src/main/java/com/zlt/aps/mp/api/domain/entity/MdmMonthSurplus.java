@@ -65,7 +65,7 @@ public class MdmMonthSurplus implements Serializable {
 
     @ApiModelProperty(value = "计划余量（硫化余量 = 总计划量 - 硫化真实完成量，已由系统计算好）")
     @TableField("PLAN_SURPLUS_QTY")
-    private Integer planSurplusQty;
+    private BigDecimal planSurplusQty;
 
     @ApiModelProperty(value = "库存抓取日")
     @TableField("STOCK_CAPTURE_DATE")
