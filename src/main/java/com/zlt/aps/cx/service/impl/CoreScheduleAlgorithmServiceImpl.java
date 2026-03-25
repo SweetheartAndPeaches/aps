@@ -1172,8 +1172,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             result.setMachineCode(machine.getCxMachineCode());
             result.setMachineName(machine.getCxMachineName());
             result.setMachineType(machine.getCxMachineTypeName());
-            result.setDailyCapacity(machine.getMaxDailyCapacity() != null 
-                    ? machine.getMaxDailyCapacity() : 1200);
+            result.setDailyCapacity(machine.getMaxDayCapacity() != null 
+                    ? machine.getMaxDayCapacity() : 1200);
             result.setUsedCapacity(0);
             result.setRemainingCapacity(result.getDailyCapacity());
             result.setAssignedTypes(0);

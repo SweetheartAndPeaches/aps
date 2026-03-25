@@ -296,8 +296,8 @@ public class ConstraintCheckServiceImpl implements ConstraintCheckService {
                 }
             } else {
                 // 未找到配置，使用机台最大日产能兜底
-                capacity = machine.getMaxDailyCapacity() != null 
-                        ? BigDecimal.valueOf(machine.getMaxDailyCapacity())
+                capacity = machine.getMaxDayCapacity() != null 
+                        ? BigDecimal.valueOf(machine.getMaxDayCapacity())
                         : BigDecimal.valueOf(1200);
                 capacitySource = "机台最大日产能(兜底)";
                 log.warn("未找到机台 {} 结构 {} 的产能配置，使用默认值", 
@@ -305,8 +305,8 @@ public class ConstraintCheckServiceImpl implements ConstraintCheckService {
             }
         } else {
             // 无结构信息，使用机台最大日产能
-            capacity = machine.getMaxDailyCapacity() != null 
-                    ? BigDecimal.valueOf(machine.getMaxDailyCapacity())
+            capacity = machine.getMaxDayCapacity() != null 
+                    ? BigDecimal.valueOf(machine.getMaxDayCapacity())
                     : BigDecimal.valueOf(1200);
             capacitySource = "机台最大日产能";
         }

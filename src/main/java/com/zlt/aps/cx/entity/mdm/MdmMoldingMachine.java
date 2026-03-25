@@ -3,13 +3,12 @@ package com.zlt.aps.cx.entity.mdm;
 import com.baomidou.mybatisplus.annotation.*;
 import com.zlt.aps.cx.entity.base.ApsBaseEntity;
 import io.swagger.annotations.ApiModel;
-import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 /**
- * 成型机台信息对象
+ * 成型机档案对象
  * 对应表：T_MDM_MOLDING_MACHINE
  *
  * @author APS Team
@@ -18,7 +17,7 @@ import lombok.EqualsAndHashCode;
 @Data
 @EqualsAndHashCode(callSuper = true)
 @TableName("T_MDM_MOLDING_MACHINE")
-@ApiModel(value = "成型机台信息对象", description = "成型机台信息对象")
+@ApiModel(value = "成型机档案对象", description = "基础数据-成型机档案对象")
 public class MdmMoldingMachine extends ApsBaseEntity {
 
     private static final long serialVersionUID = 1L;
@@ -31,6 +30,13 @@ public class MdmMoldingMachine extends ApsBaseEntity {
     private Long id;
 
     /**
+     * 工厂编号
+     */
+    @ApiModelProperty(value = "工厂编号")
+    @TableField("FACTORY_CODE")
+    private String factoryCode;
+
+    /**
      * 成型机编码
      */
     @ApiModelProperty(value = "成型机编码")
@@ -38,63 +44,46 @@ public class MdmMoldingMachine extends ApsBaseEntity {
     private String cxMachineCode;
 
     /**
-     * 成型机名称
+     * 成型机类型
      */
-    @ApiModelProperty(value = "成型机名称")
-    @TableField("CX_MACHINE_NAME")
-    private String cxMachineName;
+    @ApiModelProperty(value = "成型机类型")
+    @TableField("CX_MACHINE_BRAND_CODE")
+    private String cxMachineBrandCode;
 
     /**
-     * 成型机类型编码
+     * 机型
      */
-    @ApiModelProperty(value = "成型机类型编码")
+    @ApiModelProperty(value = "机型")
     @TableField("CX_MACHINE_TYPE_CODE")
     private String cxMachineTypeCode;
-
-    /**
-     * 成型机类型名称
-     */
-    @ApiModelProperty(value = "成型机类型名称")
-    @TableField("CX_MACHINE_TYPE_NAME")
-    private String cxMachineTypeName;
-
-    /**
-     * 机型型号
-     */
-    @ApiModelProperty(value = "机型型号")
-    @TableField("CX_MACHINE_MODEL")
-    private String cxMachineModel;
 
     /**
      * 反包方式
      */
     @ApiModelProperty(value = "反包方式")
-    @TableField("WRAPPING_TYPE")
-    private String wrappingType;
+    @TableField("ROLL_OVER_TYPE")
+    private String rollOverType;
 
     /**
-     * 是否有零度供料架：0-否 1-是
+     * 是否有零度供料架 数据字典 biz_yes_no 1 是 0 否
      */
-    @ApiModelProperty(value = "是否有零度供料架：0-否 1-是")
-    @TableField("HAS_ZERO_DEGREE_FEEDER")
-    private Integer hasZeroDegreeFeeder;
+    @ApiModelProperty(value = "是否有零度供料架 数据字典 biz_yes_no 1 是 0 否")
+    @TableField("IS_ZERO_RACK")
+    private String isZeroRack;
 
     /**
-     * 设备最大日产能（条）
-     * 
-     * 注：具体结构的产能请查询 CxMachineStructureCapacity 表
-     * 当前在产结构请查询 MdmCxMachineOnlineInfo 表
+     * 硫化机上限
      */
-    @ApiModelProperty(value = "设备最大日产能（条）")
-    @TableField("MAX_DAILY_CAPACITY")
-    private Integer maxDailyCapacity;
+    @ApiModelProperty(value = "硫化机上限")
+    @TableField("LH_MACHINE_MAX_QTY")
+    private Integer lhMachineMaxQty;
 
     /**
-     * 对应硫化机上限数量
+     * 设备最大日产量
      */
-    @ApiModelProperty(value = "对应硫化机上限数量")
-    @TableField("MAX_CURING_MACHINES")
-    private Integer maxCuringMachines;
+    @ApiModelProperty(value = "设备最大日产量")
+    @TableField("MAX_DAY_CAPACITY")
+    private Integer maxDayCapacity;
 
     /**
      * 产线编号
@@ -104,20 +93,18 @@ public class MdmMoldingMachine extends ApsBaseEntity {
     private Integer lineNumber;
 
     /**
-     * 机台状态：0-正常 1-维护中 2-故障 3-停用
-     * 
-     * 注：机台维护时间从 CxPrecisionPlan（精度计划）获取
+     * 机台状态：RUNNING-正常运行 MAINTAIN-维护中 FAULT-故障 STOP-停用
      */
-    @ApiModelProperty(value = "机台状态：0-正常 1-维护中 2-故障 3-停用")
+    @ApiModelProperty(value = "机台状态：RUNNING-正常运行 MAINTAIN-维护中 FAULT-故障 STOP-停用")
     @TableField("MAINTAIN_STATUS")
     private String maintainStatus;
 
     /**
-     * 排产限制说明
+     * 备注
      */
-    @ApiModelProperty(value = "排产限制说明")
-    @TableField("PRODUCTION_RESTRICTION")
-    private String productionRestriction;
+    @ApiModelProperty(value = "备注")
+    @TableField("REMARK")
+    private String remark;
 
     /**
      * 是否启用：0-禁用 1-启用
@@ -125,4 +112,34 @@ public class MdmMoldingMachine extends ApsBaseEntity {
     @ApiModelProperty(value = "是否启用：0-禁用 1-启用")
     @TableField("IS_ACTIVE")
     private Integer isActive;
+
+    // ==================== 非数据库字段 ====================
+
+    /**
+     * 展示机台编号
+     */
+    @ApiModelProperty(value = "展示机台编号")
+    @TableField(exist = false)
+    private String machineCode;
+
+    /**
+     * 展示机台名称
+     */
+    @ApiModelProperty(value = "展示机台名称")
+    @TableField(exist = false)
+    private String machineName;
+    
+    /**
+     * 成型机名称（用于展示）
+     */
+    @ApiModelProperty(value = "成型机名称")
+    @TableField(exist = false)
+    private String cxMachineName;
+    
+    /**
+     * 成型机类型名称（用于展示）
+     */
+    @ApiModelProperty(value = "成型机类型名称")
+    @TableField(exist = false)
+    private String cxMachineTypeName;
 }
