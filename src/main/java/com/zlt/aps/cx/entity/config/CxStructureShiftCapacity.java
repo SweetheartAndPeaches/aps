@@ -1,7 +1,8 @@
 package com.zlt.aps.cx.entity.config;
 
 import com.baomidou.mybatisplus.annotation.*;
-import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.annotations.ApiModel;
+import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
 
 import java.io.Serializable;
@@ -17,40 +18,40 @@ import java.time.LocalDateTime;
  */
 @Data
 @TableName("T_CX_STRUCTURE_SHIFT_CAPACITY")
-@Schema(description = "结构班产配置")
+@ApiModel(value = "结构班产配置")
 public class CxStructureShiftCapacity implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
-    @Schema(description = "主键ID")
+    @ApiModelProperty(value = "主键ID")
     @TableId(value = "ID", type = IdType.AUTO)
     private Long id;
 
-    @Schema(description = "结构编码")
+    @ApiModelProperty(value = "结构编码")
     @TableField("STRUCTURE_CODE")
     private String structureCode;
 
-    @Schema(description = "整车条数（该结构每车的条数，可能是12、18等）")
+    @ApiModelProperty(value = "整车条数（该结构每车的条数，可能是12、18等）")
     @TableField("TRIP_QTY")
     private Integer tripQty;
 
-    @Schema(description = "成型机台编码")
+    @ApiModelProperty(value = "成型机台编码")
     @TableField("CX_MACHINE_CODE")
     private String cxMachineCode;
 
-    @Schema(description = "班次编码")
+    @ApiModelProperty(value = "班次编码")
     @TableField(exist = false)
     private String shiftCode;
 
-    @Schema(description = "是否启用：0-禁用 1-启用")
+    @ApiModelProperty(value = "是否启用：0-禁用 1-启用")
     @TableField("IS_ACTIVE")
     private Integer isActive;
 
-    @Schema(description = "创建时间")
+    @ApiModelProperty(value = "创建时间")
     @TableField(value = "CREATE_TIME", fill = FieldFill.INSERT)
     private LocalDateTime createTime;
 
-    @Schema(description = "更新时间")
+    @ApiModelProperty(value = "更新时间")
     @TableField(value = "UPDATE_TIME", fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updateTime;
 

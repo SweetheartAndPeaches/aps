@@ -1,6 +1,7 @@
 package com.zlt.aps.cx.common;
 
-import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.annotations.ApiModel;
+import io.swagger.annotations.ApiModelProperty;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -16,18 +17,18 @@ import java.io.Serializable;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-@Schema(description = "统一返回结果")
+@ApiModel(description = "统一返回结果")
 public class Result<T> implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
-    @Schema(description = "状态码")
+    @ApiModelProperty(value = "状态码")
     private Integer code;
 
-    @Schema(description = "消息")
+    @ApiModelProperty(value = "消息")
     private String message;
 
-    @Schema(description = "数据")
+    @ApiModelProperty(value = "数据")
     private T data;
 
     /**

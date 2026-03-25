@@ -1,7 +1,8 @@
 package com.zlt.aps.cx.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
-import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.annotations.ApiModel;
+import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
 
 import java.io.Serializable;
@@ -19,430 +20,430 @@ import java.time.LocalDateTime;
  */
 @Data
 @TableName(value = "T_FACTORY_MONTH_PLAN_PRODUCTION_FINAL_RESULT", keepGlobalPrefix = false)
-@Schema(description = "工厂月生产计划-最终排产计划定稿")
+@ApiModel(value = "工厂月生产计划-最终排产计划定稿")
 public class FactoryMonthPlanProductionFinalResult implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
     // ==================== 主键与基本信息 ====================
 
-    @Schema(description = "主键ID")
+    @ApiModelProperty(value = "主键ID")
     @TableId(value = "ID", type = IdType.AUTO)
     private Long id;
 
-    @Schema(description = "工单号(MP+年月日+批次号+5位流水)")
+    @ApiModelProperty(value = "工单号(MP+年月日+批次号+5位流水)")
     @TableField("PRODUCTION_NO")
     private String productionNo;
 
-    @Schema(description = "工厂编码")
+    @ApiModelProperty(value = "工厂编码")
     @TableField("FACTORY_CODE")
     private String factoryCode;
 
-    @Schema(description = "年份")
+    @ApiModelProperty(value = "年份")
     @TableField("YEAR")
     private Integer year;
 
-    @Schema(description = "月份")
+    @ApiModelProperty(value = "月份")
     @TableField("MONTH")
     private Integer month;
 
-    @Schema(description = "年月(YYYYMM)")
+    @ApiModelProperty(value = "年月(YYYYMM)")
     @TableField("YEAR_MONTH")
     private Integer yearMonth;
 
     // ==================== 版本信息 ====================
 
-    @Schema(description = "销售生产需求计划版本")
+    @ApiModelProperty(value = "销售生产需求计划版本")
     @TableField("MONTH_PLAN_VERSION")
     private String monthPlanVersion;
 
-    @Schema(description = "最新需求计划版本")
+    @ApiModelProperty(value = "最新需求计划版本")
     @TableField("LAST_MONTH_PLAN_VERSION")
     private String lastMonthPlanVersion;
 
-    @Schema(description = "排产计划版本")
+    @ApiModelProperty(value = "排产计划版本")
     @TableField("PRODUCTION_VERSION")
     private String productionVersion;
 
     // ==================== 产品信息 ====================
 
-    @Schema(description = "产品品类(TBR全钢/PCR半钢)")
+    @ApiModelProperty(value = "产品品类(TBR全钢/PCR半钢)")
     @TableField("PRODUCT_TYPE_CODE")
     private String productTypeCode;
 
-    @Schema(description = "物料编码")
+    @ApiModelProperty(value = "物料编码")
     @TableField("MATERIAL_CODE")
     private String materialCode;
 
-    @Schema(description = "物料描述")
+    @ApiModelProperty(value = "物料描述")
     @TableField("MATERIAL_DESC")
     private String materialDesc;
 
-    @Schema(description = "MES物料编码")
+    @ApiModelProperty(value = "MES物料编码")
     @TableField("MES_MATERIAL_CODE")
     private String mesMaterialCode;
 
-    @Schema(description = "产品结构")
+    @ApiModelProperty(value = "产品结构")
     @TableField("STRUCTURE_NAME")
     private String structureName;
 
-    @Schema(description = "英寸")
+    @ApiModelProperty(value = "英寸")
     @TableField("PRO_SIZE")
     private String proSize;
 
-    @Schema(description = "产品分类")
+    @ApiModelProperty(value = "产品分类")
     @TableField("PRODUCT_CATEGORY")
     private String productCategory;
 
-    @Schema(description = "产品状态")
+    @ApiModelProperty(value = "产品状态")
     @TableField("PRODUCT_STATUS")
     private String productStatus;
 
-    @Schema(description = "结构类型(01周期结构/02常规结构)")
+    @ApiModelProperty(value = "结构类型(01周期结构/02常规结构)")
     @TableField("STRUCTURE_TYPE")
     private String structureType;
 
-    @Schema(description = "排产分类")
+    @ApiModelProperty(value = "排产分类")
     @TableField("PRODUCTION_TYPE")
     private String productionType;
 
     // ==================== 胎胚与施工信息 ====================
 
-    @Schema(description = "生胎代码")
+    @ApiModelProperty(value = "生胎代码")
     @TableField("EMBRYO_CODE")
     private String embryoCode;
 
-    @Schema(description = "主物料(胎胚号)")
+    @ApiModelProperty(value = "主物料(胎胚号)")
     @TableField("MAIN_MATERIAL_DESC")
     private String mainMaterialDesc;
 
-    @Schema(description = "施工阶段(00无工艺/01试制/02量试/03正式)")
+    @ApiModelProperty(value = "施工阶段(00无工艺/01试制/02量试/03正式)")
     @TableField("CONSTRUCTION_STAGE")
     private String constructionStage;
 
-    @Schema(description = "是否零度材料")
+    @ApiModelProperty(value = "是否零度材料")
     @TableField("IS_ZERO_RACK")
     private String isZeroRack;
 
-    @Schema(description = "制造示方书号")
+    @ApiModelProperty(value = "制造示方书号")
     @TableField("EMBRYO_NO")
     private String embryoNo;
 
-    @Schema(description = "文字示方书号")
+    @ApiModelProperty(value = "文字示方书号")
     @TableField("TEXT_NO")
     private String textNo;
 
-    @Schema(description = "硫化示方书号")
+    @ApiModelProperty(value = "硫化示方书号")
     @TableField("LH_NO")
     private String lhNo;
 
     // ==================== 产品属性 ====================
 
-    @Schema(description = "品牌")
+    @ApiModelProperty(value = "品牌")
     @TableField("BRAND")
     private String brand;
 
-    @Schema(description = "规格")
+    @ApiModelProperty(value = "规格")
     @TableField("SPECIFICATIONS")
     private String specifications;
 
-    @Schema(description = "主花纹")
+    @ApiModelProperty(value = "主花纹")
     @TableField("MAIN_PATTERN")
     private String mainPattern;
 
-    @Schema(description = "花纹")
+    @ApiModelProperty(value = "花纹")
     @TableField("PATTERN")
     private String pattern;
 
-    @Schema(description = "型腔数量(同主花纹模具数量)")
+    @ApiModelProperty(value = "型腔数量(同主花纹模具数量)")
     @TableField("MOULD_CAVITY_QTY")
     private Integer mouldCavityQty;
 
-    @Schema(description = "活块数量(同主花纹物料模具数量)")
+    @ApiModelProperty(value = "活块数量(同主花纹物料模具数量)")
     @TableField("TYPE_BLOCK_QTY")
     private Integer typeBlockQty;
 
-    @Schema(description = "高优先级数量")
+    @ApiModelProperty(value = "高优先级数量")
     @TableField("HEIGHT_QTY")
     private Integer heightQty;
 
-    @Schema(description = "月均销量")
+    @ApiModelProperty(value = "月均销量")
     @TableField("AVERAGE_SALE_QTY")
     private Integer averageSaleQty;
 
-    @Schema(description = "库销比")
+    @ApiModelProperty(value = "库销比")
     @TableField("INVENTORY_SALES_RATIO")
     private BigDecimal inventorySalesRatio;
 
     // ==================== 产能与机台信息 ====================
 
-    @Schema(description = "日硫化量")
+    @ApiModelProperty(value = "日硫化量")
     @TableField("DAY_VULCANIZATION_QTY")
     private Integer dayVulcanizationQty;
 
-    @Schema(description = "成型机台信息(多个逗号分隔)")
+    @ApiModelProperty(value = "成型机台信息(多个逗号分隔)")
     @TableField("CX_MACHINE_CODE")
     private String cxMachineCode;
 
-    @Schema(description = "模具使用变化信息(如2-4-2)")
+    @ApiModelProperty(value = "模具使用变化信息(如2-4-2)")
     @TableField("MOULD_CHANGE_INFO")
     private String mouldChangeInfo;
 
-    @Schema(description = "动平衡数量")
+    @ApiModelProperty(value = "动平衡数量")
     @TableField("DYNAMIC_BALANCE_QTY")
     private String dynamicBalanceQty;
 
-    @Schema(description = "均匀性数量")
+    @ApiModelProperty(value = "均匀性数量")
     @TableField("UNIFORMITY_QTY")
     private Integer uniformityQty;
 
-    @Schema(description = "单条硫化时间(分钟)")
+    @ApiModelProperty(value = "单条硫化时间(分钟)")
     @TableField("CURING_TIME")
     private Integer curingTime;
 
     // ==================== 需求与排产数量 ====================
 
-    @Schema(description = "生产需求计划(净需求)")
+    @ApiModelProperty(value = "生产需求计划(净需求)")
     @TableField("PROD_REQ_PLAN")
     private Integer prodReqPlan;
 
-    @Schema(description = "试制量试计划需求量")
+    @ApiModelProperty(value = "试制量试计划需求量")
     @TableField("TRIAL_QTY")
     private Integer trialQty;
 
-    @Schema(description = "高优先级排产数量")
+    @ApiModelProperty(value = "高优先级排产数量")
     @TableField("HEIGHT_PRODUCTION_QTY")
     private Integer heightProductionQty;
 
-    @Schema(description = "实际生产需求(含损耗)")
+    @ApiModelProperty(value = "实际生产需求(含损耗)")
     @TableField("FACT_PROD_REQ_QTY")
     private Integer factProdReqQty;
 
-    @Schema(description = "生产实际排产量")
+    @ApiModelProperty(value = "生产实际排产量")
     @TableField("TOTAL_QTY")
     private Integer totalQty;
 
-    @Schema(description = "中优先级排产数量")
+    @ApiModelProperty(value = "中优先级排产数量")
     @TableField("MID_PRODUCTION_QTY")
     private Integer midProductionQty;
 
-    @Schema(description = "周期排产储备排产数量")
+    @ApiModelProperty(value = "周期排产储备排产数量")
     @TableField("CYCLE_PRODUCTION_QTY")
     private Integer cycleProductionQty;
 
-    @Schema(description = "常规储备排产数量")
+    @ApiModelProperty(value = "常规储备排产数量")
     @TableField("CONVENTION_PRODUCTION_QTY")
     private Integer conventionProductionQty;
 
-    @Schema(description = "暂缓订单排产数量")
+    @ApiModelProperty(value = "暂缓订单排产数量")
     @TableField("POSTPONE_PRODUCTION_QTY")
     private Integer postponeProductionQty;
 
-    @Schema(description = "试制量试排产量")
+    @ApiModelProperty(value = "试制量试排产量")
     @TableField("TRIAL_PRODUCTION_QTY")
     private Integer trialProductionQty;
 
-    @Schema(description = "差异量(未排产数量)")
+    @ApiModelProperty(value = "差异量(未排产数量)")
     @TableField("DIFFERENCE_QTY")
     private Integer differenceQty;
 
     // ==================== 周调整量 ====================
 
-    @Schema(description = "第1周调整量")
+    @ApiModelProperty(value = "第1周调整量")
     @TableField("ADJUST_QTY1")
     private Integer adjustQty1;
 
-    @Schema(description = "第2周调整量")
+    @ApiModelProperty(value = "第2周调整量")
     @TableField("ADJUST_QTY2")
     private Integer adjustQty2;
 
-    @Schema(description = "第3周调整量")
+    @ApiModelProperty(value = "第3周调整量")
     @TableField("ADJUST_QTY3")
     private Integer adjustQty3;
 
-    @Schema(description = "第4周调整量")
+    @ApiModelProperty(value = "第4周调整量")
     @TableField("ADJUST_QTY4")
     private Integer adjustQty4;
 
-    @Schema(description = "未排产原因")
+    @ApiModelProperty(value = "未排产原因")
     @TableField("REASON")
     private String reason;
 
     // ==================== 月度每日排产计划 ====================
 
-    @Schema(description = "开始日期(1-31)")
+    @ApiModelProperty(value = "开始日期(1-31)")
     @TableField("BEGIN_DAY")
     private Integer beginDay;
 
-    @Schema(description = "结束日期(1-31)")
+    @ApiModelProperty(value = "结束日期(1-31)")
     @TableField("END_DAY")
     private Integer endDay;
 
-    @Schema(description = "第1天排产量")
+    @ApiModelProperty(value = "第1天排产量")
     @TableField("DAY_1")
     private Integer day1;
 
-    @Schema(description = "第2天排产量")
+    @ApiModelProperty(value = "第2天排产量")
     @TableField("DAY_2")
     private Integer day2;
 
-    @Schema(description = "第3天排产量")
+    @ApiModelProperty(value = "第3天排产量")
     @TableField("DAY_3")
     private Integer day3;
 
-    @Schema(description = "第4天排产量")
+    @ApiModelProperty(value = "第4天排产量")
     @TableField("DAY_4")
     private Integer day4;
 
-    @Schema(description = "第5天排产量")
+    @ApiModelProperty(value = "第5天排产量")
     @TableField("DAY_5")
     private Integer day5;
 
-    @Schema(description = "第6天排产量")
+    @ApiModelProperty(value = "第6天排产量")
     @TableField("DAY_6")
     private Integer day6;
 
-    @Schema(description = "第7天排产量")
+    @ApiModelProperty(value = "第7天排产量")
     @TableField("DAY_7")
     private Integer day7;
 
-    @Schema(description = "第8天排产量")
+    @ApiModelProperty(value = "第8天排产量")
     @TableField("DAY_8")
     private Integer day8;
 
-    @Schema(description = "第9天排产量")
+    @ApiModelProperty(value = "第9天排产量")
     @TableField("DAY_9")
     private Integer day9;
 
-    @Schema(description = "第10天排产量")
+    @ApiModelProperty(value = "第10天排产量")
     @TableField("DAY_10")
     private Integer day10;
 
-    @Schema(description = "第11天排产量")
+    @ApiModelProperty(value = "第11天排产量")
     @TableField("DAY_11")
     private Integer day11;
 
-    @Schema(description = "第12天排产量")
+    @ApiModelProperty(value = "第12天排产量")
     @TableField("DAY_12")
     private Integer day12;
 
-    @Schema(description = "第13天排产量")
+    @ApiModelProperty(value = "第13天排产量")
     @TableField("DAY_13")
     private Integer day13;
 
-    @Schema(description = "第14天排产量")
+    @ApiModelProperty(value = "第14天排产量")
     @TableField("DAY_14")
     private Integer day14;
 
-    @Schema(description = "第15天排产量")
+    @ApiModelProperty(value = "第15天排产量")
     @TableField("DAY_15")
     private Integer day15;
 
-    @Schema(description = "第16天排产量")
+    @ApiModelProperty(value = "第16天排产量")
     @TableField("DAY_16")
     private Integer day16;
 
-    @Schema(description = "第17天排产量")
+    @ApiModelProperty(value = "第17天排产量")
     @TableField("DAY_17")
     private Integer day17;
 
-    @Schema(description = "第18天排产量")
+    @ApiModelProperty(value = "第18天排产量")
     @TableField("DAY_18")
     private Integer day18;
 
-    @Schema(description = "第19天排产量")
+    @ApiModelProperty(value = "第19天排产量")
     @TableField("DAY_19")
     private Integer day19;
 
-    @Schema(description = "第20天排产量")
+    @ApiModelProperty(value = "第20天排产量")
     @TableField("DAY_20")
     private Integer day20;
 
-    @Schema(description = "第21天排产量")
+    @ApiModelProperty(value = "第21天排产量")
     @TableField("DAY_21")
     private Integer day21;
 
-    @Schema(description = "第22天排产量")
+    @ApiModelProperty(value = "第22天排产量")
     @TableField("DAY_22")
     private Integer day22;
 
-    @Schema(description = "第23天排产量")
+    @ApiModelProperty(value = "第23天排产量")
     @TableField("DAY_23")
     private Integer day23;
 
-    @Schema(description = "第24天排产量")
+    @ApiModelProperty(value = "第24天排产量")
     @TableField("DAY_24")
     private Integer day24;
 
-    @Schema(description = "第25天排产量")
+    @ApiModelProperty(value = "第25天排产量")
     @TableField("DAY_25")
     private Integer day25;
 
-    @Schema(description = "第26天排产量")
+    @ApiModelProperty(value = "第26天排产量")
     @TableField("DAY_26")
     private Integer day26;
 
-    @Schema(description = "第27天排产量")
+    @ApiModelProperty(value = "第27天排产量")
     @TableField("DAY_27")
     private Integer day27;
 
-    @Schema(description = "第28天排产量")
+    @ApiModelProperty(value = "第28天排产量")
     @TableField("DAY_28")
     private Integer day28;
 
-    @Schema(description = "第29天排产量")
+    @ApiModelProperty(value = "第29天排产量")
     @TableField("DAY_29")
     private Integer day29;
 
-    @Schema(description = "第30天排产量")
+    @ApiModelProperty(value = "第30天排产量")
     @TableField("DAY_30")
     private Integer day30;
 
-    @Schema(description = "第31天排产量")
+    @ApiModelProperty(value = "第31天排产量")
     @TableField("DAY_31")
     private Integer day31;
 
     // ==================== 其他信息 ====================
 
-    @Schema(description = "硫化总工时")
+    @ApiModelProperty(value = "硫化总工时")
     @TableField("TOTAL_VULCANIZATION_MINUTES")
     private BigDecimal totalVulcanizationMinutes;
 
-    @Schema(description = "显示顺序")
+    @ApiModelProperty(value = "显示顺序")
     @TableField("DISPLAY_SEQ")
     private Integer displaySeq;
 
-    @Schema(description = "发布状态(0未发布/1已发布/2失败/3发布中/4超时/5待发布)")
+    @ApiModelProperty(value = "发布状态(0未发布/1已发布/2失败/3发布中/4超时/5待发布)")
     @TableField("IS_RELEASE")
     private String isRelease;
 
-    @Schema(description = "是否EXCEL导入(0否/1是)")
+    @ApiModelProperty(value = "是否EXCEL导入(0否/1是)")
     @TableField("IS_IMPORT")
     private String isImport;
 
-    @Schema(description = "排产顺序")
+    @ApiModelProperty(value = "排产顺序")
     @TableField("PRODUCTION_SEQUENCE")
     private Long productionSequence;
 
     // ==================== 系统字段 ====================
 
-    @Schema(description = "创建时间")
+    @ApiModelProperty(value = "创建时间")
     @TableField(value = "CREATE_TIME", fill = FieldFill.INSERT)
     private LocalDateTime createTime;
 
-    @Schema(description = "更新时间")
+    @ApiModelProperty(value = "更新时间")
     @TableField(value = "UPDATE_TIME", fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updateTime;
 
-    @Schema(description = "创建人")
+    @ApiModelProperty(value = "创建人")
     @TableField("CREATE_BY")
     private String createBy;
 
-    @Schema(description = "更新人")
+    @ApiModelProperty(value = "更新人")
     @TableField("UPDATE_BY")
     private String updateBy;
 
-    @Schema(description = "备注")
+    @ApiModelProperty(value = "备注")
     @TableField("REMARK")
     private String remark;
 

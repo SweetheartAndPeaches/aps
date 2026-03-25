@@ -1,6 +1,6 @@
 package com.zlt.aps.cx.controller;
 
-import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.annotations.Api;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.RestController;
  * @deprecated 已弃用，物料信息请使用 MdmMaterialInfo 相关接口
  */
 @Deprecated
-@Tag(name = "物料管理(已废弃)", description = "已废弃，请使用 MdmMaterialInfo 相关接口")
+@Api(tags = "物料管理(已废弃)")
 @RestController
 @RequestMapping("/material")
 public class MaterialController {
