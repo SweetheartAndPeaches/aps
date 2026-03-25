@@ -13,7 +13,7 @@ import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.LocalDateTime;
+import java.util.Date;
 import java.util.List;
 
 /**
@@ -72,7 +72,7 @@ public class CxStockServiceImpl extends ServiceImpl<CxStockMapper, CxStock> impl
     @Transactional(rollbackFor = Exception.class)
     public void refreshAllAlertStatus() {
         List<CxStock> stocks = list();
-        LocalDateTime now = LocalDateTime.now();
+        Date now = new Date();
         
         for (CxStock stock : stocks) {
             String alertStatus = calculateAlertStatus(stock);

@@ -22,6 +22,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -407,7 +408,7 @@ public class TrialScheduleServiceImpl implements TrialScheduleService {
             detail.setIsTrial(1);
             detail.setTrialPlanId(trialPlan.getId());
             detail.setSequence(1); // 试制任务优先
-            detail.setCreateTime(LocalDateTime.now());
+            detail.setCreateTime(new Date());
 
             scheduleDetailMapper.insert(detail);
             return detail;

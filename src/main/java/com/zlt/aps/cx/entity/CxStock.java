@@ -92,7 +92,7 @@ public class CxStock extends BaseEntity {
 
     /** 预警时间 */
     @TableField(exist = false)
-    private LocalDateTime alertTime;
+    private Date alertTime;
 
     /** 是否收尾SKU：0-否，1-是 */
     @TableField(value = "IS_ENDING_SKU")

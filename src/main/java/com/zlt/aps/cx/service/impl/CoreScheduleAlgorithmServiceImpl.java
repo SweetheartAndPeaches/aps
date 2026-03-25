@@ -1402,7 +1402,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             result.setProductionStatus("0");
             result.setIsRelease("0");
             result.setDataSource("0");
-            result.setCreateTime(LocalDateTime.now());
+            result.setCreateTime(new Date());
 
             // 设置班次计划量
             ShiftAllocationResult shiftResult = shiftMap.get(allocation.getMachineCode());
