@@ -72,9 +72,6 @@ public class ScheduleServiceImpl implements ScheduleService {
     private CxStockMapper stockMapper;
 
     @Autowired
-    private CxLhPlanMapper lhPlanMapper;
-
-    @Autowired
     private CxScheduleResultMapper scheduleResultMapper;
 
     @Autowired

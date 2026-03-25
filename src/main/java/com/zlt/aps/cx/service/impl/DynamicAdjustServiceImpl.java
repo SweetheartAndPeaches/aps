@@ -7,6 +7,8 @@ import com.zlt.aps.cx.entity.config.CxParamConfig;
 import com.zlt.aps.cx.entity.mdm.MdmMaterialInfo;
 import com.zlt.aps.cx.entity.schedule.CxScheduleDetail;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
+import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
+import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
 import com.zlt.aps.cx.mapper.*;
 import com.zlt.aps.cx.service.DynamicAdjustService;
 import lombok.extern.slf4j.Slf4j;
@@ -51,7 +53,7 @@ public class DynamicAdjustServiceImpl implements DynamicAdjustService {
     private CxParamConfigMapper paramConfigMapper;
 
     @Autowired
-    private CxLhPlanMapper lhPlanMapper;
+    private LhScheduleResultMapper lhScheduleResultMapper;
 
     @Override
     public ShiftAdjustResult checkAndAdjustBeforeShiftEnd(LocalDateTime scheduleDate, String shiftCode) {
@@ -473,13 +475,13 @@ public class DynamicAdjustServiceImpl implements DynamicAdjustService {
     private Integer calculateLhConsumption(String materialCode, LocalDateTime scheduleDate, String shiftCode) {
         // 简化处理：假设每班消耗量与计划量相等
         // 实际需要根据硫化计划详细计算
-        List<CxLhPlan> lhPlans = lhPlanMapper.selectList(
-                new LambdaQueryWrapper<CxLhPlan>()
-                        .eq(CxLhPlan::getMaterialCode, materialCode)
-                        .eq(CxLhPlan::getPlanDate, scheduleDate.toLocalDate()));
+        List<LhScheduleResult> lhSchedules = lhScheduleResultMapper.selectList(
+                new LambdaQueryWrapper<LhScheduleResult>()
+                        .eq(LhScheduleResult::getMaterialCode, materialCode)
+                        .eq(LhScheduleResult::getScheduleDate, scheduleDate.toLocalDate()));
 
-        return lhPlans.stream()
-                .mapToInt(p -> p.getPlanQty() != null ? p.getPlanQty() : 0)
+        return lhSchedules.stream()
+                .mapToInt(p -> p.getDailyPlanQty() != null ? p.getDailyPlanQty() : 0)
                 .sum() / 3; // 平均到三个班次
     }
 
@@ -489,12 +491,12 @@ public class DynamicAdjustServiceImpl implements DynamicAdjustService {
     private int getLhMachineCount(String materialCode) {
         // 简化处理：假设每个结构对应固定数量的硫化机
         // 实际需要根据结构硫化配比表查询
-        List<CxLhPlan> lhPlans = lhPlanMapper.selectList(
-                new LambdaQueryWrapper<CxLhPlan>()
-                        .eq(CxLhPlan::getMaterialCode, materialCode));
+        List<LhScheduleResult> lhSchedules = lhScheduleResultMapper.selectList(
+                new LambdaQueryWrapper<LhScheduleResult>()
+                        .eq(LhScheduleResult::getMaterialCode, materialCode));
 
-        return (int) lhPlans.stream()
-                .map(CxLhPlan::getMachineCode)
+        return (int) lhSchedules.stream()
+                .map(LhScheduleResult::getLhMachineCode)
                 .distinct()
                 .count();
     }

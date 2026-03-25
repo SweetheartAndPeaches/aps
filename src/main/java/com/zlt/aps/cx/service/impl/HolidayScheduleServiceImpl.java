@@ -42,9 +42,6 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
     private CxStockMapper stockMapper;
 
     @Autowired
-    private CxLhPlanMapper lhPlanMapper;
-
-    @Autowired
     private LhScheduleResultMapper lhScheduleResultMapper;
 
     @Autowired
