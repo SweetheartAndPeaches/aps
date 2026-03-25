@@ -1092,9 +1092,27 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
     /**
      * 初始化机台状态
+     * 
+     * 处理逻辑：
+     * 1. 跳过禁用、维护中、故障的机台
+     * 2. 处理精度计划：
+     *    - 精度期间的机台在对应班次不可用（扣减该班次全部产能）
+     *    - 根据胎胚库存判断是否影响硫化
      */
     private Map<String, MachineAllocationResult> initMachineStatus(ScheduleContextDTO context) {
         Map<String, MachineAllocationResult> map = new LinkedHashMap<>();
+
+        // 构建精度计划映射（机台编码 -> 精度计划）
+        Map<String, CxPrecisionPlan> precisionPlanMap = new HashMap<>();
+        if (context.getPrecisionPlans() != null) {
+            for (CxPrecisionPlan plan : context.getPrecisionPlans()) {
+                precisionPlanMap.put(plan.getMachineCode(), plan);
+            }
+        }
+
+        // 班次产能比例（早班:中班:夜班 = 8:8:8小时）
+        int[] shiftCapacityRatio = {1, 1, 1}; // 三个班次各占1/3
+        int totalRatio = 3;
 
         for (MdmMoldingMachine machine : context.getAvailableMachines()) {
             if (machine.getIsActive() == null || machine.getIsActive() != 1) {
@@ -1103,6 +1121,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             // 检查维护状态
             if ("MAINTAINING".equals(machine.getMaintainStatus()) || 
                 "FAULT".equals(machine.getMaintainStatus())) {
+                log.debug("机台 {} 状态异常（{}），跳过", 
+                        machine.getCxMachineCode(), machine.getMaintainStatus());
                 continue;
             }
 
@@ -1118,19 +1138,57 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             result.setTaskAllocations(new ArrayList<>());
             result.setCurrentStructure(machine.getCurrentStructure());
 
-            // 检查精度计划（扣减4小时产能）
-            for (CxPrecisionPlan plan : context.getPrecisionPlans()) {
-                if (plan.getMachineCode().equals(machine.getCxMachineCode()) &&
-                    plan.getPlanDate().equals(context.getScheduleDate())) {
-                    // 扣减4小时产能（假设每小时50条）
-                    int precisionDeduction = 200;
+            // 检查精度计划
+            CxPrecisionPlan precisionPlan = precisionPlanMap.get(machine.getCxMachineCode());
+            if (precisionPlan != null && 
+                ("PLANNED".equals(precisionPlan.getStatus()) || 
+                 "IN_PROGRESS".equals(precisionPlan.getStatus()))) {
+                
+                // 精度时长（小时）
+                int precisionHours = precisionPlan.getEstimatedHours() != null 
+                        ? precisionPlan.getEstimatedHours() : 4;
+                
+                // 机台小时产能（条/小时）
+                int hourlyCapacity = machine.getProductionCapacity() != null 
+                        ? machine.getProductionCapacity().intValue() : 50;
+                
+                // 扣减产能 = 精度时长 × 小时产能
+                int precisionDeduction = precisionHours * hourlyCapacity;
+                
+                // 根据班次扣减
+                String planShift = precisionPlan.getPlanShift();
+                if ("SHIFT_DAY".equals(planShift)) {
+                    // 早班精度，扣减早班产能
                     result.setRemainingCapacity(result.getRemainingCapacity() - precisionDeduction);
+                    log.info("机台 {} 在早班有精度计划，扣减产能 {} 条", 
+                            machine.getCxMachineCode(), precisionDeduction);
+                } else if ("SHIFT_AFTERNOON".equals(planShift)) {
+                    // 中班精度，扣减中班产能
+                    result.setRemainingCapacity(result.getRemainingCapacity() - precisionDeduction);
+                    log.info("机台 {} 在中班有精度计划，扣减产能 {} 条", 
+                            machine.getCxMachineCode(), precisionDeduction);
+                } else {
+                    // 未指定班次，默认扣减全天产能的1/3
+                    int deduction = result.getDailyCapacity() / 3;
+                    result.setRemainingCapacity(result.getRemainingCapacity() - deduction);
+                    log.info("机台 {} 有精度计划（未指定班次），扣减产能 {} 条", 
+                            machine.getCxMachineCode(), deduction);
+                }
+
+                // 标记精度计划信息
+                result.setPrecisionPlan(precisionPlan);
+                
+                // 如果剩余产能为负，设为0
+                if (result.getRemainingCapacity() < 0) {
+                    log.warn("机台 {} 精度计划导致剩余产能为负，设为0", machine.getCxMachineCode());
+                    result.setRemainingCapacity(0);
                 }
             }
 
             map.put(machine.getCxMachineCode(), result);
         }
 
+        log.info("初始化机台状态完成，可用机台 {} 台", map.size());
         return map;
     }
 

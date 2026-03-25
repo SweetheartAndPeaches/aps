@@ -100,6 +100,9 @@ public class ScheduleServiceImpl implements ScheduleService {
     private LhScheduleResultMapper lhScheduleResultMapper;
 
     @Autowired
+    private CxPrecisionPlanMapper precisionPlanMapper;
+
+    @Autowired
     private MdmCxMachineOnlineInfoMapper onlineInfoMapper;
 
     @Autowired
@@ -298,12 +301,20 @@ public class ScheduleServiceImpl implements ScheduleService {
             context.setMainProductCodes(mainProductCodes);
             log.info("加载SKU排产分类 {} 条，其中主销产品 {} 个", skuCategories.size(), mainProductCodes.size());
 
-            // 13. 设置节假日相关标记
+            // 13. 获取精度计划（设备校准）
+            List<CxPrecisionPlan> precisionPlans = precisionPlanMapper.selectList(
+                    new LambdaQueryWrapper<CxPrecisionPlan>()
+                            .eq(CxPrecisionPlan::getPlanDate, scheduleDate)
+                            .in(CxPrecisionPlan::getStatus, "PLANNED", "IN_PROGRESS"));
+            context.setPrecisionPlans(precisionPlans);
+            log.info("加载精度计划 {} 条", precisionPlans.size());
+
+            // 14. 设置节假日相关标记
             context.setIsOpeningDay(holidayScheduleService.isStartProductionDay(scheduleDate));
             context.setIsClosingDay(holidayScheduleService.isStopProductionDay(scheduleDate));
             context.setIsBeforeClosingDay(holidayScheduleService.isBeforeHoliday(scheduleDate));
 
-            // 14. 设置排程参数
+            // 15. 设置排程参数
             context.setScheduleDate(scheduleDate);
             context.setScheduleMode(request.getScheduleMode());
 
