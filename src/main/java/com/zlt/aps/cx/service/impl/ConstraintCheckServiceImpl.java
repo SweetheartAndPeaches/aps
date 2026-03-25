@@ -261,8 +261,8 @@ public class ConstraintCheckServiceImpl implements ConstraintCheckService {
         List<String> violations = new ArrayList<>();
 
         // 计算机台产能
-        BigDecimal capacity = machine.getProductionCapacity() != null 
-                ? machine.getProductionCapacity().multiply(BigDecimal.valueOf(shiftHours != null ? shiftHours : 24))
+        BigDecimal capacity = machine.getMaxDailyCapacity() != null 
+                ? BigDecimal.valueOf(machine.getMaxDailyCapacity())
                 : BigDecimal.valueOf(1200); // 默认1200条/天
 
         // 检查产能是否满足
