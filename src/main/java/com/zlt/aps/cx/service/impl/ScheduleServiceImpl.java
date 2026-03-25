@@ -109,7 +109,7 @@ public class ScheduleServiceImpl implements ScheduleService {
     private FactoryMonthPlanProductionFinalResultMapper monthPlanMapper;
 
     @Override
-    public CxScheduleResult executeSchedule(ScheduleRequest request) {
+    public ScheduleResult executeSchedule(ScheduleRequest request) {
         ScheduleResult result = new ScheduleResult();
         result.setSuccess(false);
         result.setScheduleDate(request.getScheduleDate());
