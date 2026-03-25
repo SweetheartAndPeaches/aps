@@ -172,14 +172,16 @@ public class ConstraintCheckServiceImpl implements ConstraintCheckService {
             return ConstraintCheckResult.fail("库存信息不存在");
         }
 
-        if (stock.getCurrentStock() == null || stock.getCurrentStock() <= 0) {
-            return ConstraintCheckResult.fail("库存为零");
+        // 使用有效库存
+        Integer effectiveStock = stock.getEffectiveStock();
+        if (effectiveStock == null || effectiveStock <= 0) {
+            return ConstraintCheckResult.fail("有效库存为零");
         }
 
         // 检查库存是否满足计划量
-        if (planQty != null && planQty.compareTo(BigDecimal.valueOf(stock.getCurrentStock())) > 0) {
-            violations.add(String.format("库存不足，当前库存: %d, 计划量: %s", 
-                    stock.getCurrentStock(), planQty));
+        if (planQty != null && planQty.compareTo(BigDecimal.valueOf(effectiveStock)) > 0) {
+            violations.add(String.format("库存不足，当前有效库存: %d, 计划量: %s", 
+                    effectiveStock, planQty));
         }
 
         // 检查库存时长预警
@@ -192,8 +194,8 @@ public class ConstraintCheckServiceImpl implements ConstraintCheckService {
 
         if (violations.isEmpty()) {
             ConstraintCheckResult result = ConstraintCheckResult.pass();
-            result.setDetails(String.format("库存充足，当前: %d条，可供时长: %.2f小时", 
-                    stock.getCurrentStock(), stockHours != null ? stockHours : BigDecimal.ZERO));
+            result.setDetails(String.format("库存充足，当前有效库存: %d条，可供时长: %.2f小时", 
+                    effectiveStock, stockHours != null ? stockHours : BigDecimal.ZERO));
             return result;
         } else {
             return ConstraintCheckResult.fail(violations);

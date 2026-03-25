@@ -173,7 +173,7 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
         // 2. 获取当前库存
         Map<String, Integer> currentStock = new HashMap<>();
         for (CxStock stock : context.getStocks()) {
-            currentStock.put(stock.getMaterialCode(), stock.getCurrentStock());
+            currentStock.put(stock.getEmbryoCode(), stock.getEffectiveStock());
         }
 
         // 3. 计算过剩库存
@@ -356,7 +356,7 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
 
         // 获取所有胎胚库存
         List<CxStock> stocks = stockMapper.selectList(
-                new LambdaQueryWrapper<CxStock>().gt(CxStock::getCurrentStock, 0));
+                new LambdaQueryWrapper<CxStock>().gt(CxStock::getStockNum, 0));
 
         for (CxStock stock : stocks) {
             // 获取胎胚已停放时间（从生产时间计算）
@@ -369,11 +369,11 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
 
                 if (predictedParkingHours.compareTo(BigDecimal.valueOf(maxParkingHours)) > 0) {
                     EmbryoConsumptionSuggestion suggestion = new EmbryoConsumptionSuggestion();
-                    suggestion.setEmbryoCode(stock.getMaterialCode());
+                    suggestion.setEmbryoCode(stock.getEmbryoCode());
                     suggestion.setEmbryoName(stock.getMaterialName());
-                    suggestion.setCurrentStock(stock.getCurrentStock());
+                    suggestion.setCurrentStock(stock.getStockNum());
                     suggestion.setParkingHours(parkingHours);
-                    suggestion.setSuggestedConsumption(stock.getCurrentStock());
+                    suggestion.setSuggestedConsumption(stock.getEffectiveStock());
                     suggestion.setReason(String.format("停放时间 %.2f 小时，加预留时间后将超过 %d 小时限制",
                             parkingHours, maxParkingHours));
                     suggestions.add(suggestion);

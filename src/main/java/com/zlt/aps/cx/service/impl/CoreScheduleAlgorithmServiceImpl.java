@@ -86,7 +86,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         Map<String, CxStock> stockMap = new HashMap<>();
         if (context.getStocks() != null) {
             stockMap = context.getStocks().stream()
-                    .collect(Collectors.toMap(CxStock::getMaterialCode, s -> s, (a, b) -> a));
+                    .collect(Collectors.toMap(CxStock::getEmbryoCode, s -> s, (a, b) -> a));
         }
 
         // 构建结构收尾映射
@@ -126,8 +126,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                     currentStock = embryoStock;
                 } else {
                     CxStock stock = stockMap.get(embryoCode);
-                    if (stock != null && stock.getCurrentStock() != null) {
-                        currentStock = stock.getCurrentStock();
+                    if (stock != null) {
+                        currentStock = stock.getEffectiveStock();
                     }
                 }
 
@@ -730,7 +730,12 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             Integer vulcanizeMachineCount,
             Integer vulcanizeMoldCount) {
         
-        if (stock == null || stock.getCurrentStock() == null || stock.getCurrentStock() <= 0) {
+        if (stock == null) {
+            return BigDecimal.ZERO;
+        }
+        
+        Integer effectiveStock = stock.getEffectiveStock();
+        if (effectiveStock <= 0) {
             return BigDecimal.ZERO;
         }
 
@@ -745,7 +750,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 .multiply(BigDecimal.valueOf(vulcanizeMoldCount))
                 .multiply(BigDecimal.valueOf(0.5)); // 假设每模每小时0.5条
 
-        return BigDecimal.valueOf(stock.getCurrentStock())
+        return BigDecimal.valueOf(effectiveStock)
                 .divide(hourlyOutput, 2, RoundingMode.HALF_UP);
     }
 
@@ -766,8 +771,11 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
         // 获取库存分配量
         BigDecimal stockAllocation = BigDecimal.ZERO;
-        if (stock != null && stock.getCurrentStock() != null && stock.getCurrentStock() > 0) {
-            stockAllocation = BigDecimal.valueOf(stock.getCurrentStock());
+        if (stock != null) {
+            Integer effectiveStock = stock.getEffectiveStock();
+            if (effectiveStock > 0) {
+                stockAllocation = BigDecimal.valueOf(effectiveStock);
+            }
         }
 
         // 日胎胚计划量 = (硫化消耗量 - 库存分配量) × (1 + 损耗率)
@@ -859,7 +867,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             com.zlt.aps.cx.entity.mdm.MdmMonthSurplus monthSurplus = 
                     context.getMonthSurplusMap().get(material.getMaterialCode());
             if (monthSurplus != null && monthSurplus.getPlanSurplusQty() != null) {
-                int stockQty = stock != null && stock.getCurrentStock() != null ? stock.getCurrentStock() : 0;
+                int stockQty = stock != null ? stock.getEffectiveStock() : 0;
                 // 收尾余量 = 硫化余量 - 胎胚库存
                 int endingSurplusQty = monthSurplus.getPlanSurplusQty() - stockQty;
                 if (endingSurplusQty <= 0) {
@@ -1305,7 +1313,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                     context.getMonthSurplusMap().get(materialCode);
             if (monthSurplus != null && monthSurplus.getPlanSurplusQty() != null) {
                 vulcanizeSurplusQty = monthSurplus.getPlanSurplusQty();
-                int stockQty = stock != null && stock.getCurrentStock() != null ? stock.getCurrentStock() : 0;
+                int stockQty = stock != null ? stock.getEffectiveStock() : 0;
                 endingSurplusQty = vulcanizeSurplusQty - stockQty;
                 isEndingTask = endingSurplusQty <= 0;
             }

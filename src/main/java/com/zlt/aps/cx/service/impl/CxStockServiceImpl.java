@@ -27,7 +27,7 @@ public class CxStockServiceImpl extends ServiceImpl<CxStockMapper, CxStock> impl
     @Override
     public CxStock getByMaterialCode(String materialCode) {
         LambdaQueryWrapper<CxStock> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(CxStock::getMaterialCode, materialCode);
+        wrapper.eq(CxStock::getEmbryoCode, materialCode);
         return getOne(wrapper);
     }
 
@@ -55,17 +55,17 @@ public class CxStockServiceImpl extends ServiceImpl<CxStockMapper, CxStock> impl
     @Override
     public BigDecimal calculateStockHours(String materialCode) {
         CxStock stock = getByMaterialCode(materialCode);
-        if (stock == null || stock.getCurrentStock() == null || stock.getCurrentStock() <= 0) {
+        if (stock == null || stock.getStockNum() == null || stock.getStockNum() <= 0) {
+            return BigDecimal.ZERO;
+        }
+        // 使用有效库存计算可供时长
+        Integer effectiveStock = stock.getEffectiveStock();
+        if (effectiveStock <= 0) {
             return BigDecimal.ZERO;
         }
         // 简化计算：库存 / (硫化机台数 * 模数 * 每小时产能)
         // 实际应根据硫化时间和模数计算
-        if (stock.getVulcanizeMoldCount() != null && stock.getVulcanizeMoldCount() > 0) {
-            // 假设每模每小时生产1条
-            return new BigDecimal(stock.getCurrentStock())
-                    .divide(new BigDecimal(stock.getVulcanizeMoldCount()), 2, RoundingMode.HALF_UP);
-        }
-        return new BigDecimal(stock.getCurrentStock());
+        return new BigDecimal(effectiveStock).setScale(2, RoundingMode.HALF_UP);
     }
 
     @Override
@@ -95,7 +95,7 @@ public class CxStockServiceImpl extends ServiceImpl<CxStockMapper, CxStock> impl
         }
         
         wrapper.orderByDesc(CxStock::getAlertTime)
-               .orderByAsc(CxStock::getMaterialCode);
+               .orderByAsc(CxStock::getEmbryoCode);
         
         return page(page, wrapper);
     }
@@ -104,14 +104,14 @@ public class CxStockServiceImpl extends ServiceImpl<CxStockMapper, CxStock> impl
      * 计算预警状态
      */
     private String calculateAlertStatus(CxStock stock) {
-        if (stock == null || stock.getCurrentStock() == null) {
+        if (stock == null || stock.getStockNum() == null) {
             return "NORMAL";
         }
 
         // 根据库存可供硫化时长判断
         BigDecimal stockHours = stock.getStockHours();
         if (stockHours == null) {
-            stockHours = calculateStockHours(stock.getMaterialCode());
+            stockHours = calculateStockHours(stock.getEmbryoCode());
         }
 
         // 预警阈值（可配置）
