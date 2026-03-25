@@ -1,7 +1,6 @@
 package com.zlt.aps.cx.entity.mdm;
 
 import com.baomidou.mybatisplus.annotation.*;
-import com.fasterxml.jackson.annotation.JsonFormat;
 import com.zlt.aps.cx.entity.base.ApsBaseEntity;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModel;
@@ -10,7 +9,6 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 
 /**
  * 成型机台信息对象
@@ -120,26 +118,12 @@ public class MdmMoldingMachine extends ApsBaseEntity {
 
     /**
      * 机台状态：0-正常 1-维护中 2-故障 3-停用
+     * 
+     * 注：机台维护时间从 CxPrecisionPlan（精度计划）获取
      */
     @ApiModelProperty(value = "机台状态：0-正常 1-维护中 2-故障 3-停用")
     @TableField("MAINTAIN_STATUS")
     private String maintainStatus;
-
-    /**
-     * 维护开始时间
-     */
-    @ApiModelProperty(value = "维护开始时间")
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
-    @TableField("MAINTAIN_START_TIME")
-    private LocalDateTime maintainStartTime;
-
-    /**
-     * 维护结束时间
-     */
-    @ApiModelProperty(value = "维护结束时间")
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
-    @TableField("MAINTAIN_END_TIME")
-    private LocalDateTime maintainEndTime;
 
     /**
      * 排产限制说明
