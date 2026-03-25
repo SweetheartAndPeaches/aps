@@ -89,7 +89,6 @@
 /workspace/projects/src/main/java/com/zlt/aps/cx/common/enums/ScheduleType.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/service/CxAlertConfigService.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/mapper/MdmMoldingMachineMapper.java
-/workspace/projects/src/main/java/com/zlt/aps/cx/common/Result.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/mapper/CxMaterialMapper.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/ApsFormingScheduleApplication.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/mapper/MdmMaterialInfoMapper.java
