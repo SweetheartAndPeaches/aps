@@ -7,6 +7,7 @@ import com.zlt.aps.cx.dto.ScheduleRequest;
 import com.zlt.aps.cx.entity.*;
 import com.zlt.aps.cx.entity.config.CxKeyProduct;
 import com.zlt.aps.cx.entity.config.CxParamConfig;
+import com.zlt.aps.cx.entity.config.CxShiftConfig;
 import com.zlt.aps.cx.entity.config.CxStructureShiftCapacity;
 import com.zlt.aps.cx.entity.mdm.MdmCxMachineOnlineInfo;
 import com.zlt.aps.cx.entity.mdm.MdmMaterialInfo;
@@ -113,6 +114,9 @@ public class ScheduleServiceImpl implements ScheduleService {
 
     @Autowired
     private FactoryMonthPlanProductionFinalResultMapper monthPlanMapper;
+
+    @Autowired
+    private CxShiftConfigMapper shiftConfigMapper;
 
     @Override
     public ScheduleResult executeSchedule(ScheduleRequest request) {
@@ -254,7 +258,68 @@ public class ScheduleServiceImpl implements ScheduleService {
                     : 24;
             context.setMaxParkingHours(maxParkingHours);
 
-            // 8. 获取结构班产配置（整车条数）
+            // 加载算法可配置参数
+            // 排程班次数量（默认8个班次）
+            CxParamConfig shiftCountConfig = paramConfigMap.get("SCHEDULE_SHIFT_COUNT");
+            Integer scheduleShiftCount = shiftCountConfig != null 
+                    ? Integer.parseInt(shiftCountConfig.getParamValue()) 
+                    : 8;
+            context.setScheduleShiftCount(scheduleShiftCount);
+            
+            // 机台种类上限（默认4种）
+            CxParamConfig maxTypesConfig = paramConfigMap.get("MAX_TYPES_PER_MACHINE");
+            Integer maxTypesPerMachine = maxTypesConfig != null 
+                    ? Integer.parseInt(maxTypesConfig.getParamValue()) 
+                    : 4;
+            context.setMaxTypesPerMachine(maxTypesPerMachine);
+            
+            // 默认整车容量（默认12条）
+            CxParamConfig tripCapacityConfig = paramConfigMap.get("DEFAULT_TRIP_CAPACITY");
+            Integer defaultTripCapacity = tripCapacityConfig != null 
+                    ? Integer.parseInt(tripCapacityConfig.getParamValue()) 
+                    : 12;
+            context.setDefaultTripCapacity(defaultTripCapacity);
+            
+            // 波浪比例（班次分配比例，格式：1,2,1 表示夜班:早班:中班=1:2:1）
+            CxParamConfig waveRatioConfig = paramConfigMap.get("WAVE_RATIO");
+            int[] waveRatio;
+            if (waveRatioConfig != null && waveRatioConfig.getParamValue() != null) {
+                String[] ratios = waveRatioConfig.getParamValue().split(",");
+                waveRatio = new int[ratios.length];
+                for (int i = 0; i < ratios.length; i++) {
+                    waveRatio[i] = Integer.parseInt(ratios[i].trim());
+                }
+            } else {
+                // 默认波浪比例：夜班:早班:中班 = 1:2:1
+                waveRatio = new int[]{1, 2, 1};
+            }
+            context.setWaveRatio(waveRatio);
+            log.info("加载算法参数：班次数量={}, 种类上限={}, 默认整车={}, 波浪比例={}", 
+                    scheduleShiftCount, maxTypesPerMachine, defaultTripCapacity, 
+                    java.util.Arrays.toString(waveRatio));
+
+            // 8. 获取班次配置（从T_CX_SHIFT_CONFIG）
+            List<CxShiftConfig> shiftConfigList = shiftConfigMapper.selectList(
+                    new LambdaQueryWrapper<CxShiftConfig>()
+                            .eq(CxShiftConfig::getIsActive, 1)
+                            .orderByAsc(CxShiftConfig::getShiftOrder));
+            context.setShiftConfigList(shiftConfigList);
+            log.info("加载班次配置 {} 条", shiftConfigList.size());
+            
+            // 构建班次编码数组（按班次顺序排列）
+            String[] shiftCodes;
+            if (!shiftConfigList.isEmpty()) {
+                shiftCodes = shiftConfigList.stream()
+                        .map(CxShiftConfig::getShiftCode)
+                        .toArray(String[]::new);
+            } else {
+                // 默认3班次
+                shiftCodes = new String[]{"SHIFT_NIGHT", "SHIFT_DAY", "SHIFT_AFTERNOON"};
+            }
+            context.setShiftCodes(shiftCodes);
+            log.info("班次顺序: {}", java.util.Arrays.toString(shiftCodes));
+
+            // 9. 获取结构班产配置（整车条数）
             List<CxStructureShiftCapacity> structureShiftCapacities = structureShiftCapacityMapper.selectList(
                     new LambdaQueryWrapper<CxStructureShiftCapacity>()
                             .eq(CxStructureShiftCapacity::getIsActive, 1));
