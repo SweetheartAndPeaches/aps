@@ -628,8 +628,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             waveRatio = DEFAULT_WAVE_RATIO;
         }
         
-        // 根据班次数量调整波浪比例
-        int[] adjustedRatio = adjustWaveRatio(waveRatio, shiftCodes.length);
+        // 根据班次编码调整波浪比例（映射夜早中比例到正确的班次位置）
+        int[] adjustedRatio = adjustWaveRatio(waveRatio, shiftCodes);
         
         // 计算总比例
         int totalRatio = 0;
@@ -1421,9 +1421,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 ? context.getDefaultTripCapacity() 
                 : DEFAULT_TRIP_CAPACITY;
         
-        // 根据班次数量调整波浪比例
-        // 如果班次数量与波浪比例数组长度不一致，需要进行调整
-        int[] adjustedRatio = adjustWaveRatio(waveRatio, shiftCount);
+        // 根据班次编码调整波浪比例（映射夜早中比例到正确的班次位置）
+        int[] adjustedRatio = adjustWaveRatio(waveRatio, shiftCodes);
         
         // 计算总比例
         int totalRatio = 0;
@@ -1451,22 +1450,38 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     }
     
     /**
-     * 调整波浪比例以匹配班次数量
-     * 支持将基础比例模式扩展到任意班次数
+     * 调整波浪比例以匹配班次序列
+     * 
+     * 波浪比例配置顺序：夜班、早班、中班（如 {1, 2, 1} 表示夜:早:中 = 1:2:1）
+     * 班次序列顺序：早中、夜早中、夜早中...（第一天夜班跳过）
+     * 
+     * 需要根据班次编码将波浪比例映射到正确的位置
+     * 
+     * @param baseRatio 基础波浪比例 [夜, 早, 中]
+     * @param shiftCodes 班次编码数组
+     * @return 调整后的波浪比例
      */
-    private int[] adjustWaveRatio(int[] baseRatio, int shiftCount) {
+    private int[] adjustWaveRatio(int[] baseRatio, String[] shiftCodes) {
+        int shiftCount = shiftCodes.length;
         int[] result = new int[shiftCount];
-        int baseLength = baseRatio.length;
         
-        if (shiftCount <= baseLength) {
-            // 班次数量不超过基础比例长度，直接截取
-            System.arraycopy(baseRatio, 0, result, 0, shiftCount);
-        } else {
-            // 班次数量超过基础比例长度，循环复制
-            // 例如：基础 {1,2,1}，8班次 -> {1,2,1,1,2,1,1,2}
-            for (int i = 0; i < shiftCount; i++) {
-                result[i] = baseRatio[i % baseLength];
+        // 波浪比例索引映射
+        // SHIFT_NIGHT -> 0, SHIFT_DAY -> 1, SHIFT_AFTERNOON -> 2
+        for (int i = 0; i < shiftCount; i++) {
+            String shiftCode = shiftCodes[i];
+            int ratioIndex;
+            
+            if (shiftCode.contains("NIGHT")) {
+                ratioIndex = 0;  // 夜班对应第一个比例
+            } else if (shiftCode.contains("DAY")) {
+                ratioIndex = 1;  // 早班对应第二个比例
+            } else if (shiftCode.contains("AFTERNOON")) {
+                ratioIndex = 2;  // 中班对应第三个比例
+            } else {
+                ratioIndex = i % baseRatio.length;  // 兜底
             }
+            
+            result[i] = baseRatio[ratioIndex];
         }
         
         return result;

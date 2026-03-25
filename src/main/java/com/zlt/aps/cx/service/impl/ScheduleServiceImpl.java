@@ -259,13 +259,6 @@ public class ScheduleServiceImpl implements ScheduleService {
             context.setMaxParkingHours(maxParkingHours);
 
             // 加载算法可配置参数
-            // 排程班次数量（默认8个班次）
-            CxParamConfig shiftCountConfig = paramConfigMap.get("SCHEDULE_SHIFT_COUNT");
-            Integer scheduleShiftCount = shiftCountConfig != null 
-                    ? Integer.parseInt(shiftCountConfig.getParamValue()) 
-                    : 8;
-            context.setScheduleShiftCount(scheduleShiftCount);
-            
             // 机台种类上限（默认4种）
             CxParamConfig maxTypesConfig = paramConfigMap.get("MAX_TYPES_PER_MACHINE");
             Integer maxTypesPerMachine = maxTypesConfig != null 
@@ -294,8 +287,8 @@ public class ScheduleServiceImpl implements ScheduleService {
                 waveRatio = new int[]{1, 2, 1};
             }
             context.setWaveRatio(waveRatio);
-            log.info("加载算法参数：班次数量={}, 种类上限={}, 默认整车={}, 波浪比例={}", 
-                    scheduleShiftCount, maxTypesPerMachine, defaultTripCapacity, 
+            log.info("加载算法参数：种类上限={}, 默认整车={}, 波浪比例={}", 
+                    maxTypesPerMachine, defaultTripCapacity, 
                     java.util.Arrays.toString(waveRatio));
 
             // 8. 获取班次配置（从T_CX_SHIFT_CONFIG）
@@ -306,20 +299,22 @@ public class ScheduleServiceImpl implements ScheduleService {
             context.setShiftConfigList(shiftConfigList);
             log.info("加载班次配置 {} 条", shiftConfigList.size());
             
-            // 构建班次编码数组（按班次顺序排列）
-            String[] shiftCodes;
-            if (!shiftConfigList.isEmpty()) {
-                shiftCodes = shiftConfigList.stream()
-                        .map(CxShiftConfig::getShiftCode)
-                        .toArray(String[]::new);
-            } else {
-                // 默认3班次
-                shiftCodes = new String[]{"SHIFT_NIGHT", "SHIFT_DAY", "SHIFT_AFTERNOON"};
-            }
+            // 9. 计算排产班次
+            // 排产天数（默认3天）
+            CxParamConfig scheduleDaysConfig = paramConfigMap.get("SCHEDULE_DAYS");
+            int scheduleDays = scheduleDaysConfig != null 
+                    ? Integer.parseInt(scheduleDaysConfig.getParamValue()) 
+                    : 3;
+            context.setScheduleDays(scheduleDays);
+            
+            // 计算班次数组和日期数组
+            // 班次顺序：早中、夜早中、夜早中...（第一天夜班跳过）
+            String[] shiftCodes = calculateShiftSequence(scheduleDays, shiftConfigList, scheduleDate);
             context.setShiftCodes(shiftCodes);
-            log.info("班次顺序: {}", java.util.Arrays.toString(shiftCodes));
+            log.info("排产天数: {}, 班次数量: {}, 班次顺序: {}", 
+                    scheduleDays, shiftCodes.length, java.util.Arrays.toString(shiftCodes));
 
-            // 9. 获取结构班产配置（整车条数）
+            // 10. 获取结构班产配置（整车条数）
             List<CxStructureShiftCapacity> structureShiftCapacities = structureShiftCapacityMapper.selectList(
                     new LambdaQueryWrapper<CxStructureShiftCapacity>()
                             .eq(CxStructureShiftCapacity::getIsActive, 1));
@@ -854,5 +849,88 @@ public class ScheduleServiceImpl implements ScheduleService {
             }
         }
         return totalQty;
+    }
+    
+    /**
+     * 计算排产班次序列
+     * 
+     * 排产规则：
+     * - 一天3个班次：夜班(NIGHT) → 早班(DAY) → 中班(AFTERNOON)
+     * - 排产从早班开始，第一天夜班跳过
+     * - 例如3天排产：早中、夜早中、夜早中 = 8个班次
+     * 
+     * @param scheduleDays 排产天数
+     * @param shiftConfigList 班次配置列表（按班次顺序排列：夜、早、中）
+     * @param startDate 排产开始日期
+     * @return 班次编码数组
+     */
+    private String[] calculateShiftSequence(int scheduleDays, List<CxShiftConfig> shiftConfigList, 
+            LocalDate startDate) {
+        
+        // 班次顺序：夜班、早班、中班（这是自然时间顺序）
+        final String SHIFT_NIGHT = "SHIFT_NIGHT";
+        final String SHIFT_DAY = "SHIFT_DAY";
+        final String SHIFT_AFTERNOON = "SHIFT_AFTERNOON";
+        
+        // 从配置获取班次编码，如果没有配置使用默认值
+        String nightShift = SHIFT_NIGHT;
+        String dayShift = SHIFT_DAY;
+        String afternoonShift = SHIFT_AFTERNOON;
+        
+        if (shiftConfigList != null && !shiftConfigList.isEmpty()) {
+            for (CxShiftConfig config : shiftConfigList) {
+                String code = config.getShiftCode();
+                if (code != null) {
+                    if (code.contains("NIGHT")) {
+                        nightShift = code;
+                    } else if (code.contains("DAY")) {
+                        dayShift = code;
+                    } else if (code.contains("AFTERNOON")) {
+                        afternoonShift = code;
+                    }
+                }
+            }
+        }
+        
+        // 计算班次数量：天数 * 3 - 1（第一天夜班跳过）
+        int shiftCount = scheduleDays * 3 - 1;
+        String[] shiftCodes = new String[shiftCount];
+        LocalDate[] shiftDates = new LocalDate[shiftCount];
+        
+        int index = 0;
+        for (int day = 0; day < scheduleDays; day++) {
+            LocalDate shiftDate = startDate.plusDays(day);
+            
+            if (day == 0) {
+                // 第一天：跳过夜班，从早班开始
+                // 早班
+                shiftCodes[index] = dayShift;
+                shiftDates[index] = shiftDate;
+                index++;
+                // 中班
+                shiftCodes[index] = afternoonShift;
+                shiftDates[index] = shiftDate;
+                index++;
+            } else {
+                // 后续天数：夜班、早班、中班
+                // 夜班（属于当天，但实际上是前一天晚上开始）
+                shiftCodes[index] = nightShift;
+                shiftDates[index] = shiftDate;
+                index++;
+                // 早班
+                shiftCodes[index] = dayShift;
+                shiftDates[index] = shiftDate;
+                index++;
+                // 中班
+                shiftCodes[index] = afternoonShift;
+                shiftDates[index] = shiftDate;
+                index++;
+            }
+        }
+        
+        // 保存日期数组到上下文（需要在context中添加对应字段）
+        // context.setShiftDates(shiftDates);
+        
+        return shiftCodes;
     }
 }
