@@ -4,12 +4,13 @@ import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.ruoyi.common.core.annotation.Excel;
-import com.ruoyi.common.core.web.domain.BaseEntity;
+import com.zlt.aps.cx.entity.base.BaseEntity;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.Date;
 
 /**
@@ -88,6 +89,22 @@ public class CxStock extends BaseEntity {
     /** 预警状态：NORMAL-正常，LOW-低库存，HIGH-高库存 */
     @TableField(exist = false)
     private String alertStatus;
+
+    /** 预警时间 */
+    @TableField(exist = false)
+    private LocalDateTime alertTime;
+
+    /** 是否收尾SKU：0-否，1-是 */
+    @TableField(value = "IS_ENDING_SKU")
+    private Integer isEndingSku;
+
+    /** 可用硫化机台数（业务计算字段） */
+    @TableField(exist = false)
+    private Integer vulcanizeMachineCount;
+
+    /** 可用硫化模数（业务计算字段） */
+    @TableField(exist = false)
+    private Integer vulcanizeMoldCount;
 
     // ============== 业务计算方法 ==============
 
