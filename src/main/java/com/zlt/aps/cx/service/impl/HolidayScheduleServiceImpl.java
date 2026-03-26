@@ -291,8 +291,8 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
         List<LhScheduleResult> lhResults = lhScheduleResultMapper.selectByDate(scheduleDate);
 
         if (CollectionUtils.isEmpty(lhResults)) {
-            log.warn("未找到硫化排程结果，使用默认停机时间20:00");
-            return LocalDateTime.of(scheduleDate, LocalTime.of(20, 0));
+            log.warn("未找到硫化排程结果，使用默认停机时间22:00");
+            return LocalDateTime.of(scheduleDate, LocalTime.of(22, 0));
         }
 
         // 按胎胚编码(embryoCode)分组，找出每个胎胚的最大停机时间
@@ -334,8 +334,8 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
         }
 
         if (maxStopTime == null) {
-            log.warn("未能从硫化排程结果获取停机时间，使用默认停机时间20:00");
-            return LocalDateTime.of(scheduleDate, LocalTime.of(20, 0));
+            log.warn("未能从硫化排程结果获取停机时间，使用默认停机时间22:00");
+            return LocalDateTime.of(scheduleDate, LocalTime.of(22, 0));
         }
 
         log.info("从硫化排程结果获取硫化停机时间: {}，涉及胎胚种类: {}", maxStopTime, embryoGroupMap.size());
