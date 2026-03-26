@@ -433,7 +433,7 @@ public class FactoryMonthPlanProductionFinalResult implements Serializable {
 
     @ApiModelProperty(value = "更新时间")
     @TableField(value = "UPDATE_TIME", fill = FieldFill.INSERT_UPDATE)
-    private LocalDateTime updateTime;
+    private Date updateTime;
 
     @ApiModelProperty(value = "创建人")
     @TableField("CREATE_BY")
