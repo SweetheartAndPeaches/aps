@@ -27,9 +27,9 @@ import java.util.stream.Collectors;
 
 /**
  * 核心排程算法服务实现类
- * 
+ *
  * 实现试错分配、班次均衡、顺位排序等核心算法
- * 
+ *
  * 算法参数从 ScheduleContextDTO 获取，支持动态配置：
  * - 班次数量：context.getScheduleShiftCount()，默认8个班次
  * - 波浪比例：context.getWaveRatio()，默认 {1,2,1}
@@ -91,7 +91,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             materialMap = context.getMaterials().stream()
                     .collect(Collectors.toMap(MdmMaterialInfo::getMaterialCode, m -> m, (a, b) -> a));
         }
-        
+
         Map<String, CxStock> stockMap = new HashMap<>();
         if (context.getStocks() != null) {
             stockMap = context.getStocks().stream()
@@ -142,10 +142,10 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
                 // 计算净需求
                 int netDemand = totalVulcanizeDemand - currentStock;
-                
+
                 // 如果库存充足，跳过
                 if (netDemand <= 0) {
-                    log.debug("胎胚 {} 库存充足，无需生产，硫化需求: {}, 库存: {}", 
+                    log.debug("胎胚 {} 库存充足，无需生产，硫化需求: {}, 库存: {}",
                             embryoCode, totalVulcanizeDemand, currentStock);
                     continue;
                 }
@@ -163,7 +163,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
                 // 获取该结构的整车容量（不同结构整车条数可能不同，如12、18等）
                 int tripCapacity = getTripCapacity(structureCode, context);
-                
+
                 // 整车取整（向上取整到整车容量的倍数）
                 dailyDemand = roundToTrip(dailyDemand, "CEILING", tripCapacity);
 
@@ -191,9 +191,9 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 Integer vulcanizeSurplusQty = null;
                 Integer endingSurplusQty = null;
                 boolean isEndingTask = false;
-                
+
                 if (context.getMonthSurplusMap() != null) {
-                    com.zlt.aps.mp.api.domain.entity.MdmMonthSurplus monthSurplus = 
+                    com.zlt.aps.mp.api.domain.entity.MdmMonthSurplus monthSurplus =
                             context.getMonthSurplusMap().get(embryoCode);
                     if (monthSurplus != null && monthSurplus.getPlanSurplusQty() != null) {
                         // 硫化余量 = 总计划量 - 硫化真实完成量（已由系统计算）
@@ -205,15 +205,15 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                         isEndingTask = endingSurplusQty != null && endingSurplusQty <= 0;
                     }
                 }
-                
+
                 // 判断是否主销产品（月均销量 >= 500条）
-                boolean isMainProduct = context.getMainProductCodes() != null 
+                boolean isMainProduct = context.getMainProductCodes() != null
                         && context.getMainProductCodes().contains(embryoCode);
 
                 // 构建任务
                 DailyEmbryoTask task = new DailyEmbryoTask();
                 task.setMaterialCode(embryoCode);
-                
+
                 // 获取物料名称
                 MdmMaterialInfo material = materialMap.get(embryoCode);
                 if (material != null) {
@@ -225,7 +225,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                     task.setStructureCode(structureCode);
                     task.setStructureName(structureName);
                 }
-                
+
                 task.setDemandQuantity(dailyDemand);
                 task.setAssignedQuantity(0);
                 task.setRemainingQuantity(dailyDemand);
@@ -234,7 +234,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 task.setIsContinueTask(isContinueTask);
                 task.setContinueMachineCodes(continueMachineCodes);
                 task.setIsMainProduct(isMainProduct);
-                
+
                 // 收尾相关属性
                 task.setIsEndingTask(isEndingTask);
                 task.setEndingSurplusQty(endingSurplusQty);
@@ -253,13 +253,13 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 task.setPriority(calculatePriorityScoreNew(task, material, stock, context));
 
                 tasks.add(task);
-                
+
                 if (isContinueTask) {
-                    log.info("续作任务: 胎胚={}, 需求量={}, 续作机台={}, 收尾余量={}", 
+                    log.info("续作任务: 胎胚={}, 需求量={}, 续作机台={}, 收尾余量={}",
                             embryoCode, dailyDemand, continueMachineCodes, endingSurplusQty);
                 }
                 if (isEndingTask) {
-                    log.info("收尾任务: 胎胚={}, 硫化余量={}, 库存={}, 收尾余量={}", 
+                    log.info("收尾任务: 胎胚={}, 硫化余量={}, 库存={}, 收尾余量={}",
                             embryoCode, vulcanizeSurplusQty, currentStock, endingSurplusQty);
                 }
             }
@@ -312,8 +312,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             return Integer.compare(b.getPriority(), a.getPriority());
         });
 
-        log.info("计算完成，日胎胚任务数: {}, 其中续作任务数: {}, 试制任务数: {}, 收尾任务数: {}", 
-                tasks.size(), 
+        log.info("计算完成，日胎胚任务数: {}, 其中续作任务数: {}, 试制任务数: {}, 收尾任务数: {}",
+                tasks.size(),
                 tasks.stream().filter(t -> Boolean.TRUE.equals(t.getIsContinueTask())).count(),
                 tasks.stream().filter(t -> Boolean.TRUE.equals(t.getIsTrialTask())).count(),
                 tasks.stream().filter(t -> Boolean.TRUE.equals(t.getIsEndingTask())).count());
@@ -323,17 +323,17 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
     @Override
     public List<MachineAllocationResult> allocateTasksToMachines(
-            List<DailyEmbryoTask> tasks, 
+            List<DailyEmbryoTask> tasks,
             ScheduleContextDTO context) {
-        
+
         List<MachineAllocationResult> results = new ArrayList<>();
-        
+
         // 初始化机台状态
         Map<String, MachineAllocationResult> machineStatusMap = initMachineStatus(context);
-        
+
         // 记录每个机台已分配的物料编码（用于种类上限检查）
         Map<String, Set<String>> machineMaterialMap = new HashMap<>();
-        
+
         // 尝试分配每个任务
         for (DailyEmbryoTask task : tasks) {
             boolean allocated = false;
@@ -352,15 +352,15 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 }
 
                 MachineAllocationResult machineResult = machineStatusMap.get(bestMachine.getCxMachineCode());
-                
+
                 // 计算可分配量
                 int assignQty = Math.min(remainingQty, machineResult.getRemainingCapacity());
 
                 // 检查种类上限
                 Set<String> materials = machineMaterialMap.computeIfAbsent(
                         bestMachine.getCxMachineCode(), k -> new HashSet<>());
-                int maxTypes = context.getMaxTypesPerMachine() != null 
-                        ? context.getMaxTypesPerMachine() 
+                int maxTypes = context.getMaxTypesPerMachine() != null
+                        ? context.getMaxTypesPerMachine()
                         : DEFAULT_MAX_TYPES_PER_MACHINE;
                 if (!materials.contains(task.getMaterialCode()) && materials.size() >= maxTypes) {
                     // 种类已满，跳过此机台
@@ -416,51 +416,50 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     public List<ShiftAllocationResult> balanceShiftAllocation(
             List<MachineAllocationResult> allocations,
             ScheduleContextDTO context) {
-        
+
         List<ShiftAllocationResult> results = new ArrayList<>();
-        
+
         // 从上下文获取班次配置
         String[] shiftCodes = context.getShiftCodes();
         if (shiftCodes == null || shiftCodes.length == 0) {
             shiftCodes = DEFAULT_SHIFT_CODES;
         }
-        
+
         // 加载结构班产配置
         Map<String, Map<String, CxStructureShiftCapacity>> structureCapacityMap = loadStructureShiftCapacity();
-        
+
         for (MachineAllocationResult allocation : allocations) {
             ShiftAllocationResult shiftResult = new ShiftAllocationResult();
             shiftResult.setMachineCode(allocation.getMachineCode());
-            shiftResult.setMachineName(allocation.getMachineName());
             shiftResult.setTasks(allocation.getTaskAllocations());
-            
+
             Map<String, Integer> shiftPlanQty = new LinkedHashMap<>();
             int totalQty = allocation.getUsedCapacity();
-            
+
             // 获取机台最大产能
             Integer maxDailyCapacity = allocation.getDailyCapacity();
-            
+
             // 按任务结构获取班产整车数，计算波浪分配
             Map<String, Integer> structureWaveAllocation = calculateStructureWaveAllocation(
-                    allocation.getTaskAllocations(), 
-                    structureCapacityMap, 
+                    allocation.getTaskAllocations(),
+                    structureCapacityMap,
                     maxDailyCapacity,
                     shiftCodes,
                     context);
-            
+
             // 汇总各班次分配量
             for (String shiftCode : shiftCodes) {
                 int shiftQty = structureWaveAllocation.getOrDefault(shiftCode, 0);
                 shiftPlanQty.put(shiftCode, shiftQty);
             }
-            
+
             // 处理特殊情况：开产首班不排关键产品
             if (Boolean.TRUE.equals(context.getIsOpeningDay())) {
                 String firstShift = context.getFormingStartShift();
                 if (firstShift == null) {
                     firstShift = "SHIFT_DAY"; // 默认早班为开产首班
                 }
-                
+
                 Set<String> keyProductCodes = context.getKeyProductCodes();
                 if (keyProductCodes != null && !keyProductCodes.isEmpty()) {
                     // 计算首班中关键产品的量，移到下一班次
@@ -471,31 +470,31 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                             keyProductQty += task.getQuantity();
                         }
                     }
-                    
+
                     if (keyProductQty > 0) {
                         // 首班减去关键产品量
                         int firstShiftQty = shiftPlanQty.getOrDefault(firstShift, 0);
                         int adjustedQty = Math.max(firstShiftQty - keyProductQty, 0);
                         shiftPlanQty.put(firstShift, roundToTrip(adjustedQty, "FLOOR"));
-                        
+
                         // 关键产品量加到下一班次
                         String secondShift = getNextShift(firstShift);
                         int secondShiftQty = shiftPlanQty.getOrDefault(secondShift, 0);
                         shiftPlanQty.put(secondShift, secondShiftQty + roundToTrip(keyProductQty, "CEILING"));
-                        
-                        log.debug("开产首班 {} 移出关键产品 {} 条到 {}", 
+
+                        log.debug("开产首班 {} 移出关键产品 {} 条到 {}",
                                 firstShift, keyProductQty, secondShift);
                     }
                 }
             }
-            
+
             shiftResult.setShiftPlanQty(shiftPlanQty);
             results.add(shiftResult);
         }
 
         return results;
     }
-    
+
     /**
      * 获取下一个班次
      */
@@ -508,26 +507,26 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             return "SHIFT_NIGHT";
         }
     }
-    
+
     /**
      * 加载结构班产配置
      * 返回：Map<结构编码, Map<班次编码, 班产配置>>
      */
     private Map<String, Map<String, CxStructureShiftCapacity>> loadStructureShiftCapacity() {
         Map<String, Map<String, CxStructureShiftCapacity>> result = new HashMap<>();
-        
+
         List<CxStructureShiftCapacity> capacities = structureShiftCapacityMapper.selectList(
                 new LambdaQueryWrapper<CxStructureShiftCapacity>()
                         .eq(CxStructureShiftCapacity::getIsActive, 1));
-        
+
         for (CxStructureShiftCapacity capacity : capacities) {
             result.computeIfAbsent(capacity.getStructureCode(), k -> new HashMap<>())
                     .put(capacity.getShiftCode(), capacity);
         }
-        
+
         return result;
     }
-    
+
     /**
      * 按结构计算波浪分配
      * 从结构班产表获取整车条数，按波浪方式生成硫化需求量
@@ -538,25 +537,25 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             Integer maxDailyCapacity,
             String[] shiftCodes,
             ScheduleContextDTO context) {
-        
+
         Map<String, Integer> shiftTotalQty = new LinkedHashMap<>();
         for (String shiftCode : shiftCodes) {
             shiftTotalQty.put(shiftCode, 0);
         }
-        
+
         int totalAssigned = 0;
-        
+
         for (TaskAllocation task : tasks) {
             String structureCode = task.getStructureName();
             int taskQty = task.getQuantity();
-            
+
             // 获取该结构的班产配置
             Map<String, CxStructureShiftCapacity> shiftCapacityMap = structureCapacityMap.get(structureCode);
-            
+
             if (shiftCapacityMap != null && !shiftCapacityMap.isEmpty()) {
                 // 按班产配置计算各班次分配量
                 int[] shiftQty = calculateShiftQtyByCapacity(taskQty, structureCode, shiftCapacityMap, shiftCodes, context);
-                
+
                 for (int i = 0; i < shiftCodes.length; i++) {
                     int qty = shiftQty[i];
                     shiftTotalQty.merge(shiftCodes[i], qty, Integer::sum);
@@ -565,33 +564,33 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             } else {
                 // 无班产配置，使用默认波浪比例
                 int[] waveQty = calculateWaveAllocation(taskQty, shiftCodes, context);
-                
+
                 for (int i = 0; i < shiftCodes.length; i++) {
                     shiftTotalQty.merge(shiftCodes[i], waveQty[i], Integer::sum);
                     totalAssigned += waveQty[i];
                 }
             }
         }
-        
+
         // 检查是否超过机台最大产能
         if (maxDailyCapacity != null && totalAssigned > maxDailyCapacity) {
             // 按比例缩减
             double ratio = (double) maxDailyCapacity / totalAssigned;
             int newTotal = 0;
-            
+
             for (String shiftCode : shiftCodes) {
                 int originalQty = shiftTotalQty.get(shiftCode);
                 int adjustedQty = roundToTrip((int) (originalQty * ratio), "FLOOR");
                 shiftTotalQty.put(shiftCode, adjustedQty);
                 newTotal += adjustedQty;
             }
-            
+
             log.debug("班次分配量超过机台最大产能，已按比例缩减：{} -> {}", totalAssigned, newTotal);
         }
-        
+
         return shiftTotalQty;
     }
-    
+
     /**
      * 根据结构班产配置计算各班次分配量
      * 按波浪方式分配
@@ -602,13 +601,13 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             Map<String, CxStructureShiftCapacity> shiftCapacityMap,
             String[] shiftCodes,
             ScheduleContextDTO context) {
-        
+
         int[] result = new int[shiftCodes.length];
-        
+
         // 计算总班产整车数
         int totalTripQty = 0;
         int[] tripQtyPerShift = new int[shiftCodes.length];
-        
+
         for (int i = 0; i < shiftCodes.length; i++) {
             CxStructureShiftCapacity capacity = shiftCapacityMap.get(shiftCodes[i]);
             if (capacity != null && capacity.getTripQty() != null) {
@@ -616,63 +615,63 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 totalTripQty += capacity.getTripQty();
             }
         }
-        
+
         // 如果没有班产配置，使用默认波浪比例
         if (totalTripQty == 0) {
             return calculateWaveAllocation(taskQty, shiftCodes, context);
         }
-        
+
         // 获取波浪比例
         int[] waveRatio = context.getWaveRatio();
         if (waveRatio == null) {
             waveRatio = DEFAULT_WAVE_RATIO;
         }
-        
+
         // 根据班次编码调整波浪比例（映射夜早中比例到正确的班次位置）
         int[] adjustedRatio = adjustWaveRatio(waveRatio, shiftCodes);
-        
+
         // 计算总比例
         int totalRatio = 0;
         for (int ratio : adjustedRatio) {
             totalRatio += ratio;
         }
-        
+
         int remainingQty = taskQty;
-        
+
         // 获取整车容量（用于取整）
         int tripCapacity = getTripCapacity(structureCode, shiftCapacityMap);
-        
+
         for (int i = 0; i < shiftCodes.length; i++) {
             // 按波浪比例计算该班次分配量
             int shiftQty = taskQty * adjustedRatio[i] / totalRatio;
-            
+
             // 限制不超过该班次的班产整车条数
             int maxShiftQty = tripQtyPerShift[i];  // tripQtyPerShift已经是条数，不需要再乘整车容量
             shiftQty = Math.min(shiftQty, maxShiftQty);
-            
+
             // 整车取整
             shiftQty = roundToTripQty(shiftQty, tripCapacity, "ROUND");
-            
+
             result[i] = shiftQty;
             remainingQty -= shiftQty;
         }
-        
+
         // 分配余量（优先分配给早班）
         if (remainingQty > 0) {
             for (int i = 1; i < shiftCodes.length && remainingQty >= tripCapacity; i++) {
                 int idx = (i + 1) % shiftCodes.length; // 早班优先
                 CxStructureShiftCapacity capacity = shiftCapacityMap.get(shiftCodes[idx]);
-                int maxQty = capacity != null && capacity.getTripQty() != null 
+                int maxQty = capacity != null && capacity.getTripQty() != null
                         ? capacity.getTripQty()  // tripQty已经是条数
                         : Integer.MAX_VALUE;
-                
+
                 if (result[idx] + tripCapacity <= maxQty) {
                     result[idx] += tripCapacity;
                     remainingQty -= tripCapacity;
                 }
             }
         }
-        
+
         return result;
     }
 
@@ -680,10 +679,10 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     public List<CxScheduleDetail> calculateSequence(
             List<ShiftAllocationResult> shiftAllocations,
             ScheduleContextDTO context) {
-        
+
         List<CxScheduleDetail> allDetails = new ArrayList<>();
         LocalDate scheduleDate = context.getScheduleDate();
-        
+
         // 班次时间配置
         Map<String, int[]> shiftTimeMap = new HashMap<>();
         shiftTimeMap.put("SHIFT_NIGHT", new int[]{0, 8});
@@ -715,10 +714,10 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             int tripNo = 1;
             for (TaskAllocation task : sortedTasks) {
                 int qty = task.getQuantity();
-                
+
                 // 获取该结构的整车容量
                 int tripCapacity = getTripCapacity(task.getStructureName(), shiftAllocation.getMachineCode(), context);
-                
+
                 int tripCount = (int) Math.ceil((double) qty / tripCapacity);
 
                 for (int t = 1; t <= tripCount; t++) {
@@ -757,18 +756,18 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             CxStock stock,
             Integer vulcanizeMachineCount,
             Integer vulcanizeMoldCount) {
-        
+
         if (stock == null) {
             return BigDecimal.ZERO;
         }
-        
+
         Integer effectiveStock = stock.getEffectiveStock();
         if (effectiveStock <= 0) {
             return BigDecimal.ZERO;
         }
 
         if (vulcanizeMachineCount == null || vulcanizeMachineCount == 0 ||
-            vulcanizeMoldCount == null || vulcanizeMoldCount == 0) {
+                vulcanizeMoldCount == null || vulcanizeMoldCount == 0) {
             return BigDecimal.ZERO;
         }
 
@@ -787,11 +786,11 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             MdmMaterialInfo material,
             CxStock stock,
             ScheduleContextDTO context) {
-        
+
         // 获取参数配置
         CxParamConfig lossRateConfig = context.getParamConfigMap().get("LOSS_RATE");
-        BigDecimal lossRate = lossRateConfig != null 
-                ? new BigDecimal(lossRateConfig.getParamValue()) 
+        BigDecimal lossRate = lossRateConfig != null
+                ? new BigDecimal(lossRateConfig.getParamValue())
                 : new BigDecimal("0.02"); // 默认2%损耗率
 
         // 获取硫化消耗量（从结构硫化配比中获取）
@@ -822,7 +821,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             MdmMoldingMachine machine,
             MdmMaterialInfo material,
             ScheduleContextDTO context) {
-        
+
         if (machine == null || material == null) {
             return false;
         }
@@ -833,13 +832,13 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         for (MdmCxMachineFixed fixed : context.getMachineFixedConfigs()) {
             if (fixed.getCxMachineCode().equals(machine.getCxMachineCode())) {
                 // 检查不可作业结构
-                if (fixed.getDisableStructure() != null && 
-                    fixed.getDisableStructure().contains(structure)) {
+                if (fixed.getDisableStructure() != null &&
+                        fixed.getDisableStructure().contains(structure)) {
                     return false;
                 }
                 // 检查不可作业SKU
-                if (fixed.getDisableMaterialCode() != null && 
-                    fixed.getDisableMaterialCode().contains(material.getMaterialCode())) {
+                if (fixed.getDisableMaterialCode() != null &&
+                        fixed.getDisableMaterialCode().contains(material.getMaterialCode())) {
                     return false;
                 }
             }
@@ -849,8 +848,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         for (MdmStructureLhRatio ratio : context.getStructureLhRatios()) {
             if (ratio.getStructureName().equals(structure)) {
                 // 检查机型是否匹配
-                if (ratio.getCxMachineTypeCode() != null && 
-                    !ratio.getCxMachineTypeCode().equals(machine.getCxMachineTypeCode())) {
+                if (ratio.getCxMachineTypeCode() != null &&
+                        !ratio.getCxMachineTypeCode().equals(machine.getCxMachineTypeCode())) {
                     return false;
                 }
             }
@@ -865,17 +864,17 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             int currentTypes,
             MdmMaterialInfo newMaterial,
             ScheduleContextDTO context) {
-        
-        int maxTypes = context.getMaxTypesPerMachine() != null 
-                ? context.getMaxTypesPerMachine() 
+
+        int maxTypes = context.getMaxTypesPerMachine() != null
+                ? context.getMaxTypesPerMachine()
                 : DEFAULT_MAX_TYPES_PER_MACHINE;
-        
+
         // 检查固定机台配置（强制保留的情况）
         for (MdmCxMachineFixed fixed : context.getMachineFixedConfigs()) {
             if (fixed.getCxMachineCode().equals(machine.getCxMachineCode())) {
                 // 如果是固定SKU，不算新种类
-                if (fixed.getFixedMaterialCode() != null && 
-                    fixed.getFixedMaterialCode().contains(newMaterial.getMaterialCode())) {
+                if (fixed.getFixedMaterialCode() != null &&
+                        fixed.getFixedMaterialCode().contains(newMaterial.getMaterialCode())) {
                     return true;
                 }
             }
@@ -889,14 +888,14 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             MdmMaterialInfo material,
             CxStock stock,
             ScheduleContextDTO context) {
-        
+
         int score = 0;
 
         // 收尾任务通过月度计划余量计算
         // 收尾余量 = 硫化余量(PLAN_SURPLUS_QTY) - 胎胚库存
         // 硫化余量来自 t_mdm_month_surplus.PLAN_SURPLUS_QTY（已由系统计算）
         if (context.getMonthSurplusMap() != null) {
-            com.zlt.aps.mp.api.domain.entity.MdmMonthSurplus monthSurplus = 
+            com.zlt.aps.mp.api.domain.entity.MdmMonthSurplus monthSurplus =
                     context.getMonthSurplusMap().get(material.getMaterialCode());
             if (monthSurplus != null && monthSurplus.getPlanSurplusQty() != null) {
                 int stockQty = stock != null ? stock.getEffectiveStock() : 0;
@@ -939,7 +938,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
     /**
      * 计算优先级分数（新方法，支持任务对象）
-     * 
+     *
      * 优先级规则：
      * 1. 紧急收尾任务（3天内收尾）> 普通收尾任务 > 试制任务 > 续作任务 > 首排任务 > 其他
      * 2. 同级别内按库存紧张程度排序
@@ -951,7 +950,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             MdmMaterialInfo material,
             CxStock stock,
             ScheduleContextDTO context) {
-        
+
         int score = 0;
 
         // 1. 紧急收尾任务（3天内收尾，最高优先级）
@@ -1030,7 +1029,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
     /**
      * 整车取整（支持不同整车容量）
-     * 
+     *
      * @param quantity 原始数量
      * @param mode 取整模式（CEILING向上/FLOOR向下/ROUND四舍五入）
      * @param tripCapacity 整车容量（每车多少条）
@@ -1061,7 +1060,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     /**
      * 获取结构的整车容量
      * 从结构班产配置表获取，如果没有配置则返回默认值12
-     * 
+     *
      * @param structureCode 结构编码
      * @param machineCode 机台编码
      * @param context 排程上下文
@@ -1070,12 +1069,12 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     private int getTripCapacity(String structureCode, String machineCode, ScheduleContextDTO context) {
         if (context.getStructureShiftCapacities() != null) {
             for (CxStructureShiftCapacity capacity : context.getStructureShiftCapacities()) {
-                if (capacity.getStructureCode() != null && 
-                    capacity.getStructureCode().equals(structureCode)) {
+                if (capacity.getStructureCode() != null &&
+                        capacity.getStructureCode().equals(structureCode)) {
                     // 如果指定了机台，需要匹配机台
-                    if (capacity.getCxMachineCode() == null || 
-                        capacity.getCxMachineCode().isEmpty() ||
-                        capacity.getCxMachineCode().equals(machineCode)) {
+                    if (capacity.getCxMachineCode() == null ||
+                            capacity.getCxMachineCode().isEmpty() ||
+                            capacity.getCxMachineCode().equals(machineCode)) {
                         if (capacity.getTripQty() != null && capacity.getTripQty() > 0) {
                             return capacity.getTripQty();
                         }
@@ -1084,8 +1083,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             }
         }
         // 没有配置则返回默认值
-        return context.getDefaultTripCapacity() != null 
-                ? context.getDefaultTripCapacity() 
+        return context.getDefaultTripCapacity() != null
+                ? context.getDefaultTripCapacity()
                 : DEFAULT_TRIP_CAPACITY;
     }
 
@@ -1095,11 +1094,11 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     private int getTripCapacity(String structureCode, ScheduleContextDTO context) {
         return getTripCapacity(structureCode, null, context);
     }
-    
+
     /**
      * 从班产配置Map获取整车容量
      * 取第一个有效配置的整车容量
-     * 
+     *
      * @param structureCode 结构编码
      * @param shiftCapacityMap 班次班产配置Map
      * @return 整车容量
@@ -1114,7 +1113,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         }
         return DEFAULT_TRIP_CAPACITY;
     }
-    
+
     /**
      * 按整车容量取整（别名方法）
      */
@@ -1126,7 +1125,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
     /**
      * 初始化机台状态
-     * 
+     *
      * 处理逻辑：
      * 1. 跳过禁用、维护中、故障的机台
      * 2. 处理精度计划：
@@ -1164,9 +1163,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
             MachineAllocationResult result = new MachineAllocationResult();
             result.setMachineCode(machine.getCxMachineCode());
-            result.setMachineName(machine.getCxMachineName());
-            result.setMachineType(machine.getCxMachineTypeName());
-            result.setDailyCapacity(machine.getMaxDayCapacity() != null 
+            result.setMachineType(machine.getCxMachineTypeCode());
+            result.setDailyCapacity(machine.getMaxDayCapacity() != null
                     ? machine.getMaxDayCapacity() : 1200);
             result.setUsedCapacity(0);
             result.setRemainingCapacity(result.getDailyCapacity());
@@ -1181,46 +1179,46 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
             // 检查精度计划
             CxPrecisionPlan precisionPlan = precisionPlanMap.get(machine.getCxMachineCode());
-            if (precisionPlan != null && 
-                ("PLANNED".equals(precisionPlan.getStatus()) || 
-                 "IN_PROGRESS".equals(precisionPlan.getStatus()))) {
-                
+            if (precisionPlan != null &&
+                    ("PLANNED".equals(precisionPlan.getStatus()) ||
+                            "IN_PROGRESS".equals(precisionPlan.getStatus()))) {
+
                 // 精度时长（小时）
-                int precisionHours = precisionPlan.getEstimatedHours() != null 
+                int precisionHours = precisionPlan.getEstimatedHours() != null
                         ? precisionPlan.getEstimatedHours() : 4;
-                
+
                 // 机台小时产能（条/小时）- 从机台结构产能表获取，或使用默认值
                 int hourlyCapacity = getMachineHourlyCapacity(
-                        machine.getCxMachineCode(), 
-                        precisionPlan.getEmbryoCode(), 
+                        machine.getCxMachineCode(),
+                        precisionPlan.getEmbryoCode(),
                         context);
-                
+
                 // 扣减产能 = 精度时长 × 小时产能
                 int precisionDeduction = precisionHours * hourlyCapacity;
-                
+
                 // 根据班次扣减
                 String planShift = precisionPlan.getPlanShift();
                 if ("SHIFT_DAY".equals(planShift)) {
                     // 早班精度，扣减早班产能
                     result.setRemainingCapacity(result.getRemainingCapacity() - precisionDeduction);
-                    log.info("机台 {} 在早班有精度计划，扣减产能 {} 条", 
+                    log.info("机台 {} 在早班有精度计划，扣减产能 {} 条",
                             machine.getCxMachineCode(), precisionDeduction);
                 } else if ("SHIFT_AFTERNOON".equals(planShift)) {
                     // 中班精度，扣减中班产能
                     result.setRemainingCapacity(result.getRemainingCapacity() - precisionDeduction);
-                    log.info("机台 {} 在中班有精度计划，扣减产能 {} 条", 
+                    log.info("机台 {} 在中班有精度计划，扣减产能 {} 条",
                             machine.getCxMachineCode(), precisionDeduction);
                 } else {
                     // 未指定班次，默认扣减全天产能的1/3
                     int deduction = result.getDailyCapacity() / 3;
                     result.setRemainingCapacity(result.getRemainingCapacity() - deduction);
-                    log.info("机台 {} 有精度计划（未指定班次），扣减产能 {} 条", 
+                    log.info("机台 {} 有精度计划（未指定班次），扣减产能 {} 条",
                             machine.getCxMachineCode(), deduction);
                 }
 
                 // 标记精度计划信息
                 result.setPrecisionPlan(precisionPlan);
-                
+
                 // 如果剩余产能为负，设为0
                 if (result.getRemainingCapacity() < 0) {
                     log.warn("机台 {} 精度计划导致剩余产能为负，设为0", machine.getCxMachineCode());
@@ -1243,7 +1241,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             Map<String, MachineAllocationResult> machineStatusMap,
             Map<String, Set<String>> machineMaterialMap,
             ScheduleContextDTO context) {
-        
+
         MdmMoldingMachine bestMachine = null;
         int bestScore = -1;
 
@@ -1254,7 +1252,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             }
 
             // 检查结构约束
-            if (!checkStructureConstraint(machine, 
+            if (!checkStructureConstraint(machine,
                     context.getMaterials().stream()
                             .filter(m -> m.getMaterialCode().equals(task.getMaterialCode()))
                             .findFirst()
@@ -1266,7 +1264,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             // 检查种类上限
             Set<String> materials = machineMaterialMap.get(machine.getCxMachineCode());
             int currentTypes = materials != null ? materials.size() : 0;
-            if (!checkTypeLimit(machine, currentTypes, 
+            if (!checkTypeLimit(machine, currentTypes,
                     context.getMaterials().stream()
                             .filter(m -> m.getMaterialCode().equals(task.getMaterialCode()))
                             .findFirst()
@@ -1295,15 +1293,15 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             DailyEmbryoTask task,
             MachineAllocationResult status,
             ScheduleContextDTO context) {
-        
+
         int score = 0;
 
         // 【最高优先】续作任务：该机台正在做这个胎胚
-        if (Boolean.TRUE.equals(task.getIsContinueTask()) && 
-            task.getContinueMachineCodes() != null &&
-            task.getContinueMachineCodes().contains(machine.getCxMachineCode())) {
+        if (Boolean.TRUE.equals(task.getIsContinueTask()) &&
+                task.getContinueMachineCodes() != null &&
+                task.getContinueMachineCodes().contains(machine.getCxMachineCode())) {
             score += 1000; // 续作最高加分，无需换产
-            log.debug("机台 {} 是胎胚 {} 的续作机台，加分1000", 
+            log.debug("机台 {} 是胎胚 {} 的续作机台，加分1000",
                     machine.getCxMachineCode(), task.getMaterialCode());
         }
 
@@ -1311,8 +1309,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         if (context.getYesterdayResults() != null) {
             for (CxScheduleResult yesterday : context.getYesterdayResults()) {
                 if (yesterday.getCxMachineCode().equals(machine.getCxMachineCode()) &&
-                    yesterday.getEmbryoCode() != null &&
-                    yesterday.getEmbryoCode().equals(task.getMaterialCode())) {
+                        yesterday.getEmbryoCode() != null &&
+                        yesterday.getEmbryoCode().equals(task.getMaterialCode())) {
                     score += 500;
                     break;
                 }
@@ -1323,8 +1321,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         score += status.getRemainingCapacity() / 10;
 
         // 优先选种类最少的（均衡）
-        int maxTypes = context.getMaxTypesPerMachine() != null 
-                ? context.getMaxTypesPerMachine() 
+        int maxTypes = context.getMaxTypesPerMachine() != null
+                ? context.getMaxTypesPerMachine()
                 : DEFAULT_MAX_TYPES_PER_MACHINE;
         score += (maxTypes - status.getAssignedTypes()) * 50;
 
@@ -1332,12 +1330,12 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         if (context.getMachineFixedConfigs() != null) {
             for (MdmCxMachineFixed fixed : context.getMachineFixedConfigs()) {
                 if (fixed.getCxMachineCode().equals(machine.getCxMachineCode())) {
-                    if (fixed.getFixedStructure1() != null && 
-                        fixed.getFixedStructure1().contains(task.getStructureName())) {
+                    if (fixed.getFixedStructure1() != null &&
+                            fixed.getFixedStructure1().contains(task.getStructureName())) {
                         score += 200;
                     }
-                    if (fixed.getFixedMaterialCode() != null && 
-                        fixed.getFixedMaterialCode().contains(task.getMaterialCode())) {
+                    if (fixed.getFixedMaterialCode() != null &&
+                            fixed.getFixedMaterialCode().contains(task.getMaterialCode())) {
                         score += 300;
                     }
                 }
@@ -1372,7 +1370,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             }
             context.setMachineCapacityMap(capacityMap);
         }
-        
+
         if (capacityMap != null) {
             // 先尝试精确匹配（机台+结构）
             if (structureCode != null) {
@@ -1388,14 +1386,14 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 return capacity.getHourlyCapacity();
             }
         }
-        
+
         // 默认50条/小时
         return 50;
     }
 
     /**
      * 计算波浪分配（无班产配置时使用默认整车容量）
-     * 
+     *
      * @param totalQty 总数量
      * @param shiftCodes 班次编码数组
      * @param context 排程上下文
@@ -1403,27 +1401,27 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     private int[] calculateWaveAllocation(int totalQty, String[] shiftCodes, ScheduleContextDTO context) {
         int shiftCount = shiftCodes.length;
         int[] result = new int[shiftCount];
-        
+
         // 获取波浪比例
         int[] waveRatio = context.getWaveRatio();
         if (waveRatio == null) {
             waveRatio = DEFAULT_WAVE_RATIO;
         }
-        
+
         // 获取默认整车容量
-        int tripCapacity = context.getDefaultTripCapacity() != null 
-                ? context.getDefaultTripCapacity() 
+        int tripCapacity = context.getDefaultTripCapacity() != null
+                ? context.getDefaultTripCapacity()
                 : DEFAULT_TRIP_CAPACITY;
-        
+
         // 根据班次编码调整波浪比例（映射夜早中比例到正确的班次位置）
         int[] adjustedRatio = adjustWaveRatio(waveRatio, shiftCodes);
-        
+
         // 计算总比例
         int totalRatio = 0;
         for (int ratio : adjustedRatio) {
             totalRatio += ratio;
         }
-        
+
         int remaining = totalQty;
 
         for (int i = 0; i < shiftCount; i++) {
@@ -1442,15 +1440,15 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
         return result;
     }
-    
+
     /**
      * 调整波浪比例以匹配班次序列
-     * 
+     *
      * 波浪比例配置顺序：夜班、早班、中班（如 {1, 2, 1} 表示夜:早:中 = 1:2:1）
      * 班次序列顺序：早中、夜早中、夜早中...（第一天夜班跳过）
-     * 
+     *
      * 需要根据班次编码将波浪比例映射到正确的位置
-     * 
+     *
      * @param baseRatio 基础波浪比例 [夜, 早, 中]
      * @param shiftCodes 班次编码数组
      * @return 调整后的波浪比例
@@ -1458,13 +1456,13 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     private int[] adjustWaveRatio(int[] baseRatio, String[] shiftCodes) {
         int shiftCount = shiftCodes.length;
         int[] result = new int[shiftCount];
-        
+
         // 波浪比例索引映射
         // SHIFT_NIGHT -> 0, SHIFT_DAY -> 1, SHIFT_AFTERNOON -> 2
         for (int i = 0; i < shiftCount; i++) {
             String shiftCode = shiftCodes[i];
             int ratioIndex;
-            
+
             if (shiftCode.contains("NIGHT")) {
                 ratioIndex = 0;  // 夜班对应第一个比例
             } else if (shiftCode.contains("DAY")) {
@@ -1474,10 +1472,10 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             } else {
                 ratioIndex = i % baseRatio.length;  // 兜底
             }
-            
+
             result[i] = baseRatio[ratioIndex];
         }
-        
+
         return result;
     }
 
@@ -1491,7 +1489,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             Map<String, CxStock> stockMap,
             Map<String, CxStructureEnding> endingMap,
             ScheduleContextDTO context) {
-        
+
         MdmMaterialInfo material = materialMap.get(materialCode);
         if (material == null) {
             return null;
@@ -1519,9 +1517,9 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         Integer vulcanizeSurplusQty = null;
         Integer endingSurplusQty = null;
         boolean isEndingTask = false;
-        
+
         if (context.getMonthSurplusMap() != null) {
-            com.zlt.aps.mp.api.domain.entity.MdmMonthSurplus monthSurplus = 
+            com.zlt.aps.mp.api.domain.entity.MdmMonthSurplus monthSurplus =
                     context.getMonthSurplusMap().get(materialCode);
             if (monthSurplus != null && monthSurplus.getPlanSurplusQty() != null) {
                 vulcanizeSurplusQty = monthSurplus.getPlanSurplusQty().intValue();
@@ -1530,39 +1528,39 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 isEndingTask = endingSurplusQty <= 0;
             }
         }
-        
+
         task.setIsEndingTask(isEndingTask);
         task.setEndingSurplusQty(endingSurplusQty);
         task.setVulcanizeSurplusQty(vulcanizeSurplusQty);
 
         // 是否主销产品（从SKU排产分类表判断）
-        boolean isMainProduct = context.getMainProductCodes() != null 
+        boolean isMainProduct = context.getMainProductCodes() != null
                 && context.getMainProductCodes().contains(materialCode);
         task.setIsMainProduct(isMainProduct);
 
         // ========== 收尾管理：应用追赶量和优先级 ==========
-        String structureName = material.getProductStructure();
+        String structureName = material.getStructureName();
         CxStructureEnding structureEnding = endingMap.get(structureName);
-        
+
         if (structureEnding != null) {
             // 设置紧急收尾标记
-            boolean isUrgentEnding = structureEnding.getIsUrgentEnding() != null 
+            boolean isUrgentEnding = structureEnding.getIsUrgentEnding() != null
                     && structureEnding.getIsUrgentEnding() == 1;
             task.setIsUrgentEnding(isUrgentEnding);
-            
+
             // 如果需要追赶，增加需求量（平摊量）
-            if (structureEnding.getDistributedQuantity() != null 
+            if (structureEnding.getDistributedQuantity() != null
                     && structureEnding.getDistributedQuantity() > 0) {
                 int originalDemand = task.getDemandQuantity();
                 int catchUpQty = structureEnding.getDistributedQuantity();
                 task.setDemandQuantity(originalDemand + catchUpQty);
                 task.setRemainingQuantity(originalDemand + catchUpQty);
-                log.info("收尾追赶：物料 {} 原需求 {}，增加追赶量 {}，新需求 {}", 
+                log.info("收尾追赶：物料 {} 原需求 {}，增加追赶量 {}，新需求 {}",
                         materialCode, originalDemand, catchUpQty, task.getDemandQuantity());
             }
-            
+
             // 标记是否需要月计划调整
-            task.setNeedMonthPlanAdjust(structureEnding.getNeedMonthPlanAdjust() != null 
+            task.setNeedMonthPlanAdjust(structureEnding.getNeedMonthPlanAdjust() != null
                     && structureEnding.getNeedMonthPlanAdjust() == 1);
         }
 
@@ -1580,8 +1578,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         for (MdmStructureLhRatio ratio : context.getStructureLhRatios()) {
             if (ratio.getStructureName().equals(material.getStructureName())) {
                 // 简化处理：假设每日硫化需求为最大胎胚数
-                return ratio.getMaxEmbryoQty() != null 
-                        ? new BigDecimal(ratio.getMaxEmbryoQty()) 
+                return ratio.getMaxEmbryoQty() != null
+                        ? new BigDecimal(ratio.getMaxEmbryoQty())
                         : BigDecimal.ZERO;
             }
         }
@@ -1596,7 +1594,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             List<MachineAllocationResult> allocations,
             List<ShiftAllocationResult> shiftAllocations,
             List<CxScheduleDetail> details) {
-        
+
         List<CxScheduleResult> results = new ArrayList<>();
         LocalDate scheduleDate = context.getScheduleDate();
 
@@ -1608,7 +1606,6 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             CxScheduleResult result = new CxScheduleResult();
             result.setScheduleDate(scheduleDate.atStartOfDay());
             result.setCxMachineCode(allocation.getMachineCode());
-            result.setCxMachineName(allocation.getMachineName());
             result.setCxMachineType(allocation.getMachineType());
             result.setProductNum(new BigDecimal(allocation.getUsedCapacity()));
             result.setProductionStatus("0");

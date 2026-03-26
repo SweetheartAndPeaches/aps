@@ -7,19 +7,15 @@ import com.zlt.aps.cx.dto.ScheduleRequest;
 import com.zlt.aps.cx.entity.*;
 import com.zlt.aps.cx.entity.config.CxKeyProduct;
 import com.zlt.aps.cx.entity.config.CxParamConfig;
-import com.zlt.aps.cx.entity.config.CxShiftConfig;
 import com.zlt.aps.cx.entity.config.CxStructureShiftCapacity;
-import com.zlt.aps.mp.api.domain.entity.FactoryMonthPlanProductionFinalResult;
-import com.zlt.aps.mp.api.domain.entity.MdmCxMachineOnlineInfo;
-import com.zlt.aps.mp.api.domain.entity.MdmMaterialInfo;
-import com.zlt.aps.mp.api.domain.entity.MdmMoldingMachine;
-import com.zlt.aps.mp.api.domain.entity.MdmMonthSurplus;
+
 import com.zlt.aps.cx.entity.schedule.CxScheduleDetail;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
 import com.zlt.aps.cx.entity.schedule.CxTrialPlan;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
 import com.zlt.aps.cx.mapper.*;
 import com.zlt.aps.cx.service.*;
+import com.zlt.aps.mp.api.domain.entity.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -41,7 +37,7 @@ import java.util.stream.Collectors;
 
 /**
  * 排程服务实现类
- * 
+ *
  * 整合所有核心服务，实现完整的排程流程
  *
  * @author APS Team
@@ -51,7 +47,7 @@ import java.util.stream.Collectors;
 public class ScheduleServiceImpl implements ScheduleService {
 
     @Autowired
-    private CoreScheduleAlgorithmService coreAlgorithmService;
+    private CoreScheduleAlgorithmService coreScheduleAlgorithmService;
 
     @Autowired
     private ConstraintCheckService constraintCheckService;
@@ -102,12 +98,6 @@ public class ScheduleServiceImpl implements ScheduleService {
     private LhScheduleResultMapper lhScheduleResultMapper;
 
     @Autowired
-    private CxPrecisionPlanMapper precisionPlanMapper;
-
-    @Autowired
-    private CxMachineStructureCapacityMapper machineStructureCapacityMapper;
-
-    @Autowired
     private MdmCxMachineOnlineInfoMapper onlineInfoMapper;
 
     @Autowired
@@ -116,9 +106,6 @@ public class ScheduleServiceImpl implements ScheduleService {
     @Autowired
     private FactoryMonthPlanProductionFinalResultMapper monthPlanMapper;
 
-    @Autowired
-    private CxShiftConfigMapper shiftConfigMapper;
-
     @Override
     public ScheduleResult executeSchedule(ScheduleRequest request) {
         ScheduleResult result = new ScheduleResult();
@@ -126,7 +113,7 @@ public class ScheduleServiceImpl implements ScheduleService {
         result.setScheduleDate(request.getScheduleDate());
 
         try {
-            log.info("开始执行排程，日期：{}，排程模式：{}", 
+            log.info("开始执行排程，日期：{}，排程模式：{}",
                     request.getScheduleDate(), request.getScheduleMode());
 
             // 1. 检查节假日
@@ -145,14 +132,14 @@ public class ScheduleServiceImpl implements ScheduleService {
 
             // 3. 处理节假日特殊逻辑
             if (holidayScheduleService.isBeforeHoliday(request.getScheduleDate())) {
-                HolidayScheduleService.HolidayScheduleResult holidayResult = 
+                HolidayScheduleService.HolidayScheduleResult holidayResult =
                         holidayScheduleService.handleBeforeHoliday(context);
                 log.info("停产前一天处理结果：{}", holidayResult.getMessage());
             }
 
             // 4. 执行核心排程算法（包含续作、试制、正常任务的统一处理）
             // 任务优先级：续作 > 新增任务（试制在有空出产能时优先，但不挤掉实单）
-            List<CxScheduleResult> scheduleResults = coreAlgorithmService.executeSchedule(context);
+            List<CxScheduleResult> scheduleResults = coreScheduleAlgorithmService.executeSchedule(context);
 
             // 5. 应用节假日调整
             scheduleResults = holidayScheduleService.adjustHolidaySchedule(
@@ -168,7 +155,7 @@ public class ScheduleServiceImpl implements ScheduleService {
             result.setMessage(validated ? "排程成功" : "排程完成，但存在约束冲突");
             result.setResults(scheduleResults);
 
-            log.info("排程执行完成，日期：{}，结果数量：{}", 
+            log.info("排程执行完成，日期：{}，结果数量：{}",
                     request.getScheduleDate(), scheduleResults.size());
 
         } catch (Exception e) {
@@ -237,85 +224,29 @@ public class ScheduleServiceImpl implements ScheduleService {
             Map<String, CxParamConfig> paramConfigMap = paramConfigs.stream()
                     .collect(Collectors.toMap(CxParamConfig::getParamCode, p -> p, (a, b) -> a));
             context.setParamConfigMap(paramConfigMap);
-            
+
             // 加载损耗率
             CxParamConfig lossRateConfig = paramConfigMap.get("LOSS_RATE");
-            java.math.BigDecimal lossRate = lossRateConfig != null 
-                    ? new java.math.BigDecimal(lossRateConfig.getParamValue()) 
+            java.math.BigDecimal lossRate = lossRateConfig != null
+                    ? new java.math.BigDecimal(lossRateConfig.getParamValue())
                     : new java.math.BigDecimal("0.02");
             context.setLossRate(lossRate);
-            
+
             // 加载预留消化时间
             CxParamConfig reservedHoursConfig = paramConfigMap.get("RESERVED_DIGEST_HOURS");
-            Integer reservedDigestHours = reservedHoursConfig != null 
-                    ? Integer.parseInt(reservedHoursConfig.getParamValue()) 
+            Integer reservedDigestHours = reservedHoursConfig != null
+                    ? Integer.parseInt(reservedHoursConfig.getParamValue())
                     : 1;
             context.setReservedDigestHours(reservedDigestHours);
-            
+
             // 加载胎胚最长停放时间
             CxParamConfig maxParkingConfig = paramConfigMap.get("MAX_PARKING_HOURS");
-            Integer maxParkingHours = maxParkingConfig != null 
-                    ? Integer.parseInt(maxParkingConfig.getParamValue()) 
+            Integer maxParkingHours = maxParkingConfig != null
+                    ? Integer.parseInt(maxParkingConfig.getParamValue())
                     : 24;
             context.setMaxParkingHours(maxParkingHours);
 
-            // 加载算法可配置参数
-            // 机台种类上限（默认4种）
-            CxParamConfig maxTypesConfig = paramConfigMap.get("MAX_TYPES_PER_MACHINE");
-            Integer maxTypesPerMachine = maxTypesConfig != null 
-                    ? Integer.parseInt(maxTypesConfig.getParamValue()) 
-                    : 4;
-            context.setMaxTypesPerMachine(maxTypesPerMachine);
-            
-            // 默认整车容量（默认12条）
-            CxParamConfig tripCapacityConfig = paramConfigMap.get("DEFAULT_TRIP_CAPACITY");
-            Integer defaultTripCapacity = tripCapacityConfig != null 
-                    ? Integer.parseInt(tripCapacityConfig.getParamValue()) 
-                    : 12;
-            context.setDefaultTripCapacity(defaultTripCapacity);
-            
-            // 波浪比例（班次分配比例，格式：1,2,1 表示夜班:早班:中班=1:2:1）
-            CxParamConfig waveRatioConfig = paramConfigMap.get("WAVE_RATIO");
-            int[] waveRatio;
-            if (waveRatioConfig != null && waveRatioConfig.getParamValue() != null) {
-                String[] ratios = waveRatioConfig.getParamValue().split(",");
-                waveRatio = new int[ratios.length];
-                for (int i = 0; i < ratios.length; i++) {
-                    waveRatio[i] = Integer.parseInt(ratios[i].trim());
-                }
-            } else {
-                // 默认波浪比例：夜班:早班:中班 = 1:2:1
-                waveRatio = new int[]{1, 2, 1};
-            }
-            context.setWaveRatio(waveRatio);
-            log.info("加载算法参数：种类上限={}, 默认整车={}, 波浪比例={}", 
-                    maxTypesPerMachine, defaultTripCapacity, 
-                    java.util.Arrays.toString(waveRatio));
-
-            // 8. 获取班次配置（从T_CX_SHIFT_CONFIG）
-            List<CxShiftConfig> shiftConfigList = shiftConfigMapper.selectList(
-                    new LambdaQueryWrapper<CxShiftConfig>()
-                            .eq(CxShiftConfig::getIsActive, 1)
-                            .orderByAsc(CxShiftConfig::getShiftOrder));
-            context.setShiftConfigList(shiftConfigList);
-            log.info("加载班次配置 {} 条", shiftConfigList.size());
-            
-            // 9. 计算排产班次
-            // 排产天数（默认3天）
-            CxParamConfig scheduleDaysConfig = paramConfigMap.get("SCHEDULE_DAYS");
-            int scheduleDays = scheduleDaysConfig != null 
-                    ? Integer.parseInt(scheduleDaysConfig.getParamValue()) 
-                    : 3;
-            context.setScheduleDays(scheduleDays);
-            
-            // 计算班次数组和日期数组
-            // 班次顺序：早中、夜早中、夜早中...（第一天夜班跳过）
-            String[] shiftCodes = calculateShiftSequence(scheduleDays, shiftConfigList, scheduleDate);
-            context.setShiftCodes(shiftCodes);
-            log.info("排产天数: {}, 班次数量: {}, 班次顺序: {}", 
-                    scheduleDays, shiftCodes.length, java.util.Arrays.toString(shiftCodes));
-
-            // 10. 获取结构班产配置（整车条数）
+            // 8. 获取结构班产配置（整车条数）
             List<CxStructureShiftCapacity> structureShiftCapacities = structureShiftCapacityMapper.selectList(
                     new LambdaQueryWrapper<CxStructureShiftCapacity>()
                             .eq(CxStructureShiftCapacity::getIsActive, 1));
@@ -326,7 +257,7 @@ public class ScheduleServiceImpl implements ScheduleService {
                     new LambdaQueryWrapper<CxKeyProduct>()
                             .eq(CxKeyProduct::getIsActive, 1));
             context.setKeyProducts(keyProducts);
-            
+
             // 构建关键产品编码集合（快速查询用）
             Set<String> keyProductCodes = new HashSet<>();
             for (CxKeyProduct product : keyProducts) {
@@ -342,50 +273,35 @@ public class ScheduleServiceImpl implements ScheduleService {
             log.info("从月计划计算生成结构收尾信息 {} 条", structureEndings.size());
 
             // 11. 获取月度计划余量（用于收尾计算）
-            List<MdmMonthSurplus> monthSurplusList = 
+            List<MdmMonthSurplus> monthSurplusList =
                     monthSurplusMapper.selectByYearMonth(year, month);
             context.setMonthSurplusList(monthSurplusList);
             // 构建物料编码映射
             Map<String, MdmMonthSurplus> monthSurplusMap = monthSurplusList.stream()
                     .collect(Collectors.toMap(
-                            MdmMonthSurplus::getMaterialCode, 
+                            MdmMonthSurplus::getMaterialCode,
                             s -> s, (a, b) -> a));
             context.setMonthSurplusMap(monthSurplusMap);
             log.info("加载月度计划余量 {} 条", monthSurplusList.size());
 
             // 12. 获取SKU排产分类（用于判断主销产品）
-            List<com.zlt.aps.mp.api.domain.entity.MdmSkuScheduleCategory> skuCategories = 
+            List<MdmSkuScheduleCategory> skuCategories =
                     skuScheduleCategoryMapper.selectAllCategories();
             context.setSkuScheduleCategories(skuCategories);
             // 构建主销产品编码集合（SCHEDULE_TYPE='01'）
             Set<String> mainProductCodes = skuCategories.stream()
                     .filter(c -> "01".equals(c.getScheduleType()))
-                    .map(com.zlt.aps.mp.api.domain.entity.MdmSkuScheduleCategory::getMaterialCode)
+                    .map(MdmSkuScheduleCategory::getMaterialCode)
                     .collect(Collectors.toSet());
             context.setMainProductCodes(mainProductCodes);
             log.info("加载SKU排产分类 {} 条，其中主销产品 {} 个", skuCategories.size(), mainProductCodes.size());
 
-            // 13. 获取精度计划（设备校准）
-            List<CxPrecisionPlan> precisionPlans = precisionPlanMapper.selectList(
-                    new LambdaQueryWrapper<CxPrecisionPlan>()
-                            .eq(CxPrecisionPlan::getPlanDate, scheduleDate)
-                            .in(CxPrecisionPlan::getStatus, "PLANNED", "IN_PROGRESS"));
-            context.setPrecisionPlans(precisionPlans);
-            log.info("加载精度计划 {} 条", precisionPlans.size());
-
-            // 14. 获取机台结构产能配置
-            List<CxMachineStructureCapacity> machineCapacities = machineStructureCapacityMapper.selectList(
-                    new LambdaQueryWrapper<CxMachineStructureCapacity>()
-                            .eq(CxMachineStructureCapacity::getIsActive, 1));
-            context.setMachineStructureCapacities(machineCapacities);
-            log.info("加载机台结构产能配置 {} 条", machineCapacities.size());
-
-            // 16. 设置节假日相关标记
+            // 13. 设置节假日相关标记
             context.setIsOpeningDay(holidayScheduleService.isStartProductionDay(scheduleDate));
             context.setIsClosingDay(holidayScheduleService.isStopProductionDay(scheduleDate));
             context.setIsBeforeClosingDay(holidayScheduleService.isBeforeHoliday(scheduleDate));
 
-            // 17. 设置排程参数
+            // 14. 设置排程参数
             context.setScheduleDate(scheduleDate);
             context.setScheduleMode(request.getScheduleMode());
 
@@ -406,7 +322,7 @@ public class ScheduleServiceImpl implements ScheduleService {
             LocalDate today = LocalDate.now();
 
             // 执行交班前检查和调整
-            DynamicAdjustService.ShiftAdjustResult adjustResult = 
+            DynamicAdjustService.ShiftAdjustResult adjustResult =
                     dynamicAdjustService.checkAndAdjustBeforeShiftEnd(
                             today.atStartOfDay(), shiftCode);
 
@@ -434,7 +350,7 @@ public class ScheduleServiceImpl implements ScheduleService {
             List<CxTrialPlan> trialPlans = trialScheduleService.getPendingTrialPlans();
 
             // 执行试制排程
-            TrialScheduleService.TrialScheduleResult trialResult = 
+            TrialScheduleService.TrialScheduleResult trialResult =
                     trialScheduleService.executeTrialSchedule(scheduleDate, trialPlans);
 
             result.setSuccess(trialResult.isSuccess());
@@ -508,7 +424,7 @@ public class ScheduleServiceImpl implements ScheduleService {
 
             // 逐个校验
             for (CxScheduleResult scheduleResult : results) {
-                ConstraintCheckService.ConstraintCheckResult checkResult = 
+                ConstraintCheckService.ConstraintCheckResult checkResult =
                         constraintCheckService.checkAllConstraints(scheduleResult);
 
                 if (!checkResult.isPassed()) {
@@ -534,14 +450,13 @@ public class ScheduleServiceImpl implements ScheduleService {
      * 保存排程结果
      */
     @Transactional(rollbackFor = Exception.class)
-    private void saveScheduleResults(List<CxScheduleResult> results) {
+    public void saveScheduleResults(List<CxScheduleResult> results) {
         if (CollectionUtils.isEmpty(results)) {
             return;
         }
 
         for (CxScheduleResult result : results) {
             result.setCreateTime(new Date());
-            result.setStatus("PLANNED");
             scheduleResultMapper.insert(result);
 
             // 保存明细
@@ -567,13 +482,13 @@ public class ScheduleServiceImpl implements ScheduleService {
 
         int validCount = 0;
         for (CxScheduleResult result : results) {
-            ConstraintCheckService.ConstraintCheckResult checkResult = 
+            ConstraintCheckService.ConstraintCheckResult checkResult =
                     constraintCheckService.checkAllConstraints(result);
             if (checkResult.isPassed()) {
                 validCount++;
             } else {
                 log.warn("排程结果存在约束冲突，机台：{}，物料：{}，冲突：{}",
-                        result.getCxMachineCode(), result.getEmbryoCode(), 
+                        result.getCxMachineCode(), result.getEmbryoCode(),
                         checkResult.getViolations());
             }
         }
@@ -583,7 +498,7 @@ public class ScheduleServiceImpl implements ScheduleService {
 
     /**
      * 从FactoryMonthPlanProductionFinalResult计算生成结构收尾管理列表
-     * 
+     *
      * 收尾管理规则（严格依据月计划收尾日）：
      * 1. 收尾日判断：从月计划day_1到day_31找到最后一个有排产的日期
      * 2. 收尾前10天检查：
@@ -602,74 +517,75 @@ public class ScheduleServiceImpl implements ScheduleService {
      */
     private List<CxStructureEnding> calculateStructureEndings(LocalDate scheduleDate, int year, int month) {
         List<CxStructureEnding> resultList = new ArrayList<>();
-        
+
         try {
             // 1. 获取当月月计划数据
             Integer yearMonth = year * 100 + month;
             List<FactoryMonthPlanProductionFinalResult> monthPlans = monthPlanMapper.selectByYearMonth(yearMonth);
-            
+
             if (CollectionUtils.isEmpty(monthPlans)) {
                 log.warn("未找到 {} 年 {} 月的月计划数据", year, month);
                 return resultList;
             }
-            
+
             // 2. 获取月度计划余量（硫化余量）
             List<MdmMonthSurplus> monthSurplusList = monthSurplusMapper.selectByYearMonth(year, month);
             Map<String, MdmMonthSurplus> surplusMap = monthSurplusList.stream()
                     .collect(Collectors.toMap(MdmMonthSurplus::getMaterialCode, s -> s, (a, b) -> a));
-            
+
             // 3. 获取胎胚库存
             List<CxStock> stocks = stockMapper.selectList(
                     new LambdaQueryWrapper<CxStock>().gt(CxStock::getStockNum, 0));
             // 使用胎胚代码构建映射
             Map<String, CxStock> stockMap = stocks.stream()
                     .collect(Collectors.toMap(CxStock::getEmbryoCode, s -> s, (a, b) -> a));
-            
+
             // 4. 获取成型机台列表（用于计算满产能力）
             List<MdmMoldingMachine> machines = moldingMachineMapper.selectList(
                     new LambdaQueryWrapper<MdmMoldingMachine>()
-                            .eq(MdmMoldingMachine::getIsActive, 1));
-            
+                            .eq(MdmMoldingMachine::getIsActive, 1)
+                            .ne(MdmMoldingMachine::getIsActive, "FAULT"));
+
             // 5. 按结构分组汇总
             Map<String, List<FactoryMonthPlanProductionFinalResult>> structurePlanMap = monthPlans.stream()
                     .filter(p -> p.getStructureName() != null)
                     .collect(Collectors.groupingBy(FactoryMonthPlanProductionFinalResult::getStructureName));
-            
+
             // 6. 当前日期信息
             int currentDay = scheduleDate.getDayOfMonth();
             int lastDayOfMonth = scheduleDate.lengthOfMonth();
-            
+
             // 7. 遍历每个结构，计算收尾信息
             for (Map.Entry<String, List<FactoryMonthPlanProductionFinalResult>> entry : structurePlanMap.entrySet()) {
                 String structureName = entry.getKey();
                 List<FactoryMonthPlanProductionFinalResult> plans = entry.getValue();
-                
+
                 // ========== Step 1: 确定收尾日 ==========
                 // 从月计划中找到该结构最后一个有排产的日期
                 int endingDay = findEndingDay(plans, lastDayOfMonth);
                 LocalDate endingDate = scheduleDate.withDayOfMonth(endingDay);
-                
+
                 // 如果收尾日已经过了，跳过
                 if (endingDay < currentDay) {
                     log.debug("结构 {} 收尾日 {} 已过，跳过", structureName, endingDate);
                     continue;
                 }
-                
+
                 // 创建收尾记录
                 CxStructureEnding ending = new CxStructureEnding();
                 ending.setStructureName(structureName);
                 ending.setStructureCode(structureName);
                 ending.setStatDate(scheduleDate);
                 ending.setPlannedEndingDate(endingDate);
-                
+
                 // ========== Step 2: 计算成型余量 ==========
                 // 获取该结构对应的物料信息
                 FactoryMonthPlanProductionFinalResult firstPlan = plans.get(0);
                 String materialCode = firstPlan.getMaterialCode();
-                
+
                 // 硫化余量（从月度计划余量表获取）
                 MdmMonthSurplus surplus = surplusMap.get(materialCode);
-                
+
                 // 计算剩余排产量（从当前日期到收尾日）
                 int remainingPlanQty = 0;
                 for (FactoryMonthPlanProductionFinalResult plan : plans) {
@@ -680,30 +596,30 @@ public class ScheduleServiceImpl implements ScheduleService {
                         }
                     }
                 }
-                
-                int vulcanizingRemainder = surplus != null && surplus.getPlanSurplusQty() != null 
+
+                int vulcanizingRemainder = surplus != null && surplus.getPlanSurplusQty() != null
                         ? surplus.getPlanSurplusQty().intValue() : remainingPlanQty;
                 ending.setVulcanizingRemainder(vulcanizingRemainder);
-                
+
                 // 胎胚库存（使用有效库存：库存量 - 超期库存 - 不良数量 + 修正数量）
                 CxStock stock = stockMap.get(materialCode);
                 int embryoStock = stock != null ? stock.getEffectiveStock() : 0;
                 ending.setEmbryoStock(embryoStock);
-                
+
                 // 成型余量 = 硫化余量 - 胎胚库存（需要生产的量）
                 int formingRemainder = Math.max(0, vulcanizingRemainder - embryoStock);
                 ending.setFormingRemainder(formingRemainder);
-                
+
                 // 日产能（取日硫化量，或从结构班产配置获取）
                 Integer dailyCapacity = firstPlan.getDayVulcanizationQty();
                 if (dailyCapacity == null || dailyCapacity <= 0) {
                     dailyCapacity = calculateStructureDailyCapacity(structureName, machines);
                 }
                 ending.setDailyCapacity(dailyCapacity);
-                
+
                 // ========== Step 3: 计算距离收尾日的天数 ==========
                 int daysToEnding = endingDay - currentDay + 1;
-                
+
                 // 预计收尾天数 = 成型余量 / 日产能
                 BigDecimal estimatedDays = BigDecimal.ZERO;
                 if (dailyCapacity > 0 && formingRemainder > 0) {
@@ -711,58 +627,58 @@ public class ScheduleServiceImpl implements ScheduleService {
                             .divide(BigDecimal.valueOf(dailyCapacity), 2, RoundingMode.HALF_UP);
                 }
                 ending.setEstimatedEndingDays(estimatedDays);
-                
+
                 // ========== Step 4: 判断是否紧急收尾（3天内） ==========
                 boolean isUrgentEnding = daysToEnding <= 3 && formingRemainder > 0;
                 ending.setIsUrgentEnding(isUrgentEnding ? 1 : 0);
-                
+
                 // ========== Step 5: 判断是否10天内收尾 ==========
                 boolean isNearEnding = daysToEnding <= 10 && formingRemainder > 0;
                 ending.setIsNearEnding(isNearEnding ? 1 : 0);
-                
+
                 // ========== Step 6: 收尾前10天检查 - 核心逻辑 ==========
                 if (isNearEnding && formingRemainder > 0) {
                     // 收尾日前能生产的量
                     int canProduceBeforeEnding = daysToEnding * dailyCapacity;
-                    
+
                     // 判断能否按计划收尾
                     if (formingRemainder <= canProduceBeforeEnding) {
                         // 能按计划收尾，无需追赶
                         ending.setDelayQuantity(0);
                         ending.setDistributedQuantity(0);
                         ending.setNeedMonthPlanAdjust(0);
-                        log.info("结构 {} 可以按计划收尾，成型余量 {}，收尾日前产能 {}", 
+                        log.info("结构 {} 可以按计划收尾，成型余量 {}，收尾日前产能 {}",
                                 structureName, formingRemainder, canProduceBeforeEnding);
                     } else {
                         // ========== 会延误，计算延误量 ==========
                         int delayQty = formingRemainder - canProduceBeforeEnding;
                         ending.setDelayQuantity(delayQty);
-                        
+
                         // ========== 计算未来3天追赶能力 ==========
                         // 未来3天满产能力 = 3天 × 日产能
                         int next3DaysFullCapacity = 3 * dailyCapacity;
-                        
+
                         // 未来3天计划产量（从月计划获取）
                         int next3DaysPlanQty = calculateNext3DaysPlanQty(plans, currentDay);
-                        
+
                         // 未来3天可追加产能 = 满产能力 - 计划产量
                         int next3DaysAvailableCapacity = Math.max(0, next3DaysFullCapacity - next3DaysPlanQty);
-                        
+
                         // 判断能否追赶
                         if (delayQty <= next3DaysAvailableCapacity) {
                             // 可以追赶上，平摊到未来3天
                             int distributedQty = (int) Math.ceil(delayQty / 3.0);
                             ending.setDistributedQuantity(distributedQty);
                             ending.setNeedMonthPlanAdjust(0);
-                            log.info("结构 {} 延误量 {} 可追赶上，平摊到未来3天每天增加 {}", 
+                            log.info("结构 {} 延误量 {} 可追赶上，平摊到未来3天每天增加 {}",
                                     structureName, delayQty, distributedQty);
                         } else {
                             // ========== 满产也追不上，需要通知月计划调整 ==========
                             ending.setDistributedQuantity(next3DaysAvailableCapacity / 3);
                             ending.setNeedMonthPlanAdjust(1);
-                            log.warn("结构 {} 延误量 {} 超过未来3天满产能力 {}，需要调整月计划！", 
+                            log.warn("结构 {} 延误量 {} 超过未来3天满产能力 {}，需要调整月计划！",
                                     structureName, delayQty, next3DaysAvailableCapacity);
-                            
+
                             // TODO: 调用硫化调整接口通知月计划调整
                             // notifyMonthPlanAdjustment(structureName, delayQty, endingDate);
                         }
@@ -773,13 +689,13 @@ public class ScheduleServiceImpl implements ScheduleService {
                     ending.setDistributedQuantity(0);
                     ending.setNeedMonthPlanAdjust(0);
                 }
-                
+
                 ending.setCreateTime(LocalDateTime.now());
                 ending.setUpdateTime(LocalDateTime.now());
-                
+
                 resultList.add(ending);
             }
-            
+
             // 按紧急程度和收尾天数排序
             resultList.sort((a, b) -> {
                 // 紧急收尾的排最前面
@@ -795,19 +711,19 @@ public class ScheduleServiceImpl implements ScheduleService {
                 if (b.getEstimatedEndingDays() == null) return -1;
                 return a.getEstimatedEndingDays().compareTo(b.getEstimatedEndingDays());
             });
-            
-            log.info("计算结构收尾信息完成，共 {} 个结构，其中紧急收尾 {} 个，需调整月计划 {} 个", 
+
+            log.info("计算结构收尾信息完成，共 {} 个结构，其中紧急收尾 {} 个，需调整月计划 {} 个",
                     resultList.size(),
                     resultList.stream().mapToInt(e -> e.getIsUrgentEnding() != null ? e.getIsUrgentEnding() : 0).sum(),
                     resultList.stream().mapToInt(e -> e.getNeedMonthPlanAdjust() != null ? e.getNeedMonthPlanAdjust() : 0).sum());
-            
+
         } catch (Exception e) {
             log.error("计算结构收尾信息失败", e);
         }
-        
+
         return resultList;
     }
-    
+
     /**
      * 找到该结构的收尾日（最后一个有排产的日期）
      */
@@ -824,7 +740,7 @@ public class ScheduleServiceImpl implements ScheduleService {
         // 如果没找到，默认月底
         return endingDay > 0 ? endingDay : lastDayOfMonth;
     }
-    
+
     /**
      * 计算结构日产能（从可用机台汇总）
      */
@@ -834,7 +750,7 @@ public class ScheduleServiceImpl implements ScheduleService {
         int machineCount = machines.size();
         return machineCount * 200;
     }
-    
+
     /**
      * 计算未来3天的计划产量
      */
@@ -849,88 +765,5 @@ public class ScheduleServiceImpl implements ScheduleService {
             }
         }
         return totalQty;
-    }
-    
-    /**
-     * 计算排产班次序列
-     * 
-     * 排产规则：
-     * - 一天3个班次：夜班(NIGHT) → 早班(DAY) → 中班(AFTERNOON)
-     * - 排产从早班开始，第一天夜班跳过
-     * - 例如3天排产：早中、夜早中、夜早中 = 8个班次
-     * 
-     * @param scheduleDays 排产天数
-     * @param shiftConfigList 班次配置列表（按班次顺序排列：夜、早、中）
-     * @param startDate 排产开始日期
-     * @return 班次编码数组
-     */
-    private String[] calculateShiftSequence(int scheduleDays, List<CxShiftConfig> shiftConfigList, 
-            LocalDate startDate) {
-        
-        // 班次顺序：夜班、早班、中班（这是自然时间顺序）
-        final String SHIFT_NIGHT = "SHIFT_NIGHT";
-        final String SHIFT_DAY = "SHIFT_DAY";
-        final String SHIFT_AFTERNOON = "SHIFT_AFTERNOON";
-        
-        // 从配置获取班次编码，如果没有配置使用默认值
-        String nightShift = SHIFT_NIGHT;
-        String dayShift = SHIFT_DAY;
-        String afternoonShift = SHIFT_AFTERNOON;
-        
-        if (shiftConfigList != null && !shiftConfigList.isEmpty()) {
-            for (CxShiftConfig config : shiftConfigList) {
-                String code = config.getShiftCode();
-                if (code != null) {
-                    if (code.contains("NIGHT")) {
-                        nightShift = code;
-                    } else if (code.contains("DAY")) {
-                        dayShift = code;
-                    } else if (code.contains("AFTERNOON")) {
-                        afternoonShift = code;
-                    }
-                }
-            }
-        }
-        
-        // 计算班次数量：天数 * 3 - 1（第一天夜班跳过）
-        int shiftCount = scheduleDays * 3 - 1;
-        String[] shiftCodes = new String[shiftCount];
-        LocalDate[] shiftDates = new LocalDate[shiftCount];
-        
-        int index = 0;
-        for (int day = 0; day < scheduleDays; day++) {
-            LocalDate shiftDate = startDate.plusDays(day);
-            
-            if (day == 0) {
-                // 第一天：跳过夜班，从早班开始
-                // 早班
-                shiftCodes[index] = dayShift;
-                shiftDates[index] = shiftDate;
-                index++;
-                // 中班
-                shiftCodes[index] = afternoonShift;
-                shiftDates[index] = shiftDate;
-                index++;
-            } else {
-                // 后续天数：夜班、早班、中班
-                // 夜班（属于当天，但实际上是前一天晚上开始）
-                shiftCodes[index] = nightShift;
-                shiftDates[index] = shiftDate;
-                index++;
-                // 早班
-                shiftCodes[index] = dayShift;
-                shiftDates[index] = shiftDate;
-                index++;
-                // 中班
-                shiftCodes[index] = afternoonShift;
-                shiftDates[index] = shiftDate;
-                index++;
-            }
-        }
-        
-        // 保存日期数组到上下文（需要在context中添加对应字段）
-        // context.setShiftDates(shiftDates);
-        
-        return shiftCodes;
     }
 }
