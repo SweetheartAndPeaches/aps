@@ -181,8 +181,9 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
         result.setExcessStockToConsume(excessStock);
 
         // 4. 确定停机时间
-        // 假设硫化停机时间为最后一个班次结束时间（如20:00）
-        LocalDateTime vulcanizingStopTime = LocalDateTime.of(scheduleDate, LocalTime.of(20, 0));
+        // 从硫化排程结果中获取硫化停机时间
+        // 一个胎胚可能对应多个硫化任务（通过物料编码关联），取所有硫化任务中最大的specEndTime
+        LocalDateTime vulcanizingStopTime = determineVulcanizingStopTimeFromSchedule(scheduleDate);
         Integer reservedDigestHours = getReservedDigestHours();
         LocalDateTime formingStopTime = determineFormingStopTime(vulcanizingStopTime, reservedDigestHours);
         result.setFormingStopTime(formingStopTime);
@@ -271,6 +272,74 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
         result.setMessage("已完成开产日调整：成型早于硫化1个班开产，首班不排关键产品");
 
         return result;
+    }
+
+    /**
+     * 从硫化排程结果中获取硫化停机时间
+     *
+     * 逻辑说明：
+     * 1. 一个胎胚(embryoCode)可能对应多个硫化任务（通过物料编码关联）
+     * 2. 每个硫化任务有各自的specEndTime（规格结束时间）
+     * 3. 按胎胚维度分组，找出每个胎胚对应的所有硫化任务中最大的specEndTime
+     * 4. 取所有胎胚中最大的停机时间作为最终的硫化停机时间
+     *
+     * @param scheduleDate 排程日期
+     * @return 硫化停机时间
+     */
+    private LocalDateTime determineVulcanizingStopTimeFromSchedule(LocalDate scheduleDate) {
+        // 获取该日期的硫化排程结果
+        List<LhScheduleResult> lhResults = lhScheduleResultMapper.selectByDate(scheduleDate);
+
+        if (CollectionUtils.isEmpty(lhResults)) {
+            log.warn("未找到硫化排程结果，使用默认停机时间20:00");
+            return LocalDateTime.of(scheduleDate, LocalTime.of(20, 0));
+        }
+
+        // 按胎胚编码(embryoCode)分组，找出每个胎胚的最大停机时间
+        // 然后取所有胎胚中最大的那个作为最终停机时间
+        LocalDateTime maxStopTime = null;
+
+        // 按胎胚分组
+        Map<String, List<LhScheduleResult>> embryoGroupMap = new HashMap<>();
+        for (LhScheduleResult result : lhResults) {
+            String embryoCode = result.getEmbryoCode();
+            if (embryoCode != null) {
+                embryoGroupMap.computeIfAbsent(embryoCode, k -> new ArrayList<>()).add(result);
+            }
+        }
+
+        // 遍历每个胎胚组，找出该胎胚对应的所有硫化任务中最大的specEndTime
+        for (Map.Entry<String, List<LhScheduleResult>> entry : embryoGroupMap.entrySet()) {
+            String embryoCode = entry.getKey();
+            List<LhScheduleResult> embryoResults = entry.getValue();
+
+            // 找出该胎胚对应的所有硫化任务中最大的specEndTime
+            LocalDateTime embryoMaxStopTime = null;
+            for (LhScheduleResult result : embryoResults) {
+                LocalDateTime specEndTime = result.getSpecEndTime();
+                if (specEndTime != null) {
+                    if (embryoMaxStopTime == null || specEndTime.isAfter(embryoMaxStopTime)) {
+                        embryoMaxStopTime = specEndTime;
+                    }
+                }
+            }
+
+            // 取所有胎胚中最大的停机时间
+            if (embryoMaxStopTime != null) {
+                if (maxStopTime == null || embryoMaxStopTime.isAfter(maxStopTime)) {
+                    maxStopTime = embryoMaxStopTime;
+                    log.debug("胎胚 {} 的最大硫化停机时间: {}", embryoCode, embryoMaxStopTime);
+                }
+            }
+        }
+
+        if (maxStopTime == null) {
+            log.warn("未能从硫化排程结果获取停机时间，使用默认停机时间20:00");
+            return LocalDateTime.of(scheduleDate, LocalTime.of(20, 0));
+        }
+
+        log.info("从硫化排程结果获取硫化停机时间: {}，涉及胎胚种类: {}", maxStopTime, embryoGroupMap.size());
+        return maxStopTime;
     }
 
     @Override
