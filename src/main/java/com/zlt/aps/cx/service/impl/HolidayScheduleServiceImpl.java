@@ -6,6 +6,7 @@ import com.zlt.aps.cx.entity.CxStock;
 import com.zlt.aps.mp.api.domain.entity.MdmWorkCalendar;
 import com.zlt.aps.cx.entity.config.CxKeyProduct;
 import com.zlt.aps.cx.entity.config.CxParamConfig;
+import com.zlt.aps.cx.entity.config.CxShiftConfig;
 import com.zlt.aps.mp.api.domain.entity.MdmMoldingMachine;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
@@ -46,6 +47,9 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
 
     @Autowired
     private CxKeyProductMapper keyProductMapper;
+
+    @Autowired
+    private CxShiftConfigMapper shiftConfigMapper;
 
     @Autowired
     private CxParamConfigMapper paramConfigMapper;
@@ -189,8 +193,9 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
         result.setFormingStopTime(formingStopTime);
 
         // 5. 计算成型可排产时长
-        // 假设班次开始时间为早班8点
-        LocalDateTime shiftStartTime = LocalDateTime.of(scheduleDate, LocalTime.of(8, 0));
+        // 从班次配置表获取第一个班次的开始时间
+        LocalTime firstShiftStartTime = getFirstShiftStartTime();
+        LocalDateTime shiftStartTime = LocalDateTime.of(scheduleDate, firstShiftStartTime);
         Integer formingAvailableHours = calculateFormingAvailableHours(shiftStartTime, formingStopTime);
         result.setFormingAvailableHours(formingAvailableHours);
 
@@ -340,6 +345,35 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
 
         log.info("从硫化排程结果获取硫化停机时间: {}，涉及胎胚种类: {}", maxStopTime, embryoGroupMap.size());
         return maxStopTime;
+    }
+
+    /**
+     * 从班次配置表获取第一个班次的开始时间
+     *
+     * 逻辑说明：
+     * 1. 从 T_CX_SHIFT_CONFIG 表查询班次配置
+     * 2. 按班次序号(shiftOrder)排序，取第一个启用的班次
+     * 3. 解析其开始时间(startTime)，格式为 HH:mm:ss
+     *
+     * @return 第一个班次的开始时间
+     */
+    private LocalTime getFirstShiftStartTime() {
+        // 查询启用的班次配置，按序号排序取第一个
+        CxShiftConfig firstShift = shiftConfigMapper.selectOne(
+                new LambdaQueryWrapper<CxShiftConfig>()
+                        .eq(CxShiftConfig::getIsActive, 1)
+                        .orderByAsc(CxShiftConfig::getShiftOrder)
+                        .last("LIMIT 1"));
+
+        if (firstShift != null && firstShift.getStartTime() != null) {
+            String startTimeStr = firstShift.getStartTime();
+            log.info("从班次配置获取首个班次开始时间: {}，班次编码: {}", startTimeStr, firstShift.getShiftCode());
+            // 解析 HH:mm:ss 格式的时间
+            return LocalTime.parse(startTimeStr);
+        }
+
+        log.warn("未找到有效的班次配置，使用默认开始时间08:00");
+        return LocalTime.of(8, 0);
     }
 
     @Override
