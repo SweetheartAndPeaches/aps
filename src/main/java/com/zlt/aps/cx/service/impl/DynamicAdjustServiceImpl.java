@@ -70,28 +70,28 @@ public class DynamicAdjustServiceImpl implements DynamicAdjustService {
 
         // 添加预警物料
         for (StockInfo stock : lowStockMaterials) {
-            result.getWarningMaterials().add(String.format("%s库存低，可供时长%.2f小时", 
+            result.getWarningMaterials().add(String.format("%s库存低，可供时长%.2f小时",
                     stock.getMaterialName(), stock.getAvailableHours()));
         }
 
         // 尝试调整
         if (!CollectionUtils.isEmpty(lowStockMaterials) && !CollectionUtils.isEmpty(highStockMaterials)) {
             String nextShiftCode = getNextShiftCode(shiftCode);
-            
+
             // 找一对可以交换的物料
             for (StockInfo lowStock : lowStockMaterials) {
                 for (StockInfo highStock : highStockMaterials) {
                     boolean adjusted = adjustPlanQuantity(
-                            lowStock.getMaterialCode(), 
+                            lowStock.getMaterialCode(),
                             highStock.getMaterialCode(),
-                            scheduleDate, 
+                            scheduleDate,
                             nextShiftCode);
-                    
+
                     if (adjusted) {
                         result.setAdjusted(true);
                         result.getAdjustedMaterials().add(lowStock.getMaterialCode());
                         result.getAdjustedMaterials().add(highStock.getMaterialCode());
-                        result.setMessage(String.format("已将%s加量，%s减量", 
+                        result.setMessage(String.format("已将%s加量，%s减量",
                                 lowStock.getMaterialName(), highStock.getMaterialName()));
                         return result;
                     }
@@ -154,7 +154,7 @@ public class DynamicAdjustServiceImpl implements DynamicAdjustService {
     public BigDecimal calculateShiftEndAvailableHours(String materialCode, Integer expectedStock, BigDecimal remainingShiftHours) {
         // 获取硫化机数量
         int lhMachineCount = getLhMachineCount(materialCode);
-        
+
         if (lhMachineCount == 0) {
             return BigDecimal.ZERO;
         }
@@ -164,7 +164,7 @@ public class DynamicAdjustServiceImpl implements DynamicAdjustService {
 
         // 交班可供时长 = 预计交班库存 / (硫化机数×单台模数) - 剩余班次时间
         BigDecimal totalConsumptionPerHour = BigDecimal.valueOf(lhMachineCount * avgMoldCount);
-        
+
         if (totalConsumptionPerHour.compareTo(BigDecimal.ZERO) == 0) {
             return BigDecimal.ZERO;
         }
@@ -187,8 +187,8 @@ public class DynamicAdjustServiceImpl implements DynamicAdjustService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public boolean adjustPlanQuantity(String lowStockMaterial, String highStockMaterial, 
-                                       LocalDateTime scheduleDate, String nextShiftCode) {
+    public boolean adjustPlanQuantity(String lowStockMaterial, String highStockMaterial,
+                                      LocalDateTime scheduleDate, String nextShiftCode) {
         try {
             // 获取低库存物料的计划
             List<CxScheduleDetail> lowStockPlans = scheduleDetailMapper.selectList(
@@ -261,8 +261,8 @@ public class DynamicAdjustServiceImpl implements DynamicAdjustService {
                 .collect(Collectors.toList());
 
         Map<String, CxStock> stockMap = stockMapper.selectList(
-                new LambdaQueryWrapper<CxStock>()
-                        .in(CxStock::getEmbryoCode, materialCodes))
+                        new LambdaQueryWrapper<CxStock>()
+                                .in(CxStock::getEmbryoCode, materialCodes))
                 .stream()
                 .collect(Collectors.toMap(CxStock::getEmbryoCode, s -> s));
 
@@ -270,10 +270,10 @@ public class DynamicAdjustServiceImpl implements DynamicAdjustService {
         details.sort((d1, d2) -> {
             CxStock s1 = stockMap.get(d1.getEmbryoCode());
             CxStock s2 = stockMap.get(d2.getEmbryoCode());
-            
+
             BigDecimal hours1 = s1 != null && s1.getStockHours() != null ? s1.getStockHours() : BigDecimal.ZERO;
             BigDecimal hours2 = s2 != null && s2.getStockHours() != null ? s2.getStockHours() : BigDecimal.ZERO;
-            
+
             return hours1.compareTo(hours2);
         });
 
@@ -295,7 +295,7 @@ public class DynamicAdjustServiceImpl implements DynamicAdjustService {
 
         // 获取胎面信息（假设胎面编码规则）
         String treadCode = deriveTreadCode(detail.getEmbryoCode());
-        
+
         // 获取胎面库存
         CxStock treadStock = stockMapper.selectOne(
                 new LambdaQueryWrapper<CxStock>()
@@ -307,7 +307,7 @@ public class DynamicAdjustServiceImpl implements DynamicAdjustService {
 
         // 检查胎面是否满足停放时间要求（4小时）
         // TODO: 需要获取胎面的生产时间进行计算
-        
+
         return true;
     }
 
@@ -331,7 +331,7 @@ public class DynamicAdjustServiceImpl implements DynamicAdjustService {
                     exception.getScheduleDetailId(),
                     exception.getPlannedValue(),
                     exception.getActualValue());
-            
+
             if (handled) {
                 result.setHandled(true);
                 result.setHandlingMethod("调高完成率并备注原因");
@@ -341,7 +341,7 @@ public class DynamicAdjustServiceImpl implements DynamicAdjustService {
         } else if ("CURTAIN_ROLL_DEPLETION".equals(exceptionType)) {
             // 大卷帘布用完
             boolean handled = handleCurtainRollDepletion(exception.getMaterialCode());
-            
+
             if (handled) {
                 result.setHandled(true);
                 result.setHandlingMethod("检查主销产品状态并处理");
@@ -358,8 +358,8 @@ public class DynamicAdjustServiceImpl implements DynamicAdjustService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean handleTreadLengthShortage(Long scheduleDetailId, BigDecimal plannedLength, BigDecimal actualLength) {
-        if (plannedLength == null || actualLength == null || 
-            plannedLength.compareTo(BigDecimal.ZERO) == 0) {
+        if (plannedLength == null || actualLength == null ||
+                plannedLength.compareTo(BigDecimal.ZERO) == 0) {
             return false;
         }
 
@@ -370,13 +370,13 @@ public class DynamicAdjustServiceImpl implements DynamicAdjustService {
         // 完成率低于80%时，调高完成率并备注原因
         if (completionRate.compareTo(new BigDecimal("80")) < 0) {
             // 更新完成率为80%
-            scheduleDetailMapper.update(null, 
+            scheduleDetailMapper.update(null,
                     new LambdaUpdateWrapper<CxScheduleDetail>()
                             .eq(CxScheduleDetail::getId, scheduleDetailId)
                             .set(CxScheduleDetail::getCompletionRate, new BigDecimal("80"))
                             .set(CxScheduleDetail::getRemark, "胎面卷曲米数不够，实际完成率" + completionRate + "%"));
 
-            log.info("已处理胎面米数不够异常，明细ID: {}, 实际完成率: {}%", 
+            log.info("已处理胎面米数不够异常，明细ID: {}, 实际完成率: {}%",
                     scheduleDetailId, completionRate);
             return true;
         }
@@ -400,7 +400,7 @@ public class DynamicAdjustServiceImpl implements DynamicAdjustService {
         // 注意：MdmMaterialInfo 没有直接的主销产品标识
         // 实际应根据主销产品配置表判断
         // 这里暂时不判断主销产品，统一按非主销产品处理
-        
+
         // 非主销产品：不可加量，记录异常
         log.warn("产品 {} 大卷帘布用完，不可加量生产", materialCode);
 
@@ -433,8 +433,8 @@ public class DynamicAdjustServiceImpl implements DynamicAdjustService {
                         .gt(CxStock::getStockNum, 0));
 
         for (CxStock stock : stocks) {
-            BigDecimal availableHours = stock.getStockHours() != null 
-                    ? stock.getStockHours() 
+            BigDecimal availableHours = stock.getStockHours() != null
+                    ? stock.getStockHours()
                     : BigDecimal.ZERO;
 
             String alertType = checkStockAlert(stock.getEmbryoCode(), availableHours);

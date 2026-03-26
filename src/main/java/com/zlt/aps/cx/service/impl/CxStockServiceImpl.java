@@ -73,10 +73,10 @@ public class CxStockServiceImpl extends ServiceImpl<CxStockMapper, CxStock> impl
     public void refreshAllAlertStatus() {
         List<CxStock> stocks = list();
         Date now = new Date();
-        
+
         for (CxStock stock : stocks) {
             String alertStatus = calculateAlertStatus(stock);
-            
+
             if (!alertStatus.equals(stock.getAlertStatus())) {
                 stock.setAlertStatus(alertStatus);
                 stock.setAlertTime(now);
@@ -89,14 +89,14 @@ public class CxStockServiceImpl extends ServiceImpl<CxStockMapper, CxStock> impl
     @Override
     public Page<CxStock> pageList(Page<CxStock> page, String alertStatus) {
         LambdaQueryWrapper<CxStock> wrapper = new LambdaQueryWrapper<>();
-        
+
         if (StringUtils.hasText(alertStatus)) {
             wrapper.eq(CxStock::getAlertStatus, alertStatus);
         }
-        
+
         wrapper.orderByDesc(CxStock::getAlertTime)
-               .orderByAsc(CxStock::getEmbryoCode);
-        
+                .orderByAsc(CxStock::getEmbryoCode);
+
         return page(page, wrapper);
     }
 
@@ -123,7 +123,7 @@ public class CxStockServiceImpl extends ServiceImpl<CxStockMapper, CxStock> impl
         } else if (stockHours.compareTo(highThreshold) > 0) {
             return "HIGH";
         }
-        
+
         return "NORMAL";
     }
 }
