@@ -46,6 +46,12 @@ import java.util.stream.Collectors;
 @Service
 public class ScheduleServiceImpl implements ScheduleService {
 
+    /** 默认工厂编号（当请求中未指定时使用） */
+    private static final String DEFAULT_FACTORY_CODE = "DEFAULT";
+
+    /** 默认排程天数（当班次配置为空时使用） */
+    private static final int DEFAULT_SCHEDULE_DAYS = 3;
+
     @Autowired
     private CoreScheduleAlgorithmService coreScheduleAlgorithmService;
 
@@ -163,7 +169,7 @@ public class ScheduleServiceImpl implements ScheduleService {
 
             // 1. 加载班次配置（按工厂）
             // 从班次配置表获取排程天数和班次顺序
-            String factoryCode = request.getFactoryCode() != null ? request.getFactoryCode() : "DEFAULT";
+            String factoryCode = request.getFactoryCode() != null ? request.getFactoryCode() : DEFAULT_FACTORY_CODE;
             context.setFactoryCode(factoryCode);
 
             List<com.zlt.aps.cx.entity.config.CxShiftConfig> allShiftConfigs = loadShiftConfigs(factoryCode);
@@ -175,8 +181,8 @@ public class ScheduleServiceImpl implements ScheduleService {
                     .collect(Collectors.groupingBy(com.zlt.aps.cx.entity.config.CxShiftConfig::getScheduleDay));
 
             // 获取排程天数（根据班次配置计算，取最大的scheduleDay）
-            int scheduleDays = dayShiftMap.isEmpty() ? 3 : dayShiftMap.keySet().stream()
-                    .max(Integer::compareTo).orElse(3);
+            int scheduleDays = dayShiftMap.isEmpty() ? DEFAULT_SCHEDULE_DAYS : dayShiftMap.keySet().stream()
+                    .max(Integer::compareTo).orElse(DEFAULT_SCHEDULE_DAYS);
             context.setScheduleDays(scheduleDays);
             log.info("根据班次配置计算排程天数: {}", scheduleDays);
 
