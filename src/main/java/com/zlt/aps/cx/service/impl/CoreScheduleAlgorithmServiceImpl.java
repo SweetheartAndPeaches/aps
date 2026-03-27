@@ -85,20 +85,21 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     public List<DailyEmbryoTask> calculateDailyEmbryoTasks(ScheduleContextDTO context) {
         List<DailyEmbryoTask> tasks = new ArrayList<>();
 
-        // 构建物料和库存映射
+        // 构建物料映射
         Map<String, MdmMaterialInfo> materialMap = new HashMap<>();
         if (context.getMaterials() != null) {
             materialMap = context.getMaterials().stream()
                     .collect(Collectors.toMap(MdmMaterialInfo::getMaterialCode, m -> m, (a, b) -> a));
         }
 
+        // 构建胎胚库存映射
         Map<String, CxStock> stockMap = new HashMap<>();
         if (context.getStocks() != null) {
             stockMap = context.getStocks().stream()
                     .collect(Collectors.toMap(CxStock::getEmbryoCode, s -> s, (a, b) -> a));
         }
 
-        // 构建结构收尾映射
+        // 构建结构收尾映射：在calculateStructureEndings方法计算结果
         Map<String, CxStructureEnding> endingMap = new HashMap<>();
         if (context.getStructureEndings() != null) {
             endingMap = context.getStructureEndings().stream()
