@@ -299,6 +299,11 @@ public class ScheduleServiceImpl implements ScheduleService {
             context.setMaterialLhCapacityMap(materialLhCapacityMap);
             log.info("构建物料日硫化产能映射 {} 条", materialLhCapacityMap.size());
 
+            // 构建硫化机台产能映射（用于计算配比未塞满时的满算力）
+            Map<String, List<LhMachineCapacityInfo>> lhMachineCapacityMap = buildLhMachineCapacityMap();
+            context.setLhMachineCapacityMap(lhMachineCapacityMap);
+            log.info("构建硫化机台产能映射 {} 个物料", lhMachineCapacityMap.size());
+
             Map<String, MdmStructureLhRatio> structureLhRatioMap = buildStructureLhRatioMap();
             context.setStructureLhRatioMap(structureLhRatioMap);
             log.info("构建结构硫化配比映射 {} 条", structureLhRatioMap.size());
@@ -307,7 +312,7 @@ public class ScheduleServiceImpl implements ScheduleService {
             int year = scheduleDate.getYear();
             int month = scheduleDate.getMonthValue();
             List<CxMaterialEnding> materialEndings = calculateMaterialEndings(
-                    scheduleDate, year, month, stocks, materialLhCapacityMap, structureLhRatioMap, factoryCode);
+                    scheduleDate, year, month, stocks, materialLhCapacityMap, structureLhRatioMap, lhMachineCapacityMap, factoryCode);
             context.setMaterialEndings(materialEndings);
             log.info("从月计划计算生成物料收尾信息 {} 条", materialEndings.size());
 
@@ -555,6 +560,7 @@ public class ScheduleServiceImpl implements ScheduleService {
      * @param stocks 库存信息（从context中传入，避免重复查询）
      * @param materialLhCapacityMap 物料日硫化产能映射
      * @param structureLhRatioMap 结构硫化配比映射
+     * @param lhMachineCapacityMap 硫化机台产能映射
      * @param factoryCode 工厂编码
      * @return 物料收尾管理列表
      */
@@ -565,6 +571,7 @@ public class ScheduleServiceImpl implements ScheduleService {
             List<CxStock> stocks,
             Map<String, com.zlt.aps.mp.engine.domain.vo.MonthPlanProductLhCapacityVo> materialLhCapacityMap,
             Map<String, com.zlt.aps.mp.api.domain.entity.MdmStructureLhRatio> structureLhRatioMap,
+            Map<String, List<LhMachineCapacityInfo>> lhMachineCapacityMap,
             String factoryCode) {
 
         List<CxMaterialEnding> resultList = new ArrayList<>();
@@ -657,9 +664,11 @@ public class ScheduleServiceImpl implements ScheduleService {
                 ending.setFormingRemainder(formingRemainder);
 
                 // ========== Step 3: 计算满算力（日硫化产能） ==========
-                // 计算公式：成型供的硫化机中该物料的日产汇总（配比塞满的情况）
+                // 计算公式：成型供的硫化机中该物料的日产汇总
+                // 配比塞满时：使用当前硫化机台的实际产能
+                // 配比未塞满时：对于未塞满的配比，使用当前机台的最小日硫化量来预测
                 int dailyLhCapacity = calculateMaterialDailyLhCapacity(
-                        materialCode, structureName, materialLhCapacityMap, structureLhRatioMap);
+                        materialCode, structureName, materialLhCapacityMap, structureLhRatioMap, lhMachineCapacityMap);
                 ending.setDailyLhCapacity(dailyLhCapacity);
 
                 // 日成型产能（与日硫化产能相同，因为1:1对应关系）
@@ -777,45 +786,93 @@ public class ScheduleServiceImpl implements ScheduleService {
     /**
      * 计算物料的日硫化产能（满算力）
      *
-     * 计算公式：成型供的硫化机中该物料的日产汇总（配比塞满的情况）
+     * 计算逻辑：
+     * 1. 配比塞满时：使用当前硫化机台的实际产能
+     * 2. 配比未塞满时：对于未塞满的配比，使用当前机台的最小日硫化量来预测
+     *
+     * 满算力 = Σ(各硫化机台日硫化量)
+     * - 已塞满的硫化机：使用实际日硫化量
+     * - 未塞满的硫化机：使用当前机台的最小日硫化量预测
      *
      * @param materialCode 物料编码
      * @param structureName 结构名称（用于查找配比）
      * @param materialLhCapacityMap 物料日硫化产能映射
      * @param structureLhRatioMap 结构硫化配比映射
+     * @param lhMachineCapacityMap 硫化机台产能映射
      * @return 日硫化产能（条/天）
      */
     private int calculateMaterialDailyLhCapacity(
             String materialCode,
             String structureName,
             Map<String, com.zlt.aps.mp.engine.domain.vo.MonthPlanProductLhCapacityVo> materialLhCapacityMap,
-            Map<String, com.zlt.aps.mp.api.domain.entity.MdmStructureLhRatio> structureLhRatioMap) {
+            Map<String, com.zlt.aps.mp.api.domain.entity.MdmStructureLhRatio> structureLhRatioMap,
+            Map<String, List<LhMachineCapacityInfo>> lhMachineCapacityMap) {
 
-        // 1. 获取该物料的日硫化产能
-        com.zlt.aps.mp.engine.domain.vo.MonthPlanProductLhCapacityVo capacityVo = materialLhCapacityMap.get(materialCode);
-        if (capacityVo == null) {
-            log.debug("未找到物料 {} 的日硫化产能配置，使用默认值0", materialCode);
+        // 1. 获取该物料对应的硫化机台列表
+        List<LhMachineCapacityInfo> machineList = lhMachineCapacityMap.get(materialCode);
+        if (machineList == null || machineList.isEmpty()) {
+            log.debug("未找到物料 {} 的硫化机台信息，尝试使用基础产能", materialCode);
+            // 兜底：使用基础产能
+            com.zlt.aps.mp.engine.domain.vo.MonthPlanProductLhCapacityVo capacityVo = materialLhCapacityMap.get(materialCode);
+            if (capacityVo != null) {
+                int baseCapacity = capacityVo.getDefaultDayVulcanizationQty();
+                log.debug("物料 {} 使用基础产能 {}", materialCode, baseCapacity);
+                return baseCapacity;
+            }
             return 0;
         }
 
-        // 使用默认计算模式（优先标准产能）
-        int baseCapacity = capacityVo.getDefaultDayVulcanizationQty();
-
         // 2. 获取该结构的硫化配比（最大硫化机台数）
         com.zlt.aps.mp.api.domain.entity.MdmStructureLhRatio ratio = structureLhRatioMap.get(structureName);
-        if (ratio == null || ratio.getLhMachineMaxQty() == null || ratio.getLhMachineMaxQty() <= 0) {
-            log.debug("未找到结构 {} 的硫化配比配置，使用基础产能 {}", structureName, baseCapacity);
-            return baseCapacity;
+        int maxLhMachineQty = (ratio != null && ratio.getLhMachineMaxQty() != null)
+                ? ratio.getLhMachineMaxQty() : machineList.size();
+
+        // 3. 获取当前硫化机台的数量
+        int currentMachineCount = machineList.size();
+
+        // 4. 获取当前硫化机台的最小日硫化量（用于预测未塞满的配比）
+        int minCapacity = Integer.MAX_VALUE;
+        int totalCurrentCapacity = 0;
+        for (LhMachineCapacityInfo machine : machineList) {
+            if (machine.getDailyCapacity() != null && machine.getDailyCapacity() > 0) {
+                minCapacity = Math.min(minCapacity, machine.getDailyCapacity());
+                totalCurrentCapacity += machine.getDailyCapacity();
+            }
         }
 
-        int maxLhMachineQty = ratio.getLhMachineMaxQty();
+        // 如果没有找到有效产能，尝试使用基础产能
+        if (minCapacity == Integer.MAX_VALUE) {
+            com.zlt.aps.mp.engine.domain.vo.MonthPlanProductLhCapacityVo capacityVo = materialLhCapacityMap.get(materialCode);
+            if (capacityVo != null) {
+                int baseCapacity = capacityVo.getDefaultDayVulcanizationQty();
+                log.debug("物料 {} 硫化机台产能为空，使用基础产能 {}", materialCode, baseCapacity);
+                return baseCapacity;
+            }
+            return 0;
+        }
 
-        // 3. 计算满算力：基础产能 × 最大硫化机台数配比
-        // 配比塞满意味着该物料可以使用所有最大配比的硫化机台
-        int fullCapacity = baseCapacity * maxLhMachineQty;
+        // 5. 计算满算力
+        int fullCapacity;
+        if (currentMachineCount >= maxLhMachineQty) {
+            // 配比已塞满，使用当前硫化机台的总产能
+            fullCapacity = totalCurrentCapacity;
+            log.debug("物料 {} 配比已塞满，硫化机台数量 {} >= 最大配比 {}，总产能 {}",
+                    materialCode, currentMachineCount, maxLhMachineQty, fullCapacity);
+        } else {
+            // 配比未塞满，需要预测未塞满的配比
+            // 未塞满的配比数量
+            int unfilledRatioCount = maxLhMachineQty - currentMachineCount;
 
-        log.debug("物料 {} 满算力计算：基础产能 {} × 最大硫化机台数 {} = {}",
-                materialCode, baseCapacity, maxLhMachineQty, fullCapacity);
+            // 对于未塞满的配比，使用当前机台的最小日硫化量来预测
+            // 满算力 = 当前硫化机台总产能 + 未塞满配比数量 × 最小硫化量
+            int predictedUnfilledCapacity = unfilledRatioCount * minCapacity;
+            fullCapacity = totalCurrentCapacity + predictedUnfilledCapacity;
+
+            log.info("物料 {} 配比未塞满，当前硫化机台 {} 台，最大配比 {}，未塞满 {} 个配比",
+                    materialCode, currentMachineCount, maxLhMachineQty, unfilledRatioCount);
+            log.info("物料 {} 满算力计算：当前产能 {} + 预测产能({} × {}) = {}",
+                    materialCode, totalCurrentCapacity, unfilledRatioCount, minCapacity, fullCapacity);
+        }
 
         return fullCapacity;
     }
@@ -877,6 +934,41 @@ public class ScheduleServiceImpl implements ScheduleService {
      *
      * @return 物料日硫化产能映射
      */
+    /**
+     * 构建硫化机台日产能信息映射（用于计算满算力）
+     *
+     * @return 物料编码 -> 硫化机台产能信息列表
+     */
+    private Map<String, List<LhMachineCapacityInfo>> buildLhMachineCapacityMap() {
+        Map<String, List<LhMachineCapacityInfo>> resultMap = new HashMap<>();
+
+        try {
+            LocalDate today = LocalDate.now();
+            List<LhScheduleResult> lhResults = lhScheduleResultMapper.selectByDate(today);
+
+            for (LhScheduleResult lhResult : lhResults) {
+                String embryoCode = lhResult.getEmbryoCode();
+                if (embryoCode == null) {
+                    continue;
+                }
+
+                LhMachineCapacityInfo info = new LhMachineCapacityInfo();
+                info.setLhMachineCode(lhResult.getLhMachineCode());
+                info.setMaterialCode(embryoCode);
+                info.setDailyCapacity(lhResult.getDayVulcanizationQty());
+
+                resultMap.computeIfAbsent(embryoCode, k -> new ArrayList<>()).add(info);
+            }
+
+            log.info("从硫化排程结果构建硫化机台产能映射，共 {} 个物料", resultMap.size());
+
+        } catch (Exception e) {
+            log.error("构建硫化机台产能映射失败", e);
+        }
+
+        return resultMap;
+    }
+
     private Map<String, com.zlt.aps.mp.engine.domain.vo.MonthPlanProductLhCapacityVo> buildMaterialLhCapacityMap() {
         Map<String, com.zlt.aps.mp.engine.domain.vo.MonthPlanProductLhCapacityVo> resultMap = new HashMap<>();
 
