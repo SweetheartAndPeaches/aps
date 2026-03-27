@@ -143,8 +143,9 @@ public class ScheduleServiceImpl implements ScheduleService {
             List<CxScheduleResult> scheduleResults = coreScheduleAlgorithmService.executeSchedule(context);
 
             // 5. 应用节假日调整
-            scheduleResults = holidayScheduleService.adjustHolidaySchedule(
-                    request.getScheduleDate(), scheduleResults, context);
+            // 注释：不在 executeSchedule 中校验节假日调整，改在核心排程算法中处理
+            // scheduleResults = holidayScheduleService.adjustHolidaySchedule(
+            //         request.getScheduleDate(), scheduleResults, context);
 
             // 6. 保存排程结果
             saveScheduleResults(scheduleResults);
