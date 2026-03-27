@@ -131,11 +131,12 @@ public class ScheduleServiceImpl implements ScheduleService {
             }
 
             // 3. 处理节假日特殊逻辑
-            if (holidayScheduleService.isBeforeHoliday(request.getScheduleDate())) {
-                HolidayScheduleService.HolidayScheduleResult holidayResult =
-                        holidayScheduleService.handleBeforeHoliday(context);
-                log.info("停产前一天处理结果：{}", holidayResult.getMessage());
-            }
+            // 注释：不在 executeSchedule 中校验停产前一天，改在核心排程算法中处理
+            // if (holidayScheduleService.isBeforeHoliday(request.getScheduleDate())) {
+            //     HolidayScheduleService.HolidayScheduleResult holidayResult =
+            //             holidayScheduleService.handleBeforeHoliday(context);
+            //     log.info("停产前一天处理结果：{}", holidayResult.getMessage());
+            // }
 
             // 4. 执行核心排程算法（包含续作、试制、正常任务的统一处理）
             // 任务优先级：续作 > 新增任务（试制在有空出产能时优先，但不挤掉实单）
