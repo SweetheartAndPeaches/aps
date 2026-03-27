@@ -85,18 +85,24 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     public List<DailyEmbryoTask> calculateDailyEmbryoTasks(ScheduleContextDTO context) {
         List<DailyEmbryoTask> tasks = new ArrayList<>();
 
-        // 构建物料映射
+        // 构建物料和库存映射
         Map<String, MdmMaterialInfo> materialMap = new HashMap<>();
         if (context.getMaterials() != null) {
             materialMap = context.getMaterials().stream()
                     .collect(Collectors.toMap(MdmMaterialInfo::getMaterialCode, m -> m, (a, b) -> a));
         }
 
-        // 构建胎胚库存映射
         Map<String, CxStock> stockMap = new HashMap<>();
         if (context.getStocks() != null) {
             stockMap = context.getStocks().stream()
                     .collect(Collectors.toMap(CxStock::getEmbryoCode, s -> s, (a, b) -> a));
+        }
+
+        // 构建结构收尾映射
+        Map<String, CxStructureEnding> endingMap = new HashMap<>();
+        if (context.getStructureEndings() != null) {
+            endingMap = context.getStructureEndings().stream()
+                    .collect(Collectors.toMap(CxStructureEnding::getStructureCode, e -> e, (a, b) -> a));
         }
 
         // 获取机台在机胎胚映射（用于续作判断）
@@ -105,26 +111,10 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             machineOnlineEmbryoMap = new HashMap<>();
         }
 
-        // ==================== 成型排产班次与硫化班次映射 ====================
-        // 硫化有8个班次(class1~class8)，成型按天排产
-        // 班次时间：1班(夜班)22:00-06:00, 2班(早班)06:00-14:00, 3班(中班)14:00-22:00
-        // 成型排产顺序：第1天早班(class2)、中班(class3)；第2天起夜班、早班、中班循环
-        // 
-        // 映射关系：
-        // 成型班次索引 -> 硫化班次号
-        // 0 (第1天早班) -> class2
-        // 1 (第1天中班) -> class3
-        // 2 (第2天夜班) -> class4
-        // 3 (第2天早班) -> class5
-        // 4 (第2天中班) -> class6
-        // 5 (第3天夜班) -> class7
-        // 6 (第3天早班) -> class8
-        int[] formingShiftToVulcanizeClass = {2, 3, 4, 5, 6, 7, 8};
-
         // ==================== 主要任务来源：硫化排程结果 ====================
         List<LhScheduleResult> lhScheduleResults = context.getLhScheduleResults();
         if (lhScheduleResults != null && !lhScheduleResults.isEmpty()) {
-            // 按胎胚编码分组
+            // 按胎胚编码分组汇总
             Map<String, List<LhScheduleResult>> embryoTaskMap = lhScheduleResults.stream()
                     .filter(r -> r.getEmbryoCode() != null)
                     .collect(Collectors.groupingBy(LhScheduleResult::getEmbryoCode));
@@ -133,79 +123,49 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 String embryoCode = entry.getKey();
                 List<LhScheduleResult> lhResults = entry.getValue();
 
-                // 获取初始库存（第一个班次开始时间点的库存）
-                int initialStock = 0;
+                // 计算硫化需求量（汇总所有硫化机的需求）
+                int totalVulcanizeDemand = lhResults.stream()
+                        .mapToInt(r -> r.getDailyPlanQty() != null ? r.getDailyPlanQty() : 0)
+                        .sum();
+
+                // 获取当前库存
+                int currentStock = 0;
                 Integer embryoStock = lhResults.get(0).getEmbryoStock();
                 if (embryoStock != null) {
-                    initialStock = embryoStock;
+                    currentStock = embryoStock;
                 } else {
                     CxStock stock = stockMap.get(embryoCode);
                     if (stock != null) {
-                        initialStock = stock.getEffectiveStock();
+                        currentStock = stock.getEffectiveStock();
                     }
                 }
 
-                // 获取损耗率
+                // 计算净需求
+                int netDemand = totalVulcanizeDemand - currentStock;
+
+                // 如果库存充足，跳过
+                if (netDemand <= 0) {
+                    log.debug("胎胚 {} 库存充足，无需生产，硫化需求: {}, 库存: {}",
+                            embryoCode, totalVulcanizeDemand, currentStock);
+                    continue;
+                }
+
+                // 考虑损耗率
                 BigDecimal lossRate = context.getLossRate();
                 if (lossRate == null) {
                     lossRate = new BigDecimal("0.02"); // 默认2%
                 }
+                int dailyDemand = (int) Math.ceil(netDemand * (1 + lossRate.doubleValue()));
 
                 // 获取结构编码
                 String structureCode = lhResults.get(0).getStructureName();
                 String structureName = lhResults.get(0).getStructureName();
 
-                // 获取该结构的整车容量
+                // 获取该结构的整车容量（不同结构整车条数可能不同，如12、18等）
                 int tripCapacity = getTripCapacity(structureCode, context);
 
-                // ==================== 按班次动态计算需求和库存 ====================
-                int currentStock = initialStock;  // 当前库存（动态变化）
-                int totalFormingDemand = 0;       // 成型总需求量
-                Map<Integer, Integer> shiftDemands = new LinkedHashMap<>(); // 各班次需求
-
-                for (int shiftIndex = 0; shiftIndex < formingShiftToVulcanizeClass.length; shiftIndex++) {
-                    int vulcanizeClassNum = formingShiftToVulcanizeClass[shiftIndex];
-
-                    // 获取该班次的硫化需求量（汇总所有硫化机）
-                    int vulcanizeDemand = 0;
-                    for (LhScheduleResult lhResult : lhResults) {
-                        Integer classPlanQty = getClassPlanQty(lhResult, vulcanizeClassNum);
-                        if (classPlanQty != null) {
-                            vulcanizeDemand += classPlanQty;
-                        }
-                    }
-
-                    // 计算净需求 = 硫化需求 - 当前库存
-                    int netDemand = vulcanizeDemand - currentStock;
-
-                    // 计算成型产量（如果净需求 > 0）
-                    int formingOutput = 0;
-                    if (netDemand > 0) {
-                        // 考虑损耗率
-                        formingOutput = (int) Math.ceil(netDemand * (1 + lossRate.doubleValue()));
-                        // 整车取整
-                        formingOutput = roundToTrip(formingOutput, "CEILING", tripCapacity);
-                    }
-
-                    // 记录该班次需求
-                    if (formingOutput > 0) {
-                        shiftDemands.put(shiftIndex, formingOutput);
-                        totalFormingDemand += formingOutput;
-                    }
-
-                    // 更新库存 = 当前库存 + 成型产量 - 硫化消耗
-                    currentStock = currentStock + formingOutput - vulcanizeDemand;
-
-                    log.debug("胎胚 {} 班次{}(硫化class{}): 硫化需求={}, 当前库存={}, 成型产量={}, 更新后库存={}",
-                            embryoCode, shiftIndex, vulcanizeClassNum, vulcanizeDemand, 
-                            currentStock - formingOutput + vulcanizeDemand, formingOutput, currentStock);
-                }
-
-                // 如果总需求为0，跳过该胎胚
-                if (totalFormingDemand <= 0) {
-                    log.debug("胎胚 {} 所有班次库存充足，无需生产", embryoCode);
-                    continue;
-                }
+                // 整车取整（向上取整到整车容量的倍数）
+                dailyDemand = roundToTrip(dailyDemand, "CEILING", tripCapacity);
 
                 // 判断续作：检查是否有在机机台
                 List<String> continueMachineCodes = new ArrayList<>();
@@ -226,6 +186,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 boolean isFirstTask = !isContinueTask && !isTrialTask;
 
                 // 计算收尾余量
+                // 收尾余量 = 硫化余量(PLAN_SURPLUS_QTY) - 胎胚库存
+                // 硫化余量来自 t_mdm_month_surplus.PLAN_SURPLUS_QTY（已由系统计算好，无需再计算）
                 Integer vulcanizeSurplusQty = null;
                 Integer endingSurplusQty = null;
                 boolean isEndingTask = false;
@@ -234,13 +196,17 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                     com.zlt.aps.mp.api.domain.entity.MdmMonthSurplus monthSurplus =
                             context.getMonthSurplusMap().get(embryoCode);
                     if (monthSurplus != null && monthSurplus.getPlanSurplusQty() != null) {
+                        // 硫化余量 = 总计划量 - 硫化真实完成量（已由系统计算）
                         vulcanizeSurplusQty = monthSurplus.getPlanSurplusQty().intValue();
-                        endingSurplusQty = vulcanizeSurplusQty - initialStock;
+                        int stockQty = currentStock;
+                        // 收尾余量 = 硫化余量 - 胎胚库存
+                        endingSurplusQty = vulcanizeSurplusQty - stockQty;
+                        // 收尾余量 <= 0 表示该任务需要收尾
                         isEndingTask = endingSurplusQty != null && endingSurplusQty <= 0;
                     }
                 }
 
-                // 判断是否主销产品
+                // 判断是否主销产品（月均销量 >= 500条）
                 boolean isMainProduct = context.getMainProductCodes() != null
                         && context.getMainProductCodes().contains(embryoCode);
 
@@ -260,9 +226,9 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                     task.setStructureName(structureName);
                 }
 
-                task.setDemandQuantity(totalFormingDemand);
+                task.setDemandQuantity(dailyDemand);
                 task.setAssignedQuantity(0);
-                task.setRemainingQuantity(totalFormingDemand);
+                task.setRemainingQuantity(dailyDemand);
                 task.setIsTrialTask(isTrialTask);
                 task.setIsFirstTask(isFirstTask);
                 task.setIsContinueTask(isContinueTask);
@@ -273,10 +239,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 task.setIsEndingTask(isEndingTask);
                 task.setEndingSurplusQty(endingSurplusQty);
                 task.setVulcanizeSurplusQty(vulcanizeSurplusQty);
-                task.setCurrentStock(initialStock);
-
-                // 各班次需求
-                task.setShiftDemands(shiftDemands);
+                task.setCurrentStock(currentStock);
 
                 // 计算库存时长
                 CxStock stock = stockMap.get(embryoCode);
@@ -286,18 +249,18 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                     task.setVulcanizeMoldCount(stock.getVulcanizeMoldCount());
                 }
 
-                // 计算优先级分数
+                // 计算优先级分数（收尾任务通过分数体现紧急程度）
                 task.setPriority(calculatePriorityScoreNew(task, material, stock, context));
 
                 tasks.add(task);
 
                 if (isContinueTask) {
                     log.info("续作任务: 胎胚={}, 需求量={}, 续作机台={}, 收尾余量={}",
-                            embryoCode, totalFormingDemand, continueMachineCodes, endingSurplusQty);
+                            embryoCode, dailyDemand, continueMachineCodes, endingSurplusQty);
                 }
                 if (isEndingTask) {
                     log.info("收尾任务: 胎胚={}, 硫化余量={}, 库存={}, 收尾余量={}",
-                            embryoCode, vulcanizeSurplusQty, initialStock, endingSurplusQty);
+                            embryoCode, vulcanizeSurplusQty, currentStock, endingSurplusQty);
                 }
             }
         }
@@ -309,7 +272,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                     DailyEmbryoTask task = createDailyEmbryoTask(
                             trialTask.getMaterialCode(),
                             trialTask.getTrialQuantity() - trialTask.getProducedQuantity(),
-                            materialMap, stockMap, context);
+                            materialMap, stockMap, endingMap, context);
                     if (task != null) {
                         task.setIsTrialTask(true);
                         task.setTrialNo(trialTask.getTrialNo());
@@ -1524,6 +1487,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             Integer demandQuantity,
             Map<String, MdmMaterialInfo> materialMap,
             Map<String, CxStock> stockMap,
+            Map<String, CxStructureEnding> endingMap,
             ScheduleContextDTO context) {
 
         MdmMaterialInfo material = materialMap.get(materialCode);
@@ -1574,31 +1538,36 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 && context.getMainProductCodes().contains(materialCode);
         task.setIsMainProduct(isMainProduct);
 
-        // 计算优先级
+        // ========== 收尾管理：应用追赶量和优先级 ==========
+        String structureName = material.getStructureName();
+        CxStructureEnding structureEnding = endingMap.get(structureName);
+
+        if (structureEnding != null) {
+            // 设置紧急收尾标记
+            boolean isUrgentEnding = structureEnding.getIsUrgentEnding() != null
+                    && structureEnding.getIsUrgentEnding() == 1;
+            task.setIsUrgentEnding(isUrgentEnding);
+
+            // 如果需要追赶，增加需求量（平摊量）
+            if (structureEnding.getDistributedQuantity() != null
+                    && structureEnding.getDistributedQuantity() > 0) {
+                int originalDemand = task.getDemandQuantity();
+                int catchUpQty = structureEnding.getDistributedQuantity();
+                task.setDemandQuantity(originalDemand + catchUpQty);
+                task.setRemainingQuantity(originalDemand + catchUpQty);
+                log.info("收尾追赶：物料 {} 原需求 {}，增加追赶量 {}，新需求 {}",
+                        materialCode, originalDemand, catchUpQty, task.getDemandQuantity());
+            }
+
+            // 标记是否需要月计划调整
+            task.setNeedMonthPlanAdjust(structureEnding.getNeedMonthPlanAdjust() != null
+                    && structureEnding.getNeedMonthPlanAdjust() == 1);
+        }
+
+        // 计算优先级（紧急收尾会获得更高优先级）
         task.setPriority(calculatePriorityScoreNew(task, material, stock, context));
 
         return task;
-    }
-
-    /**
-     * 获取硫化排程中指定班次的计划量
-     *
-     * @param lhResult 硫化排程结果
-     * @param classNum 班次号 (1-8)
-     * @return 计划量
-     */
-    private Integer getClassPlanQty(LhScheduleResult lhResult, int classNum) {
-        switch (classNum) {
-            case 1: return lhResult.getClass1PlanQty();
-            case 2: return lhResult.getClass2PlanQty();
-            case 3: return lhResult.getClass3PlanQty();
-            case 4: return lhResult.getClass4PlanQty();
-            case 5: return lhResult.getClass5PlanQty();
-            case 6: return lhResult.getClass6PlanQty();
-            case 7: return lhResult.getClass7PlanQty();
-            case 8: return lhResult.getClass8PlanQty();
-            default: return null;
-        }
     }
 
     /**
