@@ -109,6 +109,9 @@ public class ScheduleServiceImpl implements ScheduleService {
     @Autowired
     private com.zlt.aps.mp.api.mapper.MdmDevicePlanShutMapper devicePlanShutMapper;
 
+    @Autowired
+    private com.zlt.aps.cx.mapper.CxShiftConfigMapper shiftConfigMapper;
+
     @Override
     public ScheduleResult executeSchedule(ScheduleRequest request) {
         ScheduleResult result = new ScheduleResult();
@@ -158,28 +161,43 @@ public class ScheduleServiceImpl implements ScheduleService {
             ScheduleContextDTO context = new ScheduleContextDTO();
             LocalDate scheduleDate = request.getScheduleDate();
 
-            // 获取排程天数（默认3天）
-            int scheduleDays = request.getScheduleDays() != null ? request.getScheduleDays() : 3;
+            // 1. 加载班次配置（按工厂）
+            // 从班次配置表获取排程天数和班次顺序
+            String factoryCode = request.getFactoryCode() != null ? request.getFactoryCode() : "DEFAULT";
+            context.setFactoryCode(factoryCode);
+
+            List<com.zlt.aps.cx.entity.config.CxShiftConfig> allShiftConfigs = loadShiftConfigs(factoryCode);
+            context.setShiftConfigList(allShiftConfigs);
+
+            // 按排程天数分组
+            Map<Integer, List<com.zlt.aps.cx.entity.config.CxShiftConfig>> dayShiftMap = allShiftConfigs.stream()
+                    .filter(c -> c.getScheduleDay() != null)
+                    .collect(Collectors.groupingBy(com.zlt.aps.cx.entity.config.CxShiftConfig::getScheduleDay));
+
+            // 获取排程天数（根据班次配置计算，取最大的scheduleDay）
+            int scheduleDays = dayShiftMap.isEmpty() ? 3 : dayShiftMap.keySet().stream()
+                    .max(Integer::compareTo).orElse(3);
             context.setScheduleDays(scheduleDays);
+            log.info("根据班次配置计算排程天数: {}", scheduleDays);
 
             // 计算排程日期范围
             LocalDate endDate = scheduleDate.plusDays(scheduleDays - 1);
 
-            // 1. 获取设备计划停机信息（成型机台）
+            // 2. 获取设备计划停机信息（成型机台）
             // 查询排程日期范围内的停机计划，用于排程时扣减产能
             List<MdmDevicePlanShut> devicePlanShuts = devicePlanShutMapper.selectByMachineTypeAndDateRange(
                     "成型", scheduleDate, endDate);
             context.setDevicePlanShuts(devicePlanShuts);
             log.info("加载成型机台停机计划 {} 条", devicePlanShuts.size());
 
-            // 2. 获取所有启用的机台（不过滤停机机台，停机机台在排程时扣减产能）
+            // 3. 获取所有启用的机台（不过滤停机机台，停机机台在排程时扣减产能）
             List<MdmMoldingMachine> machines = moldingMachineMapper.selectList(
                     new LambdaQueryWrapper<MdmMoldingMachine>()
                             .eq(MdmMoldingMachine::getIsActive, 1));
             context.setAvailableMachines(machines);
             log.info("加载成型机台 {} 台", machines.size());
 
-            // 3. 获取物料信息
+            // 4. 获取物料信息
             List<MdmMaterialInfo> materials = materialInfoMapper.selectList(
                     new LambdaQueryWrapper<MdmMaterialInfo>());
             context.setMaterials(materials);
@@ -766,5 +784,21 @@ public class ScheduleServiceImpl implements ScheduleService {
             }
         }
         return totalQty;
+    }
+
+    /**
+     * 加载班次配置（按工厂）
+     *
+     * @param factoryCode 工厂编号
+     * @return 排序后的班次配置列表
+     */
+    private List<com.zlt.aps.cx.entity.config.CxShiftConfig> loadShiftConfigs(String factoryCode) {
+        return shiftConfigMapper.selectList(
+                new LambdaQueryWrapper<com.zlt.aps.cx.entity.config.CxShiftConfig>()
+                        .eq(com.zlt.aps.cx.entity.config.CxShiftConfig::getFactoryCode, factoryCode)
+                        .eq(com.zlt.aps.cx.entity.config.CxShiftConfig::getIsActive, 1)
+                        .orderByAsc(com.zlt.aps.cx.entity.config.CxShiftConfig::getScheduleDay)
+                        .orderByAsc(com.zlt.aps.cx.entity.config.CxShiftConfig::getDayShiftOrder)
+        );
     }
 }
