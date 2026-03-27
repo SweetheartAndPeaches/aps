@@ -274,10 +274,8 @@ public class ScheduleServiceImpl implements ScheduleService {
                     : new java.math.BigDecimal("0.02");
             context.setLossRate(lossRate);
 
-            // 10. 获取结构班产配置（整车条数）
-            List<CxStructureShiftCapacity> structureShiftCapacities = structureShiftCapacityMapper.selectList(
-                    new LambdaQueryWrapper<CxStructureShiftCapacity>()
-                            .eq(CxStructureShiftCapacity::getIsActive, 1));
+            // 10. 获取结构整车配置
+            List<CxStructureShiftCapacity> structureShiftCapacities = structureShiftCapacityMapper.selectList(null);
             context.setStructureShiftCapacities(structureShiftCapacities);
 
             // 11. 获取关键产品配置
