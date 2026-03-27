@@ -60,6 +60,9 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     @Autowired
     private com.zlt.aps.cx.mapper.CxShiftConfigMapper shiftConfigMapper;
 
+    @Autowired
+    private com.zlt.aps.cx.service.HolidayScheduleService holidayScheduleService;
+
     /** 默认排程天数 */
     private static final int DEFAULT_SCHEDULE_DAYS = 3;
 
@@ -95,6 +98,12 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             context.setCurrentScheduleDay(day);
             context.setCurrentScheduleDate(currentScheduleDate);
             context.setCurrentShiftConfigs(dayShifts);
+
+            // 检查当前天是否是停产日（节假日）
+            if (holidayScheduleService.isStopProductionDay(currentScheduleDate)) {
+                log.info("第 {} 天日期 {} 是停产日，跳过排程", day, currentScheduleDate);
+                continue;
+            }
 
             log.info("执行第 {} 天排程，日期: {}，班次数: {}", day, currentScheduleDate, dayShifts.size());
 
