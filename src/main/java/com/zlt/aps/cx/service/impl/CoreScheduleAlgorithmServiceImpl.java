@@ -314,10 +314,24 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 task.setVulcanizeSurplusQty(vulcanizeSurplusQty);
                 task.setCurrentStock(currentStock);
 
-                // 计算库存时长
+                // 计算库存时长：库存时长 = 胎胚库存 × 单条硫化时间（秒）/ 3600
+                // lhTime 来自硫化排程结果，表示单条胎胚硫化所需时间（秒）
+                Integer lhTime = lhResults.stream()
+                        .map(LhScheduleResult::getLhTime)
+                        .filter(Objects::nonNull)
+                        .findFirst()
+                        .orElse(null);
+                if (lhTime != null && lhTime > 0 && currentStock > 0) {
+                    // 库存时长（小时）= 库存条数 × 单条硫化时间（秒）/ 3600
+                    BigDecimal stockHours = new BigDecimal(currentStock)
+                            .multiply(new BigDecimal(lhTime))
+                            .divide(new BigDecimal(3600), 2, RoundingMode.HALF_UP);
+                    task.setStockHours(stockHours);
+                }
+
+                // 硫化机台数和模数（从库存表获取）
                 CxStock stock = stockMap.get(embryoCode);
                 if (stock != null) {
-                    task.setStockHours(stock.getStockHours());
                     task.setVulcanizeMachineCount(stock.getVulcanizeMachineCount());
                     task.setVulcanizeMoldCount(stock.getVulcanizeMoldCount());
                 }
