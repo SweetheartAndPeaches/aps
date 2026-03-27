@@ -216,29 +216,31 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 // 计算净需求
                 int netDemand = totalVulcanizeDemand - currentStock;
 
-                // 如果库存充足，跳过
-                if (netDemand <= 0) {
-                    log.debug("胎胚 {} 库存充足，无需生产，硫化需求: {}, 库存: {}",
-                            embryoCode, totalVulcanizeDemand, currentStock);
-                    continue;
-                }
-
-                // 考虑损耗率
-                BigDecimal lossRate = context.getLossRate();
-                if (lossRate == null) {
-                    lossRate = new BigDecimal("0.02"); // 默认2%
-                }
-                int dailyDemand = (int) Math.ceil(netDemand * (1 + lossRate.doubleValue()));
-
-                // 获取结构编码
+                // 获取结构编码（提前获取，后续多处使用）
                 String structureCode = lhResults.get(0).getStructureName();
                 String structureName = lhResults.get(0).getStructureName();
 
-                // 获取该结构的整车容量（不同结构整车条数可能不同，如12、18等）
-                int tripCapacity = getTripCapacity(structureCode, context);
+                // 计算日需求量
+                int dailyDemand;
+                if (netDemand <= 0) {
+                    // 库存充足，计划量设为0，但仍需创建任务（可能需要续作或收尾）
+                    log.debug("胎胚 {} 库存充足，计划量设为0，硫化需求: {}, 库存: {}",
+                            embryoCode, totalVulcanizeDemand, currentStock);
+                    dailyDemand = 0;
+                } else {
+                    // 考虑损耗率
+                    BigDecimal lossRate = context.getLossRate();
+                    if (lossRate == null) {
+                        lossRate = new BigDecimal("0.02"); // 默认2%
+                    }
+                    dailyDemand = (int) Math.ceil(netDemand * (1 + lossRate.doubleValue()));
 
-                // 整车取整（向上取整到整车容量的倍数）
-                dailyDemand = roundToTrip(dailyDemand, "CEILING", tripCapacity);
+                    // 获取该结构的整车容量（不同结构整车条数可能不同，如12、18等）
+                    int tripCapacity = getTripCapacity(structureCode, context);
+
+                    // 整车取整（向上取整到整车容量的倍数）
+                    dailyDemand = roundToTrip(dailyDemand, "CEILING", tripCapacity);
+                }
 
                 // 判断续作：检查是否有在机机台
                 List<String> continueMachineCodes = new ArrayList<>();
