@@ -122,6 +122,9 @@ public class ScheduleServiceImpl implements ScheduleService {
     @Autowired
     private com.zlt.aps.cx.mapper.CxShiftConfigMapper shiftConfigMapper;
 
+    @Autowired
+    private MdmStructureLhRatioMapper structureLhRatioMapper;
+
     @Override
     public ScheduleResult executeSchedule(ScheduleRequest request) {
         ScheduleResult result = new ScheduleResult();
@@ -278,7 +281,7 @@ public class ScheduleServiceImpl implements ScheduleService {
             List<CxStructureShiftCapacity> structureShiftCapacities = structureShiftCapacityMapper.selectList(null);
             context.setStructureShiftCapacities(structureShiftCapacities);
 
-            // 11. 获取关键产品配置
+            // 11. 获取关键产品配置:开产首班次不安排关键产品
             List<CxKeyProduct> keyProducts = keyProductMapper.selectList(
                     new LambdaQueryWrapper<CxKeyProduct>()
                             .eq(CxKeyProduct::getIsActive, 1));
@@ -291,14 +294,24 @@ public class ScheduleServiceImpl implements ScheduleService {
             }
             context.setKeyProductCodes(keyProductCodes);
 
-            // 12. 获取结构收尾管理列表（从FactoryMonthPlanProductionFinalResult计算生成）
+            // 12. 构建物料日硫化产能映射和结构硫化配比映射（用于计算满算力）
+            Map<String, com.zlt.aps.mp.engine.domain.vo.MonthPlanProductLhCapacityVo> materialLhCapacityMap = buildMaterialLhCapacityMap();
+            context.setMaterialLhCapacityMap(materialLhCapacityMap);
+            log.info("构建物料日硫化产能映射 {} 条", materialLhCapacityMap.size());
+
+            Map<String, MdmStructureLhRatio> structureLhRatioMap = buildStructureLhRatioMap();
+            context.setStructureLhRatioMap(structureLhRatioMap);
+            log.info("构建结构硫化配比映射 {} 条", structureLhRatioMap.size());
+
+            // 13. 获取物料收尾管理列表（从FactoryMonthPlanProductionFinalResult计算生成，物料维度）
             int year = scheduleDate.getYear();
             int month = scheduleDate.getMonthValue();
-            List<CxStructureEnding> structureEndings = calculateStructureEndings(scheduleDate, year, month);
-            context.setStructureEndings(structureEndings);
-            log.info("从月计划计算生成结构收尾信息 {} 条", structureEndings.size());
+            List<CxMaterialEnding> materialEndings = calculateMaterialEndings(
+                    scheduleDate, year, month, stocks, materialLhCapacityMap, structureLhRatioMap, factoryCode);
+            context.setMaterialEndings(materialEndings);
+            log.info("从月计划计算生成物料收尾信息 {} 条", materialEndings.size());
 
-            // 13. 获取月度计划余量（用于收尾计算）
+            // 14. 获取月度计划余量（用于收尾计算）
             List<MdmMonthSurplus> monthSurplusList =
                     monthSurplusMapper.selectByYearMonth(year, month);
             context.setMonthSurplusList(monthSurplusList);
@@ -523,7 +536,7 @@ public class ScheduleServiceImpl implements ScheduleService {
     }
 
     /**
-     * 从FactoryMonthPlanProductionFinalResult计算生成结构收尾管理列表
+     * 从FactoryMonthPlanProductionFinalResult计算生成物料收尾管理列表（物料维度）
      *
      * 收尾管理规则（严格依据月计划收尾日）：
      * 1. 收尾日判断：从月计划day_1到day_31找到最后一个有排产的日期
@@ -539,10 +552,22 @@ public class ScheduleServiceImpl implements ScheduleService {
      * @param scheduleDate 排程日期
      * @param year 年份
      * @param month 月份
-     * @return 结构收尾管理列表
+     * @param stocks 库存信息（从context中传入，避免重复查询）
+     * @param materialLhCapacityMap 物料日硫化产能映射
+     * @param structureLhRatioMap 结构硫化配比映射
+     * @param factoryCode 工厂编码
+     * @return 物料收尾管理列表
      */
-    private List<CxStructureEnding> calculateStructureEndings(LocalDate scheduleDate, int year, int month) {
-        List<CxStructureEnding> resultList = new ArrayList<>();
+    private List<CxMaterialEnding> calculateMaterialEndings(
+            LocalDate scheduleDate,
+            int year,
+            int month,
+            List<CxStock> stocks,
+            Map<String, com.zlt.aps.mp.engine.domain.vo.MonthPlanProductLhCapacityVo> materialLhCapacityMap,
+            Map<String, com.zlt.aps.mp.api.domain.entity.MdmStructureLhRatio> structureLhRatioMap,
+            String factoryCode) {
+
+        List<CxMaterialEnding> resultList = new ArrayList<>();
 
         try {
             // 1. 获取当月月计划数据
@@ -559,53 +584,51 @@ public class ScheduleServiceImpl implements ScheduleService {
             Map<String, MdmMonthSurplus> surplusMap = monthSurplusList.stream()
                     .collect(Collectors.toMap(MdmMonthSurplus::getMaterialCode, s -> s, (a, b) -> a));
 
-            // 3. 获取胎胚库存
-            List<CxStock> stocks = stockMapper.selectList(
-                    new LambdaQueryWrapper<CxStock>().gt(CxStock::getStockNum, 0));
+            // 3. 使用传入的库存数据构建映射（避免重复查询）
             // 使用胎胚代码构建映射
             Map<String, CxStock> stockMap = stocks.stream()
                     .collect(Collectors.toMap(CxStock::getEmbryoCode, s -> s, (a, b) -> a));
 
-            // 4. 获取成型机台列表（用于计算满产能力）
-            List<MdmMoldingMachine> machines = moldingMachineMapper.selectList(null);
+            // 4. 按物料分组汇总
+            Map<String, List<FactoryMonthPlanProductionFinalResult>> materialPlanMap = monthPlans.stream()
+                    .filter(p -> p.getMaterialCode() != null)
+                    .collect(Collectors.groupingBy(FactoryMonthPlanProductionFinalResult::getMaterialCode));
 
-            // 5. 按结构分组汇总
-            Map<String, List<FactoryMonthPlanProductionFinalResult>> structurePlanMap = monthPlans.stream()
-                    .filter(p -> p.getStructureName() != null)
-                    .collect(Collectors.groupingBy(FactoryMonthPlanProductionFinalResult::getStructureName));
-
-            // 6. 当前日期信息
+            // 5. 当前日期信息
             int currentDay = scheduleDate.getDayOfMonth();
             int lastDayOfMonth = scheduleDate.lengthOfMonth();
 
-            // 7. 遍历每个结构，计算收尾信息
-            for (Map.Entry<String, List<FactoryMonthPlanProductionFinalResult>> entry : structurePlanMap.entrySet()) {
-                String structureName = entry.getKey();
+            // 6. 遍历每个物料，计算收尾信息
+            for (Map.Entry<String, List<FactoryMonthPlanProductionFinalResult>> entry : materialPlanMap.entrySet()) {
+                String materialCode = entry.getKey();
                 List<FactoryMonthPlanProductionFinalResult> plans = entry.getValue();
 
                 // ========== Step 1: 确定收尾日 ==========
-                // 从月计划中找到该结构最后一个有排产的日期
-                int endingDay = findEndingDay(plans, lastDayOfMonth);
+                // 从月计划中找到该物料最后一个有排产的日期
+                int endingDay = findMaterialEndingDay(plans, lastDayOfMonth);
                 LocalDate endingDate = scheduleDate.withDayOfMonth(endingDay);
 
                 // 如果收尾日已经过了，跳过
                 if (endingDay < currentDay) {
-                    log.debug("结构 {} 收尾日 {} 已过，跳过", structureName, endingDate);
+                    log.debug("物料 {} 收尾日 {} 已过，跳过", materialCode, endingDate);
                     continue;
                 }
 
+                // 获取物料基本信息
+                FactoryMonthPlanProductionFinalResult firstPlan = plans.get(0);
+                String materialDesc = firstPlan.getMaterialDesc();
+                String structureName = firstPlan.getStructureName();
+
                 // 创建收尾记录
-                CxStructureEnding ending = new CxStructureEnding();
+                CxMaterialEnding ending = new CxMaterialEnding();
+                ending.setFactoryCode(factoryCode);
+                ending.setMaterialCode(materialCode);
+                ending.setMaterialDesc(materialDesc);
                 ending.setStructureName(structureName);
-                ending.setStructureCode(structureName);
                 ending.setStatDate(scheduleDate);
                 ending.setPlannedEndingDate(endingDate);
 
                 // ========== Step 2: 计算成型余量 ==========
-                // 获取该结构对应的物料信息
-                FactoryMonthPlanProductionFinalResult firstPlan = plans.get(0);
-                String materialCode = firstPlan.getMaterialCode();
-
                 // 硫化余量（从月度计划余量表获取）
                 MdmMonthSurplus surplus = surplusMap.get(materialCode);
 
@@ -633,36 +656,38 @@ public class ScheduleServiceImpl implements ScheduleService {
                 int formingRemainder = Math.max(0, vulcanizingRemainder - embryoStock);
                 ending.setFormingRemainder(formingRemainder);
 
-                // 日产能（取日硫化量，或从结构班产配置获取）
-                Integer dailyCapacity = firstPlan.getDayVulcanizationQty();
-                if (dailyCapacity == null || dailyCapacity <= 0) {
-                    dailyCapacity = calculateStructureDailyCapacity(structureName, machines);
-                }
-                ending.setDailyCapacity(dailyCapacity);
+                // ========== Step 3: 计算满算力（日硫化产能） ==========
+                // 计算公式：成型供的硫化机中该物料的日产汇总（配比塞满的情况）
+                int dailyLhCapacity = calculateMaterialDailyLhCapacity(
+                        materialCode, structureName, materialLhCapacityMap, structureLhRatioMap);
+                ending.setDailyLhCapacity(dailyLhCapacity);
 
-                // ========== Step 3: 计算距离收尾日的天数 ==========
+                // 日成型产能（与日硫化产能相同，因为1:1对应关系）
+                ending.setDailyFormingCapacity(dailyLhCapacity);
+
+                // ========== Step 4: 计算距离收尾日的天数 ==========
                 int daysToEnding = endingDay - currentDay + 1;
 
                 // 预计收尾天数 = 成型余量 / 日产能
                 BigDecimal estimatedDays = BigDecimal.ZERO;
-                if (dailyCapacity > 0 && formingRemainder > 0) {
+                if (dailyLhCapacity > 0 && formingRemainder > 0) {
                     estimatedDays = BigDecimal.valueOf(formingRemainder)
-                            .divide(BigDecimal.valueOf(dailyCapacity), 2, RoundingMode.HALF_UP);
+                            .divide(BigDecimal.valueOf(dailyLhCapacity), 2, RoundingMode.HALF_UP);
                 }
                 ending.setEstimatedEndingDays(estimatedDays);
 
-                // ========== Step 4: 判断是否紧急收尾（3天内） ==========
+                // ========== Step 5: 判断是否紧急收尾（3天内） ==========
                 boolean isUrgentEnding = daysToEnding <= 3 && formingRemainder > 0;
                 ending.setIsUrgentEnding(isUrgentEnding ? 1 : 0);
 
-                // ========== Step 5: 判断是否10天内收尾 ==========
+                // ========== Step 6: 判断是否10天内收尾 ==========
                 boolean isNearEnding = daysToEnding <= 10 && formingRemainder > 0;
                 ending.setIsNearEnding(isNearEnding ? 1 : 0);
 
-                // ========== Step 6: 收尾前10天检查 - 核心逻辑 ==========
+                // ========== Step 7: 收尾前10天检查 - 核心逻辑 ==========
                 if (isNearEnding && formingRemainder > 0) {
                     // 收尾日前能生产的量
-                    int canProduceBeforeEnding = daysToEnding * dailyCapacity;
+                    int canProduceBeforeEnding = daysToEnding * dailyLhCapacity;
 
                     // 判断能否按计划收尾
                     if (formingRemainder <= canProduceBeforeEnding) {
@@ -670,8 +695,8 @@ public class ScheduleServiceImpl implements ScheduleService {
                         ending.setDelayQuantity(0);
                         ending.setDistributedQuantity(0);
                         ending.setNeedMonthPlanAdjust(0);
-                        log.info("结构 {} 可以按计划收尾，成型余量 {}，收尾日前产能 {}",
-                                structureName, formingRemainder, canProduceBeforeEnding);
+                        log.info("物料 {} 可以按计划收尾，成型余量 {}，收尾日前产能 {}",
+                                materialCode, formingRemainder, canProduceBeforeEnding);
                     } else {
                         // ========== 会延误，计算延误量 ==========
                         int delayQty = formingRemainder - canProduceBeforeEnding;
@@ -679,10 +704,10 @@ public class ScheduleServiceImpl implements ScheduleService {
 
                         // ========== 计算未来3天追赶能力 ==========
                         // 未来3天满产能力 = 3天 × 日产能
-                        int next3DaysFullCapacity = 3 * dailyCapacity;
+                        int next3DaysFullCapacity = 3 * dailyLhCapacity;
 
                         // 未来3天计划产量（从月计划获取）
-                        int next3DaysPlanQty = calculateNext3DaysPlanQty(plans, currentDay);
+                        int next3DaysPlanQty = calculateNext3DaysMaterialPlanQty(plans, currentDay);
 
                         // 未来3天可追加产能 = 满产能力 - 计划产量
                         int next3DaysAvailableCapacity = Math.max(0, next3DaysFullCapacity - next3DaysPlanQty);
@@ -693,17 +718,17 @@ public class ScheduleServiceImpl implements ScheduleService {
                             int distributedQty = (int) Math.ceil(delayQty / 3.0);
                             ending.setDistributedQuantity(distributedQty);
                             ending.setNeedMonthPlanAdjust(0);
-                            log.info("结构 {} 延误量 {} 可追赶上，平摊到未来3天每天增加 {}",
-                                    structureName, delayQty, distributedQty);
+                            log.info("物料 {} 延误量 {} 可追赶上，平摊到未来3天每天增加 {}",
+                                    materialCode, delayQty, distributedQty);
                         } else {
                             // ========== 满产也追不上，需要通知月计划调整 ==========
                             ending.setDistributedQuantity(next3DaysAvailableCapacity / 3);
                             ending.setNeedMonthPlanAdjust(1);
-                            log.warn("结构 {} 延误量 {} 超过未来3天满产能力 {}，需要调整月计划！",
-                                    structureName, delayQty, next3DaysAvailableCapacity);
+                            log.warn("物料 {} 延误量 {} 超过未来3天满产能力 {}，需要调整月计划！",
+                                    materialCode, delayQty, next3DaysAvailableCapacity);
 
                             // TODO: 调用硫化调整接口通知月计划调整
-                            // notifyMonthPlanAdjustment(structureName, delayQty, endingDate);
+                            // notifyMonthPlanAdjustment(materialCode, delayQty, endingDate);
                         }
                     }
                 } else {
@@ -722,11 +747,13 @@ public class ScheduleServiceImpl implements ScheduleService {
             // 按紧急程度和收尾天数排序
             resultList.sort((a, b) -> {
                 // 紧急收尾的排最前面
-                if (a.getIsUrgentEnding() != b.getIsUrgentEnding()) {
+                if (a.getIsUrgentEnding() != null && b.getIsUrgentEnding() != null
+                        && !a.getIsUrgentEnding().equals(b.getIsUrgentEnding())) {
                     return b.getIsUrgentEnding() - a.getIsUrgentEnding();
                 }
                 // 需要月计划调整的排前面
-                if (a.getNeedMonthPlanAdjust() != b.getNeedMonthPlanAdjust()) {
+                if (a.getNeedMonthPlanAdjust() != null && b.getNeedMonthPlanAdjust() != null
+                        && !a.getNeedMonthPlanAdjust().equals(b.getNeedMonthPlanAdjust())) {
                     return b.getNeedMonthPlanAdjust() - a.getNeedMonthPlanAdjust();
                 }
                 // 按预计收尾天数排序
@@ -735,22 +762,68 @@ public class ScheduleServiceImpl implements ScheduleService {
                 return a.getEstimatedEndingDays().compareTo(b.getEstimatedEndingDays());
             });
 
-            log.info("计算结构收尾信息完成，共 {} 个结构，其中紧急收尾 {} 个，需调整月计划 {} 个",
+            log.info("计算物料收尾信息完成，共 {} 个物料，其中紧急收尾 {} 个，需调整月计划 {} 个",
                     resultList.size(),
                     resultList.stream().mapToInt(e -> e.getIsUrgentEnding() != null ? e.getIsUrgentEnding() : 0).sum(),
                     resultList.stream().mapToInt(e -> e.getNeedMonthPlanAdjust() != null ? e.getNeedMonthPlanAdjust() : 0).sum());
 
         } catch (Exception e) {
-            log.error("计算结构收尾信息失败", e);
+            log.error("计算物料收尾信息失败", e);
         }
 
         return resultList;
     }
 
     /**
-     * 找到该结构的收尾日（最后一个有排产的日期）
+     * 计算物料的日硫化产能（满算力）
+     *
+     * 计算公式：成型供的硫化机中该物料的日产汇总（配比塞满的情况）
+     *
+     * @param materialCode 物料编码
+     * @param structureName 结构名称（用于查找配比）
+     * @param materialLhCapacityMap 物料日硫化产能映射
+     * @param structureLhRatioMap 结构硫化配比映射
+     * @return 日硫化产能（条/天）
      */
-    private int findEndingDay(List<FactoryMonthPlanProductionFinalResult> plans, int lastDayOfMonth) {
+    private int calculateMaterialDailyLhCapacity(
+            String materialCode,
+            String structureName,
+            Map<String, com.zlt.aps.mp.engine.domain.vo.MonthPlanProductLhCapacityVo> materialLhCapacityMap,
+            Map<String, com.zlt.aps.mp.api.domain.entity.MdmStructureLhRatio> structureLhRatioMap) {
+
+        // 1. 获取该物料的日硫化产能
+        com.zlt.aps.mp.engine.domain.vo.MonthPlanProductLhCapacityVo capacityVo = materialLhCapacityMap.get(materialCode);
+        if (capacityVo == null) {
+            log.debug("未找到物料 {} 的日硫化产能配置，使用默认值0", materialCode);
+            return 0;
+        }
+
+        // 使用默认计算模式（优先标准产能）
+        int baseCapacity = capacityVo.getDefaultDayVulcanizationQty();
+
+        // 2. 获取该结构的硫化配比（最大硫化机台数）
+        com.zlt.aps.mp.api.domain.entity.MdmStructureLhRatio ratio = structureLhRatioMap.get(structureName);
+        if (ratio == null || ratio.getLhMachineMaxQty() == null || ratio.getLhMachineMaxQty() <= 0) {
+            log.debug("未找到结构 {} 的硫化配比配置，使用基础产能 {}", structureName, baseCapacity);
+            return baseCapacity;
+        }
+
+        int maxLhMachineQty = ratio.getLhMachineMaxQty();
+
+        // 3. 计算满算力：基础产能 × 最大硫化机台数配比
+        // 配比塞满意味着该物料可以使用所有最大配比的硫化机台
+        int fullCapacity = baseCapacity * maxLhMachineQty;
+
+        log.debug("物料 {} 满算力计算：基础产能 {} × 最大硫化机台数 {} = {}",
+                materialCode, baseCapacity, maxLhMachineQty, fullCapacity);
+
+        return fullCapacity;
+    }
+
+    /**
+     * 找到该物料的收尾日（最后一个有排产的日期）
+     */
+    private int findMaterialEndingDay(List<FactoryMonthPlanProductionFinalResult> plans, int lastDayOfMonth) {
         int endingDay = 0;
         for (FactoryMonthPlanProductionFinalResult plan : plans) {
             for (int day = 1; day <= lastDayOfMonth; day++) {
@@ -765,19 +838,9 @@ public class ScheduleServiceImpl implements ScheduleService {
     }
 
     /**
-     * 计算结构日产能（从可用机台汇总）
+     * 计算未来3天的计划产量（物料维度）
      */
-    private int calculateStructureDailyCapacity(String structureName, List<MdmMoldingMachine> machines) {
-        // 简化处理：默认每个机台日产200条
-        // TODO: 从结构班产配置获取实际产能
-        int machineCount = machines.size();
-        return machineCount * 200;
-    }
-
-    /**
-     * 计算未来3天的计划产量
-     */
-    private int calculateNext3DaysPlanQty(List<FactoryMonthPlanProductionFinalResult> plans, int currentDay) {
+    private int calculateNext3DaysMaterialPlanQty(List<FactoryMonthPlanProductionFinalResult> plans, int currentDay) {
         int totalQty = 0;
         for (FactoryMonthPlanProductionFinalResult plan : plans) {
             for (int day = currentDay; day <= Math.min(currentDay + 2, 31); day++) {
@@ -804,5 +867,87 @@ public class ScheduleServiceImpl implements ScheduleService {
                         .orderByAsc(com.zlt.aps.cx.entity.config.CxShiftConfig::getScheduleDay)
                         .orderByAsc(com.zlt.aps.cx.entity.config.CxShiftConfig::getDayShiftOrder)
         );
+    }
+
+    /**
+     * 构建物料日硫化产能映射
+     *
+     * 从月计划数据中提取物料的日硫化产能信息，构建物料编码到产能信息的映射
+     * 用于计算成型机台的满算力
+     *
+     * @return 物料日硫化产能映射
+     */
+    private Map<String, com.zlt.aps.mp.engine.domain.vo.MonthPlanProductLhCapacityVo> buildMaterialLhCapacityMap() {
+        Map<String, com.zlt.aps.mp.engine.domain.vo.MonthPlanProductLhCapacityVo> resultMap = new HashMap<>();
+
+        try {
+            // 从硫化排程结果中获取今日的物料产能信息
+            // 查询今日硫化排程结果
+            LocalDate today = LocalDate.now();
+            List<LhScheduleResult> lhResults = lhScheduleResultMapper.selectByDate(today);
+
+            for (LhScheduleResult lhResult : lhResults) {
+                String embryoCode = lhResult.getEmbryoCode();
+                if (embryoCode == null) {
+                    continue;
+                }
+
+                // 如果已存在，累加产能
+                com.zlt.aps.mp.engine.domain.vo.MonthPlanProductLhCapacityVo existing = resultMap.get(embryoCode);
+                if (existing == null) {
+                    existing = new com.zlt.aps.mp.engine.domain.vo.MonthPlanProductLhCapacityVo();
+                    existing.setMaterialCode(embryoCode);
+                    existing.setFactoryCode(lhResult.getFactoryCode());
+                    // 从硫化结果中获取日硫化量
+                    existing.setStandardCapacity(lhResult.getDayVulcanizationQty());
+                    resultMap.put(embryoCode, existing);
+                } else {
+                    // 累加日硫化量（同一个物料可能在多个硫化机台生产）
+                    Integer existingCapacity = existing.getStandardCapacity();
+                    Integer newCapacity = lhResult.getDayVulcanizationQty();
+                    if (existingCapacity != null && newCapacity != null) {
+                        existing.setStandardCapacity(existingCapacity + newCapacity);
+                    }
+                }
+            }
+
+            log.info("从硫化排程结果构建物料日硫化产能映射，共 {} 个物料", resultMap.size());
+
+        } catch (Exception e) {
+            log.error("构建物料日硫化产能映射失败", e);
+        }
+
+        return resultMap;
+    }
+
+    /**
+     * 构建结构硫化配比映射
+     *
+     * 从T_MDM_STRUCTURE_LH_RATIO表中获取结构的最大硫化机台数
+     * 用于计算成型机台的满算力
+     *
+     * @return 结构硫化配比映射
+     */
+    private Map<String, com.zlt.aps.mp.api.domain.entity.MdmStructureLhRatio> buildStructureLhRatioMap() {
+        Map<String, com.zlt.aps.mp.api.domain.entity.MdmStructureLhRatio> resultMap = new HashMap<>();
+
+        try {
+            List<com.zlt.aps.mp.api.domain.entity.MdmStructureLhRatio> ratios =
+                    structureLhRatioMapper.selectList(null);
+
+            for (com.zlt.aps.mp.api.domain.entity.MdmStructureLhRatio ratio : ratios) {
+                String structureName = ratio.getStructureName();
+                if (structureName != null) {
+                    resultMap.put(structureName, ratio);
+                }
+            }
+
+            log.info("从结构硫化配比表构建映射，共 {} 个结构", resultMap.size());
+
+        } catch (Exception e) {
+            log.error("构建结构硫化配比映射失败", e);
+        }
+
+        return resultMap;
     }
 }
