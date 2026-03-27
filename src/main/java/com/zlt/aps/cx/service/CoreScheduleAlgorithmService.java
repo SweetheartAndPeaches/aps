@@ -229,6 +229,10 @@ public interface CoreScheduleAlgorithmService {
         private Boolean needMonthPlanAdjust;
         /** 追赶量（平摊到未来3天的延误量） */
         private Integer catchUpQuantity;
+        
+        // ==================== 班次需求字段 ====================
+        /** 各班次需求量 Map<班次索引, 需求量> */
+        private Map<Integer, Integer> shiftDemands;
     }
 
     /**
