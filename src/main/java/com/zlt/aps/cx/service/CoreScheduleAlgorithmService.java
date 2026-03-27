@@ -177,8 +177,6 @@ public interface CoreScheduleAlgorithmService {
         private String materialCode;
         /** 物料名称 */
         private String materialName;
-        /** 结构编码 */
-        private String structureCode;
         /** 结构名称 */
         private String structureName;
         /** 日需求量 */
