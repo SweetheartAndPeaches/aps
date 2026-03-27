@@ -104,6 +104,12 @@ public class ScheduleContextDTO {
     private List<MdmCxMachineFixed> machineFixedConfigs;
 
     /**
+     * 设备计划停机列表
+     * 用于排除排程日期范围内的停机机台
+     */
+    private List<MdmDevicePlanShut> devicePlanShuts;
+
+    /**
      * 物料主数据列表
      */
     private List<MdmMaterialInfo> materials;
