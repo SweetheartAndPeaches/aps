@@ -32,6 +32,29 @@ public class ScheduleContextDTO {
     private LocalDate scheduleDate;
 
     /**
+     * 工厂编号
+     * 用于加载工厂特定的班次配置
+     */
+    private String factoryCode;
+
+    /**
+     * 当前排程天数（循环执行时使用）
+     * 1-第一天 2-第二天 3-第三天
+     */
+    private Integer currentScheduleDay;
+
+    /**
+     * 当前排程日期（循环执行时使用）
+     * scheduleDate + (currentScheduleDay - 1)
+     */
+    private LocalDate currentScheduleDate;
+
+    /**
+     * 当前天的班次配置列表（循环执行时使用）
+     */
+    private List<CxShiftConfig> currentShiftConfigs;
+
+    /**
      * 排程模式：NORMAL-正常排程，RE_SCHEDULE-重排程，STRUCTURE_RE_SCHEDULE-结构重排
      */
     private String scheduleMode;
