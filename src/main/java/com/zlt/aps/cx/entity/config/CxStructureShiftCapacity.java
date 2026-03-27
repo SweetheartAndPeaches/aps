@@ -4,9 +4,7 @@ import com.baomidou.mybatisplus.annotation.*;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
-
-import java.io.Serializable;
-import java.time.LocalDateTime;
+import com.ruoyi.common.core.web.domain.BaseEntity;
 
 /**
  * 结构整车配置实体
@@ -19,13 +17,7 @@ import java.time.LocalDateTime;
 @Data
 @TableName("T_CX_STRUCTURE_TRIP_CONFIG")
 @ApiModel(value = "结构整车配置")
-public class CxStructureShiftCapacity implements Serializable {
-
-    private static final long serialVersionUID = 1L;
-
-    @ApiModelProperty(value = "主键ID")
-    @TableId(value = "ID", type = IdType.AUTO)
-    private Long id;
+public class CxStructureShiftCapacity extends BaseEntity {
 
     @ApiModelProperty(value = "结构编码")
     @TableField("STRUCTURE_CODE")
@@ -34,14 +26,6 @@ public class CxStructureShiftCapacity implements Serializable {
     @ApiModelProperty(value = "整车条数（该结构每车的条数，可能是12、18等）")
     @TableField("TRIP_QTY")
     private Integer tripQty;
-
-    @ApiModelProperty(value = "创建时间")
-    @TableField(value = "CREATE_TIME", fill = FieldFill.INSERT)
-    private LocalDateTime createTime;
-
-    @ApiModelProperty(value = "更新时间")
-    @TableField(value = "UPDATE_TIME", fill = FieldFill.INSERT_UPDATE)
-    private LocalDateTime updateTime;
 
     /**
      * 获取标准产能（条）
