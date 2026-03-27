@@ -271,7 +271,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                     com.zlt.aps.mp.api.domain.entity.MdmMonthSurplus monthSurplus =
                             context.getMonthSurplusMap().get(embryoCode);
                     if (monthSurplus != null && monthSurplus.getPlanSurplusQty() != null) {
-                        // 硫化余量 = 总计划量 - 硫化真实完成量（已由系统计算）
+                        // 硫化余量 = 总计划量 - 硫化真实完成量（已由系统接口计算）
                         vulcanizeSurplusQty = monthSurplus.getPlanSurplusQty().intValue();
                         int stockQty = currentStock;
                         // 收尾余量 = 硫化余量 - 胎胚库存
@@ -293,11 +293,9 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 MdmMaterialInfo material = materialMap.get(embryoCode);
                 if (material != null) {
                     task.setMaterialName(material.getMaterialDesc());
-                    task.setStructureCode(material.getStructureName());
                     task.setStructureName(material.getStructureName());
                 } else {
                     task.setMaterialName(embryoCode);
-                    task.setStructureCode(structureCode);
                     task.setStructureName(structureName);
                 }
 
@@ -1666,7 +1664,6 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         DailyEmbryoTask task = new DailyEmbryoTask();
         task.setMaterialCode(materialCode);
         task.setMaterialName(material.getMaterialDesc());
-        task.setStructureCode(material.getStructureName());
         task.setStructureName(material.getStructureName());
         task.setDemandQuantity(demandQuantity);
         task.setAssignedQuantity(0);
