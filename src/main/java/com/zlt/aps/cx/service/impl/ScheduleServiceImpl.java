@@ -32,6 +32,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -204,25 +205,40 @@ public class ScheduleServiceImpl implements ScheduleService {
             context.setAvailableMachines(machines);
             log.info("加载成型机台 {} 台", machines.size());
 
-            // 4. 获取物料信息
-            List<MdmMaterialInfo> materials = materialInfoMapper.selectList(
-                    new LambdaQueryWrapper<MdmMaterialInfo>());
+            // 4. 【主要任务来源】获取硫化排程结果
+            // 从T_LH_SCHEDULE_RESULT获取今日硫化计划
+            List<LhScheduleResult> lhScheduleResults = lhScheduleResultMapper.selectByDate(scheduleDate);
+            context.setLhScheduleResults(lhScheduleResults);
+            log.info("加载硫化排程结果 {} 条", lhScheduleResults.size());
+
+            // 5. 根据硫化排程结果获取需要的物料信息
+            // 从硫化排程结果中提取胎胚编码
+            Set<String> embryoCodes = lhScheduleResults.stream()
+                    .map(LhScheduleResult::getEmbryoCode)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toSet());
+
+            // 根据胎胚编码查询物料信息
+            List<MdmMaterialInfo> materials;
+            if (!embryoCodes.isEmpty()) {
+                materials = materialInfoMapper.selectList(
+                        new LambdaQueryWrapper<MdmMaterialInfo>()
+                                .in(MdmMaterialInfo::getMaterialCode, embryoCodes));
+                log.info("根据硫化排程结果加载物料信息 {} 条", materials.size());
+            } else {
+                materials = new ArrayList<>();
+                log.info("硫化排程结果为空，加载物料信息 0 条");
+            }
             context.setMaterials(materials);
 
-            // 4. 获取库存信息
+            // 6. 获取库存信息（只获取有库存的）
             List<CxStock> stocks = stockMapper.selectList(
                     new LambdaQueryWrapper<CxStock>()
                             .gt(CxStock::getStockNum, 0));
             context.setStocks(stocks);
             log.info("加载胎胚库存 {} 条", stocks.size());
 
-            // 5. 【主要任务来源】获取硫化排程结果
-            // 从T_LH_SCHEDULE_RESULT获取今日硫化计划
-            List<LhScheduleResult> lhScheduleResults = lhScheduleResultMapper.selectByDate(scheduleDate);
-            context.setLhScheduleResults(lhScheduleResults);
-            log.info("加载硫化排程结果 {} 条", lhScheduleResults.size());
-
-            // 6. 【续作判断】获取成型在机信息
+            // 7. 【续作判断】获取成型在机信息
             // 从T_MDM_CX_MACHINE_ONLINE_INFO获取当前机台正在做的胎胚
             // 查询今天和昨天在机的信息（可能跨班次生产）
             List<MdmCxMachineOnlineInfo> onlineInfos = onlineInfoMapper.selectByDateRange(
@@ -230,7 +246,7 @@ public class ScheduleServiceImpl implements ScheduleService {
             context.setOnlineInfos(onlineInfos);
             log.info("加载成型在机信息 {} 条", onlineInfos.size());
 
-            // 7. 构建机台在机胎胚映射（快速查询用）
+            // 8. 构建机台在机胎胚映射（快速查询用）
             // Key: 成型机台编码, Value: 该机台正在做的胎胚编码集合
             Map<String, Set<String>> machineOnlineEmbryoMap = new HashMap<>();
             for (MdmCxMachineOnlineInfo onlineInfo : onlineInfos) {
@@ -244,7 +260,7 @@ public class ScheduleServiceImpl implements ScheduleService {
             context.setMachineOnlineEmbryoMap(machineOnlineEmbryoMap);
             log.info("构建机台在机胎胚映射，共 {} 个机台有在机任务", machineOnlineEmbryoMap.size());
 
-            // 8. 获取参数配置
+            // 9. 获取参数配置
             List<CxParamConfig> paramConfigs = paramConfigMapper.selectList(null);
             // 转换为Map方便查询
             Map<String, CxParamConfig> paramConfigMap = paramConfigs.stream()
@@ -272,13 +288,13 @@ public class ScheduleServiceImpl implements ScheduleService {
                     : 24;
             context.setMaxParkingHours(maxParkingHours);
 
-            // 9. 获取结构班产配置（整车条数）
+            // 10. 获取结构班产配置（整车条数）
             List<CxStructureShiftCapacity> structureShiftCapacities = structureShiftCapacityMapper.selectList(
                     new LambdaQueryWrapper<CxStructureShiftCapacity>()
                             .eq(CxStructureShiftCapacity::getIsActive, 1));
             context.setStructureShiftCapacities(structureShiftCapacities);
 
-            // 10. 获取关键产品配置
+            // 11. 获取关键产品配置
             List<CxKeyProduct> keyProducts = keyProductMapper.selectList(
                     new LambdaQueryWrapper<CxKeyProduct>()
                             .eq(CxKeyProduct::getIsActive, 1));
@@ -291,14 +307,14 @@ public class ScheduleServiceImpl implements ScheduleService {
             }
             context.setKeyProductCodes(keyProductCodes);
 
-            // 11. 获取结构收尾管理列表（从FactoryMonthPlanProductionFinalResult计算生成）
+            // 12. 获取结构收尾管理列表（从FactoryMonthPlanProductionFinalResult计算生成）
             int year = scheduleDate.getYear();
             int month = scheduleDate.getMonthValue();
             List<CxStructureEnding> structureEndings = calculateStructureEndings(scheduleDate, year, month);
             context.setStructureEndings(structureEndings);
             log.info("从月计划计算生成结构收尾信息 {} 条", structureEndings.size());
 
-            // 12. 获取月度计划余量（用于收尾计算）
+            // 13. 获取月度计划余量（用于收尾计算）
             List<MdmMonthSurplus> monthSurplusList =
                     monthSurplusMapper.selectByYearMonth(year, month);
             context.setMonthSurplusList(monthSurplusList);
@@ -310,7 +326,7 @@ public class ScheduleServiceImpl implements ScheduleService {
             context.setMonthSurplusMap(monthSurplusMap);
             log.info("加载月度计划余量 {} 条", monthSurplusList.size());
 
-            // 13. 获取SKU排产分类（用于判断主销产品）
+            // 14. 获取SKU排产分类（用于判断主销产品）
             List<MdmSkuScheduleCategory> skuCategories =
                     skuScheduleCategoryMapper.selectAllCategories();
             context.setSkuScheduleCategories(skuCategories);
