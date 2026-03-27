@@ -106,6 +106,9 @@ public class ScheduleServiceImpl implements ScheduleService {
     @Autowired
     private FactoryMonthPlanProductionFinalResultMapper monthPlanMapper;
 
+    @Autowired
+    private com.zlt.aps.mp.api.mapper.MdmDevicePlanShutMapper devicePlanShutMapper;
+
     @Override
     public ScheduleResult executeSchedule(ScheduleRequest request) {
         ScheduleResult result = new ScheduleResult();
@@ -116,9 +119,6 @@ public class ScheduleServiceImpl implements ScheduleService {
             log.info("开始执行排程，日期：{}，排程模式：{}",
                     request.getScheduleDate(), request.getScheduleMode());
 
-            // 注释：节假日检查已移至核心排程算法中，对每一天单独检查
-            // 这样可以处理连续多天排程中某天是节假日的情况
-
             // 1. 构建排程上下文
             ScheduleContextDTO context = buildScheduleContext(request);
             if (context == null) {
@@ -126,7 +126,7 @@ public class ScheduleServiceImpl implements ScheduleService {
                 return result;
             }
 
-            // 2. 执行核心排程算法（包含续作、试制、正常任务的统一处理）
+            // 2. 执行核心排程算法（包含续作、试制、新增任务的统一处理）
             // 任务优先级：续作 > 新增任务（试制在有空出产能时优先，但不挤掉实单）
             // 每一天的节假日检查在核心算法中处理
             List<CxScheduleResult> scheduleResults = coreScheduleAlgorithmService.executeSchedule(context);
@@ -158,31 +158,60 @@ public class ScheduleServiceImpl implements ScheduleService {
             ScheduleContextDTO context = new ScheduleContextDTO();
             LocalDate scheduleDate = request.getScheduleDate();
 
-            // 1. 获取机台信息
-            List<MdmMoldingMachine> machines = moldingMachineMapper.selectList(
+            // 获取排程天数（默认3天）
+            int scheduleDays = request.getScheduleDays() != null ? request.getScheduleDays() : 3;
+            context.setScheduleDays(scheduleDays);
+
+            // 计算排程日期范围
+            LocalDate endDate = scheduleDate.plusDays(scheduleDays - 1);
+
+            // 1. 获取设备计划停机信息（成型机台）
+            // 查询排程日期范围内的停机计划
+            List<MdmDevicePlanShut> devicePlanShuts = devicePlanShutMapper.selectByMachineTypeAndDateRange(
+                    "成型", scheduleDate, endDate);
+            context.setDevicePlanShuts(devicePlanShuts);
+            log.info("加载成型机台停机计划 {} 条", devicePlanShuts.size());
+
+            // 构建停机机台编码集合（排程日期范围内有停机计划的机台）
+            Set<String> shutdownMachineCodes = new HashSet<>();
+            for (MdmDevicePlanShut shut : devicePlanShuts) {
+                if (shut.getMachineCode() != null) {
+                    shutdownMachineCodes.add(shut.getMachineCode());
+                }
+            }
+
+            // 2. 获取机台信息（排除停机机台）
+            List<MdmMoldingMachine> allMachines = moldingMachineMapper.selectList(
                     new LambdaQueryWrapper<MdmMoldingMachine>()
                             .eq(MdmMoldingMachine::getIsActive, 1));
-            context.setAvailableMachines(machines);
 
-            // 2. 获取物料信息
+            // 过滤掉有停机计划的机台
+            List<MdmMoldingMachine> availableMachines = allMachines.stream()
+                    .filter(m -> !shutdownMachineCodes.contains(m.getCxMachineCode()))
+                    .collect(Collectors.toList());
+            context.setAvailableMachines(availableMachines);
+            log.info("加载成型机台 {} 台，其中 {} 台有停机计划，可用 {} 台",
+                    allMachines.size(), shutdownMachineCodes.size(), availableMachines.size());
+
+            // 3. 获取物料信息
             List<MdmMaterialInfo> materials = materialInfoMapper.selectList(
                     new LambdaQueryWrapper<MdmMaterialInfo>());
             context.setMaterials(materials);
 
-            // 3. 获取库存信息
+            // 4. 获取库存信息
             List<CxStock> stocks = stockMapper.selectList(
                     new LambdaQueryWrapper<CxStock>()
                             .gt(CxStock::getStockNum, 0));
             context.setStocks(stocks);
             log.info("加载胎胚库存 {} 条", stocks.size());
 
-            // 4. 【主要任务来源】获取硫化排程结果
+            // 5. 【主要任务来源】获取硫化排程结果
             // 从T_LH_SCHEDULE_RESULT获取今日硫化计划
             List<LhScheduleResult> lhScheduleResults = lhScheduleResultMapper.selectByDate(scheduleDate);
             context.setLhScheduleResults(lhScheduleResults);
             log.info("加载硫化排程结果 {} 条", lhScheduleResults.size());
 
-            // 5. 【续作判断】获取成型在机信息
+            // 6. 【续作判断】获取成型在机信息
             // 从T_MDM_CX_MACHINE_ONLINE_INFO获取当前机台正在做的胎胚
             // 查询今天和昨天在机的信息（可能跨班次生产）
             List<MdmCxMachineOnlineInfo> onlineInfos = onlineInfoMapper.selectByDateRange(
@@ -190,7 +219,7 @@ public class ScheduleServiceImpl implements ScheduleService {
             context.setOnlineInfos(onlineInfos);
             log.info("加载成型在机信息 {} 条", onlineInfos.size());
 
-            // 6. 构建机台在机胎胚映射（快速查询用）
+            // 7. 构建机台在机胎胚映射（快速查询用）
             // Key: 成型机台编码, Value: 该机台正在做的胎胚编码集合
             Map<String, Set<String>> machineOnlineEmbryoMap = new HashMap<>();
             for (MdmCxMachineOnlineInfo onlineInfo : onlineInfos) {
@@ -204,7 +233,7 @@ public class ScheduleServiceImpl implements ScheduleService {
             context.setMachineOnlineEmbryoMap(machineOnlineEmbryoMap);
             log.info("构建机台在机胎胚映射，共 {} 个机台有在机任务", machineOnlineEmbryoMap.size());
 
-            // 7. 获取参数配置
+            // 8. 获取参数配置
             List<CxParamConfig> paramConfigs = paramConfigMapper.selectList(null);
             // 转换为Map方便查询
             Map<String, CxParamConfig> paramConfigMap = paramConfigs.stream()
@@ -232,13 +261,13 @@ public class ScheduleServiceImpl implements ScheduleService {
                     : 24;
             context.setMaxParkingHours(maxParkingHours);
 
-            // 8. 获取结构班产配置（整车条数）
+            // 9. 获取结构班产配置（整车条数）
             List<CxStructureShiftCapacity> structureShiftCapacities = structureShiftCapacityMapper.selectList(
                     new LambdaQueryWrapper<CxStructureShiftCapacity>()
                             .eq(CxStructureShiftCapacity::getIsActive, 1));
             context.setStructureShiftCapacities(structureShiftCapacities);
 
-            // 9. 获取关键产品配置
+            // 10. 获取关键产品配置
             List<CxKeyProduct> keyProducts = keyProductMapper.selectList(
                     new LambdaQueryWrapper<CxKeyProduct>()
                             .eq(CxKeyProduct::getIsActive, 1));
@@ -251,14 +280,14 @@ public class ScheduleServiceImpl implements ScheduleService {
             }
             context.setKeyProductCodes(keyProductCodes);
 
-            // 10. 获取结构收尾管理列表（从FactoryMonthPlanProductionFinalResult计算生成）
+            // 11. 获取结构收尾管理列表（从FactoryMonthPlanProductionFinalResult计算生成）
             int year = scheduleDate.getYear();
             int month = scheduleDate.getMonthValue();
             List<CxStructureEnding> structureEndings = calculateStructureEndings(scheduleDate, year, month);
             context.setStructureEndings(structureEndings);
             log.info("从月计划计算生成结构收尾信息 {} 条", structureEndings.size());
 
-            // 11. 获取月度计划余量（用于收尾计算）
+            // 12. 获取月度计划余量（用于收尾计算）
             List<MdmMonthSurplus> monthSurplusList =
                     monthSurplusMapper.selectByYearMonth(year, month);
             context.setMonthSurplusList(monthSurplusList);
@@ -270,7 +299,7 @@ public class ScheduleServiceImpl implements ScheduleService {
             context.setMonthSurplusMap(monthSurplusMap);
             log.info("加载月度计划余量 {} 条", monthSurplusList.size());
 
-            // 12. 获取SKU排产分类（用于判断主销产品）
+            // 13. 获取SKU排产分类（用于判断主销产品）
             List<MdmSkuScheduleCategory> skuCategories =
                     skuScheduleCategoryMapper.selectAllCategories();
             context.setSkuScheduleCategories(skuCategories);
@@ -282,12 +311,12 @@ public class ScheduleServiceImpl implements ScheduleService {
             context.setMainProductCodes(mainProductCodes);
             log.info("加载SKU排产分类 {} 条，其中主销产品 {} 个", skuCategories.size(), mainProductCodes.size());
 
-            // 13. 设置节假日相关标记
+            // 14. 设置节假日相关标记
             context.setIsOpeningDay(holidayScheduleService.isStartProductionDay(scheduleDate));
             context.setIsClosingDay(holidayScheduleService.isStopProductionDay(scheduleDate));
             context.setIsBeforeClosingDay(holidayScheduleService.isBeforeHoliday(scheduleDate));
 
-            // 14. 设置排程参数
+            // 15. 设置排程参数
             context.setScheduleDate(scheduleDate);
             context.setScheduleMode(request.getScheduleMode());
 
