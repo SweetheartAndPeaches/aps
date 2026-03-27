@@ -52,6 +52,9 @@ public class ScheduleServiceImpl implements ScheduleService {
     /** 默认排程天数（当班次配置为空时使用） */
     private static final int DEFAULT_SCHEDULE_DAYS = 3;
 
+    /** 机台类型：成型 */
+    private static final String MACHINE_TYPE_MOLDING = "成型";
+
     @Autowired
     private CoreScheduleAlgorithmService coreScheduleAlgorithmService;
 
@@ -192,7 +195,7 @@ public class ScheduleServiceImpl implements ScheduleService {
             // 2. 获取设备计划停机信息（成型机台）
             // 查询排程日期范围内的停机计划，用于排程时扣减产能
             List<MdmDevicePlanShut> devicePlanShuts = devicePlanShutMapper.selectByMachineTypeAndDateRange(
-                    "成型", scheduleDate, endDate);
+                    MACHINE_TYPE_MOLDING, scheduleDate, endDate);
             context.setDevicePlanShuts(devicePlanShuts);
             log.info("加载成型机台停机计划 {} 条", devicePlanShuts.size());
 
