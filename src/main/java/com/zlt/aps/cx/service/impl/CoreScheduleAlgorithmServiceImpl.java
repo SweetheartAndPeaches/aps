@@ -424,8 +424,14 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
         List<MachineAllocationResult> results = new ArrayList<>();
 
-        // 初始化机台状态
-        Map<String, MachineAllocationResult> machineStatusMap = initMachineStatus(context);
+        // 获取当前排程日期
+        LocalDate currentDate = context.getCurrentScheduleDate();
+        if (currentDate == null) {
+            currentDate = context.getScheduleDate();
+        }
+
+        // 初始化机台状态（传入当前日期，用于计算停机扣减）
+        Map<String, MachineAllocationResult> machineStatusMap = initMachineStatus(context, currentDate);
 
         // 记录每个机台已分配的物料编码（用于种类上限检查）
         Map<String, Set<String>> machineMaterialMap = new HashMap<>();
@@ -1310,6 +1316,63 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         return roundToTrip(quantity, mode, tripCapacity);
     }
 
+    /**
+     * 计算机台在指定日期的停机扣减产能
+     *
+     * @param machineCode  机台编码
+     * @param currentDate  当前排程日期
+     * @param context      排程上下文
+     * @return 停机扣减产能（条）
+     */
+    private int calculateShutdownDeduction(String machineCode, LocalDate currentDate, ScheduleContextDTO context) {
+        if (context.getDevicePlanShuts() == null || context.getDevicePlanShuts().isEmpty()) {
+            return 0;
+        }
+
+        int totalDeduction = 0;
+
+        for (MdmDevicePlanShut shutdown : context.getDevicePlanShuts()) {
+            // 检查是否匹配该机台
+            if (!machineCode.equals(shutdown.getMachineCode())) {
+                continue;
+            }
+
+            // 检查停机时间是否覆盖当前日期
+            if (shutdown.getBeginDate() == null || shutdown.getEndDate() == null) {
+                continue;
+            }
+
+            // 将Date转换为LocalDate进行比较
+            LocalDate beginDate = shutdown.getBeginDate().toInstant()
+                    .atZone(java.time.ZoneId.systemDefault())
+                    .toLocalDate();
+            LocalDate endDate = shutdown.getEndDate().toInstant()
+                    .atZone(java.time.ZoneId.systemDefault())
+                    .toLocalDate();
+
+            // 检查当前日期是否在停机时间范围内
+            if (!currentDate.isBefore(beginDate) && currentDate.isBefore(endDate)) {
+                // 计算停机时长（小时）
+                long hours = java.time.Duration.between(
+                        shutdown.getBeginDate().toInstant().atZone(java.time.ZoneId.systemDefault()),
+                        shutdown.getEndDate().toInstant().atZone(java.time.ZoneId.systemDefault())
+                ).toHours();
+
+                // 获取机台小时产能
+                int hourlyCapacity = getMachineHourlyCapacity(machineCode, null, context);
+
+                // 计算扣减产能
+                int deduction = (int) hours * hourlyCapacity;
+                totalDeduction += deduction;
+
+                log.debug("机台 {} 在 {} 有停机计划 {} 小时，扣减产能 {} 条",
+                        machineCode, currentDate, hours, deduction);
+            }
+        }
+
+        return totalDeduction;
+    }
+
     // ==================== 私有方法 ====================
 
     /**
@@ -1322,8 +1385,9 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
      *    - 根据胎胚库存判断是否影响硫化
      * 3. 从机台当前状态表获取当前在产结构
      * 4. 从机台结构产能表获取小时产能
+     * 5. 根据设备计划停机表扣减对应日期的产能
      */
-    private Map<String, MachineAllocationResult> initMachineStatus(ScheduleContextDTO context) {
+    private Map<String, MachineAllocationResult> initMachineStatus(ScheduleContextDTO context, LocalDate currentDate) {
         Map<String, MachineAllocationResult> map = new LinkedHashMap<>();
 
         // 构建精度计划映射（机台编码 -> 精度计划）
@@ -1407,18 +1471,26 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
                 // 标记精度计划信息
                 result.setPrecisionPlan(precisionPlan);
+            }
 
-                // 如果剩余产能为负，设为0
-                if (result.getRemainingCapacity() < 0) {
-                    log.warn("机台 {} 精度计划导致剩余产能为负，设为0", machine.getCxMachineCode());
-                    result.setRemainingCapacity(0);
-                }
+            // 检查设备计划停机，根据停机时长扣减产能
+            int shutdownDeduction = calculateShutdownDeduction(machine.getCxMachineCode(), currentDate, context);
+            if (shutdownDeduction > 0) {
+                result.setRemainingCapacity(result.getRemainingCapacity() - shutdownDeduction);
+                log.info("机台 {} 在 {} 有停机计划，扣减产能 {} 条，剩余产能 {} 条",
+                        machine.getCxMachineCode(), currentDate, shutdownDeduction, result.getRemainingCapacity());
+            }
+
+            // 如果剩余产能为负，设为0
+            if (result.getRemainingCapacity() < 0) {
+                log.warn("机台 {} 因停机/精度计划导致剩余产能为负，设为0", machine.getCxMachineCode());
+                result.setRemainingCapacity(0);
             }
 
             map.put(machine.getCxMachineCode(), result);
         }
 
-        log.info("初始化机台状态完成，可用机台 {} 台", map.size());
+        log.info("初始化机台状态完成，可用机台 {} 台，当前日期: {}", map.size(), currentDate);
         return map;
     }
 

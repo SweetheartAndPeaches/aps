@@ -166,32 +166,18 @@ public class ScheduleServiceImpl implements ScheduleService {
             LocalDate endDate = scheduleDate.plusDays(scheduleDays - 1);
 
             // 1. 获取设备计划停机信息（成型机台）
-            // 查询排程日期范围内的停机计划
+            // 查询排程日期范围内的停机计划，用于排程时扣减产能
             List<MdmDevicePlanShut> devicePlanShuts = devicePlanShutMapper.selectByMachineTypeAndDateRange(
                     "成型", scheduleDate, endDate);
             context.setDevicePlanShuts(devicePlanShuts);
             log.info("加载成型机台停机计划 {} 条", devicePlanShuts.size());
 
-            // 构建停机机台编码集合（排程日期范围内有停机计划的机台）
-            Set<String> shutdownMachineCodes = new HashSet<>();
-            for (MdmDevicePlanShut shut : devicePlanShuts) {
-                if (shut.getMachineCode() != null) {
-                    shutdownMachineCodes.add(shut.getMachineCode());
-                }
-            }
-
-            // 2. 获取机台信息（排除停机机台）
-            List<MdmMoldingMachine> allMachines = moldingMachineMapper.selectList(
+            // 2. 获取所有启用的机台（不过滤停机机台，停机机台在排程时扣减产能）
+            List<MdmMoldingMachine> machines = moldingMachineMapper.selectList(
                     new LambdaQueryWrapper<MdmMoldingMachine>()
                             .eq(MdmMoldingMachine::getIsActive, 1));
-
-            // 过滤掉有停机计划的机台
-            List<MdmMoldingMachine> availableMachines = allMachines.stream()
-                    .filter(m -> !shutdownMachineCodes.contains(m.getCxMachineCode()))
-                    .collect(Collectors.toList());
-            context.setAvailableMachines(availableMachines);
-            log.info("加载成型机台 {} 台，其中 {} 台有停机计划，可用 {} 台",
-                    allMachines.size(), shutdownMachineCodes.size(), availableMachines.size());
+            context.setAvailableMachines(machines);
+            log.info("加载成型机台 {} 台", machines.size());
 
             // 3. 获取物料信息
             List<MdmMaterialInfo> materials = materialInfoMapper.selectList(
