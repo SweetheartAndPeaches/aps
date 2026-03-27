@@ -274,20 +274,6 @@ public class ScheduleServiceImpl implements ScheduleService {
                     : new java.math.BigDecimal("0.02");
             context.setLossRate(lossRate);
 
-            // 加载预留消化时间
-            CxParamConfig reservedHoursConfig = paramConfigMap.get("RESERVED_DIGEST_HOURS");
-            Integer reservedDigestHours = reservedHoursConfig != null
-                    ? Integer.parseInt(reservedHoursConfig.getParamValue())
-                    : 1;
-            context.setReservedDigestHours(reservedDigestHours);
-
-            // 加载胎胚最长停放时间
-            CxParamConfig maxParkingConfig = paramConfigMap.get("MAX_PARKING_HOURS");
-            Integer maxParkingHours = maxParkingConfig != null
-                    ? Integer.parseInt(maxParkingConfig.getParamValue())
-                    : 24;
-            context.setMaxParkingHours(maxParkingHours);
-
             // 10. 获取结构班产配置（整车条数）
             List<CxStructureShiftCapacity> structureShiftCapacities = structureShiftCapacityMapper.selectList(
                     new LambdaQueryWrapper<CxStructureShiftCapacity>()
