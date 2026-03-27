@@ -58,9 +58,6 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     private CxStructureShiftCapacityMapper structureShiftCapacityMapper;
 
     @Autowired
-    private com.zlt.aps.cx.mapper.CxShiftConfigMapper shiftConfigMapper;
-
-    @Autowired
     private com.zlt.aps.cx.service.HolidayScheduleService holidayScheduleService;
 
     /** 默认排程天数 */
@@ -70,17 +67,19 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     public List<CxScheduleResult> executeSchedule(ScheduleContextDTO context) {
         log.info("开始执行排程算法，日期: {}", context.getScheduleDate());
 
-        // 加载班次配置（按工厂）
-        String factoryCode = context.getFactoryCode() != null ? context.getFactoryCode() : "DEFAULT";
-        List<com.zlt.aps.cx.entity.config.CxShiftConfig> allShiftConfigs = loadShiftConfigs(factoryCode);
-        context.setShiftConfigList(allShiftConfigs);
+        // 使用 ScheduleServiceImpl.buildScheduleContext 中已加载的班次配置
+        List<com.zlt.aps.cx.entity.config.CxShiftConfig> allShiftConfigs = context.getShiftConfigList();
+        if (allShiftConfigs == null || allShiftConfigs.isEmpty()) {
+            log.error("班次配置为空，请先调用 buildScheduleContext 加载班次配置");
+            return new ArrayList<>();
+        }
 
         // 按排程天数分组
         Map<Integer, List<com.zlt.aps.cx.entity.config.CxShiftConfig>> dayShiftMap = allShiftConfigs.stream()
                 .filter(c -> c.getScheduleDay() != null)
                 .collect(Collectors.groupingBy(com.zlt.aps.cx.entity.config.CxShiftConfig::getScheduleDay));
 
-        // 获取排程天数
+        // 获取排程天数（从上下文获取，已由 buildScheduleContext 根据班次配置计算）
         int scheduleDays = context.getScheduleDays() != null ? context.getScheduleDays() : DEFAULT_SCHEDULE_DAYS;
 
         List<CxScheduleResult> allResults = new ArrayList<>();
@@ -122,15 +121,6 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
      * @param factoryCode 工厂编号
      * @return 排序后的班次配置列表
      */
-    private List<com.zlt.aps.cx.entity.config.CxShiftConfig> loadShiftConfigs(String factoryCode) {
-        return shiftConfigMapper.selectList(
-                new LambdaQueryWrapper<com.zlt.aps.cx.entity.config.CxShiftConfig>()
-                        .eq(com.zlt.aps.cx.entity.config.CxShiftConfig::getFactoryCode, factoryCode)
-                        .eq(com.zlt.aps.cx.entity.config.CxShiftConfig::getIsActive, 1)
-                        .orderByAsc(com.zlt.aps.cx.entity.config.CxShiftConfig::getScheduleDay)
-                        .orderByAsc(com.zlt.aps.cx.entity.config.CxShiftConfig::getDayShiftOrder)
-        );
-    }
 
     /**
      * 执行单天排程
