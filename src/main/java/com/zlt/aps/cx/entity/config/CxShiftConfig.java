@@ -58,6 +58,26 @@ public class CxShiftConfig extends BaseEntity {
     @TableField("IS_CROSS_DAY")
     private Integer isCrossDay;
 
+    // ===== 排程周期配置（新增） =====
+
+    @ApiModelProperty(value = "排程天数：1-第一天 2-第二天 3-第三天")
+    @TableField("SCHEDULE_DAY")
+    private Integer scheduleDay;
+
+    @ApiModelProperty(value = "当天班次序号：该天第几个班")
+    @TableField("DAY_SHIFT_ORDER")
+    private Integer dayShiftOrder;
+
+    @ApiModelProperty(value = "对应结果表字段：CLASS1~CLASS8")
+    @TableField("CLASS_FIELD")
+    private String classField;
+
+    @ApiModelProperty(value = "工厂编号")
+    @TableField("FACTORY_CODE")
+    private String factoryCode;
+
+    // ===== 状态与审计 =====
+
     @ApiModelProperty(value = "是否启用：0-禁用 1-启用")
     @TableField("IS_ACTIVE")
     private Integer isActive;

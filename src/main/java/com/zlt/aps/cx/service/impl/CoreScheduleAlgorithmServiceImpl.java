@@ -57,28 +57,101 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     @Autowired
     private CxStructureShiftCapacityMapper structureShiftCapacityMapper;
 
+    @Autowired
+    private com.zlt.aps.cx.mapper.CxShiftConfigMapper shiftConfigMapper;
+
+    /** 默认排程天数 */
+    private static final int DEFAULT_SCHEDULE_DAYS = 3;
+
     @Override
     public List<CxScheduleResult> executeSchedule(ScheduleContextDTO context) {
         log.info("开始执行排程算法，日期: {}", context.getScheduleDate());
 
+        // 加载班次配置（按工厂）
+        String factoryCode = context.getFactoryCode() != null ? context.getFactoryCode() : "DEFAULT";
+        List<com.zlt.aps.cx.entity.config.CxShiftConfig> allShiftConfigs = loadShiftConfigs(factoryCode);
+        context.setShiftConfigList(allShiftConfigs);
+
+        // 按排程天数分组
+        Map<Integer, List<com.zlt.aps.cx.entity.config.CxShiftConfig>> dayShiftMap = allShiftConfigs.stream()
+                .filter(c -> c.getScheduleDay() != null)
+                .collect(Collectors.groupingBy(com.zlt.aps.cx.entity.config.CxShiftConfig::getScheduleDay));
+
+        // 获取排程天数
+        int scheduleDays = context.getScheduleDays() != null ? context.getScheduleDays() : DEFAULT_SCHEDULE_DAYS;
+
+        List<CxScheduleResult> allResults = new ArrayList<>();
+
+        // 连续执行多天排程
+        for (int day = 1; day <= scheduleDays; day++) {
+            List<com.zlt.aps.cx.entity.config.CxShiftConfig> dayShifts = dayShiftMap.get(day);
+            if (CollectionUtils.isEmpty(dayShifts)) {
+                log.warn("第 {} 天没有配置班次，跳过", day);
+                continue;
+            }
+
+            // 设置当前天的上下文
+            LocalDate currentScheduleDate = context.getScheduleDate().plusDays(day - 1);
+            context.setCurrentScheduleDay(day);
+            context.setCurrentScheduleDate(currentScheduleDate);
+            context.setCurrentShiftConfigs(dayShifts);
+
+            log.info("执行第 {} 天排程，日期: {}，班次数: {}", day, currentScheduleDate, dayShifts.size());
+
+            // 执行该天的排程
+            List<CxScheduleResult> dayResults = executeDaySchedule(context, day, dayShifts);
+            allResults.addAll(dayResults);
+        }
+
+        log.info("排程算法执行完成，共 {} 天，总结果数: {}", scheduleDays, allResults.size());
+        return allResults;
+    }
+
+    /**
+     * 加载班次配置（按工厂）
+     *
+     * @param factoryCode 工厂编号
+     * @return 排序后的班次配置列表
+     */
+    private List<com.zlt.aps.cx.entity.config.CxShiftConfig> loadShiftConfigs(String factoryCode) {
+        return shiftConfigMapper.selectList(
+                new LambdaQueryWrapper<com.zlt.aps.cx.entity.config.CxShiftConfig>()
+                        .eq(com.zlt.aps.cx.entity.config.CxShiftConfig::getFactoryCode, factoryCode)
+                        .eq(com.zlt.aps.cx.entity.config.CxShiftConfig::getIsActive, 1)
+                        .orderByAsc(com.zlt.aps.cx.entity.config.CxShiftConfig::getScheduleDay)
+                        .orderByAsc(com.zlt.aps.cx.entity.config.CxShiftConfig::getDayShiftOrder)
+        );
+    }
+
+    /**
+     * 执行单天排程
+     *
+     * @param context 排程上下文
+     * @param day 排程天数
+     * @param dayShifts 该天的班次配置
+     * @return 排程结果列表
+     */
+    private List<CxScheduleResult> executeDaySchedule(ScheduleContextDTO context, int day,
+            List<com.zlt.aps.cx.entity.config.CxShiftConfig> dayShifts) {
+
         // 第一步：任务分组并计算日胎胚任务
         List<DailyEmbryoTask> tasks = calculateDailyEmbryoTasks(context);
-        log.info("第一步完成，日胎胚任务数: {}", tasks.size());
+        log.info("第 {} 天第一步完成，日胎胚任务数: {}", day, tasks.size());
 
         // 第二步：试错分配任务到机台
         List<MachineAllocationResult> allocations = allocateTasksToMachines(tasks, context);
-        log.info("第二步完成，机台分配数: {}", allocations.size());
+        log.info("第 {} 天第二步完成，机台分配数: {}", day, allocations.size());
 
-        // 第三步：班次均衡分配
-        List<ShiftAllocationResult> shiftAllocations = balanceShiftAllocation(allocations, context);
-        log.info("第三步完成，班次分配完成");
+        // 第三步：班次均衡分配（使用该天实际班次配置）
+        List<ShiftAllocationResult> shiftAllocations = balanceShiftAllocation(allocations, dayShifts, context);
+        log.info("第 {} 天第三步完成，班次分配完成", day);
 
         // 第四步：排生产顺位
         List<CxScheduleDetail> details = calculateSequence(shiftAllocations, context);
-        log.info("第四步完成，排程明细数: {}", details.size());
+        log.info("第 {} 天第四步完成，排程明细数: {}", day, details.size());
 
-        // 构建排程结果
-        return buildScheduleResults(context, allocations, shiftAllocations, details);
+        // 构建排程结果（按CLASS_FIELD映射）
+        return buildScheduleResults(context, allocations, shiftAllocations, details, dayShifts);
     }
 
     @Override
@@ -479,6 +552,99 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
                         // 关键产品量加到下一班次
                         String secondShift = getNextShift(firstShift);
+                        int secondShiftQty = shiftPlanQty.getOrDefault(secondShift, 0);
+                        shiftPlanQty.put(secondShift, secondShiftQty + roundToTrip(keyProductQty, "CEILING"));
+
+                        log.debug("开产首班 {} 移出关键产品 {} 条到 {}",
+                                firstShift, keyProductQty, secondShift);
+                    }
+                }
+            }
+
+            shiftResult.setShiftPlanQty(shiftPlanQty);
+            results.add(shiftResult);
+        }
+
+        return results;
+    }
+
+    /**
+     * 第三步：班次均衡分配（接收动态班次配置）
+     * 用于多天排程场景，每天可能有不同的班次配置
+     *
+     * @param allocations 机台分配结果
+     * @param dayShifts   该天的班次配置列表
+     * @param context     排程上下文
+     * @return 班次分配结果
+     */
+    public List<ShiftAllocationResult> balanceShiftAllocation(
+            List<MachineAllocationResult> allocations,
+            List<com.zlt.aps.cx.entity.config.CxShiftConfig> dayShifts,
+            ScheduleContextDTO context) {
+
+        List<ShiftAllocationResult> results = new ArrayList<>();
+
+        if (CollectionUtils.isEmpty(dayShifts)) {
+            log.warn("班次配置为空，使用默认配置");
+            return balanceShiftAllocation(allocations, context);
+        }
+
+        // 从班次配置提取班次编码数组
+        String[] shiftCodes = dayShifts.stream()
+                .map(com.zlt.aps.cx.entity.config.CxShiftConfig::getShiftCode)
+                .toArray(String[]::new);
+
+        // 加载结构班产配置
+        Map<String, Map<String, CxStructureShiftCapacity>> structureCapacityMap = loadStructureShiftCapacity();
+
+        for (MachineAllocationResult allocation : allocations) {
+            ShiftAllocationResult shiftResult = new ShiftAllocationResult();
+            shiftResult.setMachineCode(allocation.getMachineCode());
+            shiftResult.setTasks(allocation.getTaskAllocations());
+
+            Map<String, Integer> shiftPlanQty = new LinkedHashMap<>();
+            int totalQty = allocation.getUsedCapacity();
+
+            // 获取机台最大产能
+            Integer maxDailyCapacity = allocation.getDailyCapacity();
+
+            // 按任务结构获取班产整车数，计算波浪分配
+            Map<String, Integer> structureWaveAllocation = calculateStructureWaveAllocation(
+                    allocation.getTaskAllocations(),
+                    structureCapacityMap,
+                    maxDailyCapacity,
+                    shiftCodes,
+                    context);
+
+            // 汇总各班次分配量
+            for (com.zlt.aps.cx.entity.config.CxShiftConfig shiftConfig : dayShifts) {
+                String shiftCode = shiftConfig.getShiftCode();
+                int shiftQty = structureWaveAllocation.getOrDefault(shiftCode, 0);
+                shiftPlanQty.put(shiftCode, shiftQty);
+            }
+
+            // 处理特殊情况：开产首班不排关键产品
+            if (Boolean.TRUE.equals(context.getIsOpeningDay()) && context.getCurrentScheduleDay() == 1) {
+                String firstShift = dayShifts.get(0).getShiftCode(); // 当天第一个班次
+
+                Set<String> keyProductCodes = context.getKeyProductCodes();
+                if (keyProductCodes != null && !keyProductCodes.isEmpty() && dayShifts.size() > 1) {
+                    // 计算首班中关键产品的量，移到下一班次
+                    int keyProductQty = 0;
+                    for (TaskAllocation task : allocation.getTaskAllocations()) {
+                        if (keyProductCodes.contains(task.getMaterialCode())) {
+                            keyProductQty += task.getQuantity();
+                        }
+                    }
+
+                    if (keyProductQty > 0) {
+                        // 首班减去关键产品量
+                        int firstShiftQty = shiftPlanQty.getOrDefault(firstShift, 0);
+                        int adjustedQty = Math.max(firstShiftQty - keyProductQty, 0);
+                        shiftPlanQty.put(firstShift, roundToTrip(adjustedQty, "FLOOR"));
+
+                        // 关键产品量加到下一班次
+                        String secondShift = dayShifts.get(1).getShiftCode();
                         int secondShiftQty = shiftPlanQty.getOrDefault(secondShift, 0);
                         shiftPlanQty.put(secondShift, secondShiftQty + roundToTrip(keyProductQty, "CEILING"));
 
@@ -1595,6 +1761,13 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             List<ShiftAllocationResult> shiftAllocations,
             List<CxScheduleDetail> details) {
 
+        // 使用当前天的班次配置
+        List<com.zlt.aps.cx.entity.config.CxShiftConfig> dayShifts = context.getCurrentShiftConfigs();
+        if (!CollectionUtils.isEmpty(dayShifts)) {
+            return buildScheduleResults(context, allocations, shiftAllocations, details, dayShifts);
+        }
+
+        // 兼容旧逻辑：默认班次配置
         List<CxScheduleResult> results = new ArrayList<>();
         LocalDate scheduleDate = context.getScheduleDate();
 
@@ -1613,7 +1786,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             result.setDataSource("0");
             result.setCreateTime(new Date());
 
-            // 设置班次计划量
+            // 设置班次计划量（旧逻辑：固定映射）
             ShiftAllocationResult shiftResult = shiftMap.get(allocation.getMachineCode());
             if (shiftResult != null) {
                 Map<String, Integer> shiftPlanQty = shiftResult.getShiftPlanQty();
@@ -1633,5 +1806,113 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         }
 
         return results;
+    }
+
+    /**
+     * 构建排程结果（接收动态班次配置）
+     * 按 CLASS_FIELD 映射到结果表的对应字段
+     *
+     * @param context        排程上下文
+     * @param allocations    机台分配结果
+     * @param shiftAllocations 班次分配结果
+     * @param details        排程明细
+     * @param dayShifts      该天的班次配置列表
+     * @return 排程结果列表
+     */
+    private List<CxScheduleResult> buildScheduleResults(
+            ScheduleContextDTO context,
+            List<MachineAllocationResult> allocations,
+            List<ShiftAllocationResult> shiftAllocations,
+            List<CxScheduleDetail> details,
+            List<com.zlt.aps.cx.entity.config.CxShiftConfig> dayShifts) {
+
+        List<CxScheduleResult> results = new ArrayList<>();
+        LocalDate scheduleDate = context.getCurrentScheduleDate() != null 
+                ? context.getCurrentScheduleDate() 
+                : context.getScheduleDate();
+
+        // 按机台构建排程结果
+        Map<String, ShiftAllocationResult> shiftMap = shiftAllocations.stream()
+                .collect(Collectors.toMap(ShiftAllocationResult::getMachineCode, s -> s));
+
+        for (MachineAllocationResult allocation : allocations) {
+            CxScheduleResult result = new CxScheduleResult();
+            result.setScheduleDate(scheduleDate.atStartOfDay());
+            result.setCxMachineCode(allocation.getMachineCode());
+            result.setCxMachineType(allocation.getMachineType());
+            result.setProductNum(new BigDecimal(allocation.getUsedCapacity()));
+            result.setProductionStatus("0");
+            result.setIsRelease("0");
+            result.setDataSource("0");
+            result.setCreateTime(new Date());
+
+            // 按 CLASS_FIELD 映射班次计划量
+            ShiftAllocationResult shiftResult = shiftMap.get(allocation.getMachineCode());
+            if (shiftResult != null) {
+                Map<String, Integer> shiftPlanQty = shiftResult.getShiftPlanQty();
+                
+                // 遍历该天的班次配置，按 CLASS_FIELD 设置对应字段
+                for (com.zlt.aps.cx.entity.config.CxShiftConfig shiftConfig : dayShifts) {
+                    String classField = shiftConfig.getClassField();
+                    String shiftCode = shiftConfig.getShiftCode();
+                    Integer shiftQty = shiftPlanQty.getOrDefault(shiftCode, 0);
+                    
+                    setClassFieldValue(result, classField, shiftQty);
+                }
+            }
+
+            // 设置第一个任务的胎胚信息
+            if (!allocation.getTaskAllocations().isEmpty()) {
+                TaskAllocation firstTask = allocation.getTaskAllocations().get(0);
+                result.setEmbryoCode(firstTask.getMaterialCode());
+                result.setStructureName(firstTask.getStructureName());
+            }
+
+            results.add(result);
+        }
+
+        return results;
+    }
+
+    /**
+     * 按 CLASS_FIELD 设置对应的班次计划量
+     *
+     * @param result     排程结果
+     * @param classField 字段名：CLASS1~CLASS8
+     * @param qty        计划量
+     */
+    private void setClassFieldValue(CxScheduleResult result, String classField, Integer qty) {
+        if (classField == null || qty == null) {
+            return;
+        }
+        BigDecimal qtyDecimal = new BigDecimal(qty);
+        switch (classField) {
+            case "CLASS1":
+                result.setClass1PlanQty(qtyDecimal);
+                break;
+            case "CLASS2":
+                result.setClass2PlanQty(qtyDecimal);
+                break;
+            case "CLASS3":
+                result.setClass3PlanQty(qtyDecimal);
+                break;
+            case "CLASS4":
+                result.setClass4PlanQty(qtyDecimal);
+                break;
+            case "CLASS5":
+                result.setClass5PlanQty(qtyDecimal);
+                break;
+            case "CLASS6":
+                result.setClass6PlanQty(qtyDecimal);
+                break;
+            case "CLASS7":
+                result.setClass7PlanQty(qtyDecimal);
+                break;
+            case "CLASS8":
+                result.setClass8PlanQty(qtyDecimal);
+                break;
+            default:
+                log.warn("未知的 CLASS_FIELD: {}", classField);
+        }
     }
 }
