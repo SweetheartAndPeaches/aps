@@ -9,6 +9,7 @@ import com.zlt.aps.cx.entity.config.CxStructureShiftCapacity;
 import com.zlt.aps.mp.api.domain.entity.*;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
+import com.zlt.aps.mp.engine.domain.vo.MonthPlanProductLhCapacityVo;
 import lombok.Data;
 
 import java.time.LocalDate;
@@ -182,9 +183,31 @@ public class ScheduleContextDTO {
     private List<CxTreadParkingConfig> treadParkingConfigs;
 
     /**
-     * 结构收尾管理列表
+     * 结构收尾管理列表（已废弃，请使用 materialEndings）
      */
     private List<CxStructureEnding> structureEndings;
+
+    /**
+     * 物料收尾管理列表（物料维度）
+     * 从月计划计算生成，用于跟踪每个物料的收尾进度
+     */
+    private List<CxMaterialEnding> materialEndings;
+
+    /**
+     * 物料日硫化产能映射（物料编码 -> 产能信息）
+     * 用于计算成型机台的满算力
+     * Key: 物料编码
+     * Value: 日硫化产能信息
+     */
+    private Map<String, MonthPlanProductLhCapacityVo> materialLhCapacityMap;
+
+    /**
+     * 结构硫化配比映射（结构编码 -> 配比信息）
+     * 用于获取机台的最大配比
+     * Key: 结构名称
+     * Value: 硫化配比信息
+     */
+    private Map<String, MdmStructureLhRatio> structureLhRatioMap;
 
     /**
      * 工作日历
