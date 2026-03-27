@@ -202,6 +202,14 @@ public class ScheduleContextDTO {
     private Map<String, MonthPlanProductLhCapacityVo> materialLhCapacityMap;
 
     /**
+     * 硫化机台产能信息映射（物料编码 -> 机台产能列表）
+     * 用于计算成型机台的满算力（支持配比未塞满的情况）
+     * Key: 物料编码
+     * Value: 该物料对应的硫化机台产能信息列表
+     */
+    private Map<String, List<com.zlt.aps.cx.service.impl.LhMachineCapacityInfo>> lhMachineCapacityMap;
+
+    /**
      * 结构硫化配比映射（结构编码 -> 配比信息）
      * 用于获取机台的最大配比
      * Key: 结构名称
