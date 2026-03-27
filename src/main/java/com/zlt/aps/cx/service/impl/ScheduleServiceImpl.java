@@ -199,10 +199,8 @@ public class ScheduleServiceImpl implements ScheduleService {
             context.setDevicePlanShuts(devicePlanShuts);
             log.info("加载成型机台停机计划 {} 条", devicePlanShuts.size());
 
-            // 3. 获取所有启用的机台（不过滤停机机台，停机机台在排程时扣减产能）
-            List<MdmMoldingMachine> machines = moldingMachineMapper.selectList(
-                    new LambdaQueryWrapper<MdmMoldingMachine>()
-                            .eq(MdmMoldingMachine::getIsActive, 1));
+            // 3. 获取所有机台（停机机台在排程时根据停机计划扣减产能）
+            List<MdmMoldingMachine> machines = moldingMachineMapper.selectList(null);
             context.setAvailableMachines(machines);
             log.info("加载成型机台 {} 台", machines.size());
 
@@ -569,10 +567,7 @@ public class ScheduleServiceImpl implements ScheduleService {
                     .collect(Collectors.toMap(CxStock::getEmbryoCode, s -> s, (a, b) -> a));
 
             // 4. 获取成型机台列表（用于计算满产能力）
-            List<MdmMoldingMachine> machines = moldingMachineMapper.selectList(
-                    new LambdaQueryWrapper<MdmMoldingMachine>()
-                            .eq(MdmMoldingMachine::getIsActive, 1)
-                            .ne(MdmMoldingMachine::getIsActive, "FAULT"));
+            List<MdmMoldingMachine> machines = moldingMachineMapper.selectList(null);
 
             // 5. 按结构分组汇总
             Map<String, List<FactoryMonthPlanProductionFinalResult>> structurePlanMap = monthPlans.stream()
