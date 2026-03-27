@@ -116,41 +116,25 @@ public class ScheduleServiceImpl implements ScheduleService {
             log.info("开始执行排程，日期：{}，排程模式：{}",
                     request.getScheduleDate(), request.getScheduleMode());
 
-            // 1. 检查节假日
-            if (holidayScheduleService.isStopProductionDay(request.getScheduleDate())) {
-                result.setMessage("停产日，不执行排程");
-                log.info("停产日 {}，跳过排程", request.getScheduleDate());
-                return result;
-            }
+            // 注释：节假日检查已移至核心排程算法中，对每一天单独检查
+            // 这样可以处理连续多天排程中某天是节假日的情况
 
-            // 2. 构建排程上下文
+            // 1. 构建排程上下文
             ScheduleContextDTO context = buildScheduleContext(request);
             if (context == null) {
                 result.setMessage("构建排程上下文失败");
                 return result;
             }
 
-            // 3. 处理节假日特殊逻辑
-            // 注释：不在 executeSchedule 中校验停产前一天，改在核心排程算法中处理
-            // if (holidayScheduleService.isBeforeHoliday(request.getScheduleDate())) {
-            //     HolidayScheduleService.HolidayScheduleResult holidayResult =
-            //             holidayScheduleService.handleBeforeHoliday(context);
-            //     log.info("停产前一天处理结果：{}", holidayResult.getMessage());
-            // }
-
-            // 4. 执行核心排程算法（包含续作、试制、正常任务的统一处理）
+            // 2. 执行核心排程算法（包含续作、试制、正常任务的统一处理）
             // 任务优先级：续作 > 新增任务（试制在有空出产能时优先，但不挤掉实单）
+            // 每一天的节假日检查在核心算法中处理
             List<CxScheduleResult> scheduleResults = coreScheduleAlgorithmService.executeSchedule(context);
 
-            // 5. 应用节假日调整
-            // 注释：不在 executeSchedule 中校验节假日调整，改在核心排程算法中处理
-            // scheduleResults = holidayScheduleService.adjustHolidaySchedule(
-            //         request.getScheduleDate(), scheduleResults, context);
-
-            // 6. 保存排程结果
+            // 3. 保存排程结果
             saveScheduleResults(scheduleResults);
 
-            // 7. 验证排程结果
+            // 4. 验证排程结果
             boolean validated = validateScheduleResults(scheduleResults);
 
             result.setSuccess(validated);
