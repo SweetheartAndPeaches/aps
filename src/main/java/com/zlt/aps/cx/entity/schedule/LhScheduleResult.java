@@ -195,7 +195,77 @@ public class LhScheduleResult extends ApsBaseEntity {
     @TableField("CLASS4_FINISH_QTY")
     private Integer class4FinishQty;
 
-    // 其他班次省略...与上面类似结构
+    @ApiModelProperty(value = "5班计划量")
+    @TableField("CLASS5_PLAN_QTY")
+    private Integer class5PlanQty;
+
+    @ApiModelProperty(value = "5班开始时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @TableField("CLASS5_START_TIME")
+    private LocalDateTime class5StartTime;
+
+    @ApiModelProperty(value = "5班结束时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @TableField("CLASS5_END_TIME")
+    private LocalDateTime class5EndTime;
+
+    @ApiModelProperty(value = "5班完成量")
+    @TableField("CLASS5_FINISH_QTY")
+    private Integer class5FinishQty;
+
+    @ApiModelProperty(value = "6班计划量")
+    @TableField("CLASS6_PLAN_QTY")
+    private Integer class6PlanQty;
+
+    @ApiModelProperty(value = "6班开始时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @TableField("CLASS6_START_TIME")
+    private LocalDateTime class6StartTime;
+
+    @ApiModelProperty(value = "6班结束时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @TableField("CLASS6_END_TIME")
+    private LocalDateTime class6EndTime;
+
+    @ApiModelProperty(value = "6班完成量")
+    @TableField("CLASS6_FINISH_QTY")
+    private Integer class6FinishQty;
+
+    @ApiModelProperty(value = "7班计划量")
+    @TableField("CLASS7_PLAN_QTY")
+    private Integer class7PlanQty;
+
+    @ApiModelProperty(value = "7班开始时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @TableField("CLASS7_START_TIME")
+    private LocalDateTime class7StartTime;
+
+    @ApiModelProperty(value = "7班结束时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @TableField("CLASS7_END_TIME")
+    private LocalDateTime class7EndTime;
+
+    @ApiModelProperty(value = "7班完成量")
+    @TableField("CLASS7_FINISH_QTY")
+    private Integer class7FinishQty;
+
+    @ApiModelProperty(value = "8班计划量")
+    @TableField("CLASS8_PLAN_QTY")
+    private Integer class8PlanQty;
+
+    @ApiModelProperty(value = "8班开始时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @TableField("CLASS8_START_TIME")
+    private LocalDateTime class8StartTime;
+
+    @ApiModelProperty(value = "8班结束时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @TableField("CLASS8_END_TIME")
+    private LocalDateTime class8EndTime;
+
+    @ApiModelProperty(value = "8班完成量")
+    @TableField("CLASS8_FINISH_QTY")
+    private Integer class8FinishQty;
 
     @ApiModelProperty(value = "是否交期")
     @TableField("IS_DELIVERY")
