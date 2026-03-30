@@ -63,14 +63,6 @@ public interface ScheduleService {
     ScheduleResult executeTrialSchedule(LocalDate scheduleDate);
 
     /**
-     * 验证排程
-     *
-     * @param scheduleDate 排程日期
-     * @return 验证结果
-     */
-    ScheduleValidationResult validateSchedule(LocalDate scheduleDate);
-
-    /**
      * 排程执行结果
      */
     class ScheduleResult {

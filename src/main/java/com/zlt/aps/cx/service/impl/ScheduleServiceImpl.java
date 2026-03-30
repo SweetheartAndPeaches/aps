@@ -467,49 +467,6 @@ public class ScheduleServiceImpl implements ScheduleService {
         }
     }
 
-    @Override
-    public ScheduleValidationResult validateSchedule(LocalDate scheduleDate) {
-        ScheduleValidationResult result = new ScheduleValidationResult();
-        result.setValid(true);
-        result.setErrors(new ArrayList<>());
-        result.setWarnings(new ArrayList<>());
-
-        try {
-            // 获取该日期的所有排程结果
-            List<CxScheduleResult> results = scheduleResultMapper.selectList(
-                    new LambdaQueryWrapper<CxScheduleResult>()
-                            .eq(CxScheduleResult::getScheduleDate, scheduleDate));
-
-            if (CollectionUtils.isEmpty(results)) {
-                result.setValid(false);
-                result.getErrors().add("无排程结果");
-                return result;
-            }
-
-            // 逐个校验
-            for (CxScheduleResult scheduleResult : results) {
-                ConstraintCheckService.ConstraintCheckResult checkResult =
-                        constraintCheckService.checkAllConstraints(scheduleResult);
-
-                if (!checkResult.isPassed()) {
-                    result.setValid(false);
-                    result.getErrors().addAll(checkResult.getViolations());
-                }
-
-                if (!CollectionUtils.isEmpty(checkResult.getWarnings())) {
-                    result.getWarnings().addAll(checkResult.getWarnings());
-                }
-            }
-
-        } catch (Exception e) {
-            log.error("验证排程失败", e);
-            result.setValid(false);
-            result.getErrors().add("验证异常：" + e.getMessage());
-        }
-
-        return result;
-    }
-
     /**
      * 保存排程结果
      */
