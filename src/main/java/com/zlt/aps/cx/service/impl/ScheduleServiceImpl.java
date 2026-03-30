@@ -125,6 +125,9 @@ public class ScheduleServiceImpl implements ScheduleService {
     @Autowired
     private MdmStructureLhRatioMapper structureLhRatioMapper;
 
+    @Autowired
+    private ScheduleDataValidator scheduleDataValidator;
+
     @Override
     public ScheduleResult executeSchedule(ScheduleRequest request) {
         ScheduleResult result = new ScheduleResult();
@@ -308,7 +311,7 @@ public class ScheduleServiceImpl implements ScheduleService {
             context.setStructureLhRatioMap(structureLhRatioMap);
             log.info("构建结构硫化配比映射 {} 条", structureLhRatioMap.size());
 
-            // 13. 获取物料收尾管理列表（从FactoryMonthPlanProductionFinalResult计算生成，物料维度）
+            // 13. 计算物料收尾管理列表（从FactoryMonthPlanProductionFinalResult计算生成，物料维度）
             int year = scheduleDate.getYear();
             int month = scheduleDate.getMonthValue();
             List<CxMaterialEnding> materialEndings = calculateMaterialEndings(
@@ -348,6 +351,23 @@ public class ScheduleServiceImpl implements ScheduleService {
             // 15. 设置排程参数
             context.setScheduleDate(scheduleDate);
             context.setScheduleMode(request.getScheduleMode());
+
+            // 16. 数据完整性校验
+            // 在返回之前进行数据完整性校验，提前发现问题
+            ScheduleDataValidationResult validationResult = scheduleDataValidator.validate(
+                    context, scheduleDate, factoryCode);
+
+            // 如果存在阻断级错误（ERROR），终止排程
+            if (!validationResult.isPassed()) {
+                String errorMsg = "数据完整性校验不通过，无法进行排程：" + validationResult.generateSummary();
+                log.error(errorMsg);
+                throw new RuntimeException(errorMsg);
+            }
+
+            // 如果存在警告，记录但继续执行
+            if (validationResult.getWarnCount() > 0) {
+                log.warn("数据完整性校验存在警告，请检查日志：{}", validationResult.generateSummary());
+            }
 
             return context;
 
