@@ -62,13 +62,7 @@ public class ScheduleServiceImpl implements ScheduleService {
     private ConstraintCheckService constraintCheckService;
 
     @Autowired
-    private DynamicAdjustService dynamicAdjustService;
-
-    @Autowired
     private HolidayScheduleService holidayScheduleService;
-
-    @Autowired
-    private TrialScheduleService trialScheduleService;
 
     @Autowired
     private MdmMoldingMachineMapper moldingMachineMapper;
@@ -374,75 +368,6 @@ public class ScheduleServiceImpl implements ScheduleService {
             log.error("构建排程上下文失败", e);
             return null;
         }
-    }
-
-    @Override
-    public boolean executeDynamicAdjust(String shiftCode) {
-        try {
-            log.info("执行动态调整，班次：{}", shiftCode);
-
-            // 获取当前日期
-            LocalDate today = LocalDate.now();
-
-            // 执行交班前检查和调整
-            DynamicAdjustService.ShiftAdjustResult adjustResult =
-                    dynamicAdjustService.checkAndAdjustBeforeShiftEnd(
-                            today.atStartOfDay(), shiftCode);
-
-            if (adjustResult.isAdjusted()) {
-                log.info("动态调整完成：{}", adjustResult.getMessage());
-            } else {
-                log.info("无需动态调整：{}", adjustResult.getMessage());
-            }
-
-            return true;
-
-        } catch (Exception e) {
-            log.error("动态调整失败", e);
-            return false;
-        }
-    }
-
-    @Override
-    public ScheduleResult executeTrialSchedule(LocalDate scheduleDate) {
-        ScheduleResult result = new ScheduleResult();
-        result.setScheduleDate(scheduleDate);
-
-        try {
-            // 获取待排程的试制计划
-            List<CxTrialPlan> trialPlans = trialScheduleService.getPendingTrialPlans();
-
-            // 执行试制排程
-            TrialScheduleService.TrialScheduleResult trialResult =
-                    trialScheduleService.executeTrialSchedule(scheduleDate, trialPlans);
-
-            result.setSuccess(trialResult.isSuccess());
-            result.setMessage(trialResult.getMessage());
-
-            // 转换为通用排程结果格式
-            if (!CollectionUtils.isEmpty(trialResult.getScheduledDetails())) {
-                List<CxScheduleResult> results = new ArrayList<>();
-                for (CxScheduleDetail detail : trialResult.getScheduledDetails()) {
-                    CxScheduleResult sr = new CxScheduleResult();
-                    sr.setCxMachineCode(detail.getCxMachineCode());
-                    sr.setEmbryoCode(detail.getEmbryoCode());
-                    sr.setProductNum(BigDecimal.valueOf(detail.getPlanQty() != null ? detail.getPlanQty() : 0));
-                    sr.setScheduleDate(detail.getScheduleDate() != null ? detail.getScheduleDate().atStartOfDay() : null);
-                    sr.setIsTrial(1);
-                    results.add(sr);
-                }
-                result.setResults(results);
-            }
-
-            log.info("试制排程完成，日期：{}，结果：{}", scheduleDate, trialResult.getMessage());
-
-        } catch (Exception e) {
-            log.error("试制排程失败", e);
-            result.setSuccess(false);
-            result.setMessage("试制排程失败：" + e.getMessage());
-        }
-
-        return result;
     }
 
     /**

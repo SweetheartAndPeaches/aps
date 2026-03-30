@@ -45,15 +45,6 @@ public interface ScheduleService {
      * @param shiftCode 班次编码
      * @return 是否成功
      */
-    boolean executeDynamicAdjust(String shiftCode);
-
-    /**
-     * 执行试制排程
-     *
-     * @param scheduleDate 排程日期
-     * @return 排程结果
-     */
-    ScheduleResult executeTrialSchedule(LocalDate scheduleDate);
 
     /**
      * 排程执行结果
