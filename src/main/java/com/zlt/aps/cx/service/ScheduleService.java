@@ -1,6 +1,5 @@
 package com.zlt.aps.cx.service;
 
-import com.zlt.aps.cx.dto.ReScheduleRequest;
 import com.zlt.aps.cx.dto.ScheduleContextDTO;
 import com.zlt.aps.cx.dto.ScheduleRequest;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
@@ -36,15 +35,9 @@ public interface ScheduleService {
      * @param request 重排程请求
      * @return 是否成功
      */
-    boolean executeReSchedule(ReScheduleRequest request);
+    ScheduleResult executeSchedule(ScheduleRequest request);
 
     /**
-     * 构建排程上下文
-     *
-     * @param request 排程请求
-     * @return 排程上下文
-     */
-    ScheduleContextDTO buildScheduleContext(ScheduleRequest request);
 
     /**
      * 执行动态调整
