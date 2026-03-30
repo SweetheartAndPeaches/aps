@@ -1,7 +1,6 @@
 package com.zlt.aps.cx.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.zlt.aps.cx.dto.ReScheduleRequest;
 import com.zlt.aps.cx.dto.ScheduleContextDTO;
 import com.zlt.aps.cx.dto.ScheduleRequest;
 import com.zlt.aps.cx.entity.*;
@@ -444,27 +443,6 @@ public class ScheduleServiceImpl implements ScheduleService {
         }
 
         return result;
-    }
-
-    @Override
-    public boolean executeReSchedule(ReScheduleRequest request) {
-        try {
-            log.info("执行重排程，原因：{}", request.getReason());
-
-            // 构建排程请求
-            ScheduleRequest scheduleRequest = new ScheduleRequest();
-            scheduleRequest.setScheduleDate(request.getScheduleDate());
-            scheduleRequest.setScheduleMode("RE_SCHEDULE");
-
-            // 执行排程
-            ScheduleResult result = executeSchedule(scheduleRequest);
-
-            return result.isSuccess();
-
-        } catch (Exception e) {
-            log.error("重排程失败", e);
-            return false;
-        }
     }
 
     /**
