@@ -174,7 +174,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         Map<String, CxStructureEnding> endingMap = new HashMap<>();
         if (context.getStructureEndings() != null) {
             endingMap = context.getStructureEndings().stream()
-                    .collect(Collectors.toMap(CxStructureEnding::getStructureCode, e -> e, (a, b) -> a));
+                    .collect(Collectors.toMap(CxStructureEnding::getStructureName, e -> e, (a, b) -> a));
         }
 
         // 获取机台在机胎胚映射（用于续作判断）
