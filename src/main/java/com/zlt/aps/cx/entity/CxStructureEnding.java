@@ -29,10 +29,6 @@ public class CxStructureEnding implements Serializable {
     @TableId(value = "ID", type = IdType.AUTO)
     private Long id;
 
-    @ApiModelProperty(value = "产品结构编码")
-    @TableField("STRUCTURE_CODE")
-    private String structureCode;
-
     @ApiModelProperty(value = "结构名称")
     @TableField("STRUCTURE_NAME")
     private String structureName;
