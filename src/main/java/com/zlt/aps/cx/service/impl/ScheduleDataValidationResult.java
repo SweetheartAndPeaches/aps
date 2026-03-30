@@ -17,9 +17,9 @@ public class ScheduleDataValidationResult implements Serializable {
     private static final long serialVersionUID = 1L;
 
     /**
-     * 是否通过校验
+     * 是否通过校验（无ERROR级问题）
      */
-    private boolean passed;
+    private boolean passed = true;
 
     /**
      * 校验摘要信息
@@ -44,11 +44,30 @@ public class ScheduleDataValidationResult implements Serializable {
     /**
      * 校验明细列表
      */
-    private List<ValidationDetail> details;
+    private List<ValidationDetail> details = new ArrayList<>();
 
     public ScheduleDataValidationResult() {
-        this.details = new ArrayList<>();
-        this.passed = true;
+    }
+
+    /**
+     * 添加错误级校验
+     */
+    public void addError(String dataItem, String message, String suggestion) {
+        addDetail(ValidationLevel.ERROR, dataItem, message, suggestion);
+    }
+
+    /**
+     * 添加警告级校验
+     */
+    public void addWarn(String dataItem, String message, String suggestion) {
+        addDetail(ValidationLevel.WARN, dataItem, message, suggestion);
+    }
+
+    /**
+     * 添加信息级校验
+     */
+    public void addInfo(String dataItem, String message, String suggestion) {
+        addDetail(ValidationLevel.INFO, dataItem, message, suggestion);
     }
 
     /**
@@ -77,32 +96,11 @@ public class ScheduleDataValidationResult implements Serializable {
     }
 
     /**
-     * 添加 ERROR 级别校验
-     */
-    public void addError(String dataItem, String message, String suggestion) {
-        addDetail(ValidationLevel.ERROR, dataItem, message, suggestion);
-    }
-
-    /**
-     * 添加 WARN 级别校验
-     */
-    public void addWarn(String dataItem, String message, String suggestion) {
-        addDetail(ValidationLevel.WARN, dataItem, message, suggestion);
-    }
-
-    /**
-     * 添加 INFO 级别校验
-     */
-    public void addInfo(String dataItem, String message, String suggestion) {
-        addDetail(ValidationLevel.INFO, dataItem, message, suggestion);
-    }
-
-    /**
      * 生成摘要信息
      */
     public String generateSummary() {
         StringBuilder sb = new StringBuilder();
-        sb.append("数据完整性校验结果: ");
+        sb.append("校验");
         if (passed) {
             sb.append("通过");
         } else {
