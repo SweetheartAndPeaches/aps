@@ -47,9 +47,6 @@ public class FactoryMonthPlanProductionFinalResultServiceImpl extends ServiceImp
     @Autowired
     private MdmMoldingMachineMapper machineMapper;
 
-    @Autowired
-    private ScheduleService scheduleService;
-
     @Override
     public List<FactoryMonthPlanProductionFinalResult> getByYearMonth(Integer yearMonth) {
         return factoryMonthPlanProductionFinalResultMapper.selectByYearMonth(yearMonth);
