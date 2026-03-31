@@ -218,6 +218,19 @@ public class ScheduleContextDTO {
     private Map<String, MdmStructureLhRatio> structureLhRatioMap;
 
     /**
+     * 成型余量映射（物料编码 -> 成型余量）
+     * 成型余量 = 硫化余量 - 该物料对应的所有胎胚库存
+     * 用于收尾计算
+     */
+    private Map<String, Integer> formingRemainderMap;
+
+    /**
+     * 胎胚到物料映射（胎胚编码 -> 物料编码）
+     * 用于将胎胚库存转换为物料维度
+     */
+    private Map<String, String> embryoToMaterialMap;
+
+    /**
      * 工作日历
      */
     private MdmWorkCalendar workCalendar;
