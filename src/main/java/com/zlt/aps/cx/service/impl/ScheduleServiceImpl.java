@@ -297,15 +297,22 @@ public class ScheduleServiceImpl implements ScheduleService {
             context.setKeyProductCodes(keyProductCodes);
 
             // 12. 构建物料日硫化最大产能映射
+            // ========== 12. 构建产能映射（用于满算力计算） ==========
+            
+            // 12.1 物料日硫化最大产能映射（基础表，人工维护的标准/MES/APS产能）
+            // 用途：获取物料的理论最大日硫化产能，作为兜底值
             Map<String, com.zlt.aps.mp.engine.domain.vo.MonthPlanProductLhCapacityVo> materialLhCapacityMap = buildMaterialLhCapacityMap(context);
             context.setMaterialLhCapacityMap(materialLhCapacityMap);
             log.info("构建物料日硫化最大产能映射 {} 条", materialLhCapacityMap.size());
 
-            // 构建物料当前使用的产能映射
+            // 12.2 物料当前硫化机台产能映射（今日硫化排程结果）
+            // 用途：获取物料当前实际在用的硫化机台及产能，用于判断配比是否塞满
             Map<String, List<LhMachineCapacityInfo>> lhMachineCapacityMap = buildLhMachineCapacityMap();
             context.setLhMachineCapacityMap(lhMachineCapacityMap);
             log.info("构建硫化机台当前产能映射 {} 个物料", lhMachineCapacityMap.size());
 
+            // 12.3 结构硫化配比映射（每个结构最大可用的硫化机台数）
+            // 用途：判断配比是否塞满（当前机台数 vs 最大配比）
             Map<String, MdmStructureLhRatio> structureLhRatioMap = buildStructureLhRatioMap();
             context.setStructureLhRatioMap(structureLhRatioMap);
             log.info("构建结构硫化配比映射 {} 条", structureLhRatioMap.size());
