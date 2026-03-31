@@ -227,10 +227,38 @@ public interface CoreScheduleAlgorithmService {
         private Integer daysToEnding;
         /** 是否紧急收尾（3天内收尾） */
         private Boolean isUrgentEnding;
+        /** 是否10天内收尾 */
+        private Boolean isNearEnding;
         /** 是否需要月计划调整（满产追不上时为true） */
         private Boolean needMonthPlanAdjust;
         /** 追赶量（平摊到未来3天的延误量） */
         private Integer catchUpQuantity;
+        
+        // ==================== S5.2 排程分类与余量计算新增字段 ====================
+        /** 分配的胎胚库存（按硫化需求占比分配） */
+        private Integer allocatedStock;
+        /** 待排产量 = (日硫化量 - 库存) × (1 + 损耗率) + 异常平摊 */
+        private Integer plannedProduction;
+        
+        // ==================== S5.3 开停产处理新增字段 ====================
+        /** 开产班次产能（首班只排6小时） */
+        private Integer openingShiftCapacity;
+        /** 是否开产日任务 */
+        private Boolean isOpeningDayTask;
+        /** 是否停产日任务 */
+        private Boolean isClosingDayTask;
+        /** 是否关键产品开产（首班不排） */
+        private Boolean isKeyProductOnOpening;
+        /** 是否收尾最后一批 */
+        private Boolean isLastEndingBatch;
+        
+        // ==================== 新增任务排序相关字段 ====================
+        /** 月计划优先级 */
+        private Integer monthPlanPriority;
+        /** 是否新胎胚（无历史生产记录） */
+        private Boolean isNewEmbryo;
+        /** 推荐机台列表（从月计划获取） */
+        private List<String> recommendedMachines;
     }
 
     /**
