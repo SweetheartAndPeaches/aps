@@ -496,9 +496,9 @@ public class ScheduleServiceImpl implements ScheduleService {
                 String materialCode = entry.getKey();
                 List<FactoryMonthPlanProductionFinalResult> plans = entry.getValue();
 
-                // ========== Step 1: 确定收尾日 ==========
-                // 从月计划中找到该物料最后一个有排产的日期
-                int endingDay = findMaterialEndingDay(plans, lastDayOfMonth);
+                // ========== Step 1: 确定收尾日（最近一个收尾日） ==========
+                // 从月计划中找到该物料最近一个收尾日（连续排产区间的最后一天）
+                int endingDay = findMaterialEndingDay(plans, currentDay, lastDayOfMonth);
                 LocalDate endingDate = scheduleDate.withDayOfMonth(endingDay);
 
                 // 如果收尾日已经过了，跳过
@@ -764,20 +764,54 @@ public class ScheduleServiceImpl implements ScheduleService {
     }
 
     /**
-     * 找到该物料的收尾日（最后一个有排产的日期）
+     * 找到该物料的最近一个收尾日
+     * 
+     * 逻辑说明：
+     * 从当前日期开始往后找，找到第一个连续排产区间的最后一天。
+     * 如果中间遇到停产，停产结束后可能还会继续生产这个胎胚，
+     * 所以应该找最近的一个收尾日，而不是整个月最后一个有排产的日期。
+     * 
+     * 例如：
+     * - 当前日期：10号
+     * - 月计划排产：12-15号、20-25号（停产）、28-30号
+     * - 返回：15号（最近一个收尾日）
+     * 
+     * @param plans 月计划列表
+     * @param currentDay 当前日期（几号）
+     * @param lastDayOfMonth 月末日期
+     * @return 最近一个收尾日
      */
-    private int findMaterialEndingDay(List<FactoryMonthPlanProductionFinalResult> plans, int lastDayOfMonth) {
-        int endingDay = 0;
+    private int findMaterialEndingDay(List<FactoryMonthPlanProductionFinalResult> plans, int currentDay, int lastDayOfMonth) {
+        // 收集所有有排产的日期
+        Set<Integer> productionDays = new HashSet<>();
         for (FactoryMonthPlanProductionFinalResult plan : plans) {
-            for (int day = 1; day <= lastDayOfMonth; day++) {
+            for (int day = currentDay; day <= lastDayOfMonth; day++) {
                 Integer dayQty = plan.getDayQty(day);
-                if (dayQty != null && dayQty > 0 && day > endingDay) {
-                    endingDay = day;
+                if (dayQty != null && dayQty > 0) {
+                    productionDays.add(day);
                 }
             }
         }
-        // 如果没找到，默认月底
-        return endingDay > 0 ? endingDay : lastDayOfMonth;
+        
+        if (productionDays.isEmpty()) {
+            return lastDayOfMonth;
+        }
+        
+        // 从当前日期开始，找到第一个连续排产区间的最后一天
+        int endingDay = currentDay;
+        for (int day = currentDay; day <= lastDayOfMonth; day++) {
+            if (productionDays.contains(day)) {
+                // 有排产，更新收尾日
+                endingDay = day;
+            } else if (endingDay > currentDay) {
+                // 已经进入排产区间，但今天没有排产，说明连续区间结束了
+                // 这就是最近一个收尾日
+                break;
+            }
+            // 如果还没进入排产区间（endingDay == currentDay 且当天没排产），继续往后找
+        }
+        
+        return endingDay;
     }
 
     /**
