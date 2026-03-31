@@ -873,7 +873,7 @@ public class ScheduleServiceImpl implements ScheduleService {
             // 从基础表查询物料日硫化产能（按工厂+物料维度）
             String factoryCode = context.getFactoryCode();
             java.util.List<com.zlt.aps.mp.engine.domain.vo.MonthPlanProductLhCapacityVo> baseCapacities =
-                    monthPlanProductLhCapacityMapper.selectByFactoryCodeAndType(factoryCode, "01");
+                    monthPlanProductLhCapacityMapper.selectByFactoryCode(factoryCode);
 
             // 根据模式计算日硫化量并放入映射
             for (com.zlt.aps.mp.engine.domain.vo.MonthPlanProductLhCapacityVo vo : baseCapacities) {
