@@ -303,8 +303,7 @@ public class ScheduleServiceImpl implements ScheduleService {
             context.setMaterialLhCapacityMap(materialLhCapacityMap);
             log.info("构建物料日硫化最大产能映射 {} 条", materialLhCapacityMap.size());
 
-
-            // 12.3 结构硫化配比映射（每个结构最大可用的硫化机台数）
+            // 12.2 结构硫化配比映射（每个结构最大可用的硫化机台数）
             Map<String, MdmStructureLhRatio> structureLhRatioMap = buildStructureLhRatioMap();
             context.setStructureLhRatioMap(structureLhRatioMap);
             log.info("构建结构硫化配比映射 {} 条", structureLhRatioMap.size());
@@ -320,6 +319,14 @@ public class ScheduleServiceImpl implements ScheduleService {
                             s -> s, (a, b) -> a));
             context.setMonthSurplusMap(monthSurplusMap);
             log.info("加载月度计划余量 {} 条", monthSurplusList.size());
+
+            // ========== 13.1 计算成型余量映射 ==========
+            // 成型余量 = 硫化余量 - 该物料对应的所有胎胚库存
+            // 需要通过物料信息表获取胎胚与物料的对应关系
+            Map<String, Integer> formingRemainderMap = calculateFormingRemainderMap(
+                    materials, monthSurplusMap, stocks);
+            context.setFormingRemainderMap(formingRemainderMap);
+            log.info("计算成型余量映射 {} 条", formingRemainderMap.size());
 
             // 14. 获取SKU排产分类（用于判断主销产品）
             List<MdmSkuScheduleCategory> skuCategories =
@@ -342,7 +349,7 @@ public class ScheduleServiceImpl implements ScheduleService {
             context.setScheduleDate(scheduleDate);
             context.setScheduleMode(request.getScheduleMode());
 
-            // 17. 数据完整性校验
+            // 17. 数据完整性校验(对应流程图S5.1.7数据完整性校验)
             // 在返回之前进行数据完整性校验，提前发现问题
             ScheduleDataValidationResult validationResult = scheduleDataValidator.validate(
                     context, scheduleDate, factoryCode);
@@ -417,248 +424,7 @@ public class ScheduleServiceImpl implements ScheduleService {
         return validCount == results.size();
     }
 
-    /**
-     * 从FactoryMonthPlanProductionFinalResult计算生成物料收尾管理列表（物料维度）
-     *
-     * 收尾管理规则（严格依据月计划收尾日）：
-     * 1. 收尾日判断：从月计划day_1到day_31找到最后一个有排产的日期
-     * 2. 收尾前10天检查：
-     *    - 计算：成型余量 = 硫化余量 - 胎胚库存
-     *    - 判断：能否在收尾日前完成？
-     * 3. 延误量追赶：
-     *    - 如果做不完，计算延误量，平摊到未来3天
-     *    - 检查未来3天满产是否能追上
-     * 4. 满产判断：
-     *    - 如果未来3天满产仍追不上，通知月计划调整（调用硫化接口）
-     *
-     * @param scheduleDate 排程日期
-     * @param year 年份
-     * @param month 月份
-     * @param stocks 库存信息（从context中传入，避免重复查询）
-     * @param materialLhCapacityMap 物料日硫化产能映射
-     * @param structureLhRatioMap 结构硫化配比映射
-     * @param lhMachineCapacityMap 硫化机台产能映射
-     * @param factoryCode 工厂编码
-     * @return 物料收尾管理列表
-     */
-    private List<CxMaterialEnding> calculateMaterialEndings(
-            LocalDate scheduleDate,
-            int year,
-            int month,
-            List<CxStock> stocks,
-            Map<String, com.zlt.aps.mp.engine.domain.vo.MonthPlanProductLhCapacityVo> materialLhCapacityMap,
-            Map<String, com.zlt.aps.mp.api.domain.entity.MdmStructureLhRatio> structureLhRatioMap,
-            Map<String, List<LhMachineCapacityInfo>> lhMachineCapacityMap,
-            String factoryCode) {
-
-        List<CxMaterialEnding> resultList = new ArrayList<>();
-
-        try {
-            // 1. 获取当月月计划数据
-            Integer yearMonth = year * 100 + month;
-            List<FactoryMonthPlanProductionFinalResult> monthPlans = monthPlanMapper.selectByYearMonth(yearMonth);
-
-            if (CollectionUtils.isEmpty(monthPlans)) {
-                log.warn("未找到 {} 年 {} 月的月计划数据", year, month);
-                return resultList;
-            }
-
-            // 2. 获取月度计划余量（硫化余量）
-            List<MdmMonthSurplus> monthSurplusList = monthSurplusMapper.selectByYearMonth(year, month);
-            Map<String, MdmMonthSurplus> surplusMap = monthSurplusList.stream()
-                    .collect(Collectors.toMap(MdmMonthSurplus::getMaterialCode, s -> s, (a, b) -> a));
-
-            // 3. 使用传入的库存数据构建映射（避免重复查询）
-            // 使用胎胚代码构建映射
-            Map<String, CxStock> stockMap = stocks.stream()
-                    .collect(Collectors.toMap(CxStock::getEmbryoCode, s -> s, (a, b) -> a));
-
-            // 4. 按物料分组汇总
-            Map<String, List<FactoryMonthPlanProductionFinalResult>> materialPlanMap = monthPlans.stream()
-                    .filter(p -> p.getMaterialCode() != null)
-                    .collect(Collectors.groupingBy(FactoryMonthPlanProductionFinalResult::getMaterialCode));
-
-            // 5. 当前日期信息
-            int currentDay = scheduleDate.getDayOfMonth();
-            int lastDayOfMonth = scheduleDate.lengthOfMonth();
-
-            // 6. 遍历每个物料，计算收尾信息
-            for (Map.Entry<String, List<FactoryMonthPlanProductionFinalResult>> entry : materialPlanMap.entrySet()) {
-                String materialCode = entry.getKey();
-                List<FactoryMonthPlanProductionFinalResult> plans = entry.getValue();
-
-                // ========== Step 1: 确定收尾日（最近一个收尾日） ==========
-                // 从月计划中找到该物料最近一个收尾日（连续排产区间的最后一天）
-                int endingDay = findMaterialEndingDay(plans, currentDay, lastDayOfMonth);
-                LocalDate endingDate = scheduleDate.withDayOfMonth(endingDay);
-
-                // 如果收尾日已经过了，跳过
-                if (endingDay < currentDay) {
-                    log.debug("物料 {} 收尾日 {} 已过，跳过", materialCode, endingDate);
-                    continue;
-                }
-
-                // 获取物料基本信息
-                FactoryMonthPlanProductionFinalResult firstPlan = plans.get(0);
-                String materialDesc = firstPlan.getMaterialDesc();
-                String structureName = firstPlan.getStructureName();
-
-                // 创建收尾记录
-                CxMaterialEnding ending = new CxMaterialEnding();
-                ending.setFactoryCode(factoryCode);
-                ending.setMaterialCode(materialCode);
-                ending.setMaterialDesc(materialDesc);
-                ending.setStructureName(structureName);
-                ending.setStatDate(scheduleDate);
-                ending.setPlannedEndingDate(endingDate);
-
-                // ========== Step 2: 计算成型余量 ==========
-                // 硫化余量（从月度计划余量表获取）
-                MdmMonthSurplus surplus = surplusMap.get(materialCode);
-
-                // 计算剩余排产量（从当前日期到收尾日）
-                int remainingPlanQty = 0;
-                for (FactoryMonthPlanProductionFinalResult plan : plans) {
-                    for (int day = currentDay; day <= endingDay; day++) {
-                        Integer dayQty = plan.getDayQty(day);
-                        if (dayQty != null && dayQty > 0) {
-                            remainingPlanQty += dayQty;
-                        }
-                    }
-                }
-
-                int vulcanizingRemainder = surplus != null && surplus.getPlanSurplusQty() != null
-                        ? surplus.getPlanSurplusQty().intValue() : remainingPlanQty;
-                ending.setVulcanizingRemainder(vulcanizingRemainder);
-
-                // 胎胚库存（使用有效库存：库存量 - 超期库存 - 不良数量 + 修正数量）
-                CxStock stock = stockMap.get(materialCode);
-                int embryoStock = stock != null ? stock.getEffectiveStock() : 0;
-                ending.setEmbryoStock(embryoStock);
-
-                // 成型余量 = 硫化余量 - 胎胚库存（需要生产的量）
-                int formingRemainder = Math.max(0, vulcanizingRemainder - embryoStock);
-                ending.setFormingRemainder(formingRemainder);
-
-                // ========== Step 3: 计算满算力（日硫化产能） ==========
-                // 计算公式：成型供的硫化机中该物料的日产汇总
-                // 配比塞满时：使用当前硫化机台的实际产能
-                // 配比未塞满时：对于未塞满的配比，使用当前机台的最小日硫化量来预测
-                int dailyLhCapacity = calculateMaterialDailyLhCapacity(
-                        materialCode, structureName, materialLhCapacityMap, structureLhRatioMap, lhMachineCapacityMap);
-                ending.setDailyLhCapacity(dailyLhCapacity);
-
-                // 日成型产能（与日硫化产能相同，因为1:1对应关系）
-                ending.setDailyFormingCapacity(dailyLhCapacity);
-
-                // ========== Step 4: 计算距离收尾日的天数 ==========
-                int daysToEnding = endingDay - currentDay + 1;
-
-                // 预计收尾天数 = 成型余量 / 日产能
-                BigDecimal estimatedDays = BigDecimal.ZERO;
-                if (dailyLhCapacity > 0 && formingRemainder > 0) {
-                    estimatedDays = BigDecimal.valueOf(formingRemainder)
-                            .divide(BigDecimal.valueOf(dailyLhCapacity), 2, RoundingMode.HALF_UP);
-                }
-                ending.setEstimatedEndingDays(estimatedDays);
-
-                // ========== Step 5: 判断是否紧急收尾（3天内） ==========
-                boolean isUrgentEnding = daysToEnding <= 3 && formingRemainder > 0;
-                ending.setIsUrgentEnding(isUrgentEnding ? 1 : 0);
-
-                // ========== Step 6: 判断是否10天内收尾 ==========
-                boolean isNearEnding = daysToEnding <= 10 && formingRemainder > 0;
-                ending.setIsNearEnding(isNearEnding ? 1 : 0);
-
-                // ========== Step 7: 收尾前10天检查 - 核心逻辑 ==========
-                if (isNearEnding && formingRemainder > 0) {
-                    // 收尾日前能生产的量
-                    int canProduceBeforeEnding = daysToEnding * dailyLhCapacity;
-
-                    // 判断能否按计划收尾
-                    if (formingRemainder <= canProduceBeforeEnding) {
-                        // 能按计划收尾，无需追赶
-                        ending.setDelayQuantity(0);
-                        ending.setDistributedQuantity(0);
-                        ending.setNeedMonthPlanAdjust(0);
-                        log.info("物料 {} 可以按计划收尾，成型余量 {}，收尾日前产能 {}",
-                                materialCode, formingRemainder, canProduceBeforeEnding);
-                    } else {
-                        // ========== 会延误，计算延误量 ==========
-                        int delayQty = formingRemainder - canProduceBeforeEnding;
-                        ending.setDelayQuantity(delayQty);
-
-                        // ========== 计算未来3天追赶能力 ==========
-                        // 未来3天满产能力 = 3天 × 日产能
-                        int next3DaysFullCapacity = 3 * dailyLhCapacity;
-
-                        // 未来3天计划产量（从月计划获取）
-                        int next3DaysPlanQty = calculateNext3DaysMaterialPlanQty(plans, currentDay);
-
-                        // 未来3天可追加产能 = 满产能力 - 计划产量
-                        int next3DaysAvailableCapacity = Math.max(0, next3DaysFullCapacity - next3DaysPlanQty);
-
-                        // 判断能否追赶
-                        if (delayQty <= next3DaysAvailableCapacity) {
-                            // 可以追赶上，平摊到未来3天
-                            int distributedQty = (int) Math.ceil(delayQty / 3.0);
-                            ending.setDistributedQuantity(distributedQty);
-                            ending.setNeedMonthPlanAdjust(0);
-                            log.info("物料 {} 延误量 {} 可追赶上，平摊到未来3天每天增加 {}",
-                                    materialCode, delayQty, distributedQty);
-                        } else {
-                            // ========== 满产也追不上，需要通知月计划调整 ==========
-                            ending.setDistributedQuantity(next3DaysAvailableCapacity / 3);
-                            ending.setNeedMonthPlanAdjust(1);
-                            log.warn("物料 {} 延误量 {} 超过未来3天满产能力 {}，需要调整月计划！",
-                                    materialCode, delayQty, next3DaysAvailableCapacity);
-
-                            // TODO: 调用硫化调整接口通知月计划调整
-                            // notifyMonthPlanAdjustment(materialCode, delayQty, endingDate);
-                        }
-                    }
-                } else {
-                    // 10天以外，正常安排
-                    ending.setDelayQuantity(0);
-                    ending.setDistributedQuantity(0);
-                    ending.setNeedMonthPlanAdjust(0);
-                }
-
-                ending.setCreateTime(LocalDateTime.now());
-                ending.setUpdateTime(LocalDateTime.now());
-
-                resultList.add(ending);
-            }
-
-            // 按紧急程度和收尾天数排序
-            resultList.sort((a, b) -> {
-                // 紧急收尾的排最前面
-                if (a.getIsUrgentEnding() != null && b.getIsUrgentEnding() != null
-                        && !a.getIsUrgentEnding().equals(b.getIsUrgentEnding())) {
-                    return b.getIsUrgentEnding() - a.getIsUrgentEnding();
-                }
-                // 需要月计划调整的排前面
-                if (a.getNeedMonthPlanAdjust() != null && b.getNeedMonthPlanAdjust() != null
-                        && !a.getNeedMonthPlanAdjust().equals(b.getNeedMonthPlanAdjust())) {
-                    return b.getNeedMonthPlanAdjust() - a.getNeedMonthPlanAdjust();
-                }
-                // 按预计收尾天数排序
-                if (a.getEstimatedEndingDays() == null) return 1;
-                if (b.getEstimatedEndingDays() == null) return -1;
-                return a.getEstimatedEndingDays().compareTo(b.getEstimatedEndingDays());
-            });
-
-            log.info("计算物料收尾信息完成，共 {} 个物料，其中紧急收尾 {} 个，需调整月计划 {} 个",
-                    resultList.size(),
-                    resultList.stream().mapToInt(e -> e.getIsUrgentEnding() != null ? e.getIsUrgentEnding() : 0).sum(),
-                    resultList.stream().mapToInt(e -> e.getNeedMonthPlanAdjust() != null ? e.getNeedMonthPlanAdjust() : 0).sum());
-
-        } catch (Exception e) {
-            log.error("计算物料收尾信息失败", e);
-        }
-
-        return resultList;
-    }
+   
 
     /**
      * 计算物料的日硫化产能（满算力）
@@ -850,6 +616,93 @@ public class ScheduleServiceImpl implements ScheduleService {
      *
      * @return 物料编码 -> 硫化机台产能信息列表
      */
+    /**
+     * 计算成型余量映射
+     * 
+     * 成型余量 = 硫化余量 - 该物料对应的所有胎胚库存
+     * 
+     * 计算步骤：
+     * 1. 从物料信息表构建胎胚→物料的映射
+     * 2. 将胎胚库存按物料汇总
+     * 3. 计算成型余量
+     * 
+     * @param materials 物料信息列表
+     * @param monthSurplusMap 月度计划余量映射（物料编码 -> 余量信息）
+     * @param stocks 胎胚库存列表
+     * @return 成型余量映射（物料编码 -> 成型余量）
+     */
+    private Map<String, Integer> calculateFormingRemainderMap(
+            List<MdmMaterialInfo> materials,
+            Map<String, MdmMonthSurplus> monthSurplusMap,
+            List<CxStock> stocks) {
+        
+        Map<String, Integer> resultMap = new HashMap<>();
+        
+        try {
+            // Step 1: 构建胎胚→物料的映射
+            Map<String, String> embryoToMaterialMap = new HashMap<>();
+            for (MdmMaterialInfo material : materials) {
+                String embryoCode = material.getEmbryoCode();
+                String materialCode = material.getMaterialCode();
+                if (embryoCode != null && materialCode != null) {
+                    embryoToMaterialMap.put(embryoCode, materialCode);
+                }
+            }
+            log.debug("构建胎胚→物料映射 {} 条", embryoToMaterialMap.size());
+            
+            // Step 2: 将胎胚库存按物料汇总
+            // Key: 物料编码, Value: 该物料对应的所有胎胚库存总和
+            Map<String, Integer> materialStockMap = new HashMap<>();
+            for (CxStock stock : stocks) {
+                String embryoCode = stock.getEmbryoCode();
+                if (embryoCode == null) {
+                    continue;
+                }
+                // 找到胎胚对应的物料编码
+                String materialCode = embryoToMaterialMap.get(embryoCode);
+                if (materialCode == null) {
+                    // 如果找不到对应关系，假设胎胚编码就是物料编码（兼容处理）
+                    materialCode = embryoCode;
+                }
+                // 累加该物料的有效库存
+                int effectiveStock = stock.getEffectiveStock();
+                materialStockMap.merge(materialCode, effectiveStock, Integer::sum);
+            }
+            log.debug("按物料汇总胎胚库存 {} 条", materialStockMap.size());
+            
+            // Step 3: 计算成型余量
+            // 遍历所有有硫化余量的物料
+            for (Map.Entry<String, MdmMonthSurplus> entry : monthSurplusMap.entrySet()) {
+                String materialCode = entry.getKey();
+                MdmMonthSurplus surplus = entry.getValue();
+                
+                // 硫化余量
+                int vulcanizingRemainder = surplus.getPlanSurplusQty() != null 
+                        ? surplus.getPlanSurplusQty().intValue() : 0;
+                
+                // 该物料对应的胎胚库存
+                int embryoStock = materialStockMap.getOrDefault(materialCode, 0);
+                
+                // 成型余量 = 硫化余量 - 胎胚库存
+                int formingRemainder = Math.max(0, vulcanizingRemainder - embryoStock);
+                
+                resultMap.put(materialCode, formingRemainder);
+                
+                if (formingRemainder > 0) {
+                    log.debug("物料 {} 成型余量计算: 硫化余量 {} - 胎胚库存 {} = {}",
+                            materialCode, vulcanizingRemainder, embryoStock, formingRemainder);
+                }
+            }
+            
+            log.info("计算成型余量映射完成，共 {} 条", resultMap.size());
+            
+        } catch (Exception e) {
+            log.error("计算成型余量映射失败", e);
+        }
+        
+        return resultMap;
+    }
+
     private Map<String, List<LhMachineCapacityInfo>> buildLhMachineCapacityMap() {
         Map<String, List<LhMachineCapacityInfo>> resultMap = new HashMap<>();
 
