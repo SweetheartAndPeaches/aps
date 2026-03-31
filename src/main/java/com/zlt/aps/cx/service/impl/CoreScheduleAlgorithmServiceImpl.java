@@ -9,11 +9,9 @@ import com.zlt.aps.mp.api.domain.entity.*;
 import com.zlt.aps.cx.entity.schedule.CxScheduleDetail;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
-import com.zlt.aps.cx.mapper.CxStructureShiftCapacityMapper;
 import com.zlt.aps.cx.service.CoreScheduleAlgorithmService;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 
@@ -28,19 +26,26 @@ import java.util.stream.Collectors;
 /**
  * 核心排程算法服务实现类
  *
- * 实现试错分配、班次均衡、顺位排序等核心算法
+ * <p>实现试错分配、班次均衡、顺位排序等核心算法
  *
- * 算法参数从 ScheduleContextDTO 获取，支持动态配置：
- * - 班次数量：context.getScheduleShiftCount()，默认8个班次
- * - 波浪比例：context.getWaveRatio()，默认 {1,2,1}
- * - 机台种类上限：context.getMaxTypesPerMachine()，默认4
- * - 默认整车容量：context.getDefaultTripCapacity()，默认12
+ * <p>算法参数从 ScheduleContextDTO 获取，支持动态配置：
+ * <ul>
+ *   <li>班次数量：context.getScheduleShiftCount()，默认8个班次</li>
+ *   <li>波浪比例：context.getWaveRatio()，默认 {1,2,1}</li>
+ *   <li>机台种类上限：context.getMaxTypesPerMachine()，默认4</li>
+ *   <li>默认整车容量：context.getDefaultTripCapacity()，默认12</li>
+ * </ul>
+ *
+ * <p>所有数据从 ScheduleContextDTO 上下文获取，不直接查询数据库
  *
  * @author APS Team
  */
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmService {
+
+    // ==================== 常量定义 ====================
 
     /** 默认整车容量（当配置中没有时使用） */
     private static final int DEFAULT_TRIP_CAPACITY = 12;
@@ -51,17 +56,23 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     /** 默认波浪比例：夜班:早班:中班 = 1:2:1 */
     private static final int[] DEFAULT_WAVE_RATIO = {1, 2, 1};
 
-    /** 默认班次编码 */
-    private static final String[] DEFAULT_SHIFT_CODES = {"SHIFT_NIGHT", "SHIFT_DAY", "SHIFT_AFTERNOON"};
-
-    @Autowired
-    private CxStructureShiftCapacityMapper structureShiftCapacityMapper;
-
-    @Autowired
-    private com.zlt.aps.cx.service.HolidayScheduleService holidayScheduleService;
-
     /** 默认排程天数 */
     private static final int DEFAULT_SCHEDULE_DAYS = 3;
+
+    /** 默认机台小时产能（条/小时） */
+    private static final int DEFAULT_HOURLY_CAPACITY = 50;
+
+    /** 班次编码：夜班 */
+    private static final String SHIFT_NIGHT = "SHIFT_NIGHT";
+
+    /** 班次编码：早班 */
+    private static final String SHIFT_DAY = "SHIFT_DAY";
+
+    /** 班次编码：中班 */
+    private static final String SHIFT_AFTERNOON = "SHIFT_AFTERNOON";
+
+    /** 默认班次编码数组 */
+    private static final String[] DEFAULT_SHIFT_CODES = {SHIFT_NIGHT, SHIFT_DAY, SHIFT_AFTERNOON};
 
     @Override
     public List<CxScheduleResult> executeSchedule(ScheduleContextDTO context) {
@@ -99,7 +110,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             context.setCurrentShiftConfigs(dayShifts);
 
             // 检查当前天是否是停产日（节假日）
-            if (holidayScheduleService.isStopProductionDay(currentScheduleDate)) {
+            // 使用 context 中预计算的停产日标记
+            if (isStopProductionDay(context, currentScheduleDate)) {
                 log.info("第 {} 天日期 {} 是停产日，跳过排程", day, currentScheduleDate);
                 continue;
             }
@@ -517,8 +529,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             shiftCodes = DEFAULT_SHIFT_CODES;
         }
 
-        // 加载结构班产配置
-        Map<String, Map<String, CxStructureShiftCapacity>> structureCapacityMap = loadStructureShiftCapacity();
+        // 从上下文构建结构班产配置映射
+        Map<String, Map<String, CxStructureShiftCapacity>> structureCapacityMap = buildStructureShiftCapacityMap(context);
 
         for (MachineAllocationResult allocation : allocations) {
             ShiftAllocationResult shiftResult = new ShiftAllocationResult();
@@ -549,7 +561,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             if (Boolean.TRUE.equals(context.getIsOpeningDay())) {
                 String firstShift = context.getFormingStartShift();
                 if (firstShift == null) {
-                    firstShift = "SHIFT_DAY"; // 默认早班为开产首班
+                    firstShift = SHIFT_DAY; // 默认早班为开产首班
                 }
 
                 Set<String> keyProductCodes = context.getKeyProductCodes();
@@ -614,7 +626,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 .toArray(String[]::new);
 
         // 加载结构班产配置
-        Map<String, Map<String, CxStructureShiftCapacity>> structureCapacityMap = loadStructureShiftCapacity();
+        // 从上下文构建结构班产配置映射
+        Map<String, Map<String, CxStructureShiftCapacity>> structureCapacityMap = buildStructureShiftCapacityMap(context);
 
         for (MachineAllocationResult allocation : allocations) {
             ShiftAllocationResult shiftResult = new ShiftAllocationResult();
@@ -682,33 +695,47 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
     /**
      * 获取下一个班次
+     *
+     * @param currentShift 当前班次编码
+     * @return 下一个班次编码
      */
     private String getNextShift(String currentShift) {
-        if ("SHIFT_NIGHT".equals(currentShift)) {
-            return "SHIFT_DAY";
-        } else if ("SHIFT_DAY".equals(currentShift)) {
-            return "SHIFT_AFTERNOON";
+        if (SHIFT_NIGHT.equals(currentShift)) {
+            return SHIFT_DAY;
+        } else if (SHIFT_DAY.equals(currentShift)) {
+            return SHIFT_AFTERNOON;
         } else {
-            return "SHIFT_NIGHT";
+            return SHIFT_NIGHT;
         }
     }
 
     /**
-     * 加载结构班产配置
-     * 返回：Map<结构编码, Map<班次编码, 班产配置>>
+     * 从上下文构建结构班产配置映射
+     *
+     * <p>数据已在 ScheduleServiceImpl.buildScheduleContext 中预加载
+     *
+     * @param context 排程上下文
+     * @return Map<结构编码, Map<班次编码, 班产配置>>
      */
-    private Map<String, Map<String, CxStructureShiftCapacity>> loadStructureShiftCapacity() {
+    private Map<String, Map<String, CxStructureShiftCapacity>> buildStructureShiftCapacityMap(ScheduleContextDTO context) {
         Map<String, Map<String, CxStructureShiftCapacity>> result = new HashMap<>();
 
-        List<CxStructureShiftCapacity> capacities = structureShiftCapacityMapper.selectList(
-                new LambdaQueryWrapper<CxStructureShiftCapacity>()
-                        .eq(CxStructureShiftCapacity::getIsActive, 1));
-
-        for (CxStructureShiftCapacity capacity : capacities) {
-            result.computeIfAbsent(capacity.getStructureCode(), k -> new HashMap<>())
-                    .put(capacity.getShiftCode(), capacity);
+        List<CxStructureShiftCapacity> capacities = context.getStructureShiftCapacities();
+        if (capacities == null || capacities.isEmpty()) {
+            log.warn("上下文中结构班产配置为空");
+            return result;
         }
 
+        for (CxStructureShiftCapacity capacity : capacities) {
+            String structureCode = capacity.getStructureCode();
+            String shiftCode = capacity.getShiftCode();
+            if (structureCode != null && shiftCode != null) {
+                result.computeIfAbsent(structureCode, k -> new HashMap<>())
+                        .put(shiftCode, capacity);
+            }
+        }
+
+        log.debug("构建结构班产配置映射完成，共 {} 个结构", result.size());
         return result;
     }
 
@@ -868,11 +895,11 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         List<CxScheduleDetail> allDetails = new ArrayList<>();
         LocalDate scheduleDate = context.getScheduleDate();
 
-        // 班次时间配置
+        // 班次时间配置（使用常量）
         Map<String, int[]> shiftTimeMap = new HashMap<>();
-        shiftTimeMap.put("SHIFT_NIGHT", new int[]{0, 8});
-        shiftTimeMap.put("SHIFT_DAY", new int[]{8, 16});
-        shiftTimeMap.put("SHIFT_AFTERNOON", new int[]{16, 24});
+        shiftTimeMap.put(SHIFT_NIGHT, new int[]{0, 8});
+        shiftTimeMap.put(SHIFT_DAY, new int[]{8, 16});
+        shiftTimeMap.put(SHIFT_AFTERNOON, new int[]{16, 24});
 
         int globalSequence = 1;
 
@@ -1366,6 +1393,45 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     // ==================== 私有方法 ====================
 
     /**
+     * 判断是否为停产日
+     *
+     * <p>使用 context 中预计算的工作日历信息判断
+     *
+     * @param context 排程上下文
+     * @param date    待判断日期
+     * @return true-停产日，false-生产日
+     */
+    private boolean isStopProductionDay(ScheduleContextDTO context, LocalDate date) {
+        // 优先使用 context 中的工作日历判断
+        MdmWorkCalendar workCalendar = context.getWorkCalendar();
+        if (workCalendar != null) {
+            // 检查是否在停产日期范围内
+            Date startDate = workCalendar.getStopStartDate();
+            Date endDate = workCalendar.getStopEndDate();
+            if (startDate != null && endDate != null) {
+                LocalDate stopStart = startDate.toInstant()
+                        .atZone(java.time.ZoneId.systemDefault())
+                        .toLocalDate();
+                LocalDate stopEnd = endDate.toInstant()
+                        .atZone(java.time.ZoneId.systemDefault())
+                        .toLocalDate();
+                if (!date.isBefore(stopStart) && !date.isAfter(stopEnd)) {
+                    return true;
+                }
+            }
+        }
+
+        // 检查当前排程日是否标记为停产日
+        if (context.getCurrentScheduleDate() != null 
+                && date.equals(context.getCurrentScheduleDate())
+                && Boolean.TRUE.equals(context.getIsClosingDay())) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
      * 初始化机台状态
      *
      * 处理逻辑：
@@ -1441,12 +1507,12 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
                 // 根据班次扣减
                 String planShift = precisionPlan.getPlanShift();
-                if ("SHIFT_DAY".equals(planShift)) {
+                if (SHIFT_DAY.equals(planShift)) {
                     // 早班精度，扣减早班产能
                     result.setRemainingCapacity(result.getRemainingCapacity() - precisionDeduction);
                     log.info("机台 {} 在早班有精度计划，扣减产能 {} 条",
                             machine.getCxMachineCode(), precisionDeduction);
-                } else if ("SHIFT_AFTERNOON".equals(planShift)) {
+                } else if (SHIFT_AFTERNOON.equals(planShift)) {
                     // 中班精度，扣减中班产能
                     result.setRemainingCapacity(result.getRemainingCapacity() - precisionDeduction);
                     log.info("机台 {} 在中班有精度计划，扣减产能 {} 条",
@@ -1638,8 +1704,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             }
         }
 
-        // 默认50条/小时
-        return 50;
+        // 默认机台小时产能
+        return DEFAULT_HOURLY_CAPACITY;
     }
 
     /**
@@ -1874,9 +1940,9 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             ShiftAllocationResult shiftResult = shiftMap.get(allocation.getMachineCode());
             if (shiftResult != null) {
                 Map<String, Integer> shiftPlanQty = shiftResult.getShiftPlanQty();
-                result.setClass1PlanQty(new BigDecimal(shiftPlanQty.getOrDefault("SHIFT_NIGHT", 0)));
-                result.setClass2PlanQty(new BigDecimal(shiftPlanQty.getOrDefault("SHIFT_DAY", 0)));
-                result.setClass3PlanQty(new BigDecimal(shiftPlanQty.getOrDefault("SHIFT_AFTERNOON", 0)));
+                result.setClass1PlanQty(new BigDecimal(shiftPlanQty.getOrDefault(SHIFT_NIGHT, 0)));
+                result.setClass2PlanQty(new BigDecimal(shiftPlanQty.getOrDefault(SHIFT_DAY, 0)));
+                result.setClass3PlanQty(new BigDecimal(shiftPlanQty.getOrDefault(SHIFT_AFTERNOON, 0)));
             }
 
             // 设置第一个任务的胎胚信息

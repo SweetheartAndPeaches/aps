@@ -155,7 +155,7 @@ public class ScheduleServiceImpl implements ScheduleService {
         try {
             log.info("开始执行排程，日期：{}，排程模式：{}", request.getScheduleDate(), request.getScheduleMode());
 
-            // 1. 构建排程上下文
+            // 1. 构建排程上下文(流程图S5.1.6初始化)
             ScheduleContextDTO context = buildScheduleContext(request);
             if (context == null) {
                 result.setMessage("构建排程上下文失败");
