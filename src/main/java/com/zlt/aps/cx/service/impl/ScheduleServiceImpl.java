@@ -12,6 +12,7 @@ import com.zlt.aps.cx.entity.schedule.CxScheduleDetail;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
 import com.zlt.aps.cx.entity.schedule.CxTrialPlan;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
+import com.zlt.aps.cx.enums.DayVulcanizationModeEnum;
 import com.zlt.aps.cx.mapper.*;
 import com.zlt.aps.cx.service.*;
 import com.zlt.aps.mp.api.domain.entity.*;
@@ -54,6 +55,9 @@ public class ScheduleServiceImpl implements ScheduleService {
 
     /** 机台类型：成型 */
     private static final String MACHINE_TYPE_MOLDING = "成型";
+
+    /** 日硫化量计算模式参数编码 */
+    private static final String PARAM_CODE_DAY_VULCANIZATION_MODE = "DAY_VULCANIZATION_MODE";
 
     @Autowired
     private CoreScheduleAlgorithmService coreScheduleAlgorithmService;
@@ -113,6 +117,9 @@ public class ScheduleServiceImpl implements ScheduleService {
     private com.zlt.aps.mp.api.mapper.MdmDevicePlanShutMapper devicePlanShutMapper;
 
     @Autowired
+    private com.zlt.aps.mp.api.mapper.MdmMonthPlanProductLhCapacityMapper monthPlanProductLhCapacityMapper;
+
+    @Autowired
     private com.zlt.aps.cx.mapper.CxShiftConfigMapper shiftConfigMapper;
 
     @Autowired
@@ -131,7 +138,7 @@ public class ScheduleServiceImpl implements ScheduleService {
             log.info("开始执行排程，日期：{}，排程模式：{}",
                     request.getScheduleDate(), request.getScheduleMode());
 
-            // 1. 构建排程上下文
+            // 1. 构建排程上下文(对应流程图S5.1.6详细初始化)
             ScheduleContextDTO context = buildScheduleContext(request);
             if (context == null) {
                 result.setMessage("构建排程上下文失败");
@@ -140,7 +147,6 @@ public class ScheduleServiceImpl implements ScheduleService {
 
             // 2. 执行核心排程算法（包含续作、试制、新增任务的统一处理）
             // 任务优先级：续作 > 新增任务（试制在有空出产能时优先，但不挤掉实单）
-            // 每一天的节假日检查在核心算法中处理
             List<CxScheduleResult> scheduleResults = coreScheduleAlgorithmService.executeSchedule(context);
 
             // 3. 保存排程结果
@@ -230,7 +236,7 @@ public class ScheduleServiceImpl implements ScheduleService {
             }
             context.setMaterials(materials);
 
-            // 6. 获取库存信息（只获取有库存的）
+            // 6. 获取胎胚库存信息（只获取有库存的）
             List<CxStock> stocks = stockMapper.selectList(
                     new LambdaQueryWrapper<CxStock>()
                             .gt(CxStock::getStockNum, 0));
@@ -291,7 +297,7 @@ public class ScheduleServiceImpl implements ScheduleService {
             context.setKeyProductCodes(keyProductCodes);
 
             // 12. 构建物料日硫化产能映射和结构硫化配比映射（用于计算满算力）
-            Map<String, com.zlt.aps.mp.engine.domain.vo.MonthPlanProductLhCapacityVo> materialLhCapacityMap = buildMaterialLhCapacityMap();
+            Map<String, com.zlt.aps.mp.engine.domain.vo.MonthPlanProductLhCapacityVo> materialLhCapacityMap = buildMaterialLhCapacityMap(context);
             context.setMaterialLhCapacityMap(materialLhCapacityMap);
             log.info("构建物料日硫化产能映射 {} 条", materialLhCapacityMap.size());
 
@@ -849,41 +855,53 @@ public class ScheduleServiceImpl implements ScheduleService {
         return resultMap;
     }
 
-    private Map<String, com.zlt.aps.mp.engine.domain.vo.MonthPlanProductLhCapacityVo> buildMaterialLhCapacityMap() {
+    private Map<String, com.zlt.aps.mp.engine.domain.vo.MonthPlanProductLhCapacityVo> buildMaterialLhCapacityMap(ScheduleContextDTO context) {
         Map<String, com.zlt.aps.mp.engine.domain.vo.MonthPlanProductLhCapacityVo> resultMap = new HashMap<>();
 
         try {
-            // 从硫化排程结果中获取今日的物料产能信息
-            // 查询今日硫化排程结果
-            LocalDate today = LocalDate.now();
-            List<LhScheduleResult> lhResults = lhScheduleResultMapper.selectByDate(today);
+            // 从参数配置中获取日硫化量计算模式
+            DayVulcanizationModeEnum mode = DayVulcanizationModeEnum.STANDARD_CAPACITY;
+            Map<String, CxParamConfig> paramConfigMap = context.getParamConfigMap();
+            if (paramConfigMap != null) {
+                CxParamConfig modeConfig = paramConfigMap.get(PARAM_CODE_DAY_VULCANIZATION_MODE);
+                if (modeConfig != null && modeConfig.getParamValue() != null) {
+                    mode = DayVulcanizationModeEnum.getByCode(modeConfig.getParamValue());
+                }
+            }
+            log.info("日硫化量计算模式: {}", mode.getDesc());
 
-            for (LhScheduleResult lhResult : lhResults) {
-                String embryoCode = lhResult.getEmbryoCode();
-                if (embryoCode == null) {
+            // 从基础表查询物料日硫化产能（按工厂+物料维度）
+            String factoryCode = context.getFactoryCode();
+            List<com.zlt.aps.mp.api.domain.entity.MdmMonthPlanProductLhCapacity> baseCapacities =
+                    monthPlanProductLhCapacityMapper.selectList(
+                            new LambdaQueryWrapper<com.zlt.aps.mp.api.domain.entity.MdmMonthPlanProductLhCapacity>()
+                                    .eq(com.zlt.aps.mp.api.domain.entity.MdmMonthPlanProductLhCapacity::getFactoryCode, factoryCode)
+                                    .eq(com.zlt.aps.mp.api.domain.entity.MdmMonthPlanProductLhCapacity::getType, "01")
+                    );
+
+            // 转换为Vo并根据模式计算日硫化量
+            for (com.zlt.aps.mp.api.domain.entity.MdmMonthPlanProductLhCapacity baseCapacity : baseCapacities) {
+                String materialCode = baseCapacity.getMaterialCode();
+                if (materialCode == null) {
                     continue;
                 }
 
-                // 如果已存在，累加产能
-                com.zlt.aps.mp.engine.domain.vo.MonthPlanProductLhCapacityVo existing = resultMap.get(embryoCode);
-                if (existing == null) {
-                    existing = new com.zlt.aps.mp.engine.domain.vo.MonthPlanProductLhCapacityVo();
-                    existing.setMaterialCode(embryoCode);
-                    existing.setFactoryCode(lhResult.getFactoryCode());
-                    // 从硫化结果中获取日硫化量
-                    existing.setStandardCapacity(lhResult.getDayVulcanizationQty());
-                    resultMap.put(embryoCode, existing);
-                } else {
-                    // 累加日硫化量（同一个物料可能在多个硫化机台生产）
-                    Integer existingCapacity = existing.getStandardCapacity();
-                    Integer newCapacity = lhResult.getDayVulcanizationQty();
-                    if (existingCapacity != null && newCapacity != null) {
-                        existing.setStandardCapacity(existingCapacity + newCapacity);
-                    }
-                }
+                com.zlt.aps.mp.engine.domain.vo.MonthPlanProductLhCapacityVo vo = new com.zlt.aps.mp.engine.domain.vo.MonthPlanProductLhCapacityVo();
+                vo.setFactoryCode(baseCapacity.getFactoryCode());
+                vo.setMaterialCode(baseCapacity.getMaterialCode());
+                vo.setMaterialDesc(baseCapacity.getMaterialDesc());
+                vo.setMesCapacity(baseCapacity.getMesCapacity());
+                vo.setStandardCapacity(baseCapacity.getStandardCapacity());
+                vo.setApsCapacity(baseCapacity.getApsCapacity());
+                vo.setVulcanizationTime(baseCapacity.getVulcanizationTime());
+
+                // 根据计算模式设置日硫化量
+                vo.calculateDayVulcanizationQty(mode);
+
+                resultMap.put(materialCode, vo);
             }
 
-            log.info("从硫化排程结果构建物料日硫化产能映射，共 {} 个物料", resultMap.size());
+            log.info("从基础表构建物料日硫化产能映射（工厂:{}），共 {} 个物料", factoryCode, resultMap.size());
 
         } catch (Exception e) {
             log.error("构建物料日硫化产能映射失败", e);
