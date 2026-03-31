@@ -192,177 +192,210 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
      * @param machineOnlineEmbryoMap    当前的机台在产胎胚映射
      * @return 排程结果列表
      */
+    /**
+     * 执行单天排程
+     *
+     * <p>排程流程：
+     * <ol>
+     *   <li>获取当前机台在产状态</li>
+     *   <li>任务分组：续作/试制/新增三类</li>
+     *   <li>处理续作任务：按机台分组 → 收尾检测 → 延误检测 → 补做逻辑</li>
+     *   <li>处理试制/新增任务：优先级排序 → 成型机选择</li>
+     *   <li>班次排产</li>
+     *   <li>生成排程结果</li>
+     * </ol>
+     *
+     * @param context                   排程上下文
+     * @param day                       排程天数
+     * @param dayShifts                 该天的班次配置
+     * @param machineOnlineEmbryoMap    当前的机台在产胎胚映射
+     * @return 排程结果列表
+     */
     private List<CxScheduleResult> executeDaySchedule(
             ScheduleContextDTO context, 
             int day,
             List<com.zlt.aps.cx.entity.config.CxShiftConfig> dayShifts,
             Map<String, Set<String>> machineOnlineEmbryoMap) {
 
-        // 第一步：任务分组并计算日胎胚任务（传入当前天的机台在产状态）
-        List<DailyEmbryoTask> tasks = calculateDailyEmbryoTasks(context, machineOnlineEmbryoMap);
-        log.info("第 {} 天第一步完成，日胎胚任务数: {}", day, tasks.size());
+        LocalDate scheduleDate = context.getCurrentScheduleDate() != null 
+                ? context.getCurrentScheduleDate() 
+                : context.getScheduleDate();
+        
+        log.info("========== 开始执行第 {} 天排程，日期: {} ==========", day, scheduleDate);
 
-        // 第二步：试错分配任务到机台
-        List<MachineAllocationResult> allocations = allocateTasksToMachines(tasks, context);
-        log.info("第 {} 天第二步完成，机台分配数: {}", day, allocations.size());
+        // ==================== 第一步：任务分组 ====================
+        TaskGroupResult taskGroup = groupTasks(context, machineOnlineEmbryoMap, scheduleDate);
+        log.info("任务分组完成：续作 {} 个，试制 {} 个，新增 {} 个",
+                taskGroup.getContinueTasks().size(),
+                taskGroup.getTrialTasks().size(),
+                taskGroup.getNewTasks().size());
 
-        // 第三步：班次均衡分配（使用该天实际班次配置）
-        List<ShiftAllocationResult> shiftAllocations = balanceShiftAllocation(allocations, dayShifts, context);
-        log.info("第 {} 天第三步完成，班次分配完成", day);
+        // ==================== 第二步：处理续作任务 ====================
+        // 续作任务按机台分组，检测收尾和延误，计算补做
+        List<MachineAllocationResult> continueAllocations = processContinueTasks(
+                taskGroup.getContinueTasks(), context, scheduleDate, dayShifts, day);
+        log.info("续作任务处理完成，机台分配数: {}", continueAllocations.size());
 
-        // 第四步：排生产顺位
-        List<CxScheduleDetail> details = calculateSequence(shiftAllocations, context);
-        log.info("第 {} 天第四步完成，排程明细数: {}", day, details.size());
+        // ==================== 第三步：处理试制/新增任务 ====================
+        // 试制和新增任务需要排序，选择成型机
+        List<MachineAllocationResult> newAllocations = processTrialAndNewTasks(
+                taskGroup.getTrialTasks(), 
+                taskGroup.getNewTasks(),
+                context, 
+                scheduleDate, 
+                dayShifts, 
+                day,
+                continueAllocations);
+        log.info("试制/新增任务处理完成，机台分配数: {}", newAllocations.size());
 
-        // 构建排程结果（按CLASS_FIELD映射）
-        return buildScheduleResults(context, allocations, shiftAllocations, details, dayShifts);
+        // ==================== 第四步：合并分配结果 ====================
+        List<MachineAllocationResult> allAllocations = new ArrayList<>();
+        allAllocations.addAll(continueAllocations);
+        allAllocations.addAll(newAllocations);
+
+        // ==================== 第五步：班次排产 ====================
+        List<ShiftAllocationResult> shiftAllocations = balanceShiftAllocation(allAllocations, dayShifts, context);
+        log.info("班次排产完成");
+
+        // ==================== 第六步：生成排程结果 ====================
+        List<CxScheduleResult> results = buildScheduleResults(context, allAllocations, shiftAllocations, null, dayShifts);
+        
+        log.info("========== 第 {} 天排程完成，排程结果数: {} ==========\n", day, results.size());
+        return results;
     }
 
-    @Override
-    public List<DailyEmbryoTask> calculateDailyEmbryoTasks(
-            ScheduleContextDTO context,
-            Map<String, Set<String>> machineOnlineEmbryoMap) {
-        
-        List<DailyEmbryoTask> tasks = new ArrayList<>();
+    // ==================== 任务分组 ====================
 
-        // ==================== 构建基础映射 ====================
+    /**
+     * 任务分组结果
+     */
+    @lombok.Data
+    private static class TaskGroupResult {
+        /** 续作任务：当前机台在产的胎胚 */
+        private List<DailyEmbryoTask> continueTasks = new ArrayList<>();
+        /** 试制任务：试制/量试任务 */
+        private List<DailyEmbryoTask> trialTasks = new ArrayList<>();
+        /** 新增任务：非续作、非试制的常规任务 */
+        private List<DailyEmbryoTask> newTasks = new ArrayList<>();
+    }
+
+    /**
+     * 任务分组
+     *
+     * <p>将硫化任务分为三类：
+     * <ul>
+     *   <li>续作任务：当前机台在产的胎胚，需要继续生产</li>
+     *   <li>试制任务：试制/量试任务</li>
+     *   <li>新增任务：非续作、非试制的常规任务</li>
+     * </ul>
+     *
+     * @param context                   排程上下文
+     * @param machineOnlineEmbryoMap    机台在产胎胚映射
+     * @param scheduleDate              排程日期
+     * @return 任务分组结果
+     */
+    private TaskGroupResult groupTasks(
+            ScheduleContextDTO context,
+            Map<String, Set<String>> machineOnlineEmbryoMap,
+            LocalDate scheduleDate) {
+
+        TaskGroupResult result = new TaskGroupResult();
+
+        // 构建基础映射
         Map<String, MdmMaterialInfo> materialMap = buildMaterialMap(context);
         Map<String, CxStock> stockMap = buildStockMap(context);
-        Map<String, CxStructureEnding> endingMap = buildStructureEndingMap(context);
+
+        // 获取硫化排程结果
+        List<LhScheduleResult> lhScheduleResults = context.getLhScheduleResults();
+        if (lhScheduleResults == null || lhScheduleResults.isEmpty()) {
+            log.warn("硫化排程结果为空，无法分组任务");
+            return result;
+        }
+
+        // 按胎胚编码分组
+        Map<String, List<LhScheduleResult>> embryoTaskMap = lhScheduleResults.stream()
+                .filter(r -> r.getEmbryoCode() != null)
+                .collect(Collectors.groupingBy(LhScheduleResult::getEmbryoCode));
 
         // 确保机台在产映射非空
         if (machineOnlineEmbryoMap == null) {
             machineOnlineEmbryoMap = new HashMap<>();
         }
 
-        // ==================== 主要任务来源：硫化排程结果 ====================
-        List<LhScheduleResult> lhScheduleResults = context.getLhScheduleResults();
-        if (lhScheduleResults != null && !lhScheduleResults.isEmpty()) {
-            // 按胎胚编码分组汇总
-            Map<String, List<LhScheduleResult>> embryoTaskMap = lhScheduleResults.stream()
-                    .filter(r -> r.getEmbryoCode() != null)
-                    .collect(Collectors.groupingBy(LhScheduleResult::getEmbryoCode));
+        // 遍历每个胎胚任务
+        for (Map.Entry<String, List<LhScheduleResult>> entry : embryoTaskMap.entrySet()) {
+            String embryoCode = entry.getKey();
+            List<LhScheduleResult> lhResults = entry.getValue();
 
-            for (Map.Entry<String, List<LhScheduleResult>> entry : embryoTaskMap.entrySet()) {
-                String embryoCode = entry.getKey();
-                List<LhScheduleResult> lhResults = entry.getValue();
+            // 构建基础任务
+            DailyEmbryoTask task = buildBaseTask(embryoCode, lhResults, materialMap, stockMap, context);
+            if (task == null) {
+                continue;
+            }
 
-                DailyEmbryoTask task = buildTaskFromLhResult(
-                        embryoCode, lhResults, materialMap, stockMap, 
-                        machineOnlineEmbryoMap, context);
-                
-                if (task != null) {
-                    // 计算成型余量和紧急收尾标记
-                    calculateFormingRemainderAndEnding(task, context);
-                    tasks.add(task);
-                }
+            // 判断任务类型
+            // 1. 续作任务：当前机台在产的胎胚
+            List<String> continueMachineCodes = findContinueMachines(embryoCode, machineOnlineEmbryoMap);
+            boolean isContinueTask = !continueMachineCodes.isEmpty();
+
+            // 2. 试制任务
+            boolean isTrialTask = lhResults.stream()
+                    .anyMatch(r -> "1".equals(r.getIsTrial()));
+
+            // 设置任务属性
+            task.setIsContinueTask(isContinueTask);
+            task.setContinueMachineCodes(continueMachineCodes);
+            task.setIsTrialTask(isTrialTask);
+            task.setIsFirstTask(!isContinueTask && !isTrialTask);
+
+            // 计算收尾相关属性
+            calculateEndingInfo(task, context, scheduleDate);
+
+            // 分组
+            if (isContinueTask) {
+                result.getContinueTasks().add(task);
+            } else if (isTrialTask) {
+                result.getTrialTasks().add(task);
+            } else {
+                result.getNewTasks().add(task);
             }
         }
 
-        // ==================== 处理试制任务 ====================
-        if (!CollectionUtils.isEmpty(context.getTrialTasks())) {
-            for (CxTrialTask trialTask : context.getTrialTasks()) {
-                if ("PENDING".equals(trialTask.getStatus()) || "SCHEDULED".equals(trialTask.getStatus())) {
-                    DailyEmbryoTask task = createDailyEmbryoTask(
-                            trialTask.getMaterialCode(),
-                            trialTask.getTrialQuantity() - trialTask.getProducedQuantity(),
-                            materialMap, stockMap, endingMap, context);
-                    if (task != null) {
-                        task.setIsTrialTask(true);
-                        task.setTrialNo(trialTask.getTrialNo());
-                        task.setPriority(1500); // 试制任务高优先级
-                        tasks.add(task);
-                    }
-                }
-            }
-        }
+        // 处理试制任务表中的任务
+        processTrialTaskTable(result, materialMap, stockMap, context, scheduleDate);
 
-        // ==================== 按优先级排序 ====================
-        sortTasksByPriority(tasks);
-
-        logTaskStatistics(tasks);
-
-        return tasks;
-    }
-
-    // ==================== 任务构建辅助方法 ====================
-
-    /**
-     * 构建物料映射
-     */
-    private Map<String, MdmMaterialInfo> buildMaterialMap(ScheduleContextDTO context) {
-        if (context.getMaterials() == null) {
-            return new HashMap<>();
-        }
-        return context.getMaterials().stream()
-                .collect(Collectors.toMap(MdmMaterialInfo::getMaterialCode, m -> m, (a, b) -> a));
+        return result;
     }
 
     /**
-     * 构建库存映射
+     * 构建基础任务
      */
-    private Map<String, CxStock> buildStockMap(ScheduleContextDTO context) {
-        if (context.getStocks() == null) {
-            return new HashMap<>();
-        }
-        return context.getStocks().stream()
-                .collect(Collectors.toMap(CxStock::getEmbryoCode, s -> s, (a, b) -> a));
-    }
-
-    /**
-     * 构建结构收尾映射
-     */
-    private Map<String, CxStructureEnding> buildStructureEndingMap(ScheduleContextDTO context) {
-        if (context.getStructureEndings() == null) {
-            return new HashMap<>();
-        }
-        return context.getStructureEndings().stream()
-                .collect(Collectors.toMap(CxStructureEnding::getStructureName, e -> e, (a, b) -> a));
-    }
-
-    /**
-     * 从硫化排程结果构建任务
-     */
-    private DailyEmbryoTask buildTaskFromLhResult(
+    private DailyEmbryoTask buildBaseTask(
             String embryoCode,
             List<LhScheduleResult> lhResults,
             Map<String, MdmMaterialInfo> materialMap,
             Map<String, CxStock> stockMap,
-            Map<String, Set<String>> machineOnlineEmbryoMap,
             ScheduleContextDTO context) {
 
-        // 计算硫化需求量（汇总所有硫化机的需求）
+        // 计算硫化需求量
         int totalVulcanizeDemand = lhResults.stream()
                 .mapToInt(r -> r.getDailyPlanQty() != null ? r.getDailyPlanQty() : 0)
                 .sum();
 
         // 获取当前库存
-        int currentStock = getCurrentStock(lhResults.get(0), stockMap);
+        int currentStock = getCurrentStock(lhResults.get(0), stockMap, embryoCode);
 
-        // 计算净需求和日需求量
-        int dailyDemand = calculateDailyDemand(totalVulcanizeDemand, currentStock, 
-                lhResults.get(0).getStructureName(), context);
-
-        // 获取结构编码
+        // 获取结构名称
         String structureName = lhResults.get(0).getStructureName();
 
-        // ==================== 任务类型判断 ====================
-        
-        // 1. 判断续作：检查是否有在机机台
-        List<String> continueMachineCodes = findContinueMachines(embryoCode, machineOnlineEmbryoMap);
-        boolean isContinueTask = !continueMachineCodes.isEmpty();
+        // 计算日需求量
+        int dailyDemand = calculateDailyDemand(totalVulcanizeDemand, currentStock, structureName, context);
 
-        // 2. 判断是否试制
-        boolean isTrialTask = lhResults.stream()
-                .anyMatch(r -> "1".equals(r.getIsTrial()));
-
-        // 3. 判断是否首排：非续作、非试制/量试的任务
-        boolean isFirstTask = !isContinueTask && !isTrialTask;
-
-        // ==================== 构建任务对象 ====================
-        
+        // 构建任务
         DailyEmbryoTask task = new DailyEmbryoTask();
         task.setMaterialCode(embryoCode);
+        task.setVulcanizeDemand(totalVulcanizeDemand);
+        task.setCurrentStock(currentStock);
 
         // 获取物料信息
         MdmMaterialInfo material = materialMap.get(embryoCode);
@@ -377,16 +410,10 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         task.setDemandQuantity(dailyDemand);
         task.setAssignedQuantity(0);
         task.setRemainingQuantity(dailyDemand);
-        task.setIsTrialTask(isTrialTask);
-        task.setIsFirstTask(isFirstTask);
-        task.setIsContinueTask(isContinueTask);
-        task.setContinueMachineCodes(continueMachineCodes);
+
+        // 是否主销产品
         task.setIsMainProduct(context.getMainProductCodes() != null 
                 && context.getMainProductCodes().contains(embryoCode));
-
-        // 设置库存信息
-        task.setCurrentStock(currentStock);
-        task.setVulcanizeDemand(totalVulcanizeDemand);
 
         // 计算库存时长
         calculateStockHours(task, lhResults, currentStock);
@@ -398,241 +425,744 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             task.setVulcanizeMoldCount(stock.getVulcanizeMoldCount());
         }
 
-        // 计算优先级分数
-        task.setPriority(calculatePriorityScoreNew(task, material, stock, context));
-
-        // 日志输出
-        logTaskInfo(task, totalVulcanizeDemand, currentStock);
-
         return task;
     }
 
     /**
      * 获取当前库存
      */
-    private int getCurrentStock(LhScheduleResult lhResult, Map<String, CxStock> stockMap) {
+    private int getCurrentStock(LhScheduleResult lhResult, Map<String, CxStock> stockMap, String embryoCode) {
         Integer embryoStock = lhResult.getEmbryoStock();
         if (embryoStock != null) {
             return embryoStock;
         }
-        CxStock stock = stockMap.get(lhResult.getEmbryoCode());
+        CxStock stock = stockMap.get(embryoCode);
         return stock != null ? stock.getEffectiveStock() : 0;
     }
 
     /**
-     * 计算日需求量
+     * 处理试制任务表中的任务
      */
-    private int calculateDailyDemand(int totalVulcanizeDemand, int currentStock, 
-            String structureCode, ScheduleContextDTO context) {
-        int netDemand = totalVulcanizeDemand - currentStock;
+    private void processTrialTaskTable(
+            TaskGroupResult result,
+            Map<String, MdmMaterialInfo> materialMap,
+            Map<String, CxStock> stockMap,
+            ScheduleContextDTO context,
+            LocalDate scheduleDate) {
 
-        if (netDemand <= 0) {
-            log.debug("库存充足，计划量设为0，硫化需求: {}, 库存: {}", totalVulcanizeDemand, currentStock);
+        if (CollectionUtils.isEmpty(context.getTrialTasks())) {
+            return;
+        }
+
+        for (CxTrialTask trialTask : context.getTrialTasks()) {
+            if (!"PENDING".equals(trialTask.getStatus()) && !"SCHEDULED".equals(trialTask.getStatus())) {
+                continue;
+            }
+
+            String materialCode = trialTask.getMaterialCode();
+            MdmMaterialInfo material = materialMap.get(materialCode);
+            if (material == null) {
+                continue;
+            }
+
+            DailyEmbryoTask task = new DailyEmbryoTask();
+            task.setMaterialCode(materialCode);
+            task.setMaterialName(material.getMaterialDesc());
+            task.setStructureName(material.getStructureName());
+            task.setDemandQuantity(trialTask.getTrialQuantity() - trialTask.getProducedQuantity());
+            task.setAssignedQuantity(0);
+            task.setRemainingQuantity(task.getDemandQuantity());
+            task.setIsTrialTask(true);
+            task.setTrialNo(trialTask.getTrialNo());
+            task.setIsContinueTask(false);
+            task.setIsFirstTask(true);
+
+            // 计算收尾信息
+            calculateEndingInfo(task, context, scheduleDate);
+
+            result.getTrialTasks().add(task);
+        }
+    }
+
+    // ==================== 续作任务处理 ====================
+
+    /**
+     * 处理续作任务
+     *
+     * <p>流程：
+     * <ol>
+     *   <li>按机台分组</li>
+     *   <li>对每个胎胚检测：10天内收尾？成型余量<400？</li>
+     *   <li>10天内要收尾的：检测延误，计算补做</li>
+     *   <li>补做逻辑：换算成车，主要产品补到一车</li>
+     * </ol>
+     *
+     * @param continueTasks    续作任务列表
+     * @param context          排程上下文
+     * @param scheduleDate     排程日期
+     * @param dayShifts        班次配置
+     * @param day              排程天数
+     * @return 机台分配结果列表
+     */
+    private List<MachineAllocationResult> processContinueTasks(
+            List<DailyEmbryoTask> continueTasks,
+            ScheduleContextDTO context,
+            LocalDate scheduleDate,
+            List<com.zlt.aps.cx.entity.config.CxShiftConfig> dayShifts,
+            int day) {
+
+        List<MachineAllocationResult> results = new ArrayList<>();
+
+        if (continueTasks.isEmpty()) {
+            return results;
+        }
+
+        // 按机台分组
+        Map<String, List<DailyEmbryoTask>> machineTaskMap = groupTasksByMachine(continueTasks);
+
+        // 获取参数配置
+        int endingThreshold = getEndingThreshold(context);
+        boolean isOpeningDay = Boolean.TRUE.equals(context.getIsOpeningDay()) && day == 1;
+
+        // 处理每个机台的任务
+        for (Map.Entry<String, List<DailyEmbryoTask>> entry : machineTaskMap.entrySet()) {
+            String machineCode = entry.getKey();
+            List<DailyEmbryoTask> tasks = entry.getValue();
+
+            // 创建机台分配结果
+            MachineAllocationResult allocation = createMachineAllocation(machineCode, context);
+
+            // 处理机台上的每个任务
+            for (DailyEmbryoTask task : tasks) {
+                // 检测是否需要补做（10天内收尾的续作任务）
+                if (Boolean.TRUE.equals(task.getIsNearEnding())) {
+                    // 计算延误量和补做
+                    int catchUpQty = calculateCatchUpQuantity(task, context, scheduleDate);
+                    if (catchUpQty > 0) {
+                        // 开产日不补做
+                        if (!isOpeningDay) {
+                            // 换算成车，安排补做
+                            int tripCapacity = getTripCapacity(task.getStructureName(), context);
+                            int catchUpTrips = convertToTrips(catchUpQty, tripCapacity, task.getIsMainProduct());
+                            task.setCatchUpQuantity(catchUpTrips * tripCapacity);
+                            log.info("续作任务补做：胎胚={}, 原需求={}, 补做量={}, 车数={}",
+                                    task.getMaterialCode(), task.getDemandQuantity(), 
+                                    task.getCatchUpQuantity(), catchUpTrips);
+                        }
+                    }
+                }
+
+                // 更新任务需求量（加上补做量）
+                int totalDemand = task.getDemandQuantity();
+                if (task.getCatchUpQuantity() != null && task.getCatchUpQuantity() > 0) {
+                    totalDemand += task.getCatchUpQuantity();
+                    task.setDemandQuantity(totalDemand);
+                    task.setRemainingQuantity(totalDemand);
+                }
+
+                // 分配任务到机台
+                allocateTaskToMachine(allocation, task, context);
+            }
+
+            // 如果机台有任务收尾了，需要考虑均衡
+            boolean hasEndingTask = tasks.stream()
+                    .anyMatch(t -> Boolean.TRUE.equals(t.getIsEndingTask()));
+            if (hasEndingTask) {
+                // TODO: 均衡逻辑待补充
+                log.debug("机台 {} 有收尾任务，需要考虑均衡", machineCode);
+            }
+
+            if (!allocation.getTaskAllocations().isEmpty()) {
+                results.add(allocation);
+            }
+        }
+
+        return results;
+    }
+
+    /**
+     * 按机台分组续作任务
+     */
+    private Map<String, List<DailyEmbryoTask>> groupTasksByMachine(List<DailyEmbryoTask> continueTasks) {
+        Map<String, List<DailyEmbryoTask>> machineTaskMap = new LinkedHashMap<>();
+        
+        for (DailyEmbryoTask task : continueTasks) {
+            List<String> machineCodes = task.getContinueMachineCodes();
+            if (machineCodes != null && !machineCodes.isEmpty()) {
+                // 取第一个机台（续作任务应该在当前机台继续）
+                String machineCode = machineCodes.get(0);
+                machineTaskMap.computeIfAbsent(machineCode, k -> new ArrayList<>()).add(task);
+            }
+        }
+        
+        return machineTaskMap;
+    }
+
+    /**
+     * 获取收尾阈值参数
+     */
+    private int getEndingThreshold(ScheduleContextDTO context) {
+        Map<String, CxParamConfig> paramConfigMap = context.getParamConfigMap();
+        if (paramConfigMap != null) {
+            CxParamConfig config = paramConfigMap.get("ENDING_THRESHOLD");
+            if (config != null && config.getParamValue() != null) {
+                try {
+                    return Integer.parseInt(config.getParamValue());
+                } catch (NumberFormatException e) {
+                    log.warn("收尾阈值参数配置错误: {}", config.getParamValue());
+                }
+            }
+        }
+        return 400; // 默认400条
+    }
+
+    /**
+     * 计算延误量和补做量
+     *
+     * <p>比较成型余量与月计划当前日期到收尾日的计划量汇总
+     *
+     * @param task         任务
+     * @param context      排程上下文
+     * @param scheduleDate 排程日期
+     * @return 需要补做的量（条）
+     */
+    private int calculateCatchUpQuantity(
+            DailyEmbryoTask task,
+            ScheduleContextDTO context,
+            LocalDate scheduleDate) {
+
+        // 成型余量
+        Integer formingRemainder = task.getEndingSurplusQty();
+        if (formingRemainder == null || formingRemainder <= 0) {
             return 0;
         }
 
-        // 考虑损耗率
-        BigDecimal lossRate = context.getLossRate();
-        if (lossRate == null) {
-            lossRate = new BigDecimal("0.02"); // 默认2%
+        // 获取收尾日
+        LocalDate endingDate = task.getEndingDate();
+        if (endingDate == null) {
+            return 0;
         }
-        int dailyDemand = (int) Math.ceil(netDemand * (1 + lossRate.doubleValue()));
 
-        // 整车取整
-        int tripCapacity = getTripCapacity(structureCode, context);
-        return roundToTrip(dailyDemand, "CEILING", tripCapacity);
+        // 计算当前日期到收尾日的月计划量汇总
+        int plannedQty = calculatePlannedQuantityToDate(
+                task.getMaterialCode(), 
+                scheduleDate, 
+                endingDate, 
+                context);
+
+        // 比较成型余量和汇总量
+        int gap = formingRemainder - plannedQty;
+        if (gap > 0) {
+            log.info("任务 {} 有延误，成型余量={}, 计划量={}, 差值={}",
+                    task.getMaterialCode(), formingRemainder, plannedQty, gap);
+            return gap;
+        }
+
+        return 0;
     }
 
     /**
-     * 查找续作机台
+     * 计算从当前日期到收尾日的月计划量汇总
      */
-    private List<String> findContinueMachines(String embryoCode, 
-            Map<String, Set<String>> machineOnlineEmbryoMap) {
-        List<String> continueMachineCodes = new ArrayList<>();
-        for (Map.Entry<String, Set<String>> machineEntry : machineOnlineEmbryoMap.entrySet()) {
-            String machineCode = machineEntry.getKey();
-            Set<String> onlineEmbryos = machineEntry.getValue();
-            if (onlineEmbryos != null && onlineEmbryos.contains(embryoCode)) {
-                continueMachineCodes.add(machineCode);
-            }
-        }
-        return continueMachineCodes;
+    private int calculatePlannedQuantityToDate(
+            String materialCode,
+            LocalDate startDate,
+            LocalDate endDate,
+            ScheduleContextDTO context) {
+
+        int totalQty = 0;
+
+        // 从 context 获取月计划（需要按物料过滤）
+        // TODO: 需要从 context 获取月计划数据
+        // 这里使用简化逻辑，实际需要查询 FactoryMonthPlanProductionFinalResult
+
+        return totalQty;
     }
 
     /**
-     * 计算库存时长
-     */
-    private void calculateStockHours(DailyEmbryoTask task, List<LhScheduleResult> lhResults, int currentStock) {
-        Integer lhTime = lhResults.stream()
-                .map(LhScheduleResult::getLhTime)
-                .filter(Objects::nonNull)
-                .findFirst()
-                .orElse(null);
-        
-        if (lhTime != null && lhTime > 0 && currentStock > 0) {
-            BigDecimal stockHours = new BigDecimal(currentStock)
-                    .multiply(new BigDecimal(lhTime))
-                    .divide(new BigDecimal(3600), 2, RoundingMode.HALF_UP);
-            task.setStockHours(stockHours);
-        }
-    }
-
-    /**
-     * 计算成型余量和紧急收尾标记
+     * 将数量换算成车
      *
-     * <p>成型余量 = 硫化余量 - 胎胚库存
-     * <p>紧急收尾条件：
-     * <ul>
-     *   <li>3天内收尾（daysToEnding <= 3）</li>
-     *   <li>成型余量 < 400 条</li>
-     * </ul>
+     * @param quantity      数量（条）
+     * @param tripCapacity  每车条数
+     * @param isMainProduct 是否主要产品
+     * @return 车数
      */
-    private void calculateFormingRemainderAndEnding(DailyEmbryoTask task, ScheduleContextDTO context) {
-        String embryoCode = task.getMaterialCode();
-        
-        // 从 context 获取成型余量映射（已在 ScheduleServiceImpl 中预计算）
-        Map<String, Integer> formingRemainderMap = context.getFormingRemainderMap();
-        
-        // 获取硫化余量（从月计划余量表）
-        Integer vulcanizeSurplusQty = null;
-        Integer endingSurplusQty = null;
-        boolean isEndingTask = false;
-
-        if (context.getMonthSurplusMap() != null) {
-            com.zlt.aps.mp.api.domain.entity.MdmMonthSurplus monthSurplus =
-                    context.getMonthSurplusMap().get(embryoCode);
-            if (monthSurplus != null && monthSurplus.getPlanSurplusQty() != null) {
-                vulcanizeSurplusQty = monthSurplus.getPlanSurplusQty().intValue();
-                int currentStock = task.getCurrentStock() != null ? task.getCurrentStock() : 0;
-                
-                // 使用预计算的成型余量（如果存在）
-                if (formingRemainderMap != null && formingRemainderMap.containsKey(embryoCode)) {
-                    endingSurplusQty = formingRemainderMap.get(embryoCode);
-                } else {
-                    // 收尾余量 = 硫化余量 - 胎胚库存
-                    endingSurplusQty = vulcanizeSurplusQty - currentStock;
-                }
-                
-                // 收尾余量 <= 0 表示该任务需要收尾
-                isEndingTask = endingSurplusQty != null && endingSurplusQty <= 0;
-            }
+    private int convertToTrips(int quantity, int tripCapacity, Boolean isMainProduct) {
+        if (quantity <= 0) {
+            return 0;
         }
 
-        task.setIsEndingTask(isEndingTask);
-        task.setEndingSurplusQty(endingSurplusQty);
-        task.setVulcanizeSurplusQty(vulcanizeSurplusQty);
-
-        // ==================== 紧急收尾判断 ====================
-        // 条件1：3天内收尾
-        // 条件2：成型余量 < 400 条
-        boolean isUrgentEnding = false;
-        
-        if (isEndingTask) {
-            // 获取收尾日（从物料收尾管理表）
-            if (context.getMaterialEndings() != null) {
-                for (CxMaterialEnding materialEnding : context.getMaterialEndings()) {
-                    if (embryoCode.equals(materialEnding.getMaterialCode())) {
-                        LocalDate endingDate = materialEnding.getPlannedEndingDate();
-                        if (endingDate != null) {
-                            task.setEndingDate(endingDate);
-                            
-                            // 计算距离收尾日天数
-                            LocalDate today = context.getCurrentScheduleDate() != null 
-                                    ? context.getCurrentScheduleDate() 
-                                    : context.getScheduleDate();
-                            int daysToEnding = (int) java.time.temporal.ChronoUnit.DAYS.between(today, endingDate);
-                            task.setDaysToEnding(daysToEnding);
-                            
-                            // 3天内收尾为紧急
-                            if (daysToEnding >= 0 && daysToEnding <= 3) {
-                                isUrgentEnding = true;
-                                log.info("紧急收尾任务（3天内）: 胎胚={}, 收尾日={}, 距收尾{}天", 
-                                        embryoCode, endingDate, daysToEnding);
-                            }
-                        }
-                        break;
-                    }
-                }
-            }
-            
-            // 成型余量 < 400 条为紧急
-            if (endingSurplusQty != null && endingSurplusQty < 400) {
-                isUrgentEnding = true;
-                log.info("紧急收尾任务（余量<400）: 胎胚={}, 成型余量={}", embryoCode, endingSurplusQty);
-            }
-        }
-
-        task.setIsUrgentEnding(isUrgentEnding);
-        
-        // 紧急收尾任务提高优先级
-        if (isUrgentEnding) {
-            task.setPriority(task.getPriority() + 1000);
+        // 主要产品补到一整车，非主要产品按实际
+        if (Boolean.TRUE.equals(isMainProduct)) {
+            return (int) Math.ceil((double) quantity / tripCapacity);
+        } else {
+            return quantity / tripCapacity; // 向下取整
         }
     }
 
+    // ==================== 试制/新增任务处理 ====================
+
     /**
-     * 按优先级排序任务
+     * 处理试制和新增任务
+     *
+     * <p>排序规则：
+     * <ol>
+     *   <li>按照月计划优先级排序</li>
+     *   <li>试制/量试一定在月计划优先</li>
+     *   <li>同一个胎胚的试制和量试要在同一台成型机做</li>
+     *   <li>新胎胚的优先级高于普通的新增胎胚</li>
+     *   <li>试制/量试只能安排在早班或中班（7:30-15:00），数量必须是双数</li>
+     * </ol>
+     *
+     * @param trialTasks        试制任务列表
+     * @param newTasks          新增任务列表
+     * @param context           排程上下文
+     * @param scheduleDate      排程日期
+     * @param dayShifts         班次配置
+     * @param day               排程天数
+     * @param existAllocations  已有的分配结果（续作任务）
+     * @return 机台分配结果列表
      */
-    private void sortTasksByPriority(List<DailyEmbryoTask> tasks) {
+    private List<MachineAllocationResult> processTrialAndNewTasks(
+            List<DailyEmbryoTask> trialTasks,
+            List<DailyEmbryoTask> newTasks,
+            ScheduleContextDTO context,
+            LocalDate scheduleDate,
+            List<com.zlt.aps.cx.entity.config.CxShiftConfig> dayShifts,
+            int day,
+            List<MachineAllocationResult> existAllocations) {
+
+        List<MachineAllocationResult> results = new ArrayList<>();
+
+        // 合并试制和新增任务
+        List<DailyEmbryoTask> allTasks = new ArrayList<>();
+        allTasks.addAll(trialTasks);
+        allTasks.addAll(newTasks);
+
+        if (allTasks.isEmpty()) {
+            return results;
+        }
+
+        // 排序
+        sortTrialAndNewTasks(allTasks, context);
+
+        // 获取已有机台的分配情况（用于均衡）
+        Map<String, Integer> machineUsedCapacity = calculateMachineUsedCapacity(existAllocations);
+
+        // 获取可用机台列表
+        List<MdmMoldingMachine> availableMachines = context.getAvailableMachines();
+        if (availableMachines == null || availableMachines.isEmpty()) {
+            log.warn("没有可用的成型机台");
+            return results;
+        }
+
+        // 为每个任务分配机台
+        for (DailyEmbryoTask task : allTasks) {
+            // 选择最佳机台
+            MdmMoldingMachine bestMachine = selectBestMachineForNewTask(
+                    task, availableMachines, machineUsedCapacity, context);
+
+            if (bestMachine == null) {
+                log.warn("任务 {} 无可用机台", task.getMaterialCode());
+                continue;
+            }
+
+            // 获取或创建机台分配结果
+            MachineAllocationResult allocation = findOrCreateAllocation(
+                    bestMachine.getCxMachineCode(), results, context);
+
+            // 分配任务
+            allocateTaskToMachine(allocation, task, context);
+
+            // 更新机台已用产能
+            machineUsedCapacity.merge(bestMachine.getCxMachineCode(), 
+                    task.getDemandQuantity(), Integer::sum);
+        }
+
+        return results;
+    }
+
+    /**
+     * 排序试制和新增任务
+     */
+    private void sortTrialAndNewTasks(List<DailyEmbryoTask> tasks, ScheduleContextDTO context) {
         tasks.sort((a, b) -> {
-            // 1. 续作任务最高优先级
-            if (Boolean.TRUE.equals(a.getIsContinueTask()) && !Boolean.TRUE.equals(b.getIsContinueTask())) {
-                return -1;
-            }
-            if (!Boolean.TRUE.equals(a.getIsContinueTask()) && Boolean.TRUE.equals(b.getIsContinueTask())) {
-                return 1;
-            }
-            // 2. 紧急收尾任务优先
-            if (Boolean.TRUE.equals(a.getIsUrgentEnding()) && !Boolean.TRUE.equals(b.getIsUrgentEnding())) {
-                return -1;
-            }
-            if (!Boolean.TRUE.equals(a.getIsUrgentEnding()) && Boolean.TRUE.equals(b.getIsUrgentEnding())) {
-                return 1;
-            }
-            // 3. 试制任务优先
+            // 1. 试制/量试优先
             if (Boolean.TRUE.equals(a.getIsTrialTask()) && !Boolean.TRUE.equals(b.getIsTrialTask())) {
                 return -1;
             }
             if (!Boolean.TRUE.equals(a.getIsTrialTask()) && Boolean.TRUE.equals(b.getIsTrialTask())) {
                 return 1;
             }
-            // 4. 首排任务
-            if (Boolean.TRUE.equals(a.getIsFirstTask()) && !Boolean.TRUE.equals(b.getIsFirstTask())) {
+
+            // 2. 按月计划优先级排序（需要从 context 获取）
+            int priorityA = getMonthPlanPriority(a.getMaterialCode(), context);
+            int priorityB = getMonthPlanPriority(b.getMaterialCode(), context);
+            if (priorityA != priorityB) {
+                return Integer.compare(priorityA, priorityB);
+            }
+
+            // 3. 收尾任务优先
+            if (Boolean.TRUE.equals(a.getIsEndingTask()) && !Boolean.TRUE.equals(b.getIsEndingTask())) {
                 return -1;
             }
-            if (!Boolean.TRUE.equals(a.getIsFirstTask()) && Boolean.TRUE.equals(b.getIsFirstTask())) {
+            if (!Boolean.TRUE.equals(a.getIsEndingTask()) && Boolean.TRUE.equals(b.getIsEndingTask())) {
                 return 1;
             }
-            // 5. 按优先级分数排序
-            return Integer.compare(b.getPriority(), a.getPriority());
+
+            // 4. 紧急收尾优先
+            if (Boolean.TRUE.equals(a.getIsUrgentEnding()) && !Boolean.TRUE.equals(b.getIsUrgentEnding())) {
+                return -1;
+            }
+            if (!Boolean.TRUE.equals(a.getIsUrgentEnding()) && Boolean.TRUE.equals(b.getIsUrgentEnding())) {
+                return 1;
+            }
+
+            // 5. 按需求量排序（大的优先）
+            return Integer.compare(b.getDemandQuantity(), a.getDemandQuantity());
         });
     }
 
     /**
-     * 输出任务统计日志
+     * 获取月计划优先级
      */
-    private void logTaskStatistics(List<DailyEmbryoTask> tasks) {
-        log.info("计算完成，日胎胚任务数: {}, 其中续作任务数: {}, 试制任务数: {}, 收尾任务数: {}, 紧急收尾任务数: {}",
-                tasks.size(),
-                tasks.stream().filter(t -> Boolean.TRUE.equals(t.getIsContinueTask())).count(),
-                tasks.stream().filter(t -> Boolean.TRUE.equals(t.getIsTrialTask())).count(),
-                tasks.stream().filter(t -> Boolean.TRUE.equals(t.getIsEndingTask())).count(),
-                tasks.stream().filter(t -> Boolean.TRUE.equals(t.getIsUrgentEnding())).count());
+    private int getMonthPlanPriority(String materialCode, ScheduleContextDTO context) {
+        List<CxStructurePriority> priorities = context.getStructurePriorities();
+        if (priorities != null) {
+            for (CxStructurePriority priority : priorities) {
+                // TODO: 需要根据物料编码匹配结构
+            }
+        }
+        return 999; // 默认优先级
     }
 
     /**
-     * 输出任务信息日志
+     * 计算机台已用产能
      */
-    private void logTaskInfo(DailyEmbryoTask task, int totalVulcanizeDemand, int currentStock) {
+    private Map<String, Integer> calculateMachineUsedCapacity(List<MachineAllocationResult> allocations) {
+        Map<String, Integer> usedCapacity = new HashMap<>();
+        if (allocations != null) {
+            for (MachineAllocationResult allocation : allocations) {
+                usedCapacity.put(allocation.getMachineCode(), allocation.getUsedCapacity());
+            }
+        }
+        return usedCapacity;
+    }
+
+    /**
+     * 为新任务选择最佳机台
+     */
+    private MdmMoldingMachine selectBestMachineForNewTask(
+            DailyEmbryoTask task,
+            List<MdmMoldingMachine> availableMachines,
+            Map<String, Integer> machineUsedCapacity,
+            ScheduleContextDTO context) {
+
+        MdmMoldingMachine bestMachine = null;
+        int bestScore = -1;
+
+        for (MdmMoldingMachine machine : availableMachines) {
+            // 检查结构约束
+            if (!checkStructureConstraint(machine, task.getStructureName(), context)) {
+                continue;
+            }
+
+            // 计算机台得分（考虑均衡）
+            int usedCapacity = machineUsedCapacity.getOrDefault(machine.getCxMachineCode(), 0);
+            int remainingCapacity = (machine.getMaxDayCapacity() != null ? machine.getMaxDayCapacity() : 1200) - usedCapacity;
+
+            if (remainingCapacity < task.getDemandQuantity()) {
+                continue; // 产能不足
+            }
+
+            int score = calculateMachineScoreForNewTask(machine, task, remainingCapacity, context);
+            if (score > bestScore) {
+                bestScore = score;
+                bestMachine = machine;
+            }
+        }
+
+        return bestMachine;
+    }
+
+    /**
+     * 检查结构约束
+     */
+    private boolean checkStructureConstraint(MdmMoldingMachine machine, String structureName, ScheduleContextDTO context) {
+        // TODO: 检查机台是否支持该结构
+        return true;
+    }
+
+    /**
+     * 计算新任务机台得分
+     */
+    private int calculateMachineScoreForNewTask(
+            MdmMoldingMachine machine, 
+            DailyEmbryoTask task, 
+            int remainingCapacity,
+            ScheduleContextDTO context) {
+
+        int score = 0;
+
+        // 1. 剩余产能越多得分越高（均衡）
+        score += remainingCapacity / 10;
+
+        // 2. 固定生产该结构的机台加分
+        if (context.getMachineFixedConfigs() != null) {
+            for (MdmCxMachineFixed fixed : context.getMachineFixedConfigs()) {
+                if (fixed.getCxMachineCode().equals(machine.getCxMachineCode())) {
+                    if (fixed.getFixedStructure1() != null && 
+                            fixed.getFixedStructure1().contains(task.getStructureName())) {
+                        score += 200;
+                    }
+                }
+            }
+        }
+
+        return score;
+    }
+
+    /**
+     * 查找或创建机台分配结果
+     */
+    private MachineAllocationResult findOrCreateAllocation(
+            String machineCode,
+            List<MachineAllocationResult> results,
+            ScheduleContextDTO context) {
+
+        for (MachineAllocationResult result : results) {
+            if (result.getMachineCode().equals(machineCode)) {
+                return result;
+            }
+        }
+
+        MachineAllocationResult allocation = createMachineAllocation(machineCode, context);
+        results.add(allocation);
+        return allocation;
+    }
+
+    /**
+     * 创建机台分配结果
+     */
+    private MachineAllocationResult createMachineAllocation(String machineCode, ScheduleContextDTO context) {
+        MachineAllocationResult allocation = new MachineAllocationResult();
+        allocation.setMachineCode(machineCode);
+        allocation.setTaskAllocations(new ArrayList<>());
+        allocation.setUsedCapacity(0);
+        allocation.setRemainingCapacity(getMachineDailyCapacity(machineCode, context));
+        return allocation;
+    }
+
+    /**
+     * 获取机台日产能
+     */
+    private int getMachineDailyCapacity(String machineCode, ScheduleContextDTO context) {
+        if (context.getAvailableMachines() != null) {
+            for (MdmMoldingMachine machine : context.getAvailableMachines()) {
+                if (machine.getCxMachineCode().equals(machineCode)) {
+                    return machine.getMaxDayCapacity() != null ? machine.getMaxDayCapacity() : 1200;
+                }
+            }
+        }
+        return 1200;
+    }
+
+    /**
+     * 分配任务到机台
+     */
+    private void allocateTaskToMachine(
+            MachineAllocationResult allocation,
+            DailyEmbryoTask task,
+            ScheduleContextDTO context) {
+
+        TaskAllocation taskAllocation = new TaskAllocation();
+        taskAllocation.setMaterialCode(task.getMaterialCode());
+        taskAllocation.setMaterialName(task.getMaterialName());
+        taskAllocation.setStructureName(task.getStructureName());
+        taskAllocation.setQuantity(task.getDemandQuantity());
+        taskAllocation.setPriority(task.getPriority());
+        taskAllocation.setStockHours(task.getStockHours());
+        taskAllocation.setIsTrialTask(task.getIsTrialTask());
+        taskAllocation.setIsEndingTask(task.getIsEndingTask());
+        taskAllocation.setEndingSurplusQty(task.getEndingSurplusQty());
+        taskAllocation.setIsMainProduct(task.getIsMainProduct());
+
+        allocation.getTaskAllocations().add(taskAllocation);
+        allocation.setUsedCapacity(allocation.getUsedCapacity() + task.getDemandQuantity());
+        allocation.setRemainingCapacity(allocation.getRemainingCapacity() - task.getDemandQuantity());
+    }
+
+    // ==================== 收尾信息计算 ====================
+
+    /**
+     * 计算收尾相关信息
+     *
+     * <p>包括：
+     * <ul>
+     *   <li>成型余量</li>
+     *   <li>是否收尾任务</li>
+     *   <li>是否10天内收尾</li>
+     *   <li>是否3天内收尾（紧急）</li>
+     *   <li>收尾日</li>
+     * </ul>
+     *
+     * @param task         任务
+     * @param context      排程上下文
+     * @param scheduleDate 排程日期
+     */
+    private void calculateEndingInfo(
+            DailyEmbryoTask task,
+            ScheduleContextDTO context,
+            LocalDate scheduleDate) {
+
+        String materialCode = task.getMaterialCode();
+
+        // 获取成型余量（从预计算的映射中获取）
+        Map<String, Integer> formingRemainderMap = context.getFormingRemainderMap();
+        Integer formingRemainder = null;
+        Integer vulcanizeSurplusQty = null;
+
+        // 从月计划余量获取硫化余量
+        if (context.getMonthSurplusMap() != null) {
+            MdmMonthSurplus monthSurplus = context.getMonthSurplusMap().get(materialCode);
+            if (monthSurplus != null && monthSurplus.getPlanSurplusQty() != null) {
+                vulcanizeSurplusQty = monthSurplus.getPlanSurplusQty().intValue();
+            }
+        }
+
+        // 获取成型余量
+        if (formingRemainderMap != null && formingRemainderMap.containsKey(materialCode)) {
+            formingRemainder = formingRemainderMap.get(materialCode);
+        } else if (vulcanizeSurplusQty != null) {
+            // 成型余量 = 硫化余量 - 胎胚库存
+            int currentStock = task.getCurrentStock() != null ? task.getCurrentStock() : 0;
+            formingRemainder = vulcanizeSurplusQty - currentStock;
+        }
+
+        task.setVulcanizeSurplusQty(vulcanizeSurplusQty);
+        task.setEndingSurplusQty(formingRemainder);
+
+        // 判断是否收尾任务（成型余量 <= 0）
+        boolean isEndingTask = formingRemainder != null && formingRemainder <= 0;
+        task.setIsEndingTask(isEndingTask);
+
+        // 获取收尾日（从物料收尾管理表）
+        LocalDate endingDate = findEndingDate(materialCode, context);
+        task.setEndingDate(endingDate);
+
+        if (endingDate != null) {
+            int daysToEnding = (int) java.time.temporal.ChronoUnit.DAYS.between(scheduleDate, endingDate);
+            task.setDaysToEnding(daysToEnding);
+
+            // 判断是否10天内收尾
+            boolean isNearEnding = daysToEnding >= 0 && daysToEnding <= 10;
+            task.setIsNearEnding(isNearEnding);
+
+            // 判断是否3天内收尾（紧急）
+            boolean isUrgentEnding = daysToEnding >= 0 && daysToEnding <= 3;
+            task.setIsUrgentEnding(isUrgentEnding);
+
+            if (isUrgentEnding) {
+                log.info("紧急收尾任务：物料={}, 收尾日={}, 距收尾{}天", 
+                        materialCode, endingDate, daysToEnding);
+            }
+        }
+
+        // 成型余量小于阈值也标记为紧急收尾
+        int threshold = getEndingThreshold(context);
+        if (formingRemainder != null && formingRemainder < threshold && formingRemainder > 0) {
+            task.setIsUrgentEnding(true);
+            log.info("成型余量低于阈值的收尾任务：物料={}, 成型余量={}, 阈值={}",
+                    materialCode, formingRemainder, threshold);
+        }
+
+        // 计算优先级
+        task.setPriority(calculateTaskPriority(task, context));
+    }
+
+    /**
+     * 查找物料收尾日
+     */
+    private LocalDate findEndingDate(String materialCode, ScheduleContextDTO context) {
+        if (context.getMaterialEndings() != null) {
+            for (CxMaterialEnding ending : context.getMaterialEndings()) {
+                if (materialCode.equals(ending.getMaterialCode())) {
+                    return ending.getPlannedEndingDate();
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 计算任务优先级分数
+     */
+    private int calculateTaskPriority(DailyEmbryoTask task, ScheduleContextDTO context) {
+        int score = 0;
+
+        // 紧急收尾最高优先级
+        if (Boolean.TRUE.equals(task.getIsUrgentEnding())) {
+            score += 3000;
+        }
+        // 普通收尾
+        else if (Boolean.TRUE.equals(task.getIsEndingTask())) {
+            score += 2000;
+        }
+
+        // 10天内收尾
+        if (Boolean.TRUE.equals(task.getIsNearEnding())) {
+            score += 1000;
+        }
+
+        // 试制任务
+        if (Boolean.TRUE.equals(task.getIsTrialTask())) {
+            score += 1500;
+        }
+
+        // 续作任务
         if (Boolean.TRUE.equals(task.getIsContinueTask())) {
-            log.info("续作任务: 胎胚={}, 需求量={}, 续作机台={}",
-                    task.getMaterialCode(), task.getDemandQuantity(), task.getContinueMachineCodes());
+            score += 800;
         }
-        if (Boolean.TRUE.equals(task.getIsEndingTask())) {
-            log.info("收尾任务: 胎胚={}, 硫化余量={}, 库存={}, 收尾余量={}",
-                    task.getMaterialCode(), task.getVulcanizeSurplusQty(), 
-                    currentStock, task.getEndingSurplusQty());
+
+        // 首排任务
+        if (Boolean.TRUE.equals(task.getIsFirstTask())) {
+            score += 500;
         }
+
+        // 库存紧张
+        if (task.getStockHours() != null) {
+            if (task.getStockHours().compareTo(new BigDecimal("4")) < 0) {
+                score += 800;
+            } else if (task.getStockHours().compareTo(new BigDecimal("6")) < 0) {
+                score += 400;
+            }
+        }
+
+        // 主销产品
+        if (Boolean.TRUE.equals(task.getIsMainProduct())) {
+            score += 200;
+        }
+
+        return score;
+    }
+
+    @Override
+    public List<DailyEmbryoTask> calculateDailyEmbryoTasks(
+            ScheduleContextDTO context,
+            Map<String, Set<String>> machineOnlineEmbryoMap) {
+        
+        LocalDate scheduleDate = context.getCurrentScheduleDate() != null 
+                ? context.getCurrentScheduleDate() 
+                : context.getScheduleDate();
+        
+        TaskGroupResult groupResult = groupTasks(context, machineOnlineEmbryoMap, scheduleDate);
+        
+        List<DailyEmbryoTask> allTasks = new ArrayList<>();
+        allTasks.addAll(groupResult.getContinueTasks());
+        allTasks.addAll(groupResult.getTrialTasks());
+        allTasks.addAll(groupResult.getNewTasks());
+        
+        return allTasks;
     }
 
     @Override
