@@ -872,32 +872,17 @@ public class ScheduleServiceImpl implements ScheduleService {
 
             // 从基础表查询物料日硫化产能（按工厂+物料维度）
             String factoryCode = context.getFactoryCode();
-            List<com.zlt.aps.mp.api.domain.entity.MdmMonthPlanProductLhCapacity> baseCapacities =
-                    monthPlanProductLhCapacityMapper.selectList(
-                            new LambdaQueryWrapper<com.zlt.aps.mp.api.domain.entity.MdmMonthPlanProductLhCapacity>()
-                                    .eq(com.zlt.aps.mp.api.domain.entity.MdmMonthPlanProductLhCapacity::getFactoryCode, factoryCode)
-                                    .eq(com.zlt.aps.mp.api.domain.entity.MdmMonthPlanProductLhCapacity::getType, "01")
-                    );
+            java.util.List<com.zlt.aps.mp.engine.domain.vo.MonthPlanProductLhCapacityVo> baseCapacities =
+                    monthPlanProductLhCapacityMapper.selectByFactoryCodeAndType(factoryCode, "01");
 
-            // 转换为Vo并根据模式计算日硫化量
-            for (com.zlt.aps.mp.api.domain.entity.MdmMonthPlanProductLhCapacity baseCapacity : baseCapacities) {
-                String materialCode = baseCapacity.getMaterialCode();
+            // 根据模式计算日硫化量并放入映射
+            for (com.zlt.aps.mp.engine.domain.vo.MonthPlanProductLhCapacityVo vo : baseCapacities) {
+                String materialCode = vo.getMaterialCode();
                 if (materialCode == null) {
                     continue;
                 }
-
-                com.zlt.aps.mp.engine.domain.vo.MonthPlanProductLhCapacityVo vo = new com.zlt.aps.mp.engine.domain.vo.MonthPlanProductLhCapacityVo();
-                vo.setFactoryCode(baseCapacity.getFactoryCode());
-                vo.setMaterialCode(baseCapacity.getMaterialCode());
-                vo.setMaterialDesc(baseCapacity.getMaterialDesc());
-                vo.setMesCapacity(baseCapacity.getMesCapacity());
-                vo.setStandardCapacity(baseCapacity.getStandardCapacity());
-                vo.setApsCapacity(baseCapacity.getApsCapacity());
-                vo.setVulcanizationTime(baseCapacity.getVulcanizationTime());
-
                 // 根据计算模式设置日硫化量
                 vo.calculateDayVulcanizationQty(mode);
-
                 resultMap.put(materialCode, vo);
             }
 
