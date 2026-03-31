@@ -3,6 +3,7 @@ package com.zlt.aps.cx.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.zlt.aps.cx.dto.ScheduleContextDTO;
 import com.zlt.aps.cx.dto.ScheduleRequest;
+import com.zlt.aps.cx.entity.CxMaterialEnding;
 import com.zlt.aps.cx.entity.CxStock;
 import com.zlt.aps.cx.entity.config.CxKeyProduct;
 import com.zlt.aps.cx.entity.config.CxParamConfig;
@@ -13,6 +14,7 @@ import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
 import com.zlt.aps.cx.enums.DayVulcanizationModeEnum;
 import com.zlt.aps.cx.mapper.CxKeyProductMapper;
+import com.zlt.aps.cx.mapper.CxMaterialEndingMapper;
 import com.zlt.aps.cx.mapper.CxParamConfigMapper;
 import com.zlt.aps.cx.mapper.CxScheduleDetailMapper;
 import com.zlt.aps.cx.mapper.CxScheduleResultMapper;
@@ -143,6 +145,7 @@ public class ScheduleServiceImpl implements ScheduleService {
     private final MdmCxMachineOnlineInfoMapper onlineInfoMapper;
     private final CxShiftConfigMapper shiftConfigMapper;
     private final FactoryMonthPlanProductionFinalResultMapper monthPlanMapper;
+    private final CxMaterialEndingMapper materialEndingMapper;
 
     // ==================== 公共方法 ====================
 
@@ -238,11 +241,14 @@ public class ScheduleServiceImpl implements ScheduleService {
             // 15. 设置节假日相关标记
             setHolidayFlags(context, scheduleDate);
 
-            // 16. 设置排程参数
+            // 16. 加载物料收尾信息并计算收尾日
+            loadMaterialEndings(context, scheduleDate);
+
+            // 17. 设置排程参数
             context.setScheduleDate(scheduleDate);
             context.setScheduleMode(request.getScheduleMode());
 
-            // 17. 数据完整性校验
+            // 18. 数据完整性校验
             validateScheduleData(context, scheduleDate, factoryCode);
 
             return context;
@@ -706,6 +712,155 @@ public class ScheduleServiceImpl implements ScheduleService {
             materialStockMap.merge(materialCode, effectiveStock, Integer::sum);
         }
         return materialStockMap;
+    }
+
+    /**
+     * 加载物料收尾信息并计算收尾日
+     *
+     * <p>流程：
+     * <ol>
+     *   <li>从 T_CX_MATERIAL_ENDING 表加载已存在的收尾信息</li>
+     *   <li>对于没有收尾信息的物料，从月计划计算收尾日</li>
+     *   <li>计算成型余量、预计收尾天数、紧急收尾标记等</li>
+     * </ol>
+     *
+     * @param context      排程上下文
+     * @param scheduleDate 排程日期
+     */
+    private void loadMaterialEndings(ScheduleContextDTO context, LocalDate scheduleDate) {
+        int year = scheduleDate.getYear();
+        int month = scheduleDate.getMonthValue();
+        int currentDay = scheduleDate.getDayOfMonth();
+        int lastDayOfMonth = scheduleDate.withDayOfMonth(scheduleDate.lengthOfMonth()).getDayOfMonth();
+        Integer yearMonth = year * 100 + month;
+
+        // 1. 尝试从数据库加载已存在的收尾信息
+        List<CxMaterialEnding> existingEndings = materialEndingMapper.selectByStatDate(scheduleDate);
+
+        // 2. 获取月计划数据
+        List<FactoryMonthPlanProductionFinalResult> monthPlans = monthPlanMapper.selectByYearAndMonth(year, month);
+        Map<String, List<FactoryMonthPlanProductionFinalResult>> materialPlanMap = monthPlans.stream()
+                .filter(p -> p.getMaterialCode() != null)
+                .collect(Collectors.groupingBy(FactoryMonthPlanProductionFinalResult::getMaterialCode));
+
+        // 3. 获取物料信息和库存
+        Map<String, MdmMaterialInfo> materialMap = context.getMaterials() != null
+                ? context.getMaterials().stream()
+                    .collect(Collectors.toMap(MdmMaterialInfo::getMaterialCode, m -> m, (a, b) -> a))
+                : new HashMap<>();
+
+        Map<String, Integer> formingRemainderMap = context.getFormingRemainderMap() != null
+                ? context.getFormingRemainderMap()
+                : new HashMap<>();
+
+        Map<String, MdmMonthSurplus> monthSurplusMap = context.getMonthSurplusMap() != null
+                ? context.getMonthSurplusMap()
+                : new HashMap<>();
+
+        // 4. 如果已有收尾信息，直接使用
+        if (!existingEndings.isEmpty()) {
+            context.setMaterialEndings(existingEndings);
+            log.info("从数据库加载物料收尾信息 {} 条", existingEndings.size());
+            return;
+        }
+
+        // 5. 计算每个物料的收尾信息
+        List<CxMaterialEnding> materialEndings = new ArrayList<>();
+
+        // 获取所有需要处理的物料编码（硫化排程中的物料）
+        Set<String> materialCodes = new HashSet<>();
+        if (context.getLhScheduleResults() != null) {
+            materialCodes.addAll(context.getLhScheduleResults().stream()
+                    .filter(r -> r.getMaterialCode() != null)
+                    .map(LhScheduleResult::getMaterialCode)
+                    .collect(Collectors.toSet()));
+        }
+        // 也包含月计划中的物料
+        materialCodes.addAll(materialPlanMap.keySet());
+
+        for (String materialCode : materialCodes) {
+            CxMaterialEnding ending = new CxMaterialEnding();
+            ending.setMaterialCode(materialCode);
+            ending.setStatDate(scheduleDate);
+
+            // 获取物料信息
+            MdmMaterialInfo material = materialMap.get(materialCode);
+            if (material != null) {
+                ending.setMaterialDesc(material.getMaterialDesc());
+                ending.setStructureName(material.getStructureName());
+            }
+
+            // 获取硫化余量
+            MdmMonthSurplus surplus = monthSurplusMap.get(materialCode);
+            if (surplus != null && surplus.getPlanSurplusQty() != null) {
+                ending.setVulcanizingRemainder(surplus.getPlanSurplusQty().intValue());
+            }
+
+            // 获取成型余量
+            Integer formingRemainder = formingRemainderMap.get(materialCode);
+            if (formingRemainder != null) {
+                ending.setFormingRemainder(formingRemainder);
+            } else if (ending.getVulcanizingRemainder() != null) {
+                // 成型余量 = 硫化余量 - 胎胚库存
+                ending.setFormingRemainder(ending.getVulcanizingRemainder());
+            }
+
+            // 计算收尾日
+            List<FactoryMonthPlanProductionFinalResult> plans = materialPlanMap.get(materialCode);
+            if (plans != null && !plans.isEmpty()) {
+                int endingDay = findMaterialEndingDay(plans, currentDay, lastDayOfMonth);
+                LocalDate plannedEndingDate = scheduleDate.withDayOfMonth(endingDay);
+                ending.setPlannedEndingDate(plannedEndingDate);
+
+                // 计算距收尾日的天数
+                int daysToEnding = (int) java.time.temporal.ChronoUnit.DAYS.between(scheduleDate, plannedEndingDate);
+                ending.setEstimatedEndingDays(BigDecimal.valueOf(daysToEnding));
+
+                // 设置收尾标记
+                if (daysToEnding >= 0 && daysToEnding <= URGENT_ENDING_DAYS) {
+                    ending.setIsUrgentEnding(1);
+                }
+                if (daysToEnding >= 0 && daysToEnding <= NEAR_ENDING_DAYS) {
+                    ending.setIsNearEnding(1);
+                }
+
+                // 计算延误量（如果成型余量 > 0 且接近收尾日）
+                if (formingRemainder != null && formingRemainder > 0 && daysToEnding >= 0 && daysToEnding <= NEAR_ENDING_DAYS) {
+                    // 日产能估算（简化：假设每天能做100条）
+                    int dailyCapacity = 100;
+                    int remainingDays = Math.max(daysToEnding, 1);
+                    int producibleQty = dailyCapacity * remainingDays;
+
+                    if (formingRemainder > producibleQty) {
+                        int delayQty = formingRemainder - producibleQty;
+                        ending.setDelayQuantity(delayQty);
+                        ending.setDistributedQuantity(delayQty / CATCH_UP_DAYS);
+
+                        // 如果未来3天满产仍追不上，需要调整月计划
+                        if (delayQty > dailyCapacity * CATCH_UP_DAYS) {
+                            ending.setNeedMonthPlanAdjust(1);
+                        }
+                    }
+                }
+            } else {
+                // 没有月计划，默认月末收尾
+                ending.setPlannedEndingDate(scheduleDate.withDayOfMonth(lastDayOfMonth));
+                ending.setEstimatedEndingDays(BigDecimal.valueOf(lastDayOfMonth - currentDay));
+            }
+
+            materialEndings.add(ending);
+        }
+
+        context.setMaterialEndings(materialEndings);
+        log.info("计算物料收尾信息 {} 条", materialEndings.size());
+
+        // 统计紧急收尾数量
+        long urgentCount = materialEndings.stream()
+                .filter(e -> e.getIsUrgentEnding() != null && e.getIsUrgentEnding() == 1)
+                .count();
+        if (urgentCount > 0) {
+            log.warn("发现 {} 个紧急收尾物料", urgentCount);
+        }
     }
 
     // ==================== 私有方法：收尾计算 ====================
