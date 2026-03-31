@@ -296,36 +296,20 @@ public class ScheduleServiceImpl implements ScheduleService {
             }
             context.setKeyProductCodes(keyProductCodes);
 
-            // 12. 构建物料日硫化最大产能映射
-            // ========== 12. 构建产能映射（用于满算力计算） ==========
+            // ========== 12. 构建产能映射（用于满算力计算，仅供收尾计算使用） ==========
             
             // 12.1 物料日硫化最大产能映射（基础表，人工维护的标准/MES/APS产能）
-            // 用途：获取物料的理论最大日硫化产能，作为兜底值
             Map<String, com.zlt.aps.mp.engine.domain.vo.MonthPlanProductLhCapacityVo> materialLhCapacityMap = buildMaterialLhCapacityMap(context);
             context.setMaterialLhCapacityMap(materialLhCapacityMap);
             log.info("构建物料日硫化最大产能映射 {} 条", materialLhCapacityMap.size());
 
-            // 12.2 物料当前硫化机台产能映射（今日硫化排程结果）
-            // 用途：获取物料当前实际在用的硫化机台及产能，用于判断配比是否塞满
-            Map<String, List<LhMachineCapacityInfo>> lhMachineCapacityMap = buildLhMachineCapacityMap();
-            context.setLhMachineCapacityMap(lhMachineCapacityMap);
-            log.info("构建硫化机台当前产能映射 {} 个物料", lhMachineCapacityMap.size());
 
             // 12.3 结构硫化配比映射（每个结构最大可用的硫化机台数）
-            // 用途：判断配比是否塞满（当前机台数 vs 最大配比）
             Map<String, MdmStructureLhRatio> structureLhRatioMap = buildStructureLhRatioMap();
             context.setStructureLhRatioMap(structureLhRatioMap);
             log.info("构建结构硫化配比映射 {} 条", structureLhRatioMap.size());
 
-            // 13. 计算物料收尾管理列表（从FactoryMonthPlanProductionFinalResult计算生成，物料维度）
-            int year = scheduleDate.getYear();
-            int month = scheduleDate.getMonthValue();
-            List<CxMaterialEnding> materialEndings = calculateMaterialEndings(
-                    scheduleDate, year, month, stocks, materialLhCapacityMap, structureLhRatioMap, lhMachineCapacityMap, factoryCode);
-            context.setMaterialEndings(materialEndings);
-            log.info("从月计划计算生成物料收尾信息 {} 条", materialEndings.size());
-
-            // 14. 获取月度计划余量（用于收尾计算）
+            // 13. 获取月度计划余量（用于收尾计算）
             List<MdmMonthSurplus> monthSurplusList =
                     monthSurplusMapper.selectByYearMonth(year, month);
             context.setMonthSurplusList(monthSurplusList);
@@ -349,16 +333,16 @@ public class ScheduleServiceImpl implements ScheduleService {
             context.setMainProductCodes(mainProductCodes);
             log.info("加载SKU排产分类 {} 条，其中主销产品 {} 个", skuCategories.size(), mainProductCodes.size());
 
-            // 14. 设置节假日相关标记
+            // 15. 设置节假日相关标记
             context.setIsOpeningDay(holidayScheduleService.isStartProductionDay(scheduleDate));
             context.setIsClosingDay(holidayScheduleService.isStopProductionDay(scheduleDate));
             context.setIsBeforeClosingDay(holidayScheduleService.isBeforeHoliday(scheduleDate));
 
-            // 15. 设置排程参数
+            // 16. 设置排程参数
             context.setScheduleDate(scheduleDate);
             context.setScheduleMode(request.getScheduleMode());
 
-            // 16. 数据完整性校验
+            // 17. 数据完整性校验
             // 在返回之前进行数据完整性校验，提前发现问题
             ScheduleDataValidationResult validationResult = scheduleDataValidator.validate(
                     context, scheduleDate, factoryCode);
