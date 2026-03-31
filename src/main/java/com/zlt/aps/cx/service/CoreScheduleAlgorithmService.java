@@ -12,6 +12,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 核心排程算法服务接口
@@ -41,10 +42,13 @@ public interface CoreScheduleAlgorithmService {
      * 第一步：计算日胎胚任务
      * 算需求量、检查收尾、处理节假日
      *
-     * @param context 排程上下文
+     * @param context                   排程上下文
+     * @param machineOnlineEmbryoMap   机台在产胎胚映射（用于续作判断）
      * @return 日胎胚任务列表
      */
-    List<DailyEmbryoTask> calculateDailyEmbryoTasks(ScheduleContextDTO context);
+    List<DailyEmbryoTask> calculateDailyEmbryoTasks(
+            ScheduleContextDTO context,
+            Map<String, Set<String>> machineOnlineEmbryoMap);
 
     /**
      * 第二步：试错分配任务到机台
