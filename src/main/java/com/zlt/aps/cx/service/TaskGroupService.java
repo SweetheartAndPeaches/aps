@@ -139,9 +139,6 @@ public class TaskGroupService {
             }
         }
 
-        // 处理试制任务表中的任务
-        processTrialTaskTable(result, materialMap, stockMap, context, scheduleDate);
-
         return result;
     }
 
@@ -304,49 +301,7 @@ public class TaskGroupService {
         return totalVulcanizeDemand;
     }
 
-    /**
-     * 处理试制任务表中的任务
-     */
-    private void processTrialTaskTable(
-            TaskGroupResult result,
-            Map<String, MdmMaterialInfo> materialMap,
-            Map<String, CxStock> stockMap,
-            ScheduleContextDTO context,
-            LocalDate scheduleDate) {
 
-        if (CollectionUtils.isEmpty(context.getTrialTasks())) {
-            return;
-        }
-
-        for (CxTrialTask trialTask : context.getTrialTasks()) {
-            if (!"PENDING".equals(trialTask.getStatus()) && !"SCHEDULED".equals(trialTask.getStatus())) {
-                continue;
-            }
-
-            String materialCode = trialTask.getMaterialCode();
-            MdmMaterialInfo material = materialMap.get(materialCode);
-            if (material == null) {
-                continue;
-            }
-
-            CoreScheduleAlgorithmService.DailyEmbryoTask task = new CoreScheduleAlgorithmService.DailyEmbryoTask();
-            task.setMaterialCode(materialCode);
-            task.setMaterialName(material.getMaterialDesc());
-            task.setStructureName(material.getStructureName());
-            task.setDemandQuantity(trialTask.getTrialQuantity() - trialTask.getProducedQuantity());
-            task.setAssignedQuantity(0);
-            task.setRemainingQuantity(task.getDemandQuantity());
-            task.setIsTrialTask(true);
-            task.setTrialNo(trialTask.getTrialNo());
-            task.setIsContinueTask(false);
-            task.setIsFirstTask(true);
-
-            // 计算收尾信息
-            calculateEndingInfo(task, context, scheduleDate);
-
-            result.getTrialTasks().add(task);
-        }
-    }
 
     /**
      * 计算收尾相关信息
