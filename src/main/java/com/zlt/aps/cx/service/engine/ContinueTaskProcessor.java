@@ -421,11 +421,17 @@ public class ContinueTaskProcessor {
             boolean isOpeningDay) {
         
         // 使用 ProductionCalculator 计算计划量
+        // 注意：task.getMaterialCode() 返回的是胎胚编码(embryoCode)
+        // task.getRelatedMaterialCode() 返回的是真正的物料编码(materialCode)
+        String embryoCode = task.getMaterialCode();  // 胎胚编码（用于判断关键产品）
+        String materialCode = task.getRelatedMaterialCode();  // 物料编码（用于判断主销产品）
+        
         ProductionCalculator.PlanQuantityResult calcResult = productionCalculator.calculateComprehensive(
-                task.getMaterialCode(),
+                embryoCode,
                 task.getStructureName(),
-                task.getMaterialCode(),
+                materialCode,
                 null, // 续作任务不是试制
+                null, // 续作任务单独处理收尾
                 context,
                 scheduleDate
         );
@@ -472,6 +478,7 @@ public class ContinueTaskProcessor {
             
             int openingShiftCapacity = hourlyCapacity * OPENING_SHIFT_HOURS;
             
+            // 关键产品判断：使用胎胚编码（task.getMaterialCode() 返回的是 embryoCode）
             boolean isKeyProduct = context.getKeyProductCodes() != null 
                     && context.getKeyProductCodes().contains(task.getMaterialCode());
             
