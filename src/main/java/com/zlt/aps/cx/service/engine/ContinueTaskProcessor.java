@@ -499,18 +499,49 @@ public class ContinueTaskProcessor {
         Integer endingSurplus = task.getEndingSurplusQty();
         if (endingSurplus == null || endingSurplus <= 0) return;
         
-        int tripCapacity = getTripCapacity(task.getStructureName(), context);
         int plannedProduction = task.getPlannedProduction() != null ? task.getPlannedProduction() : 0;
         int allocatedStock = task.getAllocatedStock() != null ? task.getAllocatedStock() : 0;
+        int totalPlanned = plannedProduction + allocatedStock;
         
-        if ((plannedProduction + allocatedStock) >= endingSurplus) {
-            if (Boolean.TRUE.equals(task.getIsMainProduct())) {
-                int remainder = plannedProduction % tripCapacity;
-                if (remainder > 0) {
-                    task.setPlannedProduction(plannedProduction + (tripCapacity - remainder));
-                }
+        // 使用 ProductionCalculator 计算收尾计划量
+        boolean isMainProduct = Boolean.TRUE.equals(task.getIsMainProduct());
+        int remainingToProduce = Math.max(0, endingSurplus - allocatedStock);
+        
+        ProductionCalculator.PlanQuantityResult endingResult = productionCalculator.calculateEndingQuantity(
+                remainingToProduce,
+                getTripCapacity(task.getStructureName(), context),
+                isMainProduct,
+                task.getMaterialCode()
+        );
+        
+        // 更新任务状态
+        if (endingResult.isAbandoned()) {
+            // 非主销产品余量≤2条，舍弃
+            task.setPlannedProduction(0);
+            task.setEndingAbandoned(true);
+            task.setEndingAbandonedQty(endingResult.getAbandonedQuantity());
+            log.info("收尾任务 {} 余量 {} 条被舍弃", task.getMaterialCode(), endingResult.getAbandonedQuantity());
+        } else {
+            // 更新计划量
+            int newPlanQuantity = endingResult.getPlanQuantity();
+            task.setPlannedProduction(newPlanQuantity);
+            
+            // 记录额外库存（主销产品多做的部分）
+            if (endingResult.getExtraInventory() > 0) {
+                task.setEndingExtraInventory(endingResult.getExtraInventory());
+                log.info("收尾任务 {} 主销产品，多做 {} 条当库存", 
+                        task.getMaterialCode(), endingResult.getExtraInventory());
             }
-            task.setIsLastEndingBatch(true);
+            
+            // 标记是否为收尾最后一批
+            if (totalPlanned >= endingSurplus || newPlanQuantity >= remainingToProduce) {
+                task.setIsLastEndingBatch(true);
+            }
+        }
+        
+        // 保存班次分配
+        if (endingResult.getShiftAllocation() != null) {
+            task.setShiftAllocation(endingResult.getShiftAllocation());
         }
     }
     
