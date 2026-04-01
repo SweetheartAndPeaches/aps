@@ -191,15 +191,21 @@ public class ContinueTaskProcessor {
      *
      * <p>算法核心：
      * <ul>
-     *   <li>目标：胎胚种类数均衡，配比均衡</li>
-     *   <li>约束：机台产能上限、种类数上限</li>
+     *   <li>目标：胎胚种类数均衡，硫化机台数配比均衡</li>
+     *   <li>约束：机台最大硫化机数上限、胎胚种类数上限</li>
      *   <li>策略：试错+择优，找到最均衡的分配方案</li>
+     * </ul>
+     *
+     * <p>单位说明：
+     * <ul>
+     *   <li>总需求 = 结构下所有胎胚的硫化机台数之和</li>
+     *   <li>总产能 = 所有可分配机台的最大硫化机数之和</li>
      * </ul>
      *
      * @param tasks             胎胚任务列表
      * @param availableMachines 可分配机台列表
      * @param machineHistoryMap 历史任务映射（机台 -> 昨天做的胎胚集合）
-     * @param maxLhMachines     最大硫化机台数（产能上限）
+     * @param maxLhMachines     最大硫化机台数（每台成型机的产能上限）
      * @param maxEmbryoTypes    最大胎胚种类数
      * @param forceKeepHistory  是否强制保留历史任务
      * @param context           排程上下文
@@ -214,17 +220,23 @@ public class ContinueTaskProcessor {
             boolean forceKeepHistory,
             ScheduleContextDTO context) {
 
-        // Step 1: 计算总需求
+        // Step 1: 计算总需求（所有胎胚的硫化机台数之和）
         int totalDemand = tasks.stream()
-                .mapToInt(t -> t.getVulcanizeDemand() != null ? t.getVulcanizeDemand() : 0)
+                .mapToInt(t -> t.getVulcanizeMachineCount() != null ? t.getVulcanizeMachineCount() : 0)
                 .sum();
         
-        // Step 2: 计算总产能
+        // Step 2: 计算总产能（所有可分配机台的最大硫化机数之和）
+        // 注意：每个机台可能有不同的产能上限，这里统一使用 maxLhMachines
+        // 如果需要单独配置，可以从 MpCxCapacityConfiguration 或 MdmStructureLhRatio 获取
         int totalCapacity = availableMachines.size() * maxLhMachines;
+        
+        log.info("均衡分配计算：总需求（硫化机台数）={}, 总产能（最大硫化机数）={}, 机台数={}", 
+                totalDemand, totalCapacity, availableMachines.size());
         
         // 检查产能是否足够
         if (totalDemand > totalCapacity) {
-            log.warn("产能不足：总需求={}, 总产能={}", totalDemand, totalCapacity);
+            log.warn("产能不足：总需求（硫化机台数）={}, 总产能（最大硫化机数）={}, 缺口={}", 
+                    totalDemand, totalCapacity, totalDemand - totalCapacity);
         }
 
         // Step 3: 初始化机台状态
@@ -232,10 +244,10 @@ public class ContinueTaskProcessor {
         for (MpCxCapacityConfiguration config : availableMachines) {
             MachineState state = new MachineState();
             state.setMachineCode(config.getCxMachineCode());
-            state.setMaxCapacity(maxLhMachines);
-            state.setMaxTypes(maxEmbryoTypes);
-            state.setCurrentLoad(0);
-            state.setCurrentTypes(0);
+            state.setMaxCapacity(maxLhMachines);  // 最大硫化机数
+            state.setMaxTypes(maxEmbryoTypes);    // 最大胎胚种类数
+            state.setCurrentLoad(0);              // 当前已分配的硫化机数
+            state.setCurrentTypes(0);             // 当前已分配的胎胚种类数
             state.setAssignedEmbryos(new ArrayList<>());
             
             // 设置历史胎胚（如果有）
@@ -245,12 +257,12 @@ public class ContinueTaskProcessor {
             machineStates.add(state);
         }
 
-        // Step 4: 按需求量从大到小排序胎胚
+        // Step 4: 按硫化机台数从大到小排序胎胚（硫化机数多的优先分配）
         List<CoreScheduleAlgorithmService.DailyEmbryoTask> sortedTasks = tasks.stream()
                 .sorted((a, b) -> {
-                    int demandA = a.getVulcanizeDemand() != null ? a.getVulcanizeDemand() : 0;
-                    int demandB = b.getVulcanizeDemand() != null ? b.getVulcanizeDemand() : 0;
-                    return Integer.compare(demandB, demandA); // 降序
+                    int countA = a.getVulcanizeMachineCount() != null ? a.getVulcanizeMachineCount() : 0;
+                    int countB = b.getVulcanizeMachineCount() != null ? b.getVulcanizeMachineCount() : 0;
+                    return Integer.compare(countB, countA); // 降序：硫化机数多的优先
                 })
                 .collect(Collectors.toList());
 
@@ -293,6 +305,8 @@ public class ContinueTaskProcessor {
 
     /**
      * 贪心算法分配胎胚
+     *
+     * <p>按硫化机台数分配，每个胎胚的硫化机数作为一个整体分配给一个机台
      */
     private boolean assignEmbryosGreedy(
             List<CoreScheduleAlgorithmService.DailyEmbryoTask> tasks,
@@ -302,14 +316,15 @@ public class ContinueTaskProcessor {
 
         for (CoreScheduleAlgorithmService.DailyEmbryoTask task : tasks) {
             String embryoCode = task.getMaterialCode();
-            int demand = task.getVulcanizeDemand() != null ? task.getVulcanizeDemand() : 0;
+            // 胚胎的硫化机台数（需求量）
+            int lhMachineCount = task.getVulcanizeMachineCount() != null ? task.getVulcanizeMachineCount() : 0;
 
             // 找出能接受这个胎胚的机台
             List<MachineState> candidates = findCandidateMachines(
-                    embryoCode, machineStates, forceKeepHistory);
+                    embryoCode, machineStates, forceKeepHistory, lhMachineCount);
 
             if (candidates.isEmpty()) {
-                log.warn("胎胚 {} 无法分配到任何机台", embryoCode);
+                log.warn("胎胚 {} (硫化机数: {}) 无法分配到任何机台", embryoCode, lhMachineCount);
                 continue;
             }
 
@@ -318,10 +333,11 @@ public class ContinueTaskProcessor {
 
             // 分配到第一个候选机台
             MachineState selected = candidates.get(0);
-            int assignQty = Math.min(demand, selected.getMaxCapacity() - selected.getCurrentLoad());
+            // 分配的硫化机台数（取需求和剩余容量的最小值）
+            int assignLhCount = Math.min(lhMachineCount, selected.getMaxCapacity() - selected.getCurrentLoad());
             
-            selected.getAssignedEmbryos().add(new EmbryoAssignment(embryoCode, task, assignQty));
-            selected.setCurrentLoad(selected.getCurrentLoad() + assignQty);
+            selected.getAssignedEmbryos().add(new EmbryoAssignment(embryoCode, task, assignLhCount));
+            selected.setCurrentLoad(selected.getCurrentLoad() + assignLhCount);
             
             // 如果是新胎胚，增加种类数
             if (!selected.getHistoryEmbryos().contains(embryoCode)) {
@@ -334,27 +350,35 @@ public class ContinueTaskProcessor {
 
     /**
      * 找出能接受指定胎胚的机台
+     *
+     * @param embryoCode      胎胚编码
+     * @param machineStates   机台状态列表
+     * @param forceKeepHistory 是否强制保留历史任务
+     * @param lhMachineCount  该胎胚需要的硫化机台数
+     * @return 可接受该胎胚的机台列表
      */
     private List<MachineState> findCandidateMachines(
             String embryoCode,
             List<MachineState> machineStates,
-            boolean forceKeepHistory) {
+            boolean forceKeepHistory,
+            int lhMachineCount) {
         
         List<MachineState> candidates = new ArrayList<>();
         
         for (MachineState state : machineStates) {
-            // 检查是否还有产能
-            if (state.getCurrentLoad() >= state.getMaxCapacity()) {
-                continue;
+            // 检查是否有足够的剩余容量
+            int remainingCapacity = state.getMaxCapacity() - state.getCurrentLoad();
+            if (remainingCapacity <= 0) {
+                continue;  // 机台已满
             }
             
-            // 如果是历史胎胚，可以直接分配
+            // 如果是历史胎胚（昨天做过），可以直接分配（不增加种类数）
             if (state.getHistoryEmbryos().contains(embryoCode)) {
                 candidates.add(state);
                 continue;
             }
             
-            // 如果是新胎胚，检查种类数上限
+            // 如果是新胎胚，需要检查种类数上限
             if (state.getCurrentTypes() < state.getMaxTypes()) {
                 candidates.add(state);
             }
@@ -426,6 +450,8 @@ public class ContinueTaskProcessor {
 
     /**
      * 简单分配（兜底方案）
+     *
+     * <p>轮流分配胎胚到机台，不考虑均衡
      */
     private BalancingResult simpleAssign(
             List<CoreScheduleAlgorithmService.DailyEmbryoTask> tasks,
@@ -450,9 +476,10 @@ public class ContinueTaskProcessor {
                 result.getAssignments().add(assignment);
             }
             
-            int demand = task.getVulcanizeDemand() != null ? task.getVulcanizeDemand() : 0;
+            // 使用硫化机台数
+            int lhMachineCount = task.getVulcanizeMachineCount() != null ? task.getVulcanizeMachineCount() : 0;
             assignment.getEmbryoAssignments().add(new EmbryoAssignment(
-                    task.getMaterialCode(), task, demand));
+                    task.getMaterialCode(), task, lhMachineCount));
             
             machineIndex++;
         }
@@ -620,6 +647,7 @@ public class ContinueTaskProcessor {
     private static class EmbryoAssignment {
         private String embryoCode;
         private CoreScheduleAlgorithmService.DailyEmbryoTask task;
+        /** 分配数量，单位：硫化机台数 */
         private int assignedQty;
     }
 
