@@ -171,8 +171,8 @@ public class ProductionCalculator {
         }
 
         for (CxStock stock : stocks) {
-            if (embryoCode.equals(stock.getMaterialCode())) {
-                Integer qty = stock.getQuantity();
+            if (embryoCode.equals(stock.getEmbryoCode())) {
+                Integer qty = stock.getStockNum();
                 return qty != null && qty > 0 ? qty : 0;
             }
         }
@@ -574,22 +574,7 @@ public class ProductionCalculator {
         return result;
     }
 
-    /**
-     * 检查是否为主销产品
-     *
-     * <p>主销产品定义：月均销量≥500条，SKU排产分类SCHEDULE_TYPE='01'
-     *
-     * @param materialCode 物料编码
-     * @param context      排程上下文
-     * @return 是否主销产品
-     */
-    public boolean isMainProduct(String materialCode, ScheduleContextDTO context) {
-        Set<String> mainProductCodes = context.getMainProductCodes();
-        if (mainProductCodes != null) {
-            return mainProductCodes.contains(materialCode);
-        }
-        return false;
-    }
+    // ==================== 试制量试计算 ====================
 
     /**
      * 试制量试计划量计算
@@ -933,7 +918,7 @@ public class ProductionCalculator {
                     embryoCode, structureName, isKeyProduct, context, scheduleDate);
 
             // 开产日：调整班次分配
-            if (openingResult.getSkipFirstShift()) {
+            if (openingResult.isSkipFirstShift()) {
                 // 关键产品：跳过第一班，平均分配到剩余班次
                 int planQty = openingResult.getPlanQuantity();
                 int remainingShifts = 2; // 假设3班制，跳过第一班后剩2班

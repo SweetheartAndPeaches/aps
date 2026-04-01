@@ -10,6 +10,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 
 /**
  * 班次配置表
@@ -85,4 +86,62 @@ public class CxShiftConfig extends BaseEntity {
     @ApiModelProperty(value = "备注")
     @TableField("REMARK")
     private String remark;
+
+    // ===== 辅助方法 =====
+
+    /**
+     * 获取班次开始时间（LocalTime格式）
+     */
+    public LocalTime getShiftStartTime() {
+        if (startTime == null || startTime.isEmpty()) {
+            return LocalTime.of(8, 0); // 默认8点开始
+        }
+        try {
+            return LocalTime.parse(startTime);
+        } catch (Exception e) {
+            return LocalTime.of(8, 0);
+        }
+    }
+
+    /**
+     * 获取班次结束时间（LocalTime格式）
+     */
+    public LocalTime getShiftEndTime() {
+        if (endTime == null || endTime.isEmpty()) {
+            return LocalTime.of(20, 0); // 默认20点结束
+        }
+        try {
+            return LocalTime.parse(endTime);
+        } catch (Exception e) {
+            return LocalTime.of(20, 0);
+        }
+    }
+
+    /**
+     * 获取开始小时
+     */
+    public Integer getStartHour() {
+        return getShiftStartTime().getHour();
+    }
+
+    /**
+     * 获取开始分钟
+     */
+    public Integer getStartMinute() {
+        return getShiftStartTime().getMinute();
+    }
+
+    /**
+     * 获取结束小时
+     */
+    public Integer getEndHour() {
+        return getShiftEndTime().getHour();
+    }
+
+    /**
+     * 获取结束分钟
+     */
+    public Integer getEndMinute() {
+        return getShiftEndTime().getMinute();
+    }
 }

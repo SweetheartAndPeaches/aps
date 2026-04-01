@@ -15,6 +15,7 @@ import com.zlt.aps.cx.service.engine.TaskGroupService;
 import com.zlt.aps.cx.service.engine.TrialTaskProcessor;
 import com.zlt.aps.mp.api.domain.entity.MdmMaterialInfo;
 import com.zlt.aps.mp.api.domain.entity.MdmMoldingMachine;
+import com.zlt.aps.mp.api.domain.entity.MdmWorkCalendar;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -266,20 +267,12 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
      * 判断是否为停产日
      */
     private boolean isStopProductionDay(ScheduleContextDTO context, LocalDate date) {
-        var workCalendar = context.getWorkCalendar();
+        MdmWorkCalendar workCalendar = context.getWorkCalendar();
         if (workCalendar != null) {
-            var startDate = workCalendar.getStopStartDate();
-            var endDate = workCalendar.getStopEndDate();
-            if (startDate != null && endDate != null) {
-                LocalDate stopStart = startDate.toInstant()
-                        .atZone(java.time.ZoneId.systemDefault())
-                        .toLocalDate();
-                LocalDate stopEnd = endDate.toInstant()
-                        .atZone(java.time.ZoneId.systemDefault())
-                        .toLocalDate();
-                if (!date.isBefore(stopStart) && !date.isAfter(stopEnd)) {
-                    return true;
-                }
+            // 使用 dayFlag 判断：0-停, 1-开
+            String dayFlag = workCalendar.getDayFlag();
+            if ("0".equals(dayFlag)) {
+                return true; // 停产日
             }
         }
 

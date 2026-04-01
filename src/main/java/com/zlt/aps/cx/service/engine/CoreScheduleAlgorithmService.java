@@ -306,6 +306,7 @@ public interface CoreScheduleAlgorithmService {
         private Boolean isEndingTask;
         private Integer endingSurplusQty;
         private Boolean isMainProduct;
+        private Boolean isContinueTask;
     }
 
     /**

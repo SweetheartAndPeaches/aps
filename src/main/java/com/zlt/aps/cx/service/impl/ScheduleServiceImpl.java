@@ -61,6 +61,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -192,7 +193,45 @@ public class ScheduleServiceImpl implements ScheduleService {
     }
 
     @Override
-    public ScheduleContextDTO buildScheduleContext(ScheduleRequest request) {
+    public boolean reSchedule(ScheduleRequest request) {
+        try {
+            log.info("开始执行重排程，日期：{}", request.getScheduleDate());
+            
+            // 1. 构建排程上下文
+            ScheduleContextDTO context = buildScheduleContext(request);
+
+            // 2. 执行重排程算法
+            List<CxScheduleResult> scheduleResults = coreScheduleAlgorithmService.executeSchedule(context);
+
+            // 3. 删除原有排程结果
+            deleteExistingScheduleResults(request.getScheduleDate());
+
+            // 4. 保存新的排程结果
+            saveScheduleResults(scheduleResults);
+
+            log.info("重排程完成，日期：{}，结果数量：{}", request.getScheduleDate(), scheduleResults.size());
+            return true;
+
+        } catch (Exception e) {
+            log.error("重排程失败", e);
+            return false;
+        }
+    }
+
+    /**
+     * 删除指定日期的排程结果
+     */
+    private void deleteExistingScheduleResults(LocalDate scheduleDate) {
+        scheduleResultMapper.delete(
+            new LambdaQueryWrapper<CxScheduleResult>()
+                .eq(CxScheduleResult::getScheduleDate, scheduleDate)
+        );
+    }
+
+    /**
+     * 构建排程上下文
+     */
+    private ScheduleContextDTO buildScheduleContext(ScheduleRequest request) {
         try {
             ScheduleContextDTO context = new ScheduleContextDTO();
             LocalDate scheduleDate = request.getScheduleDate();
@@ -446,7 +485,7 @@ public class ScheduleServiceImpl implements ScheduleService {
                 .filter(a -> a.getStructureName() != null)
                 .collect(Collectors.groupingBy(
                         MpCxCapacityConfiguration::getStructureName,
-                        LinkedHashMap::new,
+                        () -> new LinkedHashMap<>(),
                         Collectors.toList()));
 
         context.setStructureAllocationMap(structureAllocationMap);

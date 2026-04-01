@@ -23,6 +23,10 @@ public class CxStructureShiftCapacity extends BaseEntity {
     @TableField("STRUCTURE_CODE")
     private String structureCode;
 
+    @ApiModelProperty(value = "班次编码")
+    @TableField("SHIFT_CODE")
+    private String shiftCode;
+
     @ApiModelProperty(value = "整车条数（该结构每车的条数，可能是12、18等）")
     @TableField("TRIP_QTY")
     private Integer tripQty;
