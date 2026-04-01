@@ -14,8 +14,8 @@ import lombok.extern.slf4j.Slf4j;
  *
  * @author APS Team
  */
-<span class="fc" id="L17">@Slf4j</span>
-<span class="fc" id="L18">public abstract class BaseValidationStrategy implements ValidationStrategy {</span>
+<span class="nc" id="L17">@Slf4j</span>
+<span class="nc" id="L18">public abstract class BaseValidationStrategy implements ValidationStrategy {</span>
 
     /**
      * 获取校验项枚举
@@ -24,12 +24,12 @@ import lombok.extern.slf4j.Slf4j;
 
     @Override
     public String getDataItemName() {
-<span class="fc" id="L27">        return getValidationItem().getName();</span>
+<span class="nc" id="L27">        return getValidationItem().getName();</span>
     }
 
     @Override
     public int getOrder() {
-<span class="fc" id="L32">        return getValidationItem().getOrder();</span>
+<span class="nc" id="L32">        return getValidationItem().getOrder();</span>
     }
 
     /**

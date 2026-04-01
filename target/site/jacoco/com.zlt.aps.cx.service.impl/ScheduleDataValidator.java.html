@@ -29,9 +29,9 @@ import java.util.stream.Collectors;
  *
  * @author APS Team
  */
-<span class="fc" id="L32">@Slf4j</span>
+<span class="nc" id="L32">@Slf4j</span>
 @Component
-<span class="fc" id="L34">public class ScheduleDataValidator {</span>
+<span class="nc" id="L34">public class ScheduleDataValidator {</span>
 
     /** 自动注入的校验策略列表 */
     private List&lt;ValidationStrategy&gt; validationStrategies;
@@ -45,28 +45,28 @@ import java.util.stream.Collectors;
     @PostConstruct
     public void init() {
         // 按 order 排序
-<span class="fc" id="L48">        this.validationStrategies = strategies.stream()</span>
-<span class="fc" id="L49">                .filter(ValidationStrategy::isEnabled)</span>
-<span class="fc" id="L50">                .sorted(Comparator.comparingInt(ValidationStrategy::getOrder))</span>
-<span class="fc" id="L51">                .collect(Collectors.toList());</span>
+<span class="nc" id="L48">        this.validationStrategies = strategies.stream()</span>
+<span class="nc" id="L49">                .filter(ValidationStrategy::isEnabled)</span>
+<span class="nc" id="L50">                .sorted(Comparator.comparingInt(ValidationStrategy::getOrder))</span>
+<span class="nc" id="L51">                .collect(Collectors.toList());</span>
 
         // 构建映射
-<span class="fc" id="L54">        this.strategyMap = new HashMap&lt;&gt;();</span>
-<span class="fc bfc" id="L55" title="All 2 branches covered.">        for (ValidationStrategy strategy : validationStrategies) {</span>
+<span class="nc" id="L54">        this.strategyMap = new HashMap&lt;&gt;();</span>
+<span class="nc bnc" id="L55" title="All 2 branches missed.">        for (ValidationStrategy strategy : validationStrategies) {</span>
             // 获取策略对应的校验项（如果有）
-<span class="pc bpc" id="L57" title="1 of 2 branches missed.">            if (strategy instanceof BaseValidationStrategy) {</span>
-<span class="fc" id="L58">                ValidationItem item = ((BaseValidationStrategy) strategy).getValidationItem();</span>
-<span class="pc bpc" id="L59" title="1 of 2 branches missed.">                if (item != null) {</span>
-<span class="fc" id="L60">                    strategyMap.put(item, strategy);</span>
+<span class="nc bnc" id="L57" title="All 2 branches missed.">            if (strategy instanceof BaseValidationStrategy) {</span>
+<span class="nc" id="L58">                ValidationItem item = ((BaseValidationStrategy) strategy).getValidationItem();</span>
+<span class="nc bnc" id="L59" title="All 2 branches missed.">                if (item != null) {</span>
+<span class="nc" id="L60">                    strategyMap.put(item, strategy);</span>
                 }
             }
-<span class="fc" id="L63">        }</span>
+<span class="nc" id="L63">        }</span>
 
-<span class="fc" id="L65">        log.info(&quot;数据校验器初始化完成，已注册 {} 个校验策略&quot;, validationStrategies.size());</span>
-<span class="fc bfc" id="L66" title="All 2 branches covered.">        for (ValidationStrategy strategy : validationStrategies) {</span>
-<span class="fc" id="L67">            log.debug(&quot;  - {} (order={})&quot;, strategy.getDataItemName(), strategy.getOrder());</span>
-<span class="fc" id="L68">        }</span>
-<span class="fc" id="L69">    }</span>
+<span class="nc" id="L65">        log.info(&quot;数据校验器初始化完成，已注册 {} 个校验策略&quot;, validationStrategies.size());</span>
+<span class="nc bnc" id="L66" title="All 2 branches missed.">        for (ValidationStrategy strategy : validationStrategies) {</span>
+<span class="nc" id="L67">            log.debug(&quot;  - {} (order={})&quot;, strategy.getDataItemName(), strategy.getOrder());</span>
+<span class="nc" id="L68">        }</span>
+<span class="nc" id="L69">    }</span>
 
     /**
      * 执行所有校验

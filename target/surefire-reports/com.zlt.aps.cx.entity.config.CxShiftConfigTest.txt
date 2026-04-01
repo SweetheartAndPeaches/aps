@@ -1,4 +1,4 @@
 -------------------------------------------------------------------------------
 Test set: com.zlt.aps.cx.entity.config.CxShiftConfigTest
 -------------------------------------------------------------------------------
-Tests run: 7, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.04 s - in com.zlt.aps.cx.entity.config.CxShiftConfigTest
+Tests run: 7, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.024 s - in com.zlt.aps.cx.entity.config.CxShiftConfigTest

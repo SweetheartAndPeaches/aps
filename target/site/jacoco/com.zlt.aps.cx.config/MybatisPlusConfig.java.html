@@ -16,16 +16,16 @@ import java.time.LocalDateTime;
  * @author APS Team
  */
 @Configuration
-<span class="fc" id="L19">public class MybatisPlusConfig implements MetaObjectHandler {</span>
+<span class="nc" id="L19">public class MybatisPlusConfig implements MetaObjectHandler {</span>
 
     /**
      * 分页插件
      */
     @Bean
     public MybatisPlusInterceptor mybatisPlusInterceptor() {
-<span class="fc" id="L26">        MybatisPlusInterceptor interceptor = new MybatisPlusInterceptor();</span>
-<span class="fc" id="L27">        interceptor.addInnerInterceptor(new PaginationInnerInterceptor(DbType.MYSQL));</span>
-<span class="fc" id="L28">        return interceptor;</span>
+<span class="nc" id="L26">        MybatisPlusInterceptor interceptor = new MybatisPlusInterceptor();</span>
+<span class="nc" id="L27">        interceptor.addInnerInterceptor(new PaginationInnerInterceptor(DbType.MYSQL));</span>
+<span class="nc" id="L28">        return interceptor;</span>
     }
 
     /**

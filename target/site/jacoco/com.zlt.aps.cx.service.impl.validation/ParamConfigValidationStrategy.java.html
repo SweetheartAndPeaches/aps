@@ -15,36 +15,36 @@ import java.util.*;
  *
  * @author APS Team
  */
-<span class="fc" id="L18">@Slf4j</span>
+<span class="nc" id="L18">@Slf4j</span>
 @Component
-<span class="fc" id="L20">public class ParamConfigValidationStrategy extends BaseValidationStrategy {</span>
+<span class="nc" id="L20">public class ParamConfigValidationStrategy extends BaseValidationStrategy {</span>
 
     /** 关键参数编码列表（必须存在） */
-<span class="fc" id="L23">    private static final Set&lt;String&gt; REQUIRED_PARAM_CODES = new HashSet&lt;&gt;(Arrays.asList(</span>
+<span class="nc" id="L23">    private static final Set&lt;String&gt; REQUIRED_PARAM_CODES = new HashSet&lt;&gt;(Arrays.asList(</span>
             &quot;LOSS_RATE&quot;,              // 损耗率
             &quot;MAX_TYPES_PER_MACHINE&quot;,  // 机台种类上限
             &quot;DEFAULT_TRIP_CAPACITY&quot;   // 默认整车容量
     ));
 
     /** 关键参数默认值映射 */
-<span class="fc" id="L30">    private static final Map&lt;String, String&gt; PARAM_DEFAULTS = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L30">    private static final Map&lt;String, String&gt; PARAM_DEFAULTS = new HashMap&lt;&gt;();</span>
 
     /** 关键参数说明 */
-<span class="fc" id="L33">    private static final Map&lt;String, String&gt; PARAM_DESCRIPTIONS = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L33">    private static final Map&lt;String, String&gt; PARAM_DESCRIPTIONS = new HashMap&lt;&gt;();</span>
 
     static {
-<span class="fc" id="L36">        PARAM_DEFAULTS.put(&quot;LOSS_RATE&quot;, &quot;0.02&quot;);</span>
-<span class="fc" id="L37">        PARAM_DEFAULTS.put(&quot;MAX_TYPES_PER_MACHINE&quot;, &quot;4&quot;);</span>
-<span class="fc" id="L38">        PARAM_DEFAULTS.put(&quot;DEFAULT_TRIP_CAPACITY&quot;, &quot;200&quot;);</span>
+<span class="nc" id="L36">        PARAM_DEFAULTS.put(&quot;LOSS_RATE&quot;, &quot;0.02&quot;);</span>
+<span class="nc" id="L37">        PARAM_DEFAULTS.put(&quot;MAX_TYPES_PER_MACHINE&quot;, &quot;4&quot;);</span>
+<span class="nc" id="L38">        PARAM_DEFAULTS.put(&quot;DEFAULT_TRIP_CAPACITY&quot;, &quot;200&quot;);</span>
         
-<span class="fc" id="L40">        PARAM_DESCRIPTIONS.put(&quot;LOSS_RATE&quot;, &quot;损耗率，用于计算实际产能&quot;);</span>
-<span class="fc" id="L41">        PARAM_DESCRIPTIONS.put(&quot;MAX_TYPES_PER_MACHINE&quot;, &quot;单个机台最多生产的物料种类数&quot;);</span>
-<span class="fc" id="L42">        PARAM_DESCRIPTIONS.put(&quot;DEFAULT_TRIP_CAPACITY&quot;, &quot;默认整车容量（条/班次）&quot;);</span>
-<span class="fc" id="L43">    }</span>
+<span class="nc" id="L40">        PARAM_DESCRIPTIONS.put(&quot;LOSS_RATE&quot;, &quot;损耗率，用于计算实际产能&quot;);</span>
+<span class="nc" id="L41">        PARAM_DESCRIPTIONS.put(&quot;MAX_TYPES_PER_MACHINE&quot;, &quot;单个机台最多生产的物料种类数&quot;);</span>
+<span class="nc" id="L42">        PARAM_DESCRIPTIONS.put(&quot;DEFAULT_TRIP_CAPACITY&quot;, &quot;默认整车容量（条/班次）&quot;);</span>
+<span class="nc" id="L43">    }</span>
 
     @Override
     public ValidationItem getValidationItem() {
-<span class="fc" id="L47">        return ValidationItem.PARAM_CONFIG;</span>
+<span class="nc" id="L47">        return ValidationItem.PARAM_CONFIG;</span>
     }
 
     @Override

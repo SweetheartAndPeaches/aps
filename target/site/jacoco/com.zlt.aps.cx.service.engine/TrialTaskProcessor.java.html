@@ -30,16 +30,16 @@ import java.util.stream.Collectors;
  *
  * @author APS Team
  */
-<span class="fc" id="L33">@Slf4j</span>
+<span class="nc" id="L33">@Slf4j</span>
 @Service
-<span class="fc" id="L35">@RequiredArgsConstructor</span>
+<span class="nc" id="L35">@RequiredArgsConstructor</span>
 public class TrialTaskProcessor {
 
     /** 早班开始时间 */
-<span class="fc" id="L39">    private static final LocalTime MORNING_SHIFT_START = LocalTime.of(7, 30);</span>
+<span class="nc" id="L39">    private static final LocalTime MORNING_SHIFT_START = LocalTime.of(7, 30);</span>
     
     /** 中班结束时间 */
-<span class="fc" id="L42">    private static final LocalTime AFTERNOON_SHIFT_END = LocalTime.of(15, 0);</span>
+<span class="nc" id="L42">    private static final LocalTime AFTERNOON_SHIFT_END = LocalTime.of(15, 0);</span>
     
     /** 默认机台种类上限 */
     private static final int DEFAULT_MAX_TYPES_PER_MACHINE = 4;
