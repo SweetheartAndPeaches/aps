@@ -1,0 +1,901 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>BalancingService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">APS Forming Schedule System</a> &gt; <a href="index.source.html" class="el_package">com.zlt.aps.cx.service.engine</a> &gt; <span class="el_source">BalancingService.java</span></div><h1>BalancingService.java</h1><pre class="source lang-java linenums">package com.zlt.aps.cx.service.engine;
+
+import com.zlt.aps.cx.dto.ScheduleContextDTO;
+import com.zlt.aps.cx.entity.config.CxParamConfig;
+import com.zlt.aps.mp.api.domain.entity.MdmMoldingMachine;
+import com.zlt.aps.mp.api.domain.entity.MdmStructureLhRatio;
+import com.zlt.aps.mp.api.domain.entity.MpCxCapacityConfiguration;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.util.CollectionUtils;
+
+import java.time.LocalDate;
+import java.util.*;
+import java.util.stream.Collectors;
+
+/**
+ * 均衡分配服务
+ * 
+ * &lt;p&gt;负责胎胚到机台的均衡分配，使用 DFS + 剪枝算法：
+ * &lt;ul&gt;
+ *   &lt;li&gt;目标：胎胚种类数均衡，硫化机台数配比均衡&lt;/li&gt;
+ *   &lt;li&gt;约束：机台最大硫化机数上限、胎胚种类数上限&lt;/li&gt;
+ *   &lt;li&gt;策略：深度优先搜索 + 剪枝，超过均衡阈值的分支直接舍弃&lt;/li&gt;
+ * &lt;/ul&gt;
+ *
+ * &lt;p&gt;被以下处理器复用：
+ * &lt;ul&gt;
+ *   &lt;li&gt;{@link ContinueTaskProcessor} - 续作任务均衡分配&lt;/li&gt;
+ *   &lt;li&gt;{@link NewTaskProcessor} - 新增任务均衡分配（合并续作后重新均衡）&lt;/li&gt;
+ * &lt;/ul&gt;
+ *
+ * @author APS Team
+ */
+<span class="fc" id="L35">@Slf4j</span>
+@Service
+<span class="fc" id="L37">@RequiredArgsConstructor</span>
+public class BalancingService {
+
+    /** 参数编码：强制保留历史任务 */
+    private static final String PARAM_FORCE_KEEP_HISTORY = &quot;FORCE_KEEP_HISTORY_TASK&quot;;
+    
+    /** 参数编码：胎胚种类数允许差额（均衡阈值） */
+    private static final String PARAM_TYPE_DIFF_THRESHOLD = &quot;BALANCE_TYPE_DIFF_THRESHOLD&quot;;
+    
+    /** 参数编码：硫化机台数允许差额（均衡阈值） */
+    private static final String PARAM_LOAD_DIFF_THRESHOLD = &quot;BALANCE_LOAD_DIFF_THRESHOLD&quot;;
+    
+    /** 默认：胎胚种类数允许差额（最多差1种） */
+    private static final int DEFAULT_TYPE_DIFF_THRESHOLD = 1;
+    
+    /** 默认：硫化机台数允许差额（最多差3台） */
+    private static final int DEFAULT_LOAD_DIFF_THRESHOLD = 3;
+
+    // ==================== 核心均衡分配方法 ====================
+
+    /**
+     * 均衡分配胎胚到机台（DFS + 剪枝算法）
+     *
+     * &lt;p&gt;算法核心：
+     * &lt;ul&gt;
+     *   &lt;li&gt;目标：胎胚种类数均衡，硫化机台数配比均衡&lt;/li&gt;
+     *   &lt;li&gt;约束：机台最大硫化机数上限、胎胚种类数上限&lt;/li&gt;
+     *   &lt;li&gt;策略：深度优先搜索 + 剪枝，超过均衡阈值的分支直接舍弃&lt;/li&gt;
+     * &lt;/ul&gt;
+     *
+     * &lt;p&gt;单位说明：
+     * &lt;ul&gt;
+     *   &lt;li&gt;总需求 = 结构下所有胎胚的硫化机台数之和&lt;/li&gt;
+     *   &lt;li&gt;总产能 = 所有可分配机台的最大硫化机数之和（每台机台可能不同）&lt;/li&gt;
+     * &lt;/ul&gt;
+     *
+     * &lt;p&gt;注意：此方法使用统一的 maxLhMachines，如果不同机型有不同的最大硫化机数，
+     * 请使用 {@link #balanceEmbryosToMachinesWithMachineCapacity} 方法
+     *
+     * @param tasks                 胎胚任务列表
+     * @param availableMachines     可分配机台列表（结构排产配置）
+     * @param machineHistoryMap     历史任务映射（机台 -&gt; 昨天做的胎胚集合）
+     * @param maxLhMachines         最大硫化机台数（每台成型机的产能上限，统一值）
+     * @param maxEmbryoTypes        最大胎胚种类数
+     * @param forceKeepHistory      是否强制保留历史任务
+     * @param context               排程上下文
+     * @return 均衡分配结果
+     */
+    public BalancingResult balanceEmbryosToMachines(
+            List&lt;CoreScheduleAlgorithmService.DailyEmbryoTask&gt; tasks,
+            List&lt;MpCxCapacityConfiguration&gt; availableMachines,
+            Map&lt;String, Set&lt;String&gt;&gt; machineHistoryMap,
+            int maxLhMachines,
+            int maxEmbryoTypes,
+            boolean forceKeepHistory,
+            ScheduleContextDTO context) {
+
+        // 构建统一的机台最大硫化机数映射（向后兼容）
+<span class="nc" id="L95">        Map&lt;String, Integer&gt; machineMaxLhMap = new HashMap&lt;&gt;();</span>
+<span class="nc bnc" id="L96" title="All 2 branches missed.">        for (MpCxCapacityConfiguration config : availableMachines) {</span>
+<span class="nc" id="L97">            machineMaxLhMap.put(config.getCxMachineCode(), maxLhMachines);</span>
+<span class="nc" id="L98">        }</span>
+
+<span class="nc" id="L100">        return balanceEmbryosToMachinesWithMachineCapacity(</span>
+                tasks, availableMachines, machineHistoryMap,
+                machineMaxLhMap, maxEmbryoTypes, forceKeepHistory, context);
+    }
+
+    /**
+     * 均衡分配（简化版，根据机型+结构获取每台机台的最大硫化机数）
+     *
+     * &lt;p&gt;重要：每台成型机的机型可能不同，需要根据机型+结构从 MdmStructureLhRatio 获取各自的最大硫化机数
+     *
+     * @param tasks             胎胚任务列表
+     * @param availableMachines 可分配机台列表（包含机型信息）
+     * @param structureName     当前处理的结构名称
+     * @param context           排程上下文
+     * @return 均衡分配结果
+     */
+    public BalancingResult balanceEmbryosToMachines(
+            List&lt;CoreScheduleAlgorithmService.DailyEmbryoTask&gt; tasks,
+            List&lt;MdmMoldingMachine&gt; availableMachines,
+            String structureName,
+            ScheduleContextDTO context) {
+
+        // 转换为配置格式
+<span class="nc" id="L123">        List&lt;MpCxCapacityConfiguration&gt; configs = availableMachines.stream()</span>
+<span class="nc" id="L124">                .map(m -&gt; {</span>
+<span class="nc" id="L125">                    MpCxCapacityConfiguration config = new MpCxCapacityConfiguration();</span>
+<span class="nc" id="L126">                    config.setCxMachineCode(m.getCxMachineCode());</span>
+<span class="nc" id="L127">                    return config;</span>
+                })
+<span class="nc" id="L129">                .collect(Collectors.toList());</span>
+
+        // 根据机型+结构获取每台机台的最大硫化机数
+<span class="nc" id="L132">        Map&lt;String, Integer&gt; machineMaxLhMap = buildMachineMaxLhMap(availableMachines, structureName, context);</span>
+
+        // 根据机型+结构获取每台机台的最大胎胚种类数
+<span class="nc" id="L135">        Map&lt;String, Integer&gt; machineMaxEmbryoTypesMap = buildMachineMaxEmbryoTypesMap(availableMachines, structureName, context);</span>
+
+        // 获取其他参数
+<span class="nc" id="L138">        boolean forceKeepHistory = getForceKeepHistoryConfig(context);</span>
+<span class="nc" id="L139">        Map&lt;String, Set&lt;String&gt;&gt; machineHistoryMap = context.getMachineOnlineEmbryoMap();</span>
+<span class="nc bnc" id="L140" title="All 2 branches missed.">        if (machineHistoryMap == null) {</span>
+<span class="nc" id="L141">            machineHistoryMap = new HashMap&lt;&gt;();</span>
+        }
+
+<span class="nc" id="L144">        return balanceEmbryosToMachinesWithMachineCapacity(</span>
+                tasks, configs, machineHistoryMap,
+                machineMaxLhMap, machineMaxEmbryoTypesMap, forceKeepHistory, context);
+    }
+
+    /**
+     * 构建机台最大硫化机数映射
+     *
+     * &lt;p&gt;根据每台机台的机型 + 结构，从 MdmStructureLhRatio 获取对应的最大硫化机数
+     *
+     * @param machines      机台列表
+     * @param structureName 结构名称
+     * @param context       排程上下文
+     * @return 机台编码 -&gt; 最大硫化机数
+     */
+    private Map&lt;String, Integer&gt; buildMachineMaxLhMap(
+            List&lt;MdmMoldingMachine&gt; machines,
+            String structureName,
+            ScheduleContextDTO context) {
+
+<span class="nc" id="L164">        Map&lt;String, Integer&gt; result = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L165">        List&lt;MdmStructureLhRatio&gt; ratios = context.getStructureLhRatios();</span>
+
+        // 构建 机型_结构 -&gt; 最大硫化机数 的映射
+<span class="nc" id="L168">        Map&lt;String, Integer&gt; machineTypeStructureMap = new HashMap&lt;&gt;();</span>
+<span class="nc bnc" id="L169" title="All 2 branches missed.">        if (ratios != null) {</span>
+<span class="nc bnc" id="L170" title="All 2 branches missed.">            for (MdmStructureLhRatio ratio : ratios) {</span>
+<span class="nc" id="L171">                String key = ratio.getCxMachineTypeCode() + &quot;_&quot; + ratio.getStructureName();</span>
+<span class="nc bnc" id="L172" title="All 2 branches missed.">                if (ratio.getLhMachineMaxQty() != null) {</span>
+<span class="nc" id="L173">                    machineTypeStructureMap.put(key, ratio.getLhMachineMaxQty());</span>
+                }
+<span class="nc" id="L175">            }</span>
+        }
+
+        // 为每台机台获取对应的最大硫化机数
+<span class="nc bnc" id="L179" title="All 2 branches missed.">        for (MdmMoldingMachine machine : machines) {</span>
+<span class="nc" id="L180">            String machineCode = machine.getCxMachineCode();</span>
+<span class="nc" id="L181">            String machineType = machine.getCxMachineTypeCode();</span>
+
+            // 优先根据机型+结构查找
+<span class="nc" id="L184">            String key = machineType + &quot;_&quot; + structureName;</span>
+<span class="nc" id="L185">            Integer maxLh = machineTypeStructureMap.get(key);</span>
+
+            // 如果找不到，使用机台本身的硫化机上限
+<span class="nc bnc" id="L188" title="All 2 branches missed.">            if (maxLh == null) {</span>
+<span class="nc bnc" id="L189" title="All 2 branches missed.">                maxLh = machine.getLhMachineMaxQty() != null ? machine.getLhMachineMaxQty() : 10;</span>
+<span class="nc" id="L190">                log.debug(&quot;机台 {} 机型 {} 结构 {} 未找到配比配置，使用机台默认值 {}&quot;,</span>
+                        machineCode, machineType, structureName, maxLh);
+            }
+
+<span class="nc" id="L194">            result.put(machineCode, maxLh);</span>
+<span class="nc" id="L195">        }</span>
+
+<span class="nc" id="L197">        log.info(&quot;构建机台最大硫化机数映射完成，结构 {}，机台数 {}&quot;, structureName, result.size());</span>
+<span class="nc" id="L198">        return result;</span>
+    }
+
+    /**
+     * 构建机台最大胎胚种类数映射
+     *
+     * &lt;p&gt;根据每台机台的机型 + 结构，从 MdmStructureLhRatio 获取对应的最大胎胚种类数
+     *
+     * @param machines      机台列表
+     * @param structureName 结构名称
+     * @param context       排程上下文
+     * @return 机台编码 -&gt; 最大胎胚种类数
+     */
+    private Map&lt;String, Integer&gt; buildMachineMaxEmbryoTypesMap(
+            List&lt;MdmMoldingMachine&gt; machines,
+            String structureName,
+            ScheduleContextDTO context) {
+
+<span class="nc" id="L216">        Map&lt;String, Integer&gt; result = new HashMap&lt;&gt;();</span>
+
+        // 构建机台编码 -&gt; 机型 映射
+<span class="nc" id="L219">        Map&lt;String, String&gt; machineTypeMap = new HashMap&lt;&gt;();</span>
+<span class="nc bnc" id="L220" title="All 2 branches missed.">        for (MdmMoldingMachine machine : machines) {</span>
+<span class="nc" id="L221">            machineTypeMap.put(machine.getCxMachineCode(), machine.getCxMachineTypeCode());</span>
+<span class="nc" id="L222">        }</span>
+
+        // 构建 机型_结构 -&gt; 最大胎胚种类数 映射
+<span class="nc" id="L225">        Map&lt;String, Integer&gt; typeStructureMap = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L226">        List&lt;MdmStructureLhRatio&gt; ratios = context.getStructureLhRatios();</span>
+<span class="nc bnc" id="L227" title="All 2 branches missed.">        if (ratios != null) {</span>
+<span class="nc bnc" id="L228" title="All 2 branches missed.">            for (MdmStructureLhRatio ratio : ratios) {</span>
+<span class="nc" id="L229">                String key = ratio.getCxMachineTypeCode() + &quot;_&quot; + ratio.getStructureName();</span>
+<span class="nc bnc" id="L230" title="All 2 branches missed.">                if (ratio.getMaxEmbryoQty() != null) {</span>
+<span class="nc" id="L231">                    typeStructureMap.put(key, ratio.getMaxEmbryoQty());</span>
+                }
+<span class="nc" id="L233">            }</span>
+        }
+
+<span class="nc bnc" id="L236" title="All 2 branches missed.">        for (MdmMoldingMachine machine : machines) {</span>
+<span class="nc" id="L237">            String machineCode = machine.getCxMachineCode();</span>
+<span class="nc" id="L238">            String machineType = machineTypeMap.get(machineCode);</span>
+
+<span class="nc" id="L240">            String key = machineType + &quot;_&quot; + structureName;</span>
+<span class="nc" id="L241">            Integer maxTypes = typeStructureMap.get(key);</span>
+
+            // 如果找不到，使用默认值
+<span class="nc bnc" id="L244" title="All 2 branches missed.">            if (maxTypes == null) {</span>
+<span class="nc bnc" id="L245" title="All 2 branches missed.">                maxTypes = context.getMaxTypesPerMachine() != null ? context.getMaxTypesPerMachine() : 4;</span>
+            }
+
+<span class="nc" id="L248">            result.put(machineCode, maxTypes);</span>
+<span class="nc" id="L249">        }</span>
+
+<span class="nc" id="L251">        return result;</span>
+    }
+
+    /**
+     * 均衡分配胎胚到机台（支持每台机台有不同的最大硫化机数和最大胎胚种类数）
+     *
+     * @param tasks                   胎胚任务列表
+     * @param availableMachines       可分配机台列表
+     * @param machineHistoryMap       历史任务映射
+     * @param machineMaxLhMap         机台最大硫化机数映射（机台编码 -&gt; 最大硫化机数）
+     * @param machineMaxEmbryoTypesMap 机台最大胎胚种类数映射（机台编码 -&gt; 最大胎胚种类数）
+     * @param forceKeepHistory        是否强制保留历史任务
+     * @param context                 排程上下文
+     * @return 均衡分配结果
+     */
+    public BalancingResult balanceEmbryosToMachinesWithMachineCapacity(
+            List&lt;CoreScheduleAlgorithmService.DailyEmbryoTask&gt; tasks,
+            List&lt;MpCxCapacityConfiguration&gt; availableMachines,
+            Map&lt;String, Set&lt;String&gt;&gt; machineHistoryMap,
+            Map&lt;String, Integer&gt; machineMaxLhMap,
+            Map&lt;String, Integer&gt; machineMaxEmbryoTypesMap,
+            boolean forceKeepHistory,
+            ScheduleContextDTO context) {
+
+        // Step 1: 获取均衡阈值配置
+<span class="nc" id="L276">        int typeDiffThreshold = getTypeDiffThreshold(context);</span>
+<span class="nc" id="L277">        int loadDiffThreshold = getLoadDiffThreshold(context);</span>
+
+<span class="nc" id="L279">        log.info(&quot;均衡分配参数：种类差额阈值={}, 负荷差额阈值={}&quot;,</span>
+<span class="nc" id="L280">                typeDiffThreshold, loadDiffThreshold);</span>
+
+        // Step 2: 计算总需求（所有胎胚的硫化机台数之和）
+<span class="nc" id="L283">        int totalDemand = tasks.stream()</span>
+<span class="nc bnc" id="L284" title="All 2 branches missed.">                .mapToInt(t -&gt; t.getVulcanizeMachineCount() != null ? t.getVulcanizeMachineCount() : 0)</span>
+<span class="nc" id="L285">                .sum();</span>
+
+        // Step 3: 计算总产能（每台机台的最大硫化机数之和，不再简单相乘）
+<span class="nc" id="L288">        int totalCapacity = 0;</span>
+<span class="nc bnc" id="L289" title="All 2 branches missed.">        for (MpCxCapacityConfiguration config : availableMachines) {</span>
+<span class="nc" id="L290">            Integer maxLh = machineMaxLhMap.get(config.getCxMachineCode());</span>
+<span class="nc bnc" id="L291" title="All 2 branches missed.">            totalCapacity += (maxLh != null ? maxLh : 10);</span>
+<span class="nc" id="L292">        }</span>
+
+<span class="nc" id="L294">        log.info(&quot;均衡分配计算：总需求（硫化机台数）={}, 总产能（各机台最大硫化机数之和）={}, 机台数={}&quot;,</span>
+<span class="nc" id="L295">                totalDemand, totalCapacity, availableMachines.size());</span>
+
+        // Step 4: 按硫化机台数从大到小排序胎胚
+<span class="nc" id="L298">        List&lt;CoreScheduleAlgorithmService.DailyEmbryoTask&gt; sortedTasks = tasks.stream()</span>
+<span class="nc" id="L299">                .sorted((a, b) -&gt; {</span>
+<span class="nc bnc" id="L300" title="All 2 branches missed.">                    int countA = a.getVulcanizeMachineCount() != null ? a.getVulcanizeMachineCount() : 0;</span>
+<span class="nc bnc" id="L301" title="All 2 branches missed.">                    int countB = b.getVulcanizeMachineCount() != null ? b.getVulcanizeMachineCount() : 0;</span>
+<span class="nc" id="L302">                    return Integer.compare(countB, countA);</span>
+                })
+<span class="nc" id="L304">                .collect(Collectors.toList());</span>
+
+        // Step 5: 初始化机台状态（每台机台使用自己的最大硫化机数和最大胎胚种类数）
+<span class="nc" id="L307">        List&lt;MachineState&gt; machineStates = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L308" title="All 2 branches missed.">        for (MpCxCapacityConfiguration config : availableMachines) {</span>
+<span class="nc" id="L309">            MachineState state = new MachineState();</span>
+<span class="nc" id="L310">            state.setMachineCode(config.getCxMachineCode());</span>
+
+            // 从映射中获取该机台的最大硫化机数
+<span class="nc" id="L313">            Integer maxLh = machineMaxLhMap.get(config.getCxMachineCode());</span>
+<span class="nc bnc" id="L314" title="All 2 branches missed.">            state.setMaxCapacity(maxLh != null ? maxLh : 10);</span>
+
+            // 从映射中获取该机台的最大胎胚种类数
+<span class="nc" id="L317">            Integer maxTypes = machineMaxEmbryoTypesMap.get(config.getCxMachineCode());</span>
+<span class="nc bnc" id="L318" title="All 2 branches missed.">            state.setMaxTypes(maxTypes != null ? maxTypes : 4);</span>
+
+<span class="nc" id="L320">            state.setCurrentLoad(0);</span>
+<span class="nc" id="L321">            state.setCurrentTypes(0);</span>
+<span class="nc" id="L322">            state.setAssignedEmbryos(new ArrayList&lt;&gt;());</span>
+
+<span class="nc" id="L324">            Set&lt;String&gt; historyEmbryos = machineHistoryMap.get(config.getCxMachineCode());</span>
+<span class="nc bnc" id="L325" title="All 2 branches missed.">            state.setHistoryEmbryos(historyEmbryos != null ? historyEmbryos : new HashSet&lt;&gt;());</span>
+
+<span class="nc" id="L327">            machineStates.add(state);</span>
+<span class="nc" id="L328">        }</span>
+
+        // Step 6: 如果强制保留历史任务，先进行保底预留
+<span class="nc bnc" id="L331" title="All 2 branches missed.">        if (forceKeepHistory) {</span>
+<span class="nc" id="L332">            reservedHistoryTasks(sortedTasks, machineStates, context);</span>
+        }
+
+        // Step 7: DFS + 剪枝搜索最优方案
+<span class="nc" id="L336">        DfsSearchResult searchResult = new DfsSearchResult();</span>
+<span class="nc" id="L337">        searchResult.bestScore = Integer.MAX_VALUE;</span>
+<span class="nc" id="L338">        searchResult.bestAssignments = null;</span>
+<span class="nc" id="L339">        searchResult.searchCount = 0;</span>
+<span class="nc" id="L340">        searchResult.pruneCount = 0;</span>
+
+<span class="nc" id="L342">        List&lt;CoreScheduleAlgorithmService.DailyEmbryoTask&gt; remainingTasks = getRemainingTasks(sortedTasks);</span>
+<span class="nc" id="L343">        dfsAssign(remainingTasks, 0, machineStates, forceKeepHistory,</span>
+                typeDiffThreshold, loadDiffThreshold, searchResult);
+
+<span class="nc" id="L346">        log.info(&quot;DFS搜索统计：总搜索次数={}, 剪枝次数={}, 最优分数={}&quot;,</span>
+<span class="nc" id="L347">                searchResult.searchCount, searchResult.pruneCount, searchResult.bestScore);</span>
+
+        // Step 8: 构建结果
+        BalancingResult result;
+<span class="nc bnc" id="L351" title="All 2 branches missed.">        if (searchResult.bestAssignments != null) {</span>
+<span class="nc" id="L352">            result = convertDfsResultToBalancingResult(searchResult.bestAssignments, machineStates, sortedTasks);</span>
+<span class="nc" id="L353">            log.info(&quot;找到满足均衡条件的最优方案&quot;);</span>
+        } else {
+<span class="nc" id="L355">            log.warn(&quot;未找到满足均衡条件的方案，使用贪心算法作为兜底&quot;);</span>
+<span class="nc" id="L356">            result = greedyAssignFallback(sortedTasks, machineStates, forceKeepHistory,</span>
+                    typeDiffThreshold, loadDiffThreshold);
+        }
+
+<span class="nc" id="L360">        logAllocationResult(result, machineStates);</span>
+<span class="nc" id="L361">        return result;</span>
+    }
+
+    // ==================== 向后兼容方法 ====================
+
+    /**
+     * 均衡分配胎胚到机台（向后兼容，统一 maxEmbryoTypes）
+     *
+     * @deprecated 请使用 {@link #balanceEmbryosToMachinesWithMachineCapacity} 方法
+     */
+    @Deprecated
+    public BalancingResult balanceEmbryosToMachinesWithMachineCapacity(
+            List&lt;CoreScheduleAlgorithmService.DailyEmbryoTask&gt; tasks,
+            List&lt;MpCxCapacityConfiguration&gt; availableMachines,
+            Map&lt;String, Set&lt;String&gt;&gt; machineHistoryMap,
+            Map&lt;String, Integer&gt; machineMaxLhMap,
+            int maxEmbryoTypes,
+            boolean forceKeepHistory,
+            ScheduleContextDTO context) {
+
+        // 构建统一的机台最大胎胚种类数映射（向后兼容）
+<span class="nc" id="L382">        Map&lt;String, Integer&gt; machineMaxEmbryoTypesMap = new HashMap&lt;&gt;();</span>
+<span class="nc bnc" id="L383" title="All 2 branches missed.">        for (MpCxCapacityConfiguration config : availableMachines) {</span>
+<span class="nc" id="L384">            machineMaxEmbryoTypesMap.put(config.getCxMachineCode(), maxEmbryoTypes);</span>
+<span class="nc" id="L385">        }</span>
+
+<span class="nc" id="L387">        return balanceEmbryosToMachinesWithMachineCapacity(</span>
+                tasks, availableMachines, machineHistoryMap,
+                machineMaxLhMap, machineMaxEmbryoTypesMap, forceKeepHistory, context);
+    }
+
+    // ==================== DFS + 剪枝算法核心 ====================
+
+    /**
+     * 保底预留历史任务
+     */
+    private void reservedHistoryTasks(
+            List&lt;CoreScheduleAlgorithmService.DailyEmbryoTask&gt; tasks,
+            List&lt;MachineState&gt; machineStates,
+            ScheduleContextDTO context) {
+        
+<span class="nc" id="L402">        log.info(&quot;开始保底预留历史任务...&quot;);</span>
+        
+        // 构建胎胚编码 -&gt; 任务 的映射
+<span class="nc" id="L405">        Map&lt;String, CoreScheduleAlgorithmService.DailyEmbryoTask&gt; taskMap = tasks.stream()</span>
+<span class="nc" id="L406">                .collect(Collectors.toMap(</span>
+                        CoreScheduleAlgorithmService.DailyEmbryoTask::getMaterialCode,
+<span class="nc" id="L408">                        t -&gt; t,</span>
+<span class="nc" id="L409">                        (a, b) -&gt; a));</span>
+        
+<span class="nc" id="L411">        int totalReserved = 0;</span>
+        
+<span class="nc bnc" id="L413" title="All 2 branches missed.">        for (MachineState state : machineStates) {</span>
+<span class="nc" id="L414">            Set&lt;String&gt; historyEmbryos = state.getHistoryEmbryos();</span>
+<span class="nc bnc" id="L415" title="All 4 branches missed.">            if (historyEmbryos == null || historyEmbryos.isEmpty()) {</span>
+<span class="nc" id="L416">                continue;</span>
+            }
+            
+<span class="nc bnc" id="L419" title="All 2 branches missed.">            for (String embryoCode : historyEmbryos) {</span>
+<span class="nc" id="L420">                CoreScheduleAlgorithmService.DailyEmbryoTask task = taskMap.get(embryoCode);</span>
+<span class="nc bnc" id="L421" title="All 2 branches missed.">                if (task == null) {</span>
+<span class="nc" id="L422">                    continue;</span>
+                }
+                
+<span class="nc bnc" id="L425" title="All 2 branches missed.">                int remainingDemand = task.getVulcanizeMachineCount() != null </span>
+<span class="nc" id="L426">                        ? task.getVulcanizeMachineCount() : 0;</span>
+                
+<span class="nc bnc" id="L428" title="All 2 branches missed.">                if (remainingDemand &lt;= 0) {</span>
+<span class="nc" id="L429">                    continue;</span>
+                }
+                
+<span class="nc bnc" id="L432" title="All 2 branches missed.">                if (state.getCurrentLoad() &gt;= state.getMaxCapacity()) {</span>
+<span class="nc" id="L433">                    log.warn(&quot;机台 {} 容量已满，无法保底预留胎胚 {}&quot;, </span>
+<span class="nc" id="L434">                            state.getMachineCode(), embryoCode);</span>
+<span class="nc" id="L435">                    continue;</span>
+                }
+                
+                // 保底预留1个硫化机台数
+<span class="nc" id="L439">                int reservedCount = 1;</span>
+                
+<span class="nc" id="L441">                state.getAssignedEmbryos().add(new EmbryoAssignment(embryoCode, task, reservedCount));</span>
+<span class="nc" id="L442">                state.setCurrentLoad(state.getCurrentLoad() + reservedCount);</span>
+<span class="nc" id="L443">                state.setCurrentTypes(state.getCurrentTypes() + 1);</span>
+                
+<span class="nc" id="L445">                task.setVulcanizeMachineCount(remainingDemand - reservedCount);</span>
+                
+<span class="nc" id="L447">                totalReserved++;</span>
+<span class="nc" id="L448">                log.debug(&quot;机台 {} 保底预留胎胚 {} 共 {} 个硫化机&quot;, </span>
+<span class="nc" id="L449">                        state.getMachineCode(), embryoCode, reservedCount);</span>
+<span class="nc" id="L450">            }</span>
+<span class="nc" id="L451">        }</span>
+        
+<span class="nc" id="L453">        log.info(&quot;保底预留完成，共预留 {} 个任务&quot;, totalReserved);</span>
+<span class="nc" id="L454">    }</span>
+
+    /**
+     * 获取剩余待分配的任务（需求量 &gt; 0）
+     */
+    private List&lt;CoreScheduleAlgorithmService.DailyEmbryoTask&gt; getRemainingTasks(
+            List&lt;CoreScheduleAlgorithmService.DailyEmbryoTask&gt; tasks) {
+<span class="nc" id="L461">        return tasks.stream()</span>
+<span class="nc bnc" id="L462" title="All 4 branches missed.">                .filter(t -&gt; t.getVulcanizeMachineCount() != null &amp;&amp; t.getVulcanizeMachineCount() &gt; 0)</span>
+<span class="nc" id="L463">                .collect(Collectors.toList());</span>
+    }
+
+    /**
+     * DFS深度优先搜索 + 剪枝
+     */
+    private void dfsAssign(
+            List&lt;CoreScheduleAlgorithmService.DailyEmbryoTask&gt; tasks,
+            int taskIndex,
+            List&lt;MachineState&gt; machineStates,
+            boolean forceKeepHistory,
+            int typeDiffThreshold,
+            int loadDiffThreshold,
+            DfsSearchResult searchResult) {
+        
+<span class="nc" id="L478">        searchResult.searchCount++;</span>
+        
+        // 终止条件：所有任务已分配
+<span class="nc bnc" id="L481" title="All 2 branches missed.">        if (taskIndex &gt;= tasks.size()) {</span>
+<span class="nc" id="L482">            int score = calculateBalancingScore(machineStates);</span>
+            
+<span class="nc bnc" id="L484" title="All 2 branches missed.">            if (score &lt; searchResult.bestScore) {</span>
+<span class="nc" id="L485">                searchResult.bestScore = score;</span>
+<span class="nc" id="L486">                searchResult.bestAssignments = copyAssignments(machineStates);</span>
+            }
+<span class="nc" id="L488">            return;</span>
+        }
+        
+<span class="nc" id="L491">        CoreScheduleAlgorithmService.DailyEmbryoTask task = tasks.get(taskIndex);</span>
+<span class="nc" id="L492">        String embryoCode = task.getMaterialCode();</span>
+<span class="nc bnc" id="L493" title="All 2 branches missed.">        int lhMachineCount = task.getVulcanizeMachineCount() != null ? task.getVulcanizeMachineCount() : 0;</span>
+        
+<span class="nc bnc" id="L495" title="All 2 branches missed.">        if (lhMachineCount &lt;= 0) {</span>
+<span class="nc" id="L496">            dfsAssign(tasks, taskIndex + 1, machineStates, forceKeepHistory,</span>
+                    typeDiffThreshold, loadDiffThreshold, searchResult);
+<span class="nc" id="L498">            return;</span>
+        }
+        
+        // 找出可以分配的候选机台
+<span class="nc" id="L502">        List&lt;MachineState&gt; candidates = findCandidateMachinesForDfs(</span>
+                embryoCode, machineStates, forceKeepHistory, lhMachineCount);
+        
+        // 按优先级排序候选机台
+<span class="nc" id="L506">        sortCandidatesForDfs(candidates, embryoCode, forceKeepHistory);</span>
+        
+<span class="nc bnc" id="L508" title="All 2 branches missed.">        for (MachineState candidate : candidates) {</span>
+            // === 剪枝检查 ===
+            
+<span class="nc" id="L511">            int newTypes = candidate.getCurrentTypes();</span>
+<span class="nc" id="L512">            boolean isNewType = !candidate.getAssignedEmbryos().stream()</span>
+<span class="nc bnc" id="L513" title="All 2 branches missed.">                    .anyMatch(e -&gt; e.getEmbryoCode().equals(embryoCode));</span>
+<span class="nc bnc" id="L514" title="All 2 branches missed.">            if (isNewType) {</span>
+<span class="nc" id="L515">                newTypes++;</span>
+            }
+            
+            // 计算分配后各机台的种类数
+<span class="nc" id="L519">            int minTypes = Integer.MAX_VALUE;</span>
+<span class="nc" id="L520">            int maxTypes = 0;</span>
+<span class="nc bnc" id="L521" title="All 2 branches missed.">            for (MachineState state : machineStates) {</span>
+<span class="nc" id="L522">                int types = state.getCurrentTypes();</span>
+<span class="nc bnc" id="L523" title="All 2 branches missed.">                if (state == candidate) {</span>
+<span class="nc" id="L524">                    types = newTypes;</span>
+                }
+<span class="nc bnc" id="L526" title="All 2 branches missed.">                if (types &gt; 0) {</span>
+<span class="nc" id="L527">                    minTypes = Math.min(minTypes, types);</span>
+<span class="nc" id="L528">                    maxTypes = Math.max(maxTypes, types);</span>
+                }
+<span class="nc" id="L530">            }</span>
+            
+            // 剪枝条件：种类数差额超过阈值
+<span class="nc bnc" id="L533" title="All 4 branches missed.">            if (minTypes != Integer.MAX_VALUE &amp;&amp; maxTypes - minTypes &gt; typeDiffThreshold) {</span>
+<span class="nc" id="L534">                searchResult.pruneCount++;</span>
+<span class="nc" id="L535">                continue;</span>
+            }
+            
+            // 检查2：是否会导致负荷差额超过阈值
+<span class="nc" id="L539">            int newLoad = candidate.getCurrentLoad() + lhMachineCount;</span>
+            
+<span class="nc" id="L541">            int minLoad = Integer.MAX_VALUE;</span>
+<span class="nc" id="L542">            int maxLoad = 0;</span>
+<span class="nc bnc" id="L543" title="All 2 branches missed.">            for (MachineState state : machineStates) {</span>
+<span class="nc" id="L544">                int load = state.getCurrentLoad();</span>
+<span class="nc bnc" id="L545" title="All 2 branches missed.">                if (state == candidate) {</span>
+<span class="nc" id="L546">                    load = newLoad;</span>
+                }
+<span class="nc bnc" id="L548" title="All 2 branches missed.">                if (load &gt; 0) {</span>
+<span class="nc" id="L549">                    minLoad = Math.min(minLoad, load);</span>
+<span class="nc" id="L550">                    maxLoad = Math.max(maxLoad, load);</span>
+                }
+<span class="nc" id="L552">            }</span>
+            
+            // 剪枝条件：负荷差额超过阈值
+<span class="nc bnc" id="L555" title="All 4 branches missed.">            if (minLoad != Integer.MAX_VALUE &amp;&amp; maxLoad - minLoad &gt; loadDiffThreshold) {</span>
+<span class="nc" id="L556">                searchResult.pruneCount++;</span>
+<span class="nc" id="L557">                continue;</span>
+            }
+            
+            // === 分配并递归 ===
+<span class="nc" id="L561">            candidate.getAssignedEmbryos().add(new EmbryoAssignment(embryoCode, task, lhMachineCount));</span>
+<span class="nc" id="L562">            candidate.setCurrentLoad(newLoad);</span>
+<span class="nc bnc" id="L563" title="All 2 branches missed.">            if (isNewType) {</span>
+<span class="nc" id="L564">                candidate.setCurrentTypes(candidate.getCurrentTypes() + 1);</span>
+            }
+            
+<span class="nc" id="L567">            dfsAssign(tasks, taskIndex + 1, machineStates, forceKeepHistory,</span>
+                    typeDiffThreshold, loadDiffThreshold, searchResult);
+            
+            // === 回溯 ===
+<span class="nc" id="L571">            candidate.getAssignedEmbryos().remove(candidate.getAssignedEmbryos().size() - 1);</span>
+<span class="nc" id="L572">            candidate.setCurrentLoad(candidate.getCurrentLoad() - lhMachineCount);</span>
+<span class="nc bnc" id="L573" title="All 2 branches missed.">            if (isNewType) {</span>
+<span class="nc" id="L574">                candidate.setCurrentTypes(candidate.getCurrentTypes() - 1);</span>
+            }
+<span class="nc" id="L576">        }</span>
+<span class="nc" id="L577">    }</span>
+
+    /**
+     * 找出可以分配胎胚的候选机台（DFS用）
+     */
+    private List&lt;MachineState&gt; findCandidateMachinesForDfs(
+            String embryoCode,
+            List&lt;MachineState&gt; machineStates,
+            boolean forceKeepHistory,
+            int lhMachineCount) {
+        
+<span class="nc" id="L588">        List&lt;MachineState&gt; candidates = new ArrayList&lt;&gt;();</span>
+        
+<span class="nc bnc" id="L590" title="All 2 branches missed.">        for (MachineState state : machineStates) {</span>
+<span class="nc bnc" id="L591" title="All 2 branches missed.">            if (state.getCurrentLoad() + lhMachineCount &gt; state.getMaxCapacity()) {</span>
+<span class="nc" id="L592">                continue;</span>
+            }
+<span class="nc" id="L594">            candidates.add(state);</span>
+<span class="nc" id="L595">        }</span>
+        
+<span class="nc" id="L597">        return candidates;</span>
+    }
+
+    /**
+     * 排序候选机台（DFS用）
+     *
+     * &lt;p&gt;排序优先级：
+     * &lt;ol&gt;
+     *   &lt;li&gt;历史胎胚优先（工人更熟悉，换品种成本低）&lt;/li&gt;
+     *   &lt;li&gt;负荷少的优先（均衡分配）&lt;/li&gt;
+     *   &lt;li&gt;种类少的优先（均衡分配）&lt;/li&gt;
+     * &lt;/ol&gt;
+     */
+    private void sortCandidatesForDfs(
+            List&lt;MachineState&gt; candidates,
+            String embryoCode,
+            boolean forceKeepHistory) {
+        
+<span class="nc" id="L615">        candidates.sort((a, b) -&gt; {</span>
+            // 优先级1：历史胎胚优先
+<span class="nc" id="L617">            boolean aHasHistory = a.getHistoryEmbryos().contains(embryoCode);</span>
+<span class="nc" id="L618">            boolean bHasHistory = b.getHistoryEmbryos().contains(embryoCode);</span>
+<span class="nc bnc" id="L619" title="All 4 branches missed.">            if (aHasHistory &amp;&amp; !bHasHistory) return -1;</span>
+<span class="nc bnc" id="L620" title="All 4 branches missed.">            if (!aHasHistory &amp;&amp; bHasHistory) return 1;</span>
+            
+            // 优先级2：负荷少的优先
+<span class="nc" id="L623">            int loadCompare = Integer.compare(a.getCurrentLoad(), b.getCurrentLoad());</span>
+<span class="nc bnc" id="L624" title="All 2 branches missed.">            if (loadCompare != 0) return loadCompare;</span>
+            
+            // 优先级3：种类少的优先
+<span class="nc" id="L627">            return Integer.compare(a.getCurrentTypes(), b.getCurrentTypes());</span>
+        });
+<span class="nc" id="L629">    }</span>
+
+    /**
+     * 复制当前分配状态
+     */
+    private Map&lt;String, List&lt;EmbryoAssignment&gt;&gt; copyAssignments(List&lt;MachineState&gt; machineStates) {
+<span class="nc" id="L635">        Map&lt;String, List&lt;EmbryoAssignment&gt;&gt; copy = new LinkedHashMap&lt;&gt;();</span>
+<span class="nc bnc" id="L636" title="All 2 branches missed.">        for (MachineState state : machineStates) {</span>
+<span class="nc" id="L637">            copy.put(state.getMachineCode(), new ArrayList&lt;&gt;(state.getAssignedEmbryos()));</span>
+<span class="nc" id="L638">        }</span>
+<span class="nc" id="L639">        return copy;</span>
+    }
+
+    /**
+     * 计算均衡分数（越小越均衡）
+     */
+    private int calculateBalancingScore(List&lt;MachineState&gt; machineStates) {
+<span class="nc bnc" id="L646" title="All 2 branches missed.">        if (machineStates.isEmpty()) {</span>
+<span class="nc" id="L647">            return 0;</span>
+        }
+        
+<span class="nc" id="L650">        int maxLoad = 0, minLoad = Integer.MAX_VALUE;</span>
+<span class="nc" id="L651">        int maxTypes = 0, minTypes = Integer.MAX_VALUE;</span>
+        
+<span class="nc bnc" id="L653" title="All 2 branches missed.">        for (MachineState state : machineStates) {</span>
+<span class="nc bnc" id="L654" title="All 2 branches missed.">            if (state.getCurrentLoad() &gt; 0) {</span>
+<span class="nc" id="L655">                maxLoad = Math.max(maxLoad, state.getCurrentLoad());</span>
+<span class="nc" id="L656">                minLoad = Math.min(minLoad, state.getCurrentLoad());</span>
+<span class="nc" id="L657">                maxTypes = Math.max(maxTypes, state.getCurrentTypes());</span>
+<span class="nc" id="L658">                minTypes = Math.min(minTypes, state.getCurrentTypes());</span>
+            }
+<span class="nc" id="L660">        }</span>
+        
+<span class="nc bnc" id="L662" title="All 2 branches missed.">        int loadGap = maxLoad - (minLoad == Integer.MAX_VALUE ? 0 : minLoad);</span>
+<span class="nc bnc" id="L663" title="All 2 branches missed.">        int typeGap = maxTypes - (minTypes == Integer.MAX_VALUE ? 0 : minTypes);</span>
+        
+<span class="nc" id="L665">        return loadGap * 10 + typeGap * 100;</span>
+    }
+
+    /**
+     * 将DFS搜索结果转换为BalancingResult
+     */
+    private BalancingResult convertDfsResultToBalancingResult(
+            Map&lt;String, List&lt;EmbryoAssignment&gt;&gt; assignments,
+            List&lt;MachineState&gt; machineStates,
+            List&lt;CoreScheduleAlgorithmService.DailyEmbryoTask&gt; tasks) {
+        
+<span class="nc" id="L676">        BalancingResult result = new BalancingResult();</span>
+<span class="nc" id="L677">        result.setAssignments(new ArrayList&lt;&gt;());</span>
+        
+<span class="nc bnc" id="L679" title="All 2 branches missed.">        for (Map.Entry&lt;String, List&lt;EmbryoAssignment&gt;&gt; entry : assignments.entrySet()) {</span>
+<span class="nc bnc" id="L680" title="All 2 branches missed.">            if (entry.getValue().isEmpty()) {</span>
+<span class="nc" id="L681">                continue;</span>
+            }
+            
+<span class="nc" id="L684">            MachineAssignment assignment = new MachineAssignment();</span>
+<span class="nc" id="L685">            assignment.setMachineCode(entry.getKey());</span>
+<span class="nc" id="L686">            assignment.setEmbryoAssignments(entry.getValue());</span>
+<span class="nc" id="L687">            result.getAssignments().add(assignment);</span>
+<span class="nc" id="L688">        }</span>
+        
+<span class="nc" id="L690">        return result;</span>
+    }
+
+    /**
+     * 贪心算法兜底方案
+     */
+    private BalancingResult greedyAssignFallback(
+            List&lt;CoreScheduleAlgorithmService.DailyEmbryoTask&gt; tasks,
+            List&lt;MachineState&gt; machineStates,
+            boolean forceKeepHistory,
+            int typeDiffThreshold,
+            int loadDiffThreshold) {
+        
+        // 重置机台状态
+<span class="nc bnc" id="L704" title="All 2 branches missed.">        for (MachineState state : machineStates) {</span>
+<span class="nc" id="L705">            state.setCurrentLoad(0);</span>
+<span class="nc" id="L706">            state.setCurrentTypes(0);</span>
+<span class="nc" id="L707">            state.getAssignedEmbryos().clear();</span>
+<span class="nc" id="L708">        }</span>
+        
+<span class="nc bnc" id="L710" title="All 2 branches missed.">        for (CoreScheduleAlgorithmService.DailyEmbryoTask task : tasks) {</span>
+<span class="nc" id="L711">            String embryoCode = task.getMaterialCode();</span>
+<span class="nc bnc" id="L712" title="All 2 branches missed.">            int lhMachineCount = task.getVulcanizeMachineCount() != null ? task.getVulcanizeMachineCount() : 0;</span>
+            
+<span class="nc bnc" id="L714" title="All 2 branches missed.">            if (lhMachineCount &lt;= 0) {</span>
+<span class="nc" id="L715">                continue;</span>
+            }
+            
+<span class="nc" id="L718">            List&lt;MachineState&gt; candidates = findCandidateMachinesForDfs(</span>
+                    embryoCode, machineStates, forceKeepHistory, lhMachineCount);
+            
+<span class="nc bnc" id="L721" title="All 2 branches missed.">            if (candidates.isEmpty()) {</span>
+<span class="nc" id="L722">                log.warn(&quot;胎胚 {} 无法分配到任何机台&quot;, embryoCode);</span>
+<span class="nc" id="L723">                continue;</span>
+            }
+            
+<span class="nc" id="L726">            sortCandidatesForDfs(candidates, embryoCode, forceKeepHistory);</span>
+            
+<span class="nc" id="L728">            MachineState selected = candidates.get(0);</span>
+            
+<span class="nc" id="L730">            boolean isNewType = !selected.getAssignedEmbryos().stream()</span>
+<span class="nc bnc" id="L731" title="All 2 branches missed.">                    .anyMatch(e -&gt; e.getEmbryoCode().equals(embryoCode));</span>
+            
+<span class="nc" id="L733">            selected.getAssignedEmbryos().add(new EmbryoAssignment(embryoCode, task, lhMachineCount));</span>
+<span class="nc" id="L734">            selected.setCurrentLoad(selected.getCurrentLoad() + lhMachineCount);</span>
+<span class="nc bnc" id="L735" title="All 2 branches missed.">            if (isNewType) {</span>
+<span class="nc" id="L736">                selected.setCurrentTypes(selected.getCurrentTypes() + 1);</span>
+            }
+<span class="nc" id="L738">        }</span>
+        
+<span class="nc" id="L740">        return convertToResult(machineStates, tasks);</span>
+    }
+
+    /**
+     * 转换为结果对象
+     */
+    private BalancingResult convertToResult(
+            List&lt;MachineState&gt; machineStates,
+            List&lt;CoreScheduleAlgorithmService.DailyEmbryoTask&gt; tasks) {
+        
+<span class="nc" id="L750">        BalancingResult result = new BalancingResult();</span>
+<span class="nc" id="L751">        result.setAssignments(new ArrayList&lt;&gt;());</span>
+        
+<span class="nc bnc" id="L753" title="All 2 branches missed.">        for (MachineState state : machineStates) {</span>
+<span class="nc bnc" id="L754" title="All 2 branches missed.">            if (state.getAssignedEmbryos().isEmpty()) {</span>
+<span class="nc" id="L755">                continue;</span>
+            }
+            
+<span class="nc" id="L758">            MachineAssignment assignment = new MachineAssignment();</span>
+<span class="nc" id="L759">            assignment.setMachineCode(state.getMachineCode());</span>
+<span class="nc" id="L760">            assignment.setEmbryoAssignments(state.getAssignedEmbryos());</span>
+<span class="nc" id="L761">            result.getAssignments().add(assignment);</span>
+<span class="nc" id="L762">        }</span>
+        
+<span class="nc" id="L764">        return result;</span>
+    }
+
+    /**
+     * 记录分配结果日志
+     */
+    private void logAllocationResult(BalancingResult result, List&lt;MachineState&gt; machineStates) {
+<span class="nc" id="L771">        log.info(&quot;均衡分配结果：&quot;);</span>
+        
+<span class="nc bnc" id="L773" title="All 2 branches missed.">        for (MachineAssignment assignment : result.getAssignments()) {</span>
+<span class="nc" id="L774">            List&lt;String&gt; embryos = assignment.getEmbryoAssignments().stream()</span>
+<span class="nc" id="L775">                    .map(e -&gt; e.getEmbryoCode() + &quot;(&quot; + e.getAssignedQty() + &quot;)&quot;)</span>
+<span class="nc" id="L776">                    .collect(Collectors.toList());</span>
+<span class="nc" id="L777">            log.info(&quot;  机台 {}: {}&quot;, assignment.getMachineCode(), embryos);</span>
+<span class="nc" id="L778">        }</span>
+        
+<span class="nc" id="L780">        int maxLoad = 0, minLoad = Integer.MAX_VALUE;</span>
+<span class="nc" id="L781">        int maxTypes = 0, minTypes = Integer.MAX_VALUE;</span>
+        
+<span class="nc bnc" id="L783" title="All 2 branches missed.">        for (MachineState state : machineStates) {</span>
+<span class="nc bnc" id="L784" title="All 2 branches missed.">            if (state.getCurrentLoad() &gt; 0) {</span>
+<span class="nc" id="L785">                maxLoad = Math.max(maxLoad, state.getCurrentLoad());</span>
+<span class="nc" id="L786">                minLoad = Math.min(minLoad, state.getCurrentLoad());</span>
+<span class="nc" id="L787">                maxTypes = Math.max(maxTypes, state.getCurrentTypes());</span>
+<span class="nc" id="L788">                minTypes = Math.min(minTypes, state.getCurrentTypes());</span>
+            }
+<span class="nc" id="L790">        }</span>
+        
+<span class="nc" id="L792">        log.info(&quot;均衡指标：负荷差距={}, 种类差距={}&quot;, </span>
+<span class="nc" id="L793">                maxLoad - minLoad, maxTypes - minTypes);</span>
+<span class="nc" id="L794">    }</span>
+
+    // ==================== 配置获取方法 ====================
+
+    /**
+     * 获取种类数允许差额配置
+     */
+    public int getTypeDiffThreshold(ScheduleContextDTO context) {
+<span class="nc bnc" id="L802" title="All 2 branches missed.">        if (context.getParamConfigMap() != null) {</span>
+<span class="nc" id="L803">            CxParamConfig config = context.getParamConfigMap().get(PARAM_TYPE_DIFF_THRESHOLD);</span>
+<span class="nc bnc" id="L804" title="All 4 branches missed.">            if (config != null &amp;&amp; config.getParamValue() != null) {</span>
+                try {
+<span class="nc" id="L806">                    return Integer.parseInt(config.getParamValue());</span>
+<span class="nc" id="L807">                } catch (NumberFormatException e) {</span>
+<span class="nc" id="L808">                    log.warn(&quot;解析种类差额阈值配置失败: {}&quot;, config.getParamValue());</span>
+                }
+            }
+        }
+<span class="nc" id="L812">        return DEFAULT_TYPE_DIFF_THRESHOLD;</span>
+    }
+
+    /**
+     * 获取负荷允许差额配置
+     */
+    public int getLoadDiffThreshold(ScheduleContextDTO context) {
+<span class="nc bnc" id="L819" title="All 2 branches missed.">        if (context.getParamConfigMap() != null) {</span>
+<span class="nc" id="L820">            CxParamConfig config = context.getParamConfigMap().get(PARAM_LOAD_DIFF_THRESHOLD);</span>
+<span class="nc bnc" id="L821" title="All 4 branches missed.">            if (config != null &amp;&amp; config.getParamValue() != null) {</span>
+                try {
+<span class="nc" id="L823">                    return Integer.parseInt(config.getParamValue());</span>
+<span class="nc" id="L824">                } catch (NumberFormatException e) {</span>
+<span class="nc" id="L825">                    log.warn(&quot;解析负荷差额阈值配置失败: {}&quot;, config.getParamValue());</span>
+                }
+            }
+        }
+<span class="nc" id="L829">        return DEFAULT_LOAD_DIFF_THRESHOLD;</span>
+    }
+
+    /**
+     * 获取是否强制保留历史任务配置
+     */
+    public boolean getForceKeepHistoryConfig(ScheduleContextDTO context) {
+<span class="nc bnc" id="L836" title="All 2 branches missed.">        if (context.getParamConfigMap() != null) {</span>
+<span class="nc" id="L837">            CxParamConfig config = context.getParamConfigMap().get(PARAM_FORCE_KEEP_HISTORY);</span>
+<span class="nc bnc" id="L838" title="All 4 branches missed.">            if (config != null &amp;&amp; config.getParamValue() != null) {</span>
+<span class="nc bnc" id="L839" title="All 4 branches missed.">                return &quot;1&quot;.equals(config.getParamValue()) || &quot;true&quot;.equalsIgnoreCase(config.getParamValue());</span>
+            }
+        }
+<span class="nc" id="L842">        return false;</span>
+    }
+
+    // ==================== 内部类 ====================
+
+    /**
+     * 机台状态（分配过程中使用）
+     */
+<span class="nc bnc" id="L850" title="All 38 branches missed.">    @lombok.Data</span>
+    public static class MachineState {
+<span class="nc" id="L852">        private String machineCode;</span>
+<span class="nc" id="L853">        private int maxCapacity;</span>
+<span class="nc" id="L854">        private int maxTypes;</span>
+<span class="nc" id="L855">        private int currentLoad;</span>
+<span class="nc" id="L856">        private int currentTypes;</span>
+<span class="nc" id="L857">        private List&lt;EmbryoAssignment&gt; assignedEmbryos;</span>
+<span class="nc" id="L858">        private Set&lt;String&gt; historyEmbryos;</span>
+    }
+
+    /**
+     * DFS搜索结果记录
+     */
+<span class="nc bnc" id="L864" title="All 20 branches missed.">    @lombok.Data</span>
+    private static class DfsSearchResult {
+<span class="nc" id="L866">        int bestScore;</span>
+<span class="nc" id="L867">        Map&lt;String, List&lt;EmbryoAssignment&gt;&gt; bestAssignments;</span>
+<span class="nc" id="L868">        int searchCount;</span>
+<span class="nc" id="L869">        int pruneCount;</span>
+    }
+
+    /**
+     * 均衡分配结果
+     */
+<span class="nc bnc" id="L875" title="All 14 branches missed.">    @lombok.Data</span>
+    public static class BalancingResult {
+<span class="nc" id="L877">        private List&lt;MachineAssignment&gt; assignments;</span>
+    }
+
+    /**
+     * 机台分配
+     */
+<span class="nc bnc" id="L883" title="All 22 branches missed.">    @lombok.Data</span>
+    public static class MachineAssignment {
+<span class="nc" id="L885">        private String machineCode;</span>
+<span class="nc" id="L886">        private List&lt;EmbryoAssignment&gt; embryoAssignments;</span>
+    }
+
+    /**
+     * 胎胚分配
+     */
+<span class="nc bnc" id="L892" title="All 24 branches missed.">    @lombok.Data</span>
+<span class="nc" id="L893">    @lombok.AllArgsConstructor</span>
+    public static class EmbryoAssignment {
+<span class="nc" id="L895">        private String embryoCode;</span>
+<span class="nc" id="L896">        private CoreScheduleAlgorithmService.DailyEmbryoTask task;</span>
+        /** 分配数量，单位：硫化机台数 */
+<span class="nc" id="L898">        private int assignedQty;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

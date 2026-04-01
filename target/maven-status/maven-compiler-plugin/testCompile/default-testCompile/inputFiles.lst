@@ -1,0 +1,5 @@
+/workspace/projects/src/test/java/com/zlt/aps/cx/dto/ScheduleRequestTest.java
+/workspace/projects/src/test/java/com/zlt/aps/cx/entity/config/CxShiftConfigTest.java
+/workspace/projects/src/test/java/com/zlt/aps/cx/entity/CxStockTest.java
+/workspace/projects/src/test/java/com/zlt/aps/cx/service/impl/ScheduleServiceTest.java
+/workspace/projects/src/test/java/com/zlt/aps/cx/service/engine/ProductionCalculatorTest.java

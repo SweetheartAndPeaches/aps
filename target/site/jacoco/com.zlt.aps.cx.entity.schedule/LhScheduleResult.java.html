@@ -1,0 +1,310 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>LhScheduleResult.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">APS Forming Schedule System</a> &gt; <a href="index.source.html" class="el_package">com.zlt.aps.cx.entity.schedule</a> &gt; <span class="el_source">LhScheduleResult.java</span></div><h1>LhScheduleResult.java</h1><pre class="source lang-java linenums">package com.zlt.aps.cx.entity.schedule;
+
+import com.baomidou.mybatisplus.annotation.*;
+import com.fasterxml.jackson.annotation.JsonFormat;
+import com.zlt.aps.cx.entity.base.ApsBaseEntity;
+import io.swagger.annotations.ApiModel;
+import io.swagger.annotations.ApiModel;
+import io.swagger.annotations.ApiModelProperty;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+
+/**
+ * 硫化排程结果表
+ * 对应表：T_LH_SCHEDULE_RESULT
+ *
+ * @author APS Team
+ * @since 2.0.0
+ */
+<span class="pc" id="L23">@Data</span>
+<span class="nc bnc" id="L24" title="All 536 branches missed.">@EqualsAndHashCode(callSuper = true)</span>
+@TableName(&quot;T_LH_SCHEDULE_RESULT&quot;)
+@ApiModel(value = &quot;硫化排程结果对象&quot;, description = &quot;硫化排程结果表&quot;)
+public class LhScheduleResult extends ApsBaseEntity {
+
+    private static final long serialVersionUID = 1L;
+
+    @ApiModelProperty(value = &quot;主键ID&quot;)
+    @TableId(value = &quot;ID&quot;, type = IdType.AUTO)
+<span class="nc" id="L33">    private Long id;</span>
+
+    @ApiModelProperty(value = &quot;批次号&quot;)
+    @TableField(&quot;BATCH_NO&quot;)
+<span class="nc" id="L37">    private String batchNo;</span>
+
+    @ApiModelProperty(value = &quot;工单号&quot;)
+    @TableField(&quot;ORDER_NO&quot;)
+<span class="nc" id="L41">    private String orderNo;</span>
+
+    @ApiModelProperty(value = &quot;硫化机台编号&quot;)
+    @TableField(&quot;LH_MACHINE_CODE&quot;)
+<span class="nc" id="L45">    private String lhMachineCode;</span>
+
+    @ApiModelProperty(value = &quot;左右模&quot;)
+    @TableField(&quot;LEFT_RIGHT_MOULD&quot;)
+<span class="nc" id="L49">    private String leftRightMould;</span>
+
+    @ApiModelProperty(value = &quot;硫化机台名称&quot;)
+    @TableField(&quot;LH_MACHINE_NAME&quot;)
+<span class="nc" id="L53">    private String lhMachineName;</span>
+
+    @ApiModelProperty(value = &quot;物料编号&quot;)
+    @TableField(&quot;MATERIAL_CODE&quot;)
+<span class="nc" id="L57">    private String materialCode;</span>
+
+    @ApiModelProperty(value = &quot;规格代码&quot;)
+    @TableField(&quot;SPEC_CODE&quot;)
+<span class="nc" id="L61">    private String specCode;</span>
+
+    @ApiModelProperty(value = &quot;胎胚代码&quot;)
+    @TableField(&quot;EMBRYO_CODE&quot;)
+<span class="fc" id="L65">    private String embryoCode;</span>
+
+    @ApiModelProperty(value = &quot;产品结构&quot;)
+    @TableField(&quot;STRUCTURE_NAME&quot;)
+<span class="nc" id="L69">    private String structureName;</span>
+
+    @ApiModelProperty(value = &quot;物料描述&quot;)
+    @TableField(&quot;MATERIAL_DESC&quot;)
+<span class="nc" id="L73">    private String materialDesc;</span>
+
+    @ApiModelProperty(value = &quot;主物料&quot;)
+    @TableField(&quot;MAIN_MATERIAL_DESC&quot;)
+<span class="nc" id="L77">    private String mainMaterialDesc;</span>
+
+    @ApiModelProperty(value = &quot;胎胚库存&quot;)
+    @TableField(&quot;EMBRYO_STOCK&quot;)
+<span class="nc" id="L81">    private Integer embryoStock;</span>
+
+    @ApiModelProperty(value = &quot;规格描述&quot;)
+    @TableField(&quot;SPEC_DESC&quot;)
+<span class="nc" id="L85">    private String specDesc;</span>
+
+    @ApiModelProperty(value = &quot;硫化时长(秒)&quot;)
+    @TableField(&quot;LH_TIME&quot;)
+<span class="nc" id="L89">    private Integer lhTime;</span>
+
+    @ApiModelProperty(value = &quot;日计划数量&quot;)
+    @TableField(&quot;DAILY_PLAN_QTY&quot;)
+<span class="fc" id="L93">    private Integer dailyPlanQty;</span>
+
+    @ApiModelProperty(value = &quot;排程日期&quot;)
+    @JsonFormat(pattern = &quot;yyyy-MM-dd&quot;)
+    @TableField(&quot;SCHEDULE_DATE&quot;)
+<span class="nc" id="L98">    private LocalDate scheduleDate;</span>
+
+    @ApiModelProperty(value = &quot;规格结束时间&quot;)
+    @JsonFormat(pattern = &quot;yyyy-MM-dd HH:mm:ss&quot;)
+    @TableField(&quot;SPEC_END_TIME&quot;)
+<span class="nc" id="L103">    private LocalDateTime specEndTime;</span>
+
+    @ApiModelProperty(value = &quot;生产状态&quot;)
+    @TableField(&quot;PRODUCTION_STATUS&quot;)
+<span class="nc" id="L107">    private String productionStatus;</span>
+
+    // ========== 班次信息 ==========
+    @ApiModelProperty(value = &quot;1班计划量&quot;)
+    @TableField(&quot;CLASS1_PLAN_QTY&quot;)
+<span class="nc" id="L112">    private Integer class1PlanQty;</span>
+
+    @ApiModelProperty(value = &quot;1班开始时间&quot;)
+    @JsonFormat(pattern = &quot;yyyy-MM-dd HH:mm:ss&quot;)
+    @TableField(&quot;CLASS1_START_TIME&quot;)
+<span class="nc" id="L117">    private LocalDateTime class1StartTime;</span>
+
+    @ApiModelProperty(value = &quot;1班结束时间&quot;)
+    @JsonFormat(pattern = &quot;yyyy-MM-dd HH:mm:ss&quot;)
+    @TableField(&quot;CLASS1_END_TIME&quot;)
+<span class="nc" id="L122">    private LocalDateTime class1EndTime;</span>
+
+    @ApiModelProperty(value = &quot;1班原因分析&quot;)
+    @TableField(&quot;CLASS1_ANALYSIS&quot;)
+<span class="nc" id="L126">    private String class1Analysis;</span>
+
+    @ApiModelProperty(value = &quot;1班完成量&quot;)
+    @TableField(&quot;CLASS1_FINISH_QTY&quot;)
+<span class="nc" id="L130">    private Integer class1FinishQty;</span>
+
+    @ApiModelProperty(value = &quot;2班计划量&quot;)
+    @TableField(&quot;CLASS2_PLAN_QTY&quot;)
+<span class="nc" id="L134">    private Integer class2PlanQty;</span>
+
+    @ApiModelProperty(value = &quot;2班开始时间&quot;)
+    @JsonFormat(pattern = &quot;yyyy-MM-dd HH:mm:ss&quot;)
+    @TableField(&quot;CLASS2_START_TIME&quot;)
+<span class="nc" id="L139">    private LocalDateTime class2StartTime;</span>
+
+    @ApiModelProperty(value = &quot;2班结束时间&quot;)
+    @JsonFormat(pattern = &quot;yyyy-MM-dd HH:mm:ss&quot;)
+    @TableField(&quot;CLASS2_END_TIME&quot;)
+<span class="nc" id="L144">    private LocalDateTime class2EndTime;</span>
+
+    @ApiModelProperty(value = &quot;2班原因分析&quot;)
+    @TableField(&quot;CLASS2_ANALYSIS&quot;)
+<span class="nc" id="L148">    private String class2Analysis;</span>
+
+    @ApiModelProperty(value = &quot;2班完成量&quot;)
+    @TableField(&quot;CLASS2_FINISH_QTY&quot;)
+<span class="nc" id="L152">    private Integer class2FinishQty;</span>
+
+    @ApiModelProperty(value = &quot;3班计划量&quot;)
+    @TableField(&quot;CLASS3_PLAN_QTY&quot;)
+<span class="nc" id="L156">    private Integer class3PlanQty;</span>
+
+    @ApiModelProperty(value = &quot;3班开始时间&quot;)
+    @JsonFormat(pattern = &quot;yyyy-MM-dd HH:mm:ss&quot;)
+    @TableField(&quot;CLASS3_START_TIME&quot;)
+<span class="nc" id="L161">    private LocalDateTime class3StartTime;</span>
+
+    @ApiModelProperty(value = &quot;3班结束时间&quot;)
+    @JsonFormat(pattern = &quot;yyyy-MM-dd HH:mm:ss&quot;)
+    @TableField(&quot;CLASS3_END_TIME&quot;)
+<span class="nc" id="L166">    private LocalDateTime class3EndTime;</span>
+
+    @ApiModelProperty(value = &quot;3班原因分析&quot;)
+    @TableField(&quot;CLASS3_ANALYSIS&quot;)
+<span class="nc" id="L170">    private String class3Analysis;</span>
+
+    @ApiModelProperty(value = &quot;3班完成量&quot;)
+    @TableField(&quot;CLASS3_FINISH_QTY&quot;)
+<span class="nc" id="L174">    private Integer class3FinishQty;</span>
+
+    @ApiModelProperty(value = &quot;4班计划量&quot;)
+    @TableField(&quot;CLASS4_PLAN_QTY&quot;)
+<span class="nc" id="L178">    private Integer class4PlanQty;</span>
+
+    @ApiModelProperty(value = &quot;4班开始时间&quot;)
+    @JsonFormat(pattern = &quot;yyyy-MM-dd HH:mm:ss&quot;)
+    @TableField(&quot;CLASS4_START_TIME&quot;)
+<span class="nc" id="L183">    private LocalDateTime class4StartTime;</span>
+
+    @ApiModelProperty(value = &quot;4班结束时间&quot;)
+    @JsonFormat(pattern = &quot;yyyy-MM-dd HH:mm:ss&quot;)
+    @TableField(&quot;CLASS4_END_TIME&quot;)
+<span class="nc" id="L188">    private LocalDateTime class4EndTime;</span>
+
+    @ApiModelProperty(value = &quot;4班原因分析&quot;)
+    @TableField(&quot;CLASS4_ANALYSIS&quot;)
+<span class="nc" id="L192">    private String class4Analysis;</span>
+
+    @ApiModelProperty(value = &quot;4班完成量&quot;)
+    @TableField(&quot;CLASS4_FINISH_QTY&quot;)
+<span class="nc" id="L196">    private Integer class4FinishQty;</span>
+
+    // 其他班次省略...与上面类似结构
+
+    @ApiModelProperty(value = &quot;是否交期&quot;)
+    @TableField(&quot;IS_DELIVERY&quot;)
+<span class="nc" id="L202">    private String isDelivery;</span>
+
+    @ApiModelProperty(value = &quot;是否发布&quot;)
+    @TableField(&quot;IS_RELEASE&quot;)
+<span class="nc" id="L206">    private String isRelease;</span>
+
+    @ApiModelProperty(value = &quot;发布成功计数&quot;)
+    @TableField(&quot;PUBLISH_SUCCESS_COUNT&quot;)
+<span class="nc" id="L210">    private BigDecimal publishSuccessCount;</span>
+
+    @ApiModelProperty(value = &quot;最新发布时间&quot;)
+    @JsonFormat(pattern = &quot;yyyy-MM-dd HH:mm:ss&quot;)
+    @TableField(&quot;NEWEST_PUBLISH_TIME&quot;)
+<span class="nc" id="L215">    private LocalDateTime newestPublishTime;</span>
+
+    @ApiModelProperty(value = &quot;数据来源&quot;)
+    @TableField(&quot;DATA_SOURCE&quot;)
+<span class="nc" id="L219">    private String dataSource;</span>
+
+    @ApiModelProperty(value = &quot;使用模数&quot;)
+    @TableField(&quot;MOULD_QTY&quot;)
+<span class="nc" id="L223">    private Integer mouldQty;</span>
+
+    @ApiModelProperty(value = &quot;单班硫化量&quot;)
+    @TableField(&quot;SINGLE_MOULD_SHIFT_QTY&quot;)
+<span class="nc" id="L227">    private Integer singleMouldShiftQty;</span>
+
+    @ApiModelProperty(value = &quot;模具信息&quot;)
+    @TableField(&quot;MOULD_INFO&quot;)
+<span class="nc" id="L231">    private String mouldInfo;</span>
+
+    @ApiModelProperty(value = &quot;硫化方式&quot;)
+    @TableField(&quot;MOULD_METHOD&quot;)
+<span class="nc" id="L235">    private String mouldMethod;</span>
+
+    @ApiModelProperty(value = &quot;施工阶段&quot;)
+    @TableField(&quot;CONSTRUCTION_STAGE&quot;)
+<span class="nc" id="L239">    private String constructionStage;</span>
+
+    @ApiModelProperty(value = &quot;制造示方书号&quot;)
+    @TableField(&quot;EMBRYO_NO&quot;)
+<span class="nc" id="L243">    private String embryoNo;</span>
+
+    @ApiModelProperty(value = &quot;文字示方书号&quot;)
+    @TableField(&quot;TEXT_NO&quot;)
+<span class="nc" id="L247">    private String textNo;</span>
+
+    @ApiModelProperty(value = &quot;硫化示方书号&quot;)
+    @TableField(&quot;LH_NO&quot;)
+<span class="nc" id="L251">    private String lhNo;</span>
+
+    @ApiModelProperty(value = &quot;月计划版本&quot;)
+    @TableField(&quot;MONTH_PLAN_VERSION&quot;)
+<span class="nc" id="L255">    private String monthPlanVersion;</span>
+
+    @ApiModelProperty(value = &quot;机台排序号&quot;)
+    @TableField(&quot;MACHINE_ORDER&quot;)
+<span class="nc" id="L259">    private Integer machineOrder;</span>
+
+    @ApiModelProperty(value = &quot;是否试制量试&quot;)
+    @TableField(&quot;IS_TRIAL&quot;)
+<span class="nc" id="L263">    private String isTrial;</span>
+
+    @ApiModelProperty(value = &quot;实际排程日期&quot;)
+    @JsonFormat(pattern = &quot;yyyy-MM-dd&quot;)
+    @TableField(&quot;REAL_SCHEDULE_DATE&quot;)
+<span class="nc" id="L268">    private LocalDate realScheduleDate;</span>
+
+    @ApiModelProperty(value = &quot;是否首排&quot;)
+    @TableField(&quot;IS_FIRST&quot;)
+<span class="nc" id="L272">    private String isFirst;</span>
+
+    @ApiModelProperty(value = &quot;硫化余量&quot;)
+    @TableField(&quot;MOULD_SURPLUS_QTY&quot;)
+<span class="nc" id="L276">    private Integer mouldSurplusQty;</span>
+
+    @ApiModelProperty(value = &quot;是否收尾&quot;)
+    @TableField(&quot;IS_END&quot;)
+<span class="nc" id="L280">    private String isEnd;</span>
+
+    @ApiModelProperty(value = &quot;排产版本&quot;)
+    @TableField(&quot;PRODUCTION_VERSION&quot;)
+<span class="nc" id="L284">    private String productionVersion;</span>
+
+    @ApiModelProperty(value = &quot;模具号&quot;)
+    @TableField(&quot;MOULD_CODE&quot;)
+<span class="nc" id="L288">    private String mouldCode;</span>
+
+    @ApiModelProperty(value = &quot;是否拆分&quot;)
+    @TableField(&quot;IS_SPLIT&quot;)
+<span class="nc" id="L292">    private String isSplit;</span>
+
+    @ApiModelProperty(value = &quot;排程顺序&quot;)
+    @TableField(&quot;SCHEDULE_ORDER&quot;)
+<span class="nc" id="L296">    private String scheduleOrder;</span>
+
+    @ApiModelProperty(value = &quot;排程类型&quot;)
+    @TableField(&quot;SCHEDULE_TYPE&quot;)
+<span class="nc" id="L300">    private String scheduleType;</span>
+
+    @ApiModelProperty(value = &quot;是否换模&quot;)
+    @TableField(&quot;IS_CHANGE_MOULD&quot;)
+<span class="nc" id="L304">    private String isChangeMould;</span>
+
+    @ApiModelProperty(value = &quot;总计划数量&quot;)
+    @TableField(&quot;TOTAL_DAILY_PLAN_QTY&quot;)
+<span class="nc" id="L308">    private Integer totalDailyPlanQty;</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ValidationItem.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">APS Forming Schedule System</a> &gt; <a href="index.source.html" class="el_package">com.zlt.aps.cx.service.impl.validation</a> &gt; <span class="el_source">ValidationItem.java</span></div><h1>ValidationItem.java</h1><pre class="source lang-java linenums">package com.zlt.aps.cx.service.impl.validation;
+
+import lombok.Getter;
+
+/**
+ * 校验项枚举
+ * 
+ * 定义所有可校验的数据项
+ * 新增校验项：
+ * 1. 在枚举中添加新的校验项
+ * 2. 创建对应的 ValidationStrategy 实现
+ * 3. 在策略类中关联对应的枚举值
+ *
+ * @author APS Team
+ */
+<span class="fc" id="L16">@Getter</span>
+public enum ValidationItem {
+
+    // ==================== 基础配置 ====================
+    
+    /** 班次配置 */
+<span class="fc" id="L22">    SHIFT_CONFIG(&quot;班次配置&quot;, &quot;T_CX_SHIFT_CONFIG&quot;, ValidationLevel.ERROR, 10),</span>
+    
+    /** 成型机台 */
+<span class="fc" id="L25">    MOLDING_MACHINE(&quot;成型机台&quot;, &quot;T_MDM_MOLDING_MACHINE&quot;, ValidationLevel.ERROR, 11),</span>
+    
+    // ==================== 任务来源 ====================
+    
+    /** 硫化排程结果 */
+<span class="fc" id="L30">    LH_SCHEDULE_RESULT(&quot;硫化排程结果&quot;, &quot;T_LH_SCHEDULE_RESULT&quot;, ValidationLevel.WARN, 20),</span>
+    
+    /** 物料信息 */
+<span class="fc" id="L33">    MATERIAL_INFO(&quot;物料信息&quot;, &quot;T_MDM_MATERIAL_INFO&quot;, ValidationLevel.ERROR, 21),</span>
+    
+    // ==================== 库存与在制 ====================
+    
+    /** 胎胚库存 */
+<span class="fc" id="L38">    STOCK(&quot;胎胚库存&quot;, &quot;T_CX_STOCK&quot;, ValidationLevel.INFO, 30),</span>
+    
+    /** 成型在机信息 */
+<span class="fc" id="L41">    ONLINE_INFO(&quot;成型在机信息&quot;, &quot;T_MDM_CX_MACHINE_ONLINE_INFO&quot;, ValidationLevel.INFO, 31),</span>
+    
+    // ==================== 配置参数 ====================
+    
+    /** 参数配置 */
+<span class="fc" id="L46">    PARAM_CONFIG(&quot;参数配置&quot;, &quot;T_CX_PARAM_CONFIG&quot;, ValidationLevel.ERROR, 40),</span>
+    
+    /** 结构班产配置 */
+<span class="fc" id="L49">    STRUCTURE_SHIFT_CAPACITY(&quot;结构班产配置&quot;, &quot;T_CX_STRUCTURE_SHIFT_CAPACITY&quot;, ValidationLevel.WARN, 41),</span>
+    
+    /** 关键产品配置 */
+<span class="fc" id="L52">    KEY_PRODUCT(&quot;关键产品配置&quot;, &quot;T_CX_KEY_PRODUCT&quot;, ValidationLevel.INFO, 42),</span>
+    
+    // ==================== 产能相关 ====================
+    
+    /** 结构硫化配比 */
+<span class="fc" id="L57">    STRUCTURE_LH_RATIO(&quot;结构硫化配比&quot;, &quot;T_MDM_STRUCTURE_LH_RATIO&quot;, ValidationLevel.WARN, 50),</span>
+    
+    /** 物料日硫化产能 */
+<span class="fc" id="L60">    MATERIAL_LH_CAPACITY(&quot;物料日硫化产能&quot;, &quot;计算得出&quot;, ValidationLevel.WARN, 51),</span>
+    
+    /** 设备计划停机 */
+<span class="fc" id="L63">    DEVICE_PLAN_SHUT(&quot;设备计划停机&quot;, &quot;T_MDM_DEVICE_PLAN_SHUT&quot;, ValidationLevel.INFO, 52),</span>
+    
+    // ==================== 月计划相关 ====================
+    
+    /** 月度计划余量 */
+<span class="fc" id="L68">    MONTH_SURPLUS(&quot;月度计划余量&quot;, &quot;T_MDM_MONTH_SURPLUS&quot;, ValidationLevel.INFO, 60),</span>
+    
+    /** 物料收尾数据 */
+<span class="fc" id="L71">    MATERIAL_ENDING(&quot;物料收尾数据&quot;, &quot;T_CX_MATERIAL_ENDING&quot;, ValidationLevel.WARN, 61),</span>
+    
+    // ==================== 其他 ====================
+    
+    /** SKU排产分类 */
+<span class="fc" id="L76">    SKU_SCHEDULE_CATEGORY(&quot;SKU排产分类&quot;, &quot;T_MDM_SKU_SCHEDULE_CATEGORY&quot;, ValidationLevel.INFO, 70),</span>
+    
+    /** 节假日配置 */
+<span class="fc" id="L79">    HOLIDAY_CONFIG(&quot;节假日配置&quot;, &quot;T_CX_HOLIDAY_CONFIG&quot;, ValidationLevel.INFO, 71);</span>
+
+    /**
+     * 校验项名称（中文）
+     */
+<span class="fc" id="L84">    private final String name;</span>
+
+    /**
+     * 对应数据表或来源
+     */
+<span class="nc" id="L89">    private final String source;</span>
+
+    /**
+     * 默认校验级别
+     */
+<span class="nc" id="L94">    private final ValidationLevel defaultLevel;</span>
+
+    /**
+     * 排序顺序
+     */
+<span class="fc" id="L99">    private final int order;</span>
+
+<span class="fc" id="L101">    ValidationItem(String name, String source, ValidationLevel defaultLevel, int order) {</span>
+<span class="fc" id="L102">        this.name = name;</span>
+<span class="fc" id="L103">        this.source = source;</span>
+<span class="fc" id="L104">        this.defaultLevel = defaultLevel;</span>
+<span class="fc" id="L105">        this.order = order;</span>
+<span class="fc" id="L106">    }</span>
+
+    /**
+     * 校验级别
+     */
+<span class="fc" id="L111">    public enum ValidationLevel {</span>
+        /** 阻断级 - 必须修复才能排程 */
+<span class="fc" id="L113">        ERROR,</span>
+        
+        /** 警告级 - 可继续但需关注 */
+<span class="fc" id="L116">        WARN,</span>
+        
+        /** 提示级 - 仅提示 */
+<span class="fc" id="L119">        INFO</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

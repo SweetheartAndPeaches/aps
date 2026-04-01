@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CxMachineStructureCapacity.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">APS Forming Schedule System</a> &gt; <a href="index.source.html" class="el_package">com.zlt.aps.cx.entity</a> &gt; <span class="el_source">CxMachineStructureCapacity.java</span></div><h1>CxMachineStructureCapacity.java</h1><pre class="source lang-java linenums">package com.zlt.aps.cx.entity;
+
+import com.baomidou.mybatisplus.annotation.*;
+import com.fasterxml.jackson.annotation.JsonFormat;
+import io.swagger.annotations.ApiModel;
+import io.swagger.annotations.ApiModelProperty;
+import lombok.Data;
+
+import java.io.Serializable;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+/**
+ * 机台结构产能配置实体
+ * 
+ * 记录每个结构在不同成型机台上的产能配置。
+ * 不同结构在不同机台上的产能可能不同，需要单独配置。
+ * 
+ * 用于排程计算时获取：
+ * - 小时产能：用于计算精度计划产能扣减
+ * - 班次产能：用于计算单班最大产量
+ * 
+ * 注：整车条数由 CxStructureShiftCapacity 表配置
+ *
+ * @author APS Team
+ */
+<span class="nc bnc" id="L27" title="All 134 branches missed.">@Data</span>
+@TableName(&quot;T_CX_MACHINE_STRUCTURE_CAPACITY&quot;)
+@ApiModel(value = &quot;机台结构产能配置&quot;, description = &quot;机台-结构维度的产能配置&quot;)
+public class CxMachineStructureCapacity implements Serializable {
+
+    private static final long serialVersionUID = 1L;
+
+    @ApiModelProperty(value = &quot;主键ID&quot;)
+    @TableId(value = &quot;ID&quot;, type = IdType.AUTO)
+<span class="nc" id="L36">    private Long id;</span>
+
+    @ApiModelProperty(value = &quot;成型机台编码&quot;)
+    @TableField(&quot;CX_MACHINE_CODE&quot;)
+<span class="nc" id="L40">    private String cxMachineCode;</span>
+
+    @ApiModelProperty(value = &quot;成型机台名称&quot;)
+    @TableField(&quot;CX_MACHINE_NAME&quot;)
+<span class="nc" id="L44">    private String cxMachineName;</span>
+
+    @ApiModelProperty(value = &quot;结构编码&quot;)
+    @TableField(&quot;STRUCTURE_CODE&quot;)
+<span class="nc" id="L48">    private String structureCode;</span>
+
+    @ApiModelProperty(value = &quot;结构名称&quot;)
+    @TableField(&quot;STRUCTURE_NAME&quot;)
+<span class="nc" id="L52">    private String structureName;</span>
+
+    @ApiModelProperty(value = &quot;小时产能（条/小时）&quot;)
+    @TableField(&quot;HOURLY_CAPACITY&quot;)
+<span class="nc" id="L56">    private Integer hourlyCapacity;</span>
+
+    @ApiModelProperty(value = &quot;早班产能（条/班）&quot;)
+    @TableField(&quot;MORNING_SHIFT_CAPACITY&quot;)
+<span class="nc" id="L60">    private Integer morningShiftCapacity;</span>
+
+    @ApiModelProperty(value = &quot;中班产能（条/班）&quot;)
+    @TableField(&quot;AFTERNOON_SHIFT_CAPACITY&quot;)
+<span class="nc" id="L64">    private Integer afternoonShiftCapacity;</span>
+
+    @ApiModelProperty(value = &quot;夜班产能（条/班）&quot;)
+    @TableField(&quot;NIGHT_SHIFT_CAPACITY&quot;)
+<span class="nc" id="L68">    private Integer nightShiftCapacity;</span>
+
+    @ApiModelProperty(value = &quot;换产时间（分钟）&quot;)
+    @TableField(&quot;CHANGE_OVER_TIME&quot;)
+<span class="nc" id="L72">    private Integer changeOverTime;</span>
+
+    @ApiModelProperty(value = &quot;损耗率&quot;)
+    @TableField(&quot;LOSS_RATE&quot;)
+<span class="nc" id="L76">    private BigDecimal lossRate;</span>
+
+    @ApiModelProperty(value = &quot;是否启用：0-禁用 1-启用&quot;)
+    @TableField(&quot;IS_ACTIVE&quot;)
+<span class="nc" id="L80">    private Integer isActive;</span>
+
+    @ApiModelProperty(value = &quot;备注&quot;)
+    @TableField(&quot;REMARK&quot;)
+<span class="nc" id="L84">    private String remark;</span>
+
+    @ApiModelProperty(value = &quot;创建时间&quot;)
+    @TableField(value = &quot;CREATE_TIME&quot;, fill = FieldFill.INSERT)
+<span class="nc" id="L88">    private LocalDateTime createTime;</span>
+
+    @ApiModelProperty(value = &quot;更新时间&quot;)
+    @TableField(value = &quot;UPDATE_TIME&quot;, fill = FieldFill.INSERT_UPDATE)
+<span class="nc" id="L92">    private LocalDateTime updateTime;</span>
+
+    @ApiModelProperty(value = &quot;创建人&quot;)
+    @TableField(&quot;CREATE_BY&quot;)
+<span class="nc" id="L96">    private String createBy;</span>
+
+    // ==================== 业务方法 ====================
+
+    /**
+     * 获取指定班次的产能
+     *
+     * @param shiftCode 班次编码：SHIFT_DAY-早班，SHIFT_AFTERNOON-中班，SHIFT_NIGHT-夜班
+     * @return 班次产能（条/班）
+     */
+    public Integer getShiftCapacity(String shiftCode) {
+<span class="nc bnc" id="L107" title="All 2 branches missed.">        if (shiftCode == null) {</span>
+<span class="nc bnc" id="L108" title="All 2 branches missed.">            return hourlyCapacity != null ? hourlyCapacity * 8 : 400; // 默认8小时</span>
+        }
+<span class="nc bnc" id="L110" title="All 4 branches missed.">        switch (shiftCode) {</span>
+            case &quot;SHIFT_DAY&quot;:
+<span class="nc bnc" id="L112" title="All 4 branches missed.">                return morningShiftCapacity != null ? morningShiftCapacity : </span>
+<span class="nc" id="L113">                       (hourlyCapacity != null ? hourlyCapacity * 8 : 400);</span>
+            case &quot;SHIFT_AFTERNOON&quot;:
+<span class="nc bnc" id="L115" title="All 4 branches missed.">                return afternoonShiftCapacity != null ? afternoonShiftCapacity : </span>
+<span class="nc" id="L116">                       (hourlyCapacity != null ? hourlyCapacity * 8 : 400);</span>
+            case &quot;SHIFT_NIGHT&quot;:
+<span class="nc bnc" id="L118" title="All 4 branches missed.">                return nightShiftCapacity != null ? nightShiftCapacity : </span>
+<span class="nc" id="L119">                       (hourlyCapacity != null ? hourlyCapacity * 8 : 400);</span>
+            default:
+<span class="nc bnc" id="L121" title="All 2 branches missed.">                return hourlyCapacity != null ? hourlyCapacity * 8 : 400;</span>
+        }
+    }
+
+    /**
+     * 获取日产能（三班总和）
+     */
+    public Integer getDailyCapacity() {
+<span class="nc bnc" id="L129" title="All 4 branches missed.">        int morning = morningShiftCapacity != null ? morningShiftCapacity : </span>
+<span class="nc" id="L130">                      (hourlyCapacity != null ? hourlyCapacity * 8 : 400);</span>
+<span class="nc bnc" id="L131" title="All 4 branches missed.">        int afternoon = afternoonShiftCapacity != null ? afternoonShiftCapacity : </span>
+<span class="nc" id="L132">                        (hourlyCapacity != null ? hourlyCapacity * 8 : 400);</span>
+<span class="nc bnc" id="L133" title="All 4 branches missed.">        int night = nightShiftCapacity != null ? nightShiftCapacity : </span>
+<span class="nc" id="L134">                    (hourlyCapacity != null ? hourlyCapacity * 8 : 400);</span>
+<span class="nc" id="L135">        return morning + afternoon + night;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

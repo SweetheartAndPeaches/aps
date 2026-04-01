@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ParamConfigValidationStrategy.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">APS Forming Schedule System</a> &gt; <a href="index.source.html" class="el_package">com.zlt.aps.cx.service.impl.validation</a> &gt; <span class="el_source">ParamConfigValidationStrategy.java</span></div><h1>ParamConfigValidationStrategy.java</h1><pre class="source lang-java linenums">package com.zlt.aps.cx.service.impl.validation;
+
+import com.zlt.aps.cx.dto.ScheduleContextDTO;
+import com.zlt.aps.cx.entity.config.CxParamConfig;
+import com.zlt.aps.cx.service.impl.ScheduleDataValidationResult;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.*;
+
+/**
+ * 参数配置校验策略
+ *
+ * @author APS Team
+ */
+<span class="fc" id="L18">@Slf4j</span>
+@Component
+<span class="fc" id="L20">public class ParamConfigValidationStrategy extends BaseValidationStrategy {</span>
+
+    /** 关键参数编码列表（必须存在） */
+<span class="fc" id="L23">    private static final Set&lt;String&gt; REQUIRED_PARAM_CODES = new HashSet&lt;&gt;(Arrays.asList(</span>
+            &quot;LOSS_RATE&quot;,              // 损耗率
+            &quot;MAX_TYPES_PER_MACHINE&quot;,  // 机台种类上限
+            &quot;DEFAULT_TRIP_CAPACITY&quot;   // 默认整车容量
+    ));
+
+    /** 关键参数默认值映射 */
+<span class="fc" id="L30">    private static final Map&lt;String, String&gt; PARAM_DEFAULTS = new HashMap&lt;&gt;();</span>
+
+    /** 关键参数说明 */
+<span class="fc" id="L33">    private static final Map&lt;String, String&gt; PARAM_DESCRIPTIONS = new HashMap&lt;&gt;();</span>
+
+    static {
+<span class="fc" id="L36">        PARAM_DEFAULTS.put(&quot;LOSS_RATE&quot;, &quot;0.02&quot;);</span>
+<span class="fc" id="L37">        PARAM_DEFAULTS.put(&quot;MAX_TYPES_PER_MACHINE&quot;, &quot;4&quot;);</span>
+<span class="fc" id="L38">        PARAM_DEFAULTS.put(&quot;DEFAULT_TRIP_CAPACITY&quot;, &quot;200&quot;);</span>
+        
+<span class="fc" id="L40">        PARAM_DESCRIPTIONS.put(&quot;LOSS_RATE&quot;, &quot;损耗率，用于计算实际产能&quot;);</span>
+<span class="fc" id="L41">        PARAM_DESCRIPTIONS.put(&quot;MAX_TYPES_PER_MACHINE&quot;, &quot;单个机台最多生产的物料种类数&quot;);</span>
+<span class="fc" id="L42">        PARAM_DESCRIPTIONS.put(&quot;DEFAULT_TRIP_CAPACITY&quot;, &quot;默认整车容量（条/班次）&quot;);</span>
+<span class="fc" id="L43">    }</span>
+
+    @Override
+    public ValidationItem getValidationItem() {
+<span class="fc" id="L47">        return ValidationItem.PARAM_CONFIG;</span>
+    }
+
+    @Override
+    public void validate(ScheduleContextDTO context, LocalDate scheduleDate, String factoryCode,
+                        ScheduleDataValidationResult result) {
+        
+<span class="nc" id="L54">        Map&lt;String, CxParamConfig&gt; paramConfigMap = context.getParamConfigMap();</span>
+
+<span class="nc bnc" id="L56" title="All 4 branches missed.">        if (paramConfigMap == null || paramConfigMap.isEmpty()) {</span>
+<span class="nc" id="L57">            addError(result,</span>
+                    &quot;参数配置为空，无法获取排程所需参数&quot;,
+                    &quot;请在参数配置表(T_CX_PARAM_CONFIG)中配置排程参数&quot;);
+<span class="nc" id="L60">            return;</span>
+        }
+
+        // 检查关键参数
+<span class="nc bnc" id="L64" title="All 2 branches missed.">        for (String paramCode : REQUIRED_PARAM_CODES) {</span>
+<span class="nc" id="L65">            CxParamConfig config = paramConfigMap.get(paramCode);</span>
+<span class="nc" id="L66">            String description = PARAM_DESCRIPTIONS.get(paramCode);</span>
+<span class="nc" id="L67">            String defaultValue = PARAM_DEFAULTS.get(paramCode);</span>
+
+<span class="nc bnc" id="L69" title="All 2 branches missed.">            if (config == null) {</span>
+<span class="nc" id="L70">                addWarn(result,</span>
+                        &quot;缺少关键参数【&quot; + paramCode + &quot;】&quot;,
+                        &quot;将使用默认值【&quot; + defaultValue + &quot;】，&quot; + description);
+<span class="nc bnc" id="L73" title="All 4 branches missed.">            } else if (config.getParamValue() == null || config.getParamValue().trim().isEmpty()) {</span>
+<span class="nc" id="L74">                addWarn(result,</span>
+                        &quot;参数【&quot; + paramCode + &quot;】的值为空&quot;,
+                        &quot;将使用默认值【&quot; + defaultValue + &quot;】，请检查参数配置&quot;);
+            } else {
+                // 校验数值格式
+                try {
+<span class="nc" id="L80">                    new BigDecimal(config.getParamValue());</span>
+<span class="nc" id="L81">                    addInfo(result,</span>
+<span class="nc" id="L82">                            &quot;参数【&quot; + paramCode + &quot;】已配置，值：&quot; + config.getParamValue(),</span>
+                            null);
+<span class="nc" id="L84">                } catch (NumberFormatException e) {</span>
+<span class="nc" id="L85">                    addWarn(result,</span>
+<span class="nc" id="L86">                            &quot;参数【&quot; + paramCode + &quot;】的值格式错误：&quot; + config.getParamValue(),</span>
+                            &quot;请确保参数为数数值，当前将使用默认值【&quot; + defaultValue + &quot;】&quot;);
+<span class="nc" id="L88">                }</span>
+            }
+<span class="nc" id="L90">        }</span>
+
+<span class="nc" id="L92">        addInfo(result,</span>
+<span class="nc" id="L93">                &quot;参数配置总数：&quot; + paramConfigMap.size() + &quot;项&quot;,</span>
+                null);
+<span class="nc" id="L95">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

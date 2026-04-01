@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CxMaterialEnding.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">APS Forming Schedule System</a> &gt; <a href="index.source.html" class="el_package">com.zlt.aps.cx.entity</a> &gt; <span class="el_source">CxMaterialEnding.java</span></div><h1>CxMaterialEnding.java</h1><pre class="source lang-java linenums">package com.zlt.aps.cx.entity;
+
+import com.baomidou.mybatisplus.annotation.*;
+import io.swagger.annotations.ApiModel;
+import io.swagger.annotations.ApiModelProperty;
+import lombok.Data;
+
+import java.io.Serializable;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+
+/**
+ * 物料收尾管理实体类
+ * 对应数据库表：T_CX_MATERIAL_ENDING
+ *
+ * 用于跟踪每个物料的收尾进度，支持紧急收尾判断。
+ * 收尾管理规则（严格依据月计划收尾日）：
+ * 1. 收尾日判断：从月计划day_1到day_31找到最后一个有排产的日期
+ * 2. 收尾前10天检查：
+ *    - 计算：成型余量 = 硫化余量 - 胎胚库存
+ *    - 判断：能否在收尾日前完成？
+ * 3. 延误量追赶：
+ *    - 如果做不完，计算延误量，平摊到未来3天
+ *    - 检查未来3天满产是否能追上
+ * 4. 满产判断：
+ *    - 如果未来3天满产仍追不上，通知月计划调整（调用硫化接口）
+ *
+ * @author APS Team
+ */
+<span class="nc bnc" id="L31" title="All 174 branches missed.">@Data</span>
+@TableName(value = &quot;T_CX_MATERIAL_ENDING&quot;, keepGlobalPrefix = false)
+@ApiModel(value = &quot;物料收尾管理&quot;)
+public class CxMaterialEnding implements Serializable {
+
+    private static final long serialVersionUID = 1L;
+
+    /**
+     * 主键ID
+     */
+    @ApiModelProperty(value = &quot;主键ID&quot;)
+    @TableId(value = &quot;ID&quot;, type = IdType.AUTO)
+<span class="nc" id="L43">    private Long id;</span>
+
+    /**
+     * 工厂编码
+     */
+    @ApiModelProperty(value = &quot;工厂编码&quot;)
+    @TableField(&quot;FACTORY_CODE&quot;)
+<span class="nc" id="L50">    private String factoryCode;</span>
+
+    /**
+     * 物料编码
+     */
+    @ApiModelProperty(value = &quot;物料编码&quot;)
+    @TableField(&quot;MATERIAL_CODE&quot;)
+<span class="nc" id="L57">    private String materialCode;</span>
+
+    /**
+     * 物料描述
+     */
+    @ApiModelProperty(value = &quot;物料描述&quot;)
+    @TableField(&quot;MATERIAL_DESC&quot;)
+<span class="nc" id="L64">    private String materialDesc;</span>
+
+    /**
+     * 结构名称（关联的结构）
+     */
+    @ApiModelProperty(value = &quot;结构名称&quot;)
+    @TableField(&quot;STRUCTURE_NAME&quot;)
+<span class="nc" id="L71">    private String structureName;</span>
+
+    /**
+     * 硫化余量（条）- 从月度计划余量表获取
+     */
+    @ApiModelProperty(value = &quot;硫化余量（条）&quot;)
+    @TableField(&quot;VULCANIZING_REMAINDER&quot;)
+<span class="nc" id="L78">    private Integer vulcanizingRemainder;</span>
+
+    /**
+     * 胎胚库存（条）- 使用有效库存：库存量 - 超期库存 - 不良数量 + 修正数量
+     */
+    @ApiModelProperty(value = &quot;胎胚库存（条）&quot;)
+    @TableField(&quot;EMBRYO_STOCK&quot;)
+<span class="nc" id="L85">    private Integer embryoStock;</span>
+
+    /**
+     * 成型余量 = 硫化余量 - 胎胚库存（需要生产的量）
+     */
+    @ApiModelProperty(value = &quot;成型余量 = 硫化余量 - 胎胚库存&quot;)
+    @TableField(&quot;FORMING_REMAINDER&quot;)
+<span class="nc" id="L92">    private Integer formingRemainder;</span>
+
+    /**
+     * 日硫化产能（满算力，单位：条）
+     * 计算公式：成型供的硫化机中该物料的日产汇总（配比塞满的情况）
+     */
+    @ApiModelProperty(value = &quot;日硫化产能（满算力，单位：条）&quot;)
+    @TableField(&quot;DAILY_LH_CAPACITY&quot;)
+<span class="nc" id="L100">    private Integer dailyLhCapacity;</span>
+
+    /**
+     * 日成型产能（单位：条）
+     */
+    @ApiModelProperty(value = &quot;日成型产能（单位：条）&quot;)
+    @TableField(&quot;DAILY_FORMING_CAPACITY&quot;)
+<span class="nc" id="L107">    private Integer dailyFormingCapacity;</span>
+
+    /**
+     * 预计收尾天数
+     */
+    @ApiModelProperty(value = &quot;预计收尾天数&quot;)
+    @TableField(&quot;ESTIMATED_ENDING_DAYS&quot;)
+<span class="nc" id="L114">    private BigDecimal estimatedEndingDays;</span>
+
+    /**
+     * 计划收尾日期
+     */
+    @ApiModelProperty(value = &quot;计划收尾日期&quot;)
+    @TableField(&quot;PLANNED_ENDING_DATE&quot;)
+<span class="nc" id="L121">    private LocalDate plannedEndingDate;</span>
+
+    /**
+     * 是否紧急收尾（3天内）
+     */
+    @ApiModelProperty(value = &quot;是否紧急收尾（3天内）&quot;)
+    @TableField(&quot;IS_URGENT_ENDING&quot;)
+<span class="nc" id="L128">    private Integer isUrgentEnding;</span>
+
+    /**
+     * 是否10天内收尾
+     */
+    @ApiModelProperty(value = &quot;是否10天内收尾&quot;)
+    @TableField(&quot;IS_NEAR_ENDING&quot;)
+<span class="nc" id="L135">    private Integer isNearEnding;</span>
+
+    /**
+     * 延误量（条）- 会延误的量
+     */
+    @ApiModelProperty(value = &quot;延误量（条）&quot;)
+    @TableField(&quot;DELAY_QUANTITY&quot;)
+<span class="nc" id="L142">    private Integer delayQuantity;</span>
+
+    /**
+     * 平摊到未来3天的量（每天需要额外生产的量）
+     */
+    @ApiModelProperty(value = &quot;平摊到未来3天的量&quot;)
+    @TableField(&quot;DISTRIBUTED_QUANTITY&quot;)
+<span class="nc" id="L149">    private Integer distributedQuantity;</span>
+
+    /**
+     * 是否需要调整月计划（0-否，1-是）
+     */
+    @ApiModelProperty(value = &quot;是否需要调整月计划（0-否，1-是）&quot;)
+    @TableField(&quot;NEED_MONTH_PLAN_ADJUST&quot;)
+<span class="nc" id="L156">    private Integer needMonthPlanAdjust;</span>
+
+    /**
+     * 统计日期
+     */
+    @ApiModelProperty(value = &quot;统计日期&quot;)
+    @TableField(&quot;STAT_DATE&quot;)
+<span class="nc" id="L163">    private LocalDate statDate;</span>
+
+    /**
+     * 创建时间
+     */
+    @ApiModelProperty(value = &quot;创建时间&quot;)
+    @TableField(value = &quot;CREATE_TIME&quot;, fill = FieldFill.INSERT)
+<span class="nc" id="L170">    private LocalDateTime createTime;</span>
+
+    /**
+     * 更新时间
+     */
+    @ApiModelProperty(value = &quot;更新时间&quot;)
+    @TableField(value = &quot;UPDATE_TIME&quot;, fill = FieldFill.INSERT_UPDATE)
+<span class="nc" id="L177">    private LocalDateTime updateTime;</span>
+
+    /**
+     * 备注
+     */
+    @ApiModelProperty(value = &quot;备注&quot;)
+    @TableField(&quot;REMARK&quot;)
+<span class="nc" id="L184">    private String remark;</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

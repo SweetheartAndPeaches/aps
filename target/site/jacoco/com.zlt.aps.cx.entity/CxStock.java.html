@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CxStock.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">APS Forming Schedule System</a> &gt; <a href="index.source.html" class="el_package">com.zlt.aps.cx.entity</a> &gt; <span class="el_source">CxStock.java</span></div><h1>CxStock.java</h1><pre class="source lang-java linenums">package com.zlt.aps.cx.entity;
+
+import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableName;
+import com.fasterxml.jackson.annotation.JsonFormat;
+import com.ruoyi.common.core.annotation.Excel;
+import com.zlt.aps.cx.entity.base.BaseEntity;
+import io.swagger.annotations.ApiModel;
+import io.swagger.annotations.ApiModelProperty;
+import lombok.Data;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.Date;
+
+/**
+ * Copyright (c) 2022, All rights reserved。
+ * 文件名称：CxStock.java
+ * 描    述：成型库存信息对象 t_cx_stock
+ *@author zlt
+ *@date 2025-02-17
+ *@version 1.0
+ *
+ *  修改记录：
+ *     修改时间：...
+ *     修 改 人：zlt
+ *     修改内容：...
+ */
+
+@ApiModel(value = &quot;成型库存信息对象&quot;, description = &quot;成型库存信息对象 &quot;)
+<span class="pc bnc" id="L31" title="All 118 branches missed.">@Data</span>
+@TableName(value = &quot;T_CX_STOCK&quot;)
+public class CxStock extends BaseEntity {
+
+    private static final long serialVersionUID = 1L;
+
+     /** 库存日期，格式：yyyy-MM-dd */
+    @JsonFormat(pattern = &quot;yyyy-MM-dd&quot;)
+    @Excel(name = &quot;ui.data.column.cxStock.stockDate&quot;, width = 30, dateFormat = &quot;yyyy-MM-dd&quot;)
+    @ApiModelProperty(value = &quot;库存日期，格式：yyyy-MM-dd&quot;, name = &quot;stockDate&quot;)
+    @TableField(value = &quot;STOCK_DATE&quot;)
+<span class="fc" id="L42">    private Date stockDate;</span>
+
+    /** 胎胚代码 */
+    @Excel(name = &quot;ui.data.column.cxStock.embryoCode&quot;)
+    @ApiModelProperty(value = &quot;胎胚代码&quot;, name = &quot;embryoCode&quot;)
+    @TableField(value = &quot;EMBRYO_CODE&quot;)
+<span class="fc" id="L48">    private String embryoCode;</span>
+
+    /** 库存量 */
+    @Excel(name = &quot;ui.data.column.cxStock.stockNum&quot;)
+    @ApiModelProperty(value = &quot;库存量&quot;, name = &quot;stockNum&quot;)
+    @TableField(value = &quot;STOCK_NUM&quot;)
+<span class="fc" id="L54">    private Integer stockNum;</span>
+
+    /** 超期库存 */
+    @Excel(name = &quot;ui.data.column.cxStock.overTimeStock&quot;)
+    @ApiModelProperty(value = &quot;超期库存&quot;, name = &quot;overTimeStock&quot;)
+    @TableField(value = &quot;OVER_TIME_STOCK&quot;)
+<span class="fc" id="L60">    private Integer overTimeStock;</span>
+
+    /** 修正数量 */
+    @Excel(name = &quot;ui.data.column.cxStock.modifyNum&quot;)
+    @ApiModelProperty(value = &quot;修正数量&quot;, name = &quot;modifyNum&quot;)
+    @TableField(value = &quot;MODIFY_NUM&quot;)
+<span class="fc" id="L66">    private Integer modifyNum;</span>
+
+    /** 不良数量 */
+    @Excel(name = &quot;ui.data.column.cxStock.badNum&quot;)
+    @ApiModelProperty(value = &quot;不良数量&quot;, name = &quot;badNum&quot;)
+    @TableField(value = &quot;BAD_NUM&quot;)
+<span class="fc" id="L72">    private Integer badNum;</span>
+
+    // ============== 非数据库字段（用于业务计算） ==============
+
+    /** 排程使用库存 */
+    @Excel(name = &quot;ui.data.column.stock.scheduleUseStock&quot;)
+    @TableField(exist = false)
+<span class="fc" id="L79">    private Long scheduleUseStock;</span>
+
+    /** 胎胚名称（关联查询） */
+    @TableField(exist = false)
+<span class="fc" id="L83">    private String materialName;</span>
+
+    /** 库存可供硫化时长(小时) */
+    @TableField(exist = false)
+<span class="nc" id="L87">    private BigDecimal stockHours;</span>
+
+    /** 预警状态：NORMAL-正常，LOW-低库存，HIGH-高库存 */
+    @TableField(exist = false)
+<span class="fc" id="L91">    private String alertStatus;</span>
+
+    /** 预警时间 */
+    @TableField(exist = false)
+<span class="nc" id="L95">    private Date alertTime;</span>
+
+    /** 是否收尾SKU：0-否，1-是 */
+    @TableField(value = &quot;IS_ENDING_SKU&quot;)
+<span class="fc" id="L99">    private Integer isEndingSku;</span>
+
+    /** 可用硫化机台数（业务计算字段） */
+    @TableField(exist = false)
+<span class="nc" id="L103">    private Integer vulcanizeMachineCount;</span>
+
+    /** 可用硫化模数（业务计算字段） */
+    @TableField(exist = false)
+<span class="nc" id="L107">    private Integer vulcanizeMoldCount;</span>
+
+    // ============== 业务计算方法 ==============
+
+    /**
+     * 计算有效库存
+     * 有效库存 = 库存量 - 超期库存 - 不良数量 + 修正数量
+     * 
+     * @return 有效库存量
+     */
+    public Integer getEffectiveStock() {
+<span class="nc bnc" id="L118" title="All 2 branches missed.">        int effective = stockNum != null ? stockNum : 0;</span>
+<span class="nc bnc" id="L119" title="All 2 branches missed.">        if (overTimeStock != null) {</span>
+<span class="nc" id="L120">            effective -= overTimeStock;</span>
+        }
+<span class="nc bnc" id="L122" title="All 2 branches missed.">        if (badNum != null) {</span>
+<span class="nc" id="L123">            effective -= badNum;</span>
+        }
+<span class="nc bnc" id="L125" title="All 2 branches missed.">        if (modifyNum != null) {</span>
+<span class="nc" id="L126">            effective += modifyNum;</span>
+        }
+<span class="nc" id="L128">        return Math.max(0, effective);</span>
+    }
+
+    /**
+     * 计算可用库存
+     * 可用库存 = 有效库存 - 排程使用库存
+     * 
+     * @return 可用库存量
+     */
+    public Long getAvailableStock() {
+<span class="nc" id="L138">        long available = getEffectiveStock();</span>
+<span class="nc bnc" id="L139" title="All 2 branches missed.">        if (scheduleUseStock != null) {</span>
+<span class="nc" id="L140">            available -= scheduleUseStock;</span>
+        }
+<span class="nc" id="L142">        return Math.max(0L, available);</span>
+    }
+
+    /**
+     * 获取可用小时数（用于排程计算）
+     * 
+     * @return 可用小时数
+     */
+    public BigDecimal getAvailableHours() {
+<span class="nc bnc" id="L151" title="All 2 branches missed.">        return stockHours != null ? stockHours : BigDecimal.ZERO;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

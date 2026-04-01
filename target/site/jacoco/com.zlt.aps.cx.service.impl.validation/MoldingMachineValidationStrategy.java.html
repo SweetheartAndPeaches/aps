@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MoldingMachineValidationStrategy.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">APS Forming Schedule System</a> &gt; <a href="index.source.html" class="el_package">com.zlt.aps.cx.service.impl.validation</a> &gt; <span class="el_source">MoldingMachineValidationStrategy.java</span></div><h1>MoldingMachineValidationStrategy.java</h1><pre class="source lang-java linenums">package com.zlt.aps.cx.service.impl.validation;
+
+import com.zlt.aps.cx.dto.ScheduleContextDTO;
+import com.zlt.aps.cx.service.impl.ScheduleDataValidationResult;
+import com.zlt.aps.mp.api.domain.entity.MdmMoldingMachine;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
+
+import java.time.LocalDate;
+import java.util.List;
+
+/**
+ * 成型机台校验策略
+ *
+ * @author APS Team
+ */
+<span class="fc" id="L17">@Slf4j</span>
+@Component
+<span class="fc" id="L19">public class MoldingMachineValidationStrategy extends BaseValidationStrategy {</span>
+
+    @Override
+    public ValidationItem getValidationItem() {
+<span class="fc" id="L23">        return ValidationItem.MOLDING_MACHINE;</span>
+    }
+
+    @Override
+    public void validate(ScheduleContextDTO context, LocalDate scheduleDate, String factoryCode,
+                        ScheduleDataValidationResult result) {
+        
+<span class="nc" id="L30">        List&lt;MdmMoldingMachine&gt; machines = context.getAvailableMachines();</span>
+
+<span class="nc bnc" id="L32" title="All 2 branches missed.">        if (isEmpty(machines)) {</span>
+<span class="nc" id="L33">            addError(result,</span>
+                    &quot;成型机台数据为空，无可用机台进行排程&quot;,
+                    &quot;请检查成型机台基础数据(T_MDM_MOLDING_MACHINE)是否正确配置&quot;);
+<span class="nc" id="L36">            return;</span>
+        }
+
+        // 检查机台状态
+<span class="nc" id="L40">        long activeCount = machines.stream()</span>
+<span class="nc bnc" id="L41" title="All 4 branches missed.">                .filter(m -&gt; &quot;1&quot;.equals(m.getIsActive()) || m.getIsActive() == null)</span>
+<span class="nc" id="L42">                .count();</span>
+
+<span class="nc bnc" id="L44" title="All 2 branches missed.">        if (activeCount == 0) {</span>
+<span class="nc" id="L45">            addError(result,</span>
+                    &quot;没有启用状态的成型机台，无法进行排程&quot;,
+                    &quot;请检查机台IS_ACTIVE字段，至少需要1台启用状态的机台&quot;);
+<span class="nc bnc" id="L48" title="All 2 branches missed.">        } else if (activeCount &lt; machines.size()) {</span>
+<span class="nc" id="L49">            addWarn(result,</span>
+<span class="nc" id="L50">                    &quot;部分机台未启用，启用：&quot; + activeCount + &quot;，总计：&quot; + machines.size(),</span>
+                    &quot;如需启用请修改机台IS_ACTIVE字段为'1'&quot;);
+        }
+
+        // 检查关键字段
+<span class="nc" id="L55">        long validCount = machines.stream()</span>
+<span class="nc bnc" id="L56" title="All 2 branches missed.">                .filter(m -&gt; m.getCxMachineCode() != null)</span>
+<span class="nc" id="L57">                .count();</span>
+
+<span class="nc bnc" id="L59" title="All 2 branches missed.">        if (validCount &lt; machines.size()) {</span>
+<span class="nc" id="L60">            addWarn(result,</span>
+<span class="nc" id="L61">                    &quot;部分机台缺少机台编码，有效：&quot; + validCount + &quot;，总计：&quot; + machines.size(),</span>
+                    &quot;请检查机台CX_MACHINE_CODE字段&quot;);
+        }
+
+<span class="nc" id="L65">        addInfo(result,</span>
+<span class="nc" id="L66">                &quot;成型机台数量：&quot; + machines.size() + &quot;，启用：&quot; + activeCount,</span>
+                null);
+<span class="nc" id="L68">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

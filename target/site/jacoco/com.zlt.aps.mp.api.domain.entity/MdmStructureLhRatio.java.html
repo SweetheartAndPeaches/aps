@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MdmStructureLhRatio.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">APS Forming Schedule System</a> &gt; <a href="index.source.html" class="el_package">com.zlt.aps.mp.api.domain.entity</a> &gt; <span class="el_source">MdmStructureLhRatio.java</span></div><h1>MdmStructureLhRatio.java</h1><pre class="source lang-java linenums">package com.zlt.aps.mp.api.domain.entity;
+
+import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableName;
+import com.zlt.aps.cx.entity.base.ApsBaseEntity;
+import io.swagger.annotations.ApiModel;
+import io.swagger.annotations.ApiModelProperty;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+
+/**
+ * 成型结构硫化配比对象
+ * 对应表：T_MDM_STRUCTURE_LH_RATIO
+ *
+ * @author APS Team
+ * @since 2.0.0
+ */
+<span class="nc" id="L18">@Data</span>
+<span class="nc bnc" id="L19" title="All 40 branches missed.">@EqualsAndHashCode(callSuper = true)</span>
+@TableName(&quot;T_MDM_STRUCTURE_LH_RATIO&quot;)
+@ApiModel(value = &quot;成型结构硫化配比对象&quot;, description = &quot;成型结构硫化配比对象&quot;)
+public class MdmStructureLhRatio extends ApsBaseEntity {
+
+    private static final long serialVersionUID = 1L;
+
+    @ApiModelProperty(value = &quot;机型&quot;)
+    @TableField(&quot;CX_MACHINE_TYPE_CODE&quot;)
+<span class="nc" id="L28">    private String cxMachineTypeCode;</span>
+
+    @ApiModelProperty(value = &quot;结构&quot;)
+    @TableField(&quot;STRUCTURE_NAME&quot;)
+<span class="nc" id="L32">    private String structureName;</span>
+
+    @ApiModelProperty(value = &quot;最大硫化机台数&quot;)
+    @TableField(&quot;LH_MACHINE_MAX_QTY&quot;)
+<span class="nc" id="L36">    private Integer lhMachineMaxQty;</span>
+
+    @ApiModelProperty(value = &quot;最大胎胚数&quot;)
+    @TableField(&quot;MAX_EMBRYO_QTY&quot;)
+<span class="nc" id="L40">    private Integer maxEmbryoQty;</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MpCxCapacityConfiguration.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">APS Forming Schedule System</a> &gt; <a href="index.source.html" class="el_package">com.zlt.aps.mp.api.domain.entity</a> &gt; <span class="el_source">MpCxCapacityConfiguration.java</span></div><h1>MpCxCapacityConfiguration.java</h1><pre class="source lang-java linenums">package com.zlt.aps.mp.api.domain.entity;
+
+import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableName;
+import com.zlt.aps.cx.entity.base.ApsBaseEntity;
+import io.swagger.annotations.ApiModel;
+import io.swagger.annotations.ApiModelProperty;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+
+/**
+ * 成型产能分配配置(结构)对象
+ * 对应表：T_MP_STRUCTURE_ALLOCATION
+ *
+ * @author APS Team
+ */
+<span class="nc" id="L17">@Data</span>
+<span class="nc bnc" id="L18" title="All 112 branches missed.">@EqualsAndHashCode(callSuper = true)</span>
+@TableName(&quot;T_MP_STRUCTURE_ALLOCATION&quot;)
+@ApiModel(value = &quot;成型产能分配配置(结构)对象&quot;, description = &quot;成型产能分配配置(结构)对象&quot;)
+public class MpCxCapacityConfiguration extends ApsBaseEntity {
+
+    private static final long serialVersionUID = 1L;
+
+    /**
+     * 工厂编码
+     */
+    @ApiModelProperty(value = &quot;工厂编码&quot;)
+    @TableField(&quot;FACTORY_CODE&quot;)
+<span class="nc" id="L30">    private String factoryCode;</span>
+
+    /**
+     * 年份
+     */
+    @ApiModelProperty(value = &quot;年份&quot;)
+    @TableField(&quot;YEAR&quot;)
+<span class="nc" id="L37">    private Integer year;</span>
+
+    /**
+     * 月份
+     */
+    @ApiModelProperty(value = &quot;月份&quot;)
+    @TableField(&quot;MONTH&quot;)
+<span class="nc" id="L44">    private Integer month;</span>
+
+    /**
+     * 销售生产需求计划版本
+     */
+    @ApiModelProperty(value = &quot;销售生产需求计划版本&quot;)
+    @TableField(&quot;MONTH_PLAN_VERSION&quot;)
+<span class="nc" id="L51">    private String monthPlanVersion;</span>
+
+    /**
+     * 工厂排产版本
+     */
+    @ApiModelProperty(value = &quot;工厂排产版本&quot;)
+    @TableField(&quot;PRODUCTION_VERSION&quot;)
+<span class="nc" id="L58">    private String productionVersion;</span>
+
+    /**
+     * 计划类型 01 正常 02 订单预测 03 实单模拟
+     */
+    @ApiModelProperty(value = &quot;计划类型&quot;)
+    @TableField(&quot;PLAN_TYPE&quot;)
+<span class="nc" id="L65">    private String planType;</span>
+
+    /**
+     * 产品结构
+     */
+    @ApiModelProperty(value = &quot;产品结构&quot;)
+    @TableField(&quot;STRUCTURE_NAME&quot;)
+<span class="nc" id="L72">    private String structureName;</span>
+
+    /**
+     * 排产净需求
+     */
+    @ApiModelProperty(value = &quot;总需求量&quot;)
+    @TableField(&quot;NET_QTY&quot;)
+<span class="nc" id="L79">    private Long netQty;</span>
+
+    /**
+     * 排产净需求(含损耗)
+     */
+    @ApiModelProperty(value = &quot;净需求量&quot;)
+    @TableField(&quot;LOSS_QTY&quot;)
+<span class="nc" id="L86">    private Long lossQty;</span>
+
+    /**
+     * 成型机编码
+     */
+    @ApiModelProperty(value = &quot;成型机编码&quot;)
+    @TableField(&quot;CX_MACHINE_CODE&quot;)
+<span class="nc" id="L93">    private String cxMachineCode;</span>
+
+    /**
+     * 开始日期
+     */
+    @ApiModelProperty(value = &quot;开始日期&quot;)
+    @TableField(&quot;BEGIN_DAY&quot;)
+<span class="nc" id="L100">    private Integer beginDay;</span>
+
+    /**
+     * 结束日期
+     */
+    @ApiModelProperty(value = &quot;结束日期&quot;)
+    @TableField(&quot;END_DAY&quot;)
+<span class="nc" id="L107">    private Integer endDay;</span>
+
+    /**
+     * 分配天数
+     */
+    @ApiModelProperty(value = &quot;分配天数&quot;)
+    @TableField(&quot;ALLOT_DAYS&quot;)
+<span class="nc" id="L114">    private Integer allotDays;</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

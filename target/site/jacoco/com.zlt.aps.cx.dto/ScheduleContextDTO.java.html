@@ -1,0 +1,435 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ScheduleContextDTO.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">APS Forming Schedule System</a> &gt; <a href="index.source.html" class="el_package">com.zlt.aps.cx.dto</a> &gt; <span class="el_source">ScheduleContextDTO.java</span></div><h1>ScheduleContextDTO.java</h1><pre class="source lang-java linenums">package com.zlt.aps.cx.dto;
+
+import com.zlt.aps.cx.entity.*;
+import com.zlt.aps.cx.entity.config.CxKeyProduct;
+import com.zlt.aps.cx.entity.config.CxParamConfig;
+import com.zlt.aps.cx.entity.config.CxShiftConfig;
+import com.zlt.aps.cx.entity.config.CxStructurePriority;
+import com.zlt.aps.cx.entity.config.CxStructureShiftCapacity;
+import com.zlt.aps.mp.api.domain.entity.*;
+import com.zlt.aps.mp.api.domain.entity.MpCxCapacityConfiguration;
+import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
+import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
+import com.zlt.aps.mp.engine.domain.vo.MonthPlanProductLhCapacityVo;
+import lombok.Data;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+/**
+ * 排程上下文DTO
+ * 用于承载排程过程中需要的所有数据
+ *
+ * @author APS Team
+ */
+<span class="pc bnc" id="L28" title="All 524 branches missed.">@Data</span>
+public class ScheduleContextDTO {
+
+    /**
+     * 排程日期
+     */
+<span class="nc" id="L34">    private LocalDate scheduleDate;</span>
+
+    /**
+     * 工厂编号
+     * 用于加载工厂特定的班次配置
+     */
+<span class="nc" id="L40">    private String factoryCode;</span>
+
+    /**
+     * 当前排程天数（循环执行时使用）
+     * 1-第一天 2-第二天 3-第三天
+     */
+<span class="nc" id="L46">    private Integer currentScheduleDay;</span>
+
+    /**
+     * 当前排程日期（循环执行时使用）
+     * scheduleDate + (currentScheduleDay - 1)
+     */
+<span class="nc" id="L52">    private LocalDate currentScheduleDate;</span>
+
+    /**
+     * 当前天的班次配置列表（循环执行时使用）
+     */
+<span class="nc" id="L57">    private List&lt;CxShiftConfig&gt; currentShiftConfigs;</span>
+
+    /**
+     * 排程模式：NORMAL-正常排程，RE_SCHEDULE-重排程，STRUCTURE_RE_SCHEDULE-结构重排
+     */
+<span class="nc" id="L62">    private String scheduleMode;</span>
+
+    /**
+     * 可用成型机台列表
+     */
+<span class="nc" id="L67">    private List&lt;MdmMoldingMachine&gt; availableMachines;</span>
+
+    /**
+     * 机台结构产能配置列表
+     * 用于获取机台-结构维度的小时产能、班次产能
+     */
+<span class="nc" id="L73">    private List&lt;CxMachineStructureCapacity&gt; machineStructureCapacities;</span>
+
+    /**
+     * 机台结构产能映射（快速查询用）
+     * Key: 机台编码_结构编码
+     * Value: 产能配置
+     */
+<span class="nc" id="L80">    private Map&lt;String, CxMachineStructureCapacity&gt; machineCapacityMap;</span>
+
+    // ==================== 任务来源数据 ====================
+
+    /**
+     * 硫化排程结果列表（主要任务来源）
+     * 从T_LH_SCHEDULE_RESULT获取今日硫化计划
+     */
+<span class="fc" id="L88">    private List&lt;LhScheduleResult&gt; lhScheduleResults;</span>
+
+    /**
+     * 成型在机信息列表（续作判断）
+     * 从T_MDM_CX_MACHINE_ONLINE_INFO获取当前机台正在做的胎胚
+     */
+<span class="nc" id="L94">    private List&lt;MdmCxMachineOnlineInfo&gt; onlineInfos;</span>
+
+    /**
+     * 机台在机胎胚映射（快速查询用）
+     * Key: 成型机台编码
+     * Value: 该机台正在做的胎胚编码集合
+     */
+<span class="nc" id="L101">    private Map&lt;String, Set&lt;String&gt;&gt; machineOnlineEmbryoMap;</span>
+
+    /**
+     * 固定机台配置列表
+     */
+<span class="nc" id="L106">    private List&lt;MdmCxMachineFixed&gt; machineFixedConfigs;</span>
+
+    /**
+     * 设备计划停机列表
+     * 用于排除排程日期范围内的停机机台
+     */
+<span class="nc" id="L112">    private List&lt;MdmDevicePlanShut&gt; devicePlanShuts;</span>
+
+    /**
+     * 物料主数据列表
+     */
+<span class="nc" id="L117">    private List&lt;MdmMaterialInfo&gt; materials;</span>
+
+    /**
+     * 库存列表
+     */
+<span class="fc" id="L122">    private List&lt;CxStock&gt; stocks;</span>
+
+    /**
+     * 结构硫化配比列表
+     */
+<span class="nc" id="L127">    private List&lt;MdmStructureLhRatio&gt; structureLhRatios;</span>
+
+    /**
+     * 结构班产配置列表（整车条数）
+     * 按结构+班次定义的标准产能
+     */
+<span class="nc" id="L133">    private List&lt;CxStructureShiftCapacity&gt; structureShiftCapacities;</span>
+
+    /**
+     * 结构优先级配置列表
+     */
+<span class="nc" id="L138">    private List&lt;CxStructurePriority&gt; structurePriorities;</span>
+
+    /**
+     * 关键产品配置列表
+     * 用于开产首班排除等场景判断
+     */
+<span class="nc" id="L144">    private List&lt;CxKeyProduct&gt; keyProducts;</span>
+
+    /**
+     * 关键产品编码集合（快速查询用）
+     */
+<span class="nc" id="L149">    private Set&lt;String&gt; keyProductCodes;</span>
+
+    /**
+     * 排程参数配置
+     */
+<span class="nc" id="L154">    private Map&lt;String, CxParamConfig&gt; paramConfigMap;</span>
+
+    /**
+     * 预警配置
+     */
+<span class="nc" id="L159">    private Map&lt;String, CxAlertConfig&gt; alertConfigMap;</span>
+
+    /**
+     * 试制任务列表
+     */
+<span class="nc" id="L164">    private List&lt;CxTrialTask&gt; trialTasks;</span>
+
+    /**
+     * 精度计划列表
+     */
+<span class="nc" id="L169">    private List&lt;CxPrecisionPlan&gt; precisionPlans;</span>
+
+    /**
+     * 操作工请假列表
+     */
+<span class="nc" id="L174">    private List&lt;CxOperatorLeave&gt; operatorLeaves;</span>
+
+    /**
+     * 材料异常列表
+     */
+<span class="nc" id="L179">    private List&lt;CxMaterialException&gt; materialExceptions;</span>
+
+    /**
+     * 胎面停放配置列表
+     */
+<span class="nc" id="L184">    private List&lt;CxTreadParkingConfig&gt; treadParkingConfigs;</span>
+
+    /**
+     * 结构收尾管理列表（已废弃，请使用 materialEndings）
+     */
+<span class="nc" id="L189">    private List&lt;CxStructureEnding&gt; structureEndings;</span>
+
+    /**
+     * 物料收尾管理列表（物料维度）
+     * 从月计划计算生成，用于跟踪每个物料的收尾进度
+     */
+<span class="nc" id="L195">    private List&lt;CxMaterialEnding&gt; materialEndings;</span>
+
+    /**
+     * 物料日硫化产能映射（物料编码 -&gt; 产能信息）
+     * 用于计算成型机台的满算力
+     * Key: 物料编码
+     * Value: 日硫化产能信息
+     */
+<span class="nc" id="L203">    private Map&lt;String, MonthPlanProductLhCapacityVo&gt; materialLhCapacityMap;</span>
+
+    /**
+     * 硫化机台产能信息映射（物料编码 -&gt; 机台产能列表）
+     * 用于计算成型机台的满算力（支持配比未塞满的情况）
+     * Key: 物料编码
+     * Value: 该物料对应的硫化机台产能信息列表
+     */
+<span class="nc" id="L211">    private Map&lt;String, List&lt;com.zlt.aps.cx.service.impl.LhMachineCapacityInfo&gt;&gt; lhMachineCapacityMap;</span>
+
+    /**
+     * 结构硫化配比映射（结构编码 -&gt; 配比信息）
+     * 用于获取机台的最大配比
+     * Key: 结构名称
+     * Value: 硫化配比信息
+     */
+<span class="nc" id="L219">    private Map&lt;String, MdmStructureLhRatio&gt; structureLhRatioMap;</span>
+
+    /**
+     * 成型余量映射（物料编码 -&gt; 成型余量）
+     * 成型余量 = 硫化余量 - 该物料对应的所有胎胚库存
+     * 用于收尾计算
+     */
+<span class="nc" id="L226">    private Map&lt;String, Integer&gt; formingRemainderMap;</span>
+
+    /**
+     * 胎胚到物料映射（胎胚编码 -&gt; 物料编码）
+     * 用于将胎胚库存转换为物料维度
+     */
+<span class="nc" id="L232">    private Map&lt;String, String&gt; embryoToMaterialMap;</span>
+
+    /**
+     * 工作日历
+     */
+<span class="nc" id="L237">    private MdmWorkCalendar workCalendar;</span>
+
+    /**
+     * 昨日排程结果（用于续作判断）
+     */
+<span class="nc" id="L242">    private List&lt;CxScheduleResult&gt; yesterdayResults;</span>
+
+    /**
+     * 班次配置
+     */
+<span class="nc" id="L247">    private Map&lt;String, ShiftInfo&gt; shiftConfigs;</span>
+
+    /**
+     * 班次配置列表（从T_CX_SHIFT_CONFIG加载）
+     * 用于排程时获取班次顺序、产能比例等信息
+     */
+<span class="nc" id="L253">    private List&lt;CxShiftConfig&gt; shiftConfigList;</span>
+
+    /**
+     * 排产天数
+     * 默认3天
+     * 班次数量 = 天数 * 3 - 1（第一天的夜班跳过）
+     * 例如：3天 → 早中 + 夜早中 + 夜早中 = 8个班次
+     */
+<span class="nc" id="L261">    private Integer scheduleDays;</span>
+
+    /**
+     * 班次编码数组（按排产顺序排列）
+     * 例如3天排产：[早班, 中班, 夜班, 早班, 中班, 夜班, 早班, 中班]
+     * 即：早中、夜早中、夜早中
+     */
+<span class="nc" id="L268">    private String[] shiftCodes;</span>
+
+    /**
+     * 每个班次对应的日期（与shiftCodes一一对应）
+     * 用于确定每个班次属于哪一天
+     */
+<span class="nc" id="L274">    private LocalDate[] shiftDates;</span>
+
+    // ==================== 算法可配置参数 ====================
+
+    /**
+     * 波浪比例（班次分配比例）
+     * 按夜班:早班:中班顺序配置
+     * 默认 {1, 2, 1} 表示夜班:早班:中班 = 1:2:1
+     * 实际使用时会根据班次顺序重新映射
+     */
+<span class="nc" id="L284">    private int[] waveRatio;</span>
+
+    /**
+     * 机台种类上限
+     * 默认4种
+     */
+<span class="nc" id="L290">    private Integer maxTypesPerMachine;</span>
+
+    /**
+     * 默认整车容量（条）
+     * 当结构班产配置中没有该结构时使用
+     */
+<span class="nc" id="L296">    private Integer defaultTripCapacity;</span>
+
+    /**
+     * 损耗率
+     */
+<span class="nc" id="L301">    private java.math.BigDecimal lossRate;</span>
+
+    /**
+     * 预留消化时间（小时）
+     * 默认1小时
+     */
+<span class="nc" id="L307">    private Integer reservedDigestHours;</span>
+
+    /**
+     * 胎胚最长停放时间（小时）
+     * 默认24小时
+     */
+<span class="nc" id="L313">    private Integer maxParkingHours;</span>
+
+    /**
+     * 机台小时产能（条/小时）
+     */
+<span class="nc" id="L318">    private Integer machineHourlyCapacity;</span>
+
+    /**
+     * 是否开产日
+     */
+<span class="nc" id="L323">    private Boolean isOpeningDay;</span>
+
+    /**
+     * 是否停产日
+     */
+<span class="nc" id="L328">    private Boolean isClosingDay;</span>
+
+    /**
+     * 是否停产前一天
+     */
+<span class="nc" id="L333">    private Boolean isBeforeClosingDay;</span>
+
+    /**
+     * 停产剩余天数
+     */
+<span class="nc" id="L338">    private Integer daysToClose;</span>
+
+    /**
+     * 节假日天数
+     */
+<span class="nc" id="L343">    private Integer holidayDays;</span>
+
+    /**
+     * 成型开产班次（开产日第一个班次）
+     */
+<span class="nc" id="L348">    private String formingStartShift;</span>
+
+    /**
+     * 硫化开模班次（开产日第二个班次）
+     */
+<span class="nc" id="L353">    private String vulcanizingStartShift;</span>
+
+    /**
+     * 硫化停机时间（停产前一天）
+     */
+<span class="nc" id="L358">    private LocalDateTime vulcanizingStopTime;</span>
+
+    /**
+     * 成型停机时间（停产前一天，早于硫化停机时间）
+     */
+<span class="nc" id="L363">    private LocalDateTime formingStopTime;</span>
+
+    /**
+     * 成型可排产时长（小时，停产前一天）
+     */
+<span class="nc" id="L368">    private Integer formingAvailableHours;</span>
+
+    /**
+     * 过剩库存需要消耗的量
+     */
+<span class="nc" id="L373">    private Map&lt;String, Integer&gt; excessStockToConsume;</span>
+
+    // ==================== 收尾相关数据 ====================
+
+    /**
+     * 月度计划余量列表
+     * 硫化余量(PLAN_SURPLUS_QTY)已由系统计算好（总计划量 - 硫化真实完成量）
+     * 用于计算收尾余量：收尾余量 = 硫化余量 - 胎胚库存
+     */
+<span class="nc" id="L382">    private List&lt;com.zlt.aps.mp.api.domain.entity.MdmMonthSurplus&gt; monthSurplusList;</span>
+
+    /**
+     * 月度计划余量映射（物料编码 -&gt; 余量信息）
+     * 快速查询用
+     */
+<span class="nc" id="L388">    private Map&lt;String, com.zlt.aps.mp.api.domain.entity.MdmMonthSurplus&gt; monthSurplusMap;</span>
+
+    /**
+     * SKU排产分类列表
+     * 用于判断是否为主销产品（SCHEDULE_TYPE='01'表示主销产品，月均销量&gt;=500条）
+     */
+<span class="nc" id="L394">    private List&lt;com.zlt.aps.mp.api.domain.entity.MdmSkuScheduleCategory&gt; skuScheduleCategories;</span>
+
+    /**
+     * 主销产品编码集合
+     * 快速查询用
+     */
+<span class="nc" id="L400">    private Set&lt;String&gt; mainProductCodes;</span>
+
+    // ==================== 结构排产配置 ====================
+
+    /**
+     * 结构排产配置列表
+     * 从 T_MP_STRUCTURE_ALLOCATION 获取，定义了每个结构可分配的机台
+     */
+<span class="nc" id="L408">    private List&lt;MpCxCapacityConfiguration&gt; structureAllocations;</span>
+
+    /**
+     * 结构排产配置映射（结构编码 -&gt; 可分配机台列表）
+     * 快速查询用
+     */
+<span class="nc" id="L414">    private Map&lt;String, List&lt;MpCxCapacityConfiguration&gt;&gt; structureAllocationMap;</span>
+
+    /**
+     * 是否强制保留历史任务
+     * 从 CxParamConfig 获取，控制续作任务是否优先保留在原机台
+     */
+<span class="nc" id="L420">    private Boolean forceKeepHistoryTask;</span>
+
+    /**
+     * 班次信息
+     */
+<span class="nc bnc" id="L425" title="All 54 branches missed.">    @Data</span>
+    public static class ShiftInfo {
+<span class="nc" id="L427">        private String shiftCode;</span>
+<span class="nc" id="L428">        private String shiftName;</span>
+<span class="nc" id="L429">        private Integer startHour;</span>
+<span class="nc" id="L430">        private Integer endHour;</span>
+<span class="nc" id="L431">        private Integer standardHours;</span>
+<span class="nc" id="L432">        private Boolean isActive;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

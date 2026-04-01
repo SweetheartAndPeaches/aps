@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CxStockServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">APS Forming Schedule System</a> &gt; <a href="index.source.html" class="el_package">com.zlt.aps.cx.service.impl</a> &gt; <span class="el_source">CxStockServiceImpl.java</span></div><h1>CxStockServiceImpl.java</h1><pre class="source lang-java linenums">package com.zlt.aps.cx.service.impl;
+
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.zlt.aps.cx.entity.CxStock;
+import com.zlt.aps.cx.mapper.CxStockMapper;
+import com.zlt.aps.cx.service.CxStockService;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.Date;
+import java.util.List;
+
+/**
+ * 库存Service实现类
+ *
+ * @author APS Team
+ */
+@Service
+<span class="nc" id="L25">public class CxStockServiceImpl extends ServiceImpl&lt;CxStockMapper, CxStock&gt; implements CxStockService {</span>
+
+    @Override
+    public CxStock getByMaterialCode(String materialCode) {
+<span class="nc" id="L29">        LambdaQueryWrapper&lt;CxStock&gt; wrapper = new LambdaQueryWrapper&lt;&gt;();</span>
+<span class="nc" id="L30">        wrapper.eq(CxStock::getEmbryoCode, materialCode);</span>
+<span class="nc" id="L31">        return getOne(wrapper);</span>
+    }
+
+    @Override
+    public List&lt;CxStock&gt; listLowStock() {
+<span class="nc" id="L36">        LambdaQueryWrapper&lt;CxStock&gt; wrapper = new LambdaQueryWrapper&lt;&gt;();</span>
+<span class="nc" id="L37">        wrapper.eq(CxStock::getAlertStatus, &quot;LOW&quot;);</span>
+<span class="nc" id="L38">        return list(wrapper);</span>
+    }
+
+    @Override
+    public List&lt;CxStock&gt; listHighStock() {
+<span class="nc" id="L43">        LambdaQueryWrapper&lt;CxStock&gt; wrapper = new LambdaQueryWrapper&lt;&gt;();</span>
+<span class="nc" id="L44">        wrapper.eq(CxStock::getAlertStatus, &quot;HIGH&quot;);</span>
+<span class="nc" id="L45">        return list(wrapper);</span>
+    }
+
+    @Override
+    public List&lt;CxStock&gt; listEndingStock() {
+<span class="nc" id="L50">        LambdaQueryWrapper&lt;CxStock&gt; wrapper = new LambdaQueryWrapper&lt;&gt;();</span>
+<span class="nc" id="L51">        wrapper.eq(CxStock::getIsEndingSku, 1);</span>
+<span class="nc" id="L52">        return list(wrapper);</span>
+    }
+
+    @Override
+    public BigDecimal calculateStockHours(String materialCode) {
+<span class="nc" id="L57">        CxStock stock = getByMaterialCode(materialCode);</span>
+<span class="nc bnc" id="L58" title="All 6 branches missed.">        if (stock == null || stock.getStockNum() == null || stock.getStockNum() &lt;= 0) {</span>
+<span class="nc" id="L59">            return BigDecimal.ZERO;</span>
+        }
+        // 使用有效库存计算可供时长
+<span class="nc" id="L62">        Integer effectiveStock = stock.getEffectiveStock();</span>
+<span class="nc bnc" id="L63" title="All 2 branches missed.">        if (effectiveStock &lt;= 0) {</span>
+<span class="nc" id="L64">            return BigDecimal.ZERO;</span>
+        }
+        // 简化计算：库存 / (硫化机台数 * 模数 * 每小时产能)
+        // 实际应根据硫化时间和模数计算
+<span class="nc" id="L68">        return new BigDecimal(effectiveStock).setScale(2, RoundingMode.HALF_UP);</span>
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void refreshAllAlertStatus() {
+<span class="nc" id="L74">        List&lt;CxStock&gt; stocks = list();</span>
+<span class="nc" id="L75">        Date now = new Date();</span>
+
+<span class="nc bnc" id="L77" title="All 2 branches missed.">        for (CxStock stock : stocks) {</span>
+<span class="nc" id="L78">            String alertStatus = calculateAlertStatus(stock);</span>
+
+<span class="nc bnc" id="L80" title="All 2 branches missed.">            if (!alertStatus.equals(stock.getAlertStatus())) {</span>
+<span class="nc" id="L81">                stock.setAlertStatus(alertStatus);</span>
+<span class="nc" id="L82">                stock.setAlertTime(now);</span>
+<span class="nc" id="L83">                stock.setUpdateTime(now);</span>
+<span class="nc" id="L84">                updateById(stock);</span>
+            }
+<span class="nc" id="L86">        }</span>
+<span class="nc" id="L87">    }</span>
+
+    @Override
+    public Page&lt;CxStock&gt; pageList(Page&lt;CxStock&gt; page, String alertStatus) {
+<span class="nc" id="L91">        LambdaQueryWrapper&lt;CxStock&gt; wrapper = new LambdaQueryWrapper&lt;&gt;();</span>
+
+<span class="nc bnc" id="L93" title="All 2 branches missed.">        if (StringUtils.hasText(alertStatus)) {</span>
+<span class="nc" id="L94">            wrapper.eq(CxStock::getAlertStatus, alertStatus);</span>
+        }
+
+<span class="nc" id="L97">        wrapper.orderByDesc(CxStock::getAlertTime)</span>
+<span class="nc" id="L98">                .orderByAsc(CxStock::getEmbryoCode);</span>
+
+<span class="nc" id="L100">        return page(page, wrapper);</span>
+    }
+
+    /**
+     * 计算预警状态
+     */
+    private String calculateAlertStatus(CxStock stock) {
+<span class="nc bnc" id="L107" title="All 4 branches missed.">        if (stock == null || stock.getStockNum() == null) {</span>
+<span class="nc" id="L108">            return &quot;NORMAL&quot;;</span>
+        }
+
+        // 根据库存可供硫化时长判断
+<span class="nc" id="L112">        BigDecimal stockHours = stock.getStockHours();</span>
+<span class="nc bnc" id="L113" title="All 2 branches missed.">        if (stockHours == null) {</span>
+<span class="nc" id="L114">            stockHours = calculateStockHours(stock.getEmbryoCode());</span>
+        }
+
+        // 预警阈值（可配置）
+<span class="nc" id="L118">        BigDecimal lowThreshold = new BigDecimal(&quot;4&quot;);   // 低于4小时预警</span>
+<span class="nc" id="L119">        BigDecimal highThreshold = new BigDecimal(&quot;48&quot;); // 高于48小时预警</span>
+
+<span class="nc bnc" id="L121" title="All 2 branches missed.">        if (stockHours.compareTo(lowThreshold) &lt; 0) {</span>
+<span class="nc" id="L122">            return &quot;LOW&quot;;</span>
+<span class="nc bnc" id="L123" title="All 2 branches missed.">        } else if (stockHours.compareTo(highThreshold) &gt; 0) {</span>
+<span class="nc" id="L124">            return &quot;HIGH&quot;;</span>
+        }
+
+<span class="nc" id="L127">        return &quot;NORMAL&quot;;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

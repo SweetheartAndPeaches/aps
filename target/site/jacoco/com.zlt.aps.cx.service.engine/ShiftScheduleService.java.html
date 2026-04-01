@@ -1,0 +1,659 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ShiftScheduleService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">APS Forming Schedule System</a> &gt; <a href="index.source.html" class="el_package">com.zlt.aps.cx.service.engine</a> &gt; <span class="el_source">ShiftScheduleService.java</span></div><h1>ShiftScheduleService.java</h1><pre class="source lang-java linenums">package com.zlt.aps.cx.service.engine;
+
+import com.zlt.aps.cx.dto.ScheduleContextDTO;
+import com.zlt.aps.cx.entity.CxMachineStructureCapacity;
+import com.zlt.aps.cx.entity.CxPrecisionPlan;
+import com.zlt.aps.cx.entity.config.CxParamConfig;
+import com.zlt.aps.cx.entity.config.CxShiftConfig;
+import com.zlt.aps.cx.entity.config.CxStructureShiftCapacity;
+import com.zlt.aps.mp.api.domain.entity.MdmDevicePlanShut;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.*;
+import java.util.stream.Collectors;
+
+/**
+ * 班次排产服务
+ * 
+ * &lt;p&gt;负责 S5.3.7 按班次排产：
+ * &lt;ul&gt;
+ *   &lt;li&gt;将待排产量分配到具体的班次和时间段&lt;/li&gt;
+ *   &lt;li&gt;选择排产模式（核心计划计算 vs 成型结构达产）&lt;/li&gt;
+ *   &lt;li&gt;计算计划量和生产耗时&lt;/li&gt;
+ *   &lt;li&gt;确定开始时间和结束时间&lt;/li&gt;
+ *   &lt;li&gt;更新机台剩余产能&lt;/li&gt;
+ * &lt;/ul&gt;
+ *
+ * @author APS Team
+ */
+<span class="fc" id="L35">@Slf4j</span>
+@Service
+<span class="fc" id="L37">@RequiredArgsConstructor</span>
+public class ShiftScheduleService {
+
+    /** 默认波浪比例：夜班:早班:中班 = 1:2:1 */
+<span class="fc" id="L41">    private static final int[] DEFAULT_WAVE_RATIO = {1, 2, 1};</span>
+
+    /** 班次编码：夜班 */
+    public static final String SHIFT_NIGHT = &quot;SHIFT_NIGHT&quot;;
+    /** 班次编码：早班 */
+    public static final String SHIFT_DAY = &quot;SHIFT_DAY&quot;;
+    /** 班次编码：中班 */
+    public static final String SHIFT_AFTERNOON = &quot;SHIFT_AFTERNOON&quot;;
+
+    /**
+     * 班次均衡分配
+     *
+     * @param allocations 机台分配结果
+     * @param dayShifts   该天的班次配置列表
+     * @param context     排程上下文
+     * @return 班次分配结果
+     */
+    public List&lt;CoreScheduleAlgorithmService.ShiftAllocationResult&gt; balanceShiftAllocation(
+            List&lt;CoreScheduleAlgorithmService.MachineAllocationResult&gt; allocations,
+            List&lt;CxShiftConfig&gt; dayShifts,
+            ScheduleContextDTO context) {
+
+<span class="nc" id="L63">        List&lt;CoreScheduleAlgorithmService.ShiftAllocationResult&gt; results = new ArrayList&lt;&gt;();</span>
+
+<span class="nc bnc" id="L65" title="All 4 branches missed.">        if (dayShifts == null || dayShifts.isEmpty()) {</span>
+<span class="nc" id="L66">            log.warn(&quot;班次配置为空&quot;);</span>
+<span class="nc" id="L67">            return results;</span>
+        }
+
+        // 从班次配置提取班次编码数组
+<span class="nc" id="L71">        String[] shiftCodes = dayShifts.stream()</span>
+<span class="nc" id="L72">                .map(CxShiftConfig::getShiftCode)</span>
+<span class="nc" id="L73">                .toArray(String[]::new);</span>
+
+        // 加载结构班产配置
+<span class="nc" id="L76">        Map&lt;String, Map&lt;String, CxStructureShiftCapacity&gt;&gt; structureCapacityMap = buildStructureShiftCapacityMap(context);</span>
+
+<span class="nc bnc" id="L78" title="All 2 branches missed.">        for (CoreScheduleAlgorithmService.MachineAllocationResult allocation : allocations) {</span>
+<span class="nc" id="L79">            CoreScheduleAlgorithmService.ShiftAllocationResult shiftResult = new CoreScheduleAlgorithmService.ShiftAllocationResult();</span>
+<span class="nc" id="L80">            shiftResult.setMachineCode(allocation.getMachineCode());</span>
+<span class="nc" id="L81">            shiftResult.setTasks(allocation.getTaskAllocations());</span>
+
+<span class="nc" id="L83">            Map&lt;String, Integer&gt; shiftPlanQty = new LinkedHashMap&lt;&gt;();</span>
+
+            // 按任务结构获取班产整车数，计算波浪分配
+<span class="nc" id="L86">            Map&lt;String, Integer&gt; structureWaveAllocation = calculateStructureWaveAllocation(</span>
+<span class="nc" id="L87">                    allocation.getTaskAllocations(),</span>
+                    structureCapacityMap,
+<span class="nc" id="L89">                    allocation.getDailyCapacity(),</span>
+                    shiftCodes,
+                    context);
+
+            // 汇总各班次分配量
+<span class="nc bnc" id="L94" title="All 2 branches missed.">            for (CxShiftConfig shiftConfig : dayShifts) {</span>
+<span class="nc" id="L95">                String shiftCode = shiftConfig.getShiftCode();</span>
+<span class="nc" id="L96">                int shiftQty = structureWaveAllocation.getOrDefault(shiftCode, 0);</span>
+<span class="nc" id="L97">                shiftPlanQty.put(shiftCode, shiftQty);</span>
+<span class="nc" id="L98">            }</span>
+
+            // 处理特殊情况：开产首班不排关键产品
+<span class="nc bnc" id="L101" title="All 4 branches missed.">            if (Boolean.TRUE.equals(context.getIsOpeningDay()) &amp;&amp; context.getCurrentScheduleDay() == 1) {</span>
+<span class="nc" id="L102">                String firstShift = dayShifts.get(0).getShiftCode();</span>
+
+<span class="nc" id="L104">                Set&lt;String&gt; keyProductCodes = context.getKeyProductCodes();</span>
+<span class="nc bnc" id="L105" title="All 6 branches missed.">                if (keyProductCodes != null &amp;&amp; !keyProductCodes.isEmpty() &amp;&amp; dayShifts.size() &gt; 1) {</span>
+<span class="nc" id="L106">                    int keyProductQty = 0;</span>
+<span class="nc bnc" id="L107" title="All 2 branches missed.">                    for (CoreScheduleAlgorithmService.TaskAllocation task : allocation.getTaskAllocations()) {</span>
+<span class="nc bnc" id="L108" title="All 2 branches missed.">                        if (keyProductCodes.contains(task.getMaterialCode())) {</span>
+<span class="nc" id="L109">                            keyProductQty += task.getQuantity();</span>
+                        }
+<span class="nc" id="L111">                    }</span>
+
+<span class="nc bnc" id="L113" title="All 2 branches missed.">                    if (keyProductQty &gt; 0) {</span>
+<span class="nc" id="L114">                        int firstShiftQty = shiftPlanQty.getOrDefault(firstShift, 0);</span>
+<span class="nc" id="L115">                        int adjustedQty = Math.max(firstShiftQty - keyProductQty, 0);</span>
+<span class="nc" id="L116">                        shiftPlanQty.put(firstShift, roundToTrip(adjustedQty, &quot;FLOOR&quot;));</span>
+
+<span class="nc" id="L118">                        String secondShift = dayShifts.get(1).getShiftCode();</span>
+<span class="nc" id="L119">                        int secondShiftQty = shiftPlanQty.getOrDefault(secondShift, 0);</span>
+<span class="nc" id="L120">                        shiftPlanQty.put(secondShift, secondShiftQty + roundToTrip(keyProductQty, &quot;CEILING&quot;));</span>
+
+<span class="nc" id="L122">                        log.debug(&quot;开产首班 {} 移出关键产品 {} 条到 {}&quot;, firstShift, keyProductQty, secondShift);</span>
+                    }
+                }
+            }
+
+<span class="nc" id="L127">            shiftResult.setShiftPlanQty(shiftPlanQty);</span>
+<span class="nc" id="L128">            results.add(shiftResult);</span>
+<span class="nc" id="L129">        }</span>
+
+<span class="nc" id="L131">        return results;</span>
+    }
+
+    /**
+     * 按结构计算波浪分配
+     */
+    private Map&lt;String, Integer&gt; calculateStructureWaveAllocation(
+            List&lt;CoreScheduleAlgorithmService.TaskAllocation&gt; tasks,
+            Map&lt;String, Map&lt;String, CxStructureShiftCapacity&gt;&gt; structureCapacityMap,
+            Integer maxDailyCapacity,
+            String[] shiftCodes,
+            ScheduleContextDTO context) {
+
+<span class="nc" id="L144">        Map&lt;String, Integer&gt; shiftTotalQty = new LinkedHashMap&lt;&gt;();</span>
+<span class="nc bnc" id="L145" title="All 2 branches missed.">        for (String shiftCode : shiftCodes) {</span>
+<span class="nc" id="L146">            shiftTotalQty.put(shiftCode, 0);</span>
+        }
+
+<span class="nc" id="L149">        int totalAssigned = 0;</span>
+
+<span class="nc bnc" id="L151" title="All 2 branches missed.">        for (CoreScheduleAlgorithmService.TaskAllocation task : tasks) {</span>
+<span class="nc" id="L152">            String structureCode = task.getStructureName();</span>
+<span class="nc" id="L153">            int taskQty = task.getQuantity();</span>
+
+<span class="nc" id="L155">            Map&lt;String, CxStructureShiftCapacity&gt; shiftCapacityMap = structureCapacityMap.get(structureCode);</span>
+
+<span class="nc bnc" id="L157" title="All 4 branches missed.">            if (shiftCapacityMap != null &amp;&amp; !shiftCapacityMap.isEmpty()) {</span>
+<span class="nc" id="L158">                int[] shiftQty = calculateShiftQtyByCapacity(taskQty, structureCode, shiftCapacityMap, shiftCodes, context);</span>
+
+<span class="nc bnc" id="L160" title="All 2 branches missed.">                for (int i = 0; i &lt; shiftCodes.length; i++) {</span>
+<span class="nc" id="L161">                    int qty = shiftQty[i];</span>
+<span class="nc" id="L162">                    shiftTotalQty.merge(shiftCodes[i], qty, Integer::sum);</span>
+<span class="nc" id="L163">                    totalAssigned += qty;</span>
+                }
+<span class="nc" id="L165">            } else {</span>
+<span class="nc" id="L166">                int[] waveQty = calculateWaveAllocation(taskQty, shiftCodes, context);</span>
+
+<span class="nc bnc" id="L168" title="All 2 branches missed.">                for (int i = 0; i &lt; shiftCodes.length; i++) {</span>
+<span class="nc" id="L169">                    shiftTotalQty.merge(shiftCodes[i], waveQty[i], Integer::sum);</span>
+<span class="nc" id="L170">                    totalAssigned += waveQty[i];</span>
+                }
+            }
+<span class="nc" id="L173">        }</span>
+
+        // 检查是否超过机台最大产能
+<span class="nc bnc" id="L176" title="All 4 branches missed.">        if (maxDailyCapacity != null &amp;&amp; totalAssigned &gt; maxDailyCapacity) {</span>
+<span class="nc" id="L177">            double ratio = (double) maxDailyCapacity / totalAssigned;</span>
+
+<span class="nc bnc" id="L179" title="All 2 branches missed.">            for (String shiftCode : shiftCodes) {</span>
+<span class="nc" id="L180">                int originalQty = shiftTotalQty.get(shiftCode);</span>
+<span class="nc" id="L181">                int adjustedQty = roundToTrip((int) (originalQty * ratio), &quot;FLOOR&quot;);</span>
+<span class="nc" id="L182">                shiftTotalQty.put(shiftCode, adjustedQty);</span>
+            }
+        }
+
+<span class="nc" id="L186">        return shiftTotalQty;</span>
+    }
+
+    /**
+     * 根据结构班产配置计算各班次分配量
+     */
+    private int[] calculateShiftQtyByCapacity(
+            int taskQty,
+            String structureCode,
+            Map&lt;String, CxStructureShiftCapacity&gt; shiftCapacityMap,
+            String[] shiftCodes,
+            ScheduleContextDTO context) {
+
+<span class="nc" id="L199">        int[] result = new int[shiftCodes.length];</span>
+
+<span class="nc" id="L201">        int totalTripQty = 0;</span>
+<span class="nc" id="L202">        int[] tripQtyPerShift = new int[shiftCodes.length];</span>
+
+<span class="nc bnc" id="L204" title="All 2 branches missed.">        for (int i = 0; i &lt; shiftCodes.length; i++) {</span>
+<span class="nc" id="L205">            CxStructureShiftCapacity capacity = shiftCapacityMap.get(shiftCodes[i]);</span>
+<span class="nc bnc" id="L206" title="All 4 branches missed.">            if (capacity != null &amp;&amp; capacity.getTripQty() != null) {</span>
+<span class="nc" id="L207">                tripQtyPerShift[i] = capacity.getTripQty();</span>
+<span class="nc" id="L208">                totalTripQty += capacity.getTripQty();</span>
+            }
+        }
+
+<span class="nc bnc" id="L212" title="All 2 branches missed.">        if (totalTripQty == 0) {</span>
+<span class="nc" id="L213">            return calculateWaveAllocation(taskQty, shiftCodes, context);</span>
+        }
+
+<span class="nc" id="L216">        int[] waveRatio = context.getWaveRatio();</span>
+<span class="nc bnc" id="L217" title="All 2 branches missed.">        if (waveRatio == null) {</span>
+<span class="nc" id="L218">            waveRatio = DEFAULT_WAVE_RATIO;</span>
+        }
+
+<span class="nc" id="L221">        int[] adjustedRatio = adjustWaveRatio(waveRatio, shiftCodes);</span>
+
+<span class="nc" id="L223">        int totalRatio = 0;</span>
+<span class="nc bnc" id="L224" title="All 2 branches missed.">        for (int ratio : adjustedRatio) {</span>
+<span class="nc" id="L225">            totalRatio += ratio;</span>
+        }
+
+<span class="nc" id="L228">        int tripCapacity = getTripCapacity(structureCode, shiftCapacityMap);</span>
+
+<span class="nc bnc" id="L230" title="All 2 branches missed.">        for (int i = 0; i &lt; shiftCodes.length; i++) {</span>
+<span class="nc" id="L231">            int shiftQty = taskQty * adjustedRatio[i] / totalRatio;</span>
+<span class="nc" id="L232">            shiftQty = Math.min(shiftQty, tripQtyPerShift[i]);</span>
+<span class="nc" id="L233">            shiftQty = roundToTripQty(shiftQty, tripCapacity, &quot;ROUND&quot;);</span>
+
+<span class="nc" id="L235">            result[i] = shiftQty;</span>
+        }
+
+<span class="nc" id="L238">        return result;</span>
+    }
+
+    /**
+     * 按波浪比例分配
+     */
+    private int[] calculateWaveAllocation(int taskQty, String[] shiftCodes, ScheduleContextDTO context) {
+<span class="nc" id="L245">        int[] result = new int[shiftCodes.length];</span>
+
+<span class="nc" id="L247">        int[] waveRatio = context.getWaveRatio();</span>
+<span class="nc bnc" id="L248" title="All 2 branches missed.">        if (waveRatio == null) {</span>
+<span class="nc" id="L249">            waveRatio = DEFAULT_WAVE_RATIO;</span>
+        }
+
+<span class="nc" id="L252">        int[] adjustedRatio = adjustWaveRatio(waveRatio, shiftCodes);</span>
+
+<span class="nc" id="L254">        int totalRatio = 0;</span>
+<span class="nc bnc" id="L255" title="All 2 branches missed.">        for (int ratio : adjustedRatio) {</span>
+<span class="nc" id="L256">            totalRatio += ratio;</span>
+        }
+
+<span class="nc bnc" id="L259" title="All 2 branches missed.">        int tripCapacity = context.getDefaultTripCapacity() != null ? context.getDefaultTripCapacity() : 12;</span>
+
+<span class="nc" id="L261">        int remainingQty = taskQty;</span>
+<span class="nc bnc" id="L262" title="All 2 branches missed.">        for (int i = 0; i &lt; shiftCodes.length; i++) {</span>
+<span class="nc" id="L263">            int shiftQty = taskQty * adjustedRatio[i] / totalRatio;</span>
+<span class="nc" id="L264">            shiftQty = roundToTripQty(shiftQty, tripCapacity, &quot;ROUND&quot;);</span>
+<span class="nc" id="L265">            result[i] = shiftQty;</span>
+<span class="nc" id="L266">            remainingQty -= shiftQty;</span>
+        }
+
+        // 分配余量
+<span class="nc bnc" id="L270" title="All 2 branches missed.">        if (remainingQty &gt; 0) {</span>
+<span class="nc bnc" id="L271" title="All 4 branches missed.">            for (int i = 0; i &lt; shiftCodes.length &amp;&amp; remainingQty &gt;= tripCapacity; i++) {</span>
+<span class="nc" id="L272">                result[i] += tripCapacity;</span>
+<span class="nc" id="L273">                remainingQty -= tripCapacity;</span>
+            }
+        }
+
+<span class="nc" id="L277">        return result;</span>
+    }
+
+    /**
+     * 调整波浪比例映射
+     */
+    private int[] adjustWaveRatio(int[] waveRatio, String[] shiftCodes) {
+<span class="nc" id="L284">        int[] adjustedRatio = new int[shiftCodes.length];</span>
+
+<span class="nc bnc" id="L286" title="All 2 branches missed.">        for (int i = 0; i &lt; shiftCodes.length; i++) {</span>
+<span class="nc" id="L287">            String shiftCode = shiftCodes[i];</span>
+<span class="nc bnc" id="L288" title="All 2 branches missed.">            if (SHIFT_NIGHT.equals(shiftCode)) {</span>
+<span class="nc" id="L289">                adjustedRatio[i] = waveRatio[0];</span>
+<span class="nc bnc" id="L290" title="All 2 branches missed.">            } else if (SHIFT_DAY.equals(shiftCode)) {</span>
+<span class="nc" id="L291">                adjustedRatio[i] = waveRatio[1];</span>
+<span class="nc bnc" id="L292" title="All 2 branches missed.">            } else if (SHIFT_AFTERNOON.equals(shiftCode)) {</span>
+<span class="nc" id="L293">                adjustedRatio[i] = waveRatio[2];</span>
+            } else {
+<span class="nc" id="L295">                adjustedRatio[i] = 1;</span>
+            }
+        }
+
+<span class="nc" id="L299">        return adjustedRatio;</span>
+    }
+
+    /**
+     * 从上下文构建结构班产配置映射
+     */
+    private Map&lt;String, Map&lt;String, CxStructureShiftCapacity&gt;&gt; buildStructureShiftCapacityMap(ScheduleContextDTO context) {
+<span class="nc" id="L306">        Map&lt;String, Map&lt;String, CxStructureShiftCapacity&gt;&gt; result = new HashMap&lt;&gt;();</span>
+
+<span class="nc" id="L308">        List&lt;CxStructureShiftCapacity&gt; capacities = context.getStructureShiftCapacities();</span>
+<span class="nc bnc" id="L309" title="All 4 branches missed.">        if (capacities == null || capacities.isEmpty()) {</span>
+<span class="nc" id="L310">            return result;</span>
+        }
+
+<span class="nc bnc" id="L313" title="All 2 branches missed.">        for (CxStructureShiftCapacity capacity : capacities) {</span>
+<span class="nc" id="L314">            String structureCode = capacity.getStructureCode();</span>
+<span class="nc" id="L315">            String shiftCode = capacity.getShiftCode();</span>
+<span class="nc bnc" id="L316" title="All 4 branches missed.">            if (structureCode != null &amp;&amp; shiftCode != null) {</span>
+<span class="nc" id="L317">                result.computeIfAbsent(structureCode, k -&gt; new HashMap&lt;&gt;())</span>
+<span class="nc" id="L318">                        .put(shiftCode, capacity);</span>
+            }
+<span class="nc" id="L320">        }</span>
+
+<span class="nc" id="L322">        return result;</span>
+    }
+
+    /**
+     * 获取结构的整车容量
+     */
+    private int getTripCapacity(String structureCode, Map&lt;String, CxStructureShiftCapacity&gt; shiftCapacityMap) {
+<span class="nc bnc" id="L329" title="All 2 branches missed.">        if (shiftCapacityMap != null) {</span>
+<span class="nc bnc" id="L330" title="All 2 branches missed.">            for (CxStructureShiftCapacity capacity : shiftCapacityMap.values()) {</span>
+<span class="nc bnc" id="L331" title="All 4 branches missed.">                if (capacity.getTripQty() != null &amp;&amp; capacity.getTripQty() &gt; 0) {</span>
+<span class="nc" id="L332">                    return capacity.getTripQty();</span>
+                }
+<span class="nc" id="L334">            }</span>
+        }
+<span class="nc" id="L336">        return 12;</span>
+    }
+
+    /**
+     * 整车取整
+     */
+    private int roundToTrip(int quantity, String mode) {
+<span class="nc" id="L343">        return roundToTrip(quantity, mode, 12);</span>
+    }
+
+    /**
+     * 整车取整
+     */
+    private int roundToTrip(int quantity, String mode, int tripCapacity) {
+<span class="nc bnc" id="L350" title="All 2 branches missed.">        if (quantity &lt;= 0) {</span>
+<span class="nc" id="L351">            return 0;</span>
+        }
+
+        int trips;
+<span class="nc bnc" id="L355" title="All 3 branches missed.">        switch (mode) {</span>
+            case &quot;CEILING&quot;:
+<span class="nc" id="L357">                trips = (int) Math.ceil((double) quantity / tripCapacity);</span>
+<span class="nc" id="L358">                break;</span>
+            case &quot;FLOOR&quot;:
+<span class="nc" id="L360">                trips = (int) Math.floor((double) quantity / tripCapacity);</span>
+<span class="nc" id="L361">                break;</span>
+            case &quot;ROUND&quot;:
+            default:
+<span class="nc" id="L364">                trips = (int) Math.round((double) quantity / tripCapacity);</span>
+                break;
+        }
+
+<span class="nc" id="L368">        return trips * tripCapacity;</span>
+    }
+
+    /**
+     * 按整车容量取整
+     */
+    private int roundToTripQty(int quantity, int tripCapacity, String mode) {
+<span class="nc" id="L375">        return roundToTrip(quantity, mode, tripCapacity);</span>
+    }
+
+    // ==================== S5.3.7 详细排产方法 ====================
+
+    /**
+     * S5.3.7 按班次排产详细实现
+     *
+     * &lt;p&gt;将待排产量分配到具体的班次和时间段
+     *
+     * @param task          任务
+     * @param machineCode   机台编码
+     * @param context       排程上下文
+     * @param dayShifts     班次配置
+     * @param scheduleDate  排程日期
+     * @return 班次排产结果列表
+     */
+    public List&lt;ShiftProductionResult&gt; scheduleTaskToShifts(
+            CoreScheduleAlgorithmService.DailyEmbryoTask task,
+            String machineCode,
+            ScheduleContextDTO context,
+            List&lt;CxShiftConfig&gt; dayShifts,
+            LocalDate scheduleDate) {
+
+<span class="nc" id="L399">        List&lt;ShiftProductionResult&gt; results = new ArrayList&lt;&gt;();</span>
+
+<span class="nc bnc" id="L401" title="All 2 branches missed.">        int remainingQty = task.getPlannedProduction() != null ? task.getPlannedProduction() : 0;</span>
+<span class="nc bnc" id="L402" title="All 2 branches missed.">        if (remainingQty &lt;= 0) {</span>
+<span class="nc" id="L403">            return results;</span>
+        }
+
+<span class="nc" id="L406">        int hourlyCapacity = getMachineHourlyCapacity(machineCode, task.getStructureName(), context);</span>
+<span class="nc" id="L407">        int tripCapacity = getTripCapacity(task.getStructureName(), context);</span>
+
+<span class="nc bnc" id="L409" title="All 2 branches missed.">        for (CxShiftConfig shiftConfig : dayShifts) {</span>
+<span class="nc bnc" id="L410" title="All 2 branches missed.">            if (remainingQty &lt;= 0) {</span>
+<span class="nc" id="L411">                break;</span>
+            }
+
+            // 试制任务只能在早班或中班
+<span class="nc bnc" id="L415" title="All 2 branches missed.">            if (Boolean.TRUE.equals(task.getIsTrialTask())) {</span>
+<span class="nc bnc" id="L416" title="All 2 branches missed.">                if (!SHIFT_DAY.equals(shiftConfig.getShiftCode()) </span>
+<span class="nc bnc" id="L417" title="All 2 branches missed.">                        &amp;&amp; !SHIFT_AFTERNOON.equals(shiftConfig.getShiftCode())) {</span>
+<span class="nc" id="L418">                    continue;</span>
+                }
+            }
+
+<span class="nc" id="L422">            int shiftAvailableCapacity = calculateShiftAvailableCapacity(</span>
+                    machineCode, shiftConfig, hourlyCapacity, context);
+
+<span class="nc bnc" id="L425" title="All 2 branches missed.">            if (shiftAvailableCapacity &lt;= 0) {</span>
+<span class="nc" id="L426">                continue;</span>
+            }
+
+<span class="nc" id="L429">            int currentBatchQty = Math.min(remainingQty, shiftAvailableCapacity);</span>
+
+<span class="nc" id="L431">            double productionHours = (double) currentBatchQty / hourlyCapacity;</span>
+
+<span class="nc" id="L433">            LocalDateTime startTime = calculateStartTime(machineCode, shiftConfig, scheduleDate, context);</span>
+<span class="nc" id="L434">            LocalDateTime endTime = startTime.plusMinutes((long) (productionHours * 60));</span>
+
+<span class="nc" id="L436">            LocalDateTime shiftEndTime = calculateShiftEndTime(shiftConfig, scheduleDate);</span>
+<span class="nc bnc" id="L437" title="All 2 branches missed.">            if (endTime.isAfter(shiftEndTime)) {</span>
+<span class="nc" id="L438">                endTime = shiftEndTime;</span>
+<span class="nc" id="L439">                long actualMinutes = java.time.Duration.between(startTime, endTime).toMinutes();</span>
+<span class="nc" id="L440">                currentBatchQty = (int) (actualMinutes * hourlyCapacity / 60);</span>
+<span class="nc" id="L441">                currentBatchQty = roundToTrip(currentBatchQty, &quot;FLOOR&quot;, tripCapacity);</span>
+            }
+
+<span class="nc bnc" id="L444" title="All 2 branches missed.">            if (currentBatchQty &lt;= 0) {</span>
+<span class="nc" id="L445">                continue;</span>
+            }
+
+<span class="nc" id="L448">            ShiftProductionResult result = new ShiftProductionResult();</span>
+<span class="nc" id="L449">            result.setMachineCode(machineCode);</span>
+<span class="nc" id="L450">            result.setShiftCode(shiftConfig.getShiftCode());</span>
+<span class="nc" id="L451">            result.setShiftName(shiftConfig.getShiftName());</span>
+<span class="nc" id="L452">            result.setMaterialCode(task.getMaterialCode());</span>
+<span class="nc" id="L453">            result.setMaterialName(task.getMaterialName());</span>
+<span class="nc" id="L454">            result.setStructureName(task.getStructureName());</span>
+<span class="nc" id="L455">            result.setQuantity(currentBatchQty);</span>
+<span class="nc" id="L456">            result.setPlanStartTime(startTime);</span>
+<span class="nc" id="L457">            result.setPlanEndTime(endTime);</span>
+<span class="nc" id="L458">            result.setIsTrialTask(task.getIsTrialTask());</span>
+<span class="nc" id="L459">            result.setIsEndingTask(task.getIsEndingTask());</span>
+<span class="nc" id="L460">            result.setIsContinueTask(task.getIsContinueTask());</span>
+
+<span class="nc" id="L462">            results.add(result);</span>
+
+<span class="nc" id="L464">            remainingQty -= currentBatchQty;</span>
+
+<span class="nc" id="L466">            log.debug(&quot;班次排产：机台={}, 班次={}, 胎胚={}, 数量={}, 时间={}-{}&quot;,</span>
+<span class="nc" id="L467">                    machineCode, shiftConfig.getShiftName(), task.getMaterialCode(),</span>
+<span class="nc" id="L468">                    currentBatchQty, startTime, endTime);</span>
+<span class="nc" id="L469">        }</span>
+
+<span class="nc bnc" id="L471" title="All 2 branches missed.">        if (remainingQty &gt; 0) {</span>
+<span class="nc" id="L472">            log.warn(&quot;任务 {} 还有 {} 条未排产，产能不足&quot;, task.getMaterialCode(), remainingQty);</span>
+        }
+
+<span class="nc" id="L475">        return results;</span>
+    }
+
+    /**
+     * 计算班次可用产能
+     */
+    private int calculateShiftAvailableCapacity(
+            String machineCode,
+            CxShiftConfig shiftConfig,
+            int hourlyCapacity,
+            ScheduleContextDTO context) {
+
+<span class="nc" id="L487">        int shiftHours = calculateShiftHours(shiftConfig);</span>
+<span class="nc" id="L488">        int baseCapacity = hourlyCapacity * shiftHours;</span>
+
+<span class="nc" id="L490">        int shutdownDeduction = calculateShiftShutdownDeduction(machineCode, shiftConfig, hourlyCapacity, context);</span>
+<span class="nc" id="L491">        int precisionDeduction = calculateShiftPrecisionDeduction(machineCode, shiftConfig, hourlyCapacity, context);</span>
+
+<span class="nc" id="L493">        int availableCapacity = baseCapacity - shutdownDeduction - precisionDeduction;</span>
+
+<span class="nc" id="L495">        return Math.max(0, availableCapacity);</span>
+    }
+
+    /**
+     * 计算班次时长（小时）
+     */
+    private int calculateShiftHours(CxShiftConfig shiftConfig) {
+<span class="nc" id="L502">        Integer startHour = shiftConfig.getStartHour();</span>
+<span class="nc" id="L503">        Integer endHour = shiftConfig.getEndHour();</span>
+
+<span class="nc bnc" id="L505" title="All 4 branches missed.">        if (startHour == null || endHour == null) {</span>
+<span class="nc" id="L506">            return 8;</span>
+        }
+
+<span class="nc bnc" id="L509" title="All 2 branches missed.">        if (endHour &lt; startHour) {</span>
+<span class="nc" id="L510">            return (24 - startHour) + endHour;</span>
+        }
+<span class="nc" id="L512">        return endHour - startHour;</span>
+    }
+
+    /**
+     * 计算班次停机扣减产能
+     */
+    private int calculateShiftShutdownDeduction(
+            String machineCode,
+            CxShiftConfig shiftConfig,
+            int hourlyCapacity,
+            ScheduleContextDTO context) {
+
+<span class="nc bnc" id="L524" title="All 4 branches missed.">        if (context.getDevicePlanShuts() == null || context.getDevicePlanShuts().isEmpty()) {</span>
+<span class="nc" id="L525">            return 0;</span>
+        }
+
+<span class="nc" id="L528">        int totalDeduction = 0;</span>
+
+<span class="nc bnc" id="L530" title="All 2 branches missed.">        for (MdmDevicePlanShut shutdown : context.getDevicePlanShuts()) {</span>
+<span class="nc bnc" id="L531" title="All 2 branches missed.">            if (!machineCode.equals(shutdown.getMachineCode())) {</span>
+<span class="nc" id="L532">                continue;</span>
+            }
+            // TODO: 实现详细的班次停机时间扣减计算
+<span class="nc" id="L535">        }</span>
+
+<span class="nc" id="L537">        return totalDeduction;</span>
+    }
+
+    /**
+     * 计算班次精度计划扣减产能
+     */
+    private int calculateShiftPrecisionDeduction(
+            String machineCode,
+            CxShiftConfig shiftConfig,
+            int hourlyCapacity,
+            ScheduleContextDTO context) {
+
+<span class="nc bnc" id="L549" title="All 4 branches missed.">        if (context.getPrecisionPlans() == null || context.getPrecisionPlans().isEmpty()) {</span>
+<span class="nc" id="L550">            return 0;</span>
+        }
+
+<span class="nc bnc" id="L553" title="All 2 branches missed.">        for (CxPrecisionPlan plan : context.getPrecisionPlans()) {</span>
+<span class="nc bnc" id="L554" title="All 2 branches missed.">            if (machineCode.equals(plan.getMachineCode())) {</span>
+<span class="nc bnc" id="L555" title="All 2 branches missed.">                if (shiftConfig.getShiftCode().equals(plan.getPlanShift())) {</span>
+<span class="nc bnc" id="L556" title="All 2 branches missed.">                    int precisionHours = plan.getEstimatedHours() != null ? plan.getEstimatedHours() : 4;</span>
+<span class="nc" id="L557">                    return precisionHours * hourlyCapacity;</span>
+                }
+            }
+<span class="nc" id="L560">        }</span>
+
+<span class="nc" id="L562">        return 0;</span>
+    }
+
+    /**
+     * 计算生产开始时间
+     */
+    private LocalDateTime calculateStartTime(
+            String machineCode,
+            CxShiftConfig shiftConfig,
+            LocalDate scheduleDate,
+            ScheduleContextDTO context) {
+
+<span class="nc bnc" id="L574" title="All 2 branches missed.">        int startHour = shiftConfig.getStartHour() != null ? shiftConfig.getStartHour() : 0;</span>
+<span class="nc bnc" id="L575" title="All 2 branches missed.">        int startMinute = shiftConfig.getStartMinute() != null ? shiftConfig.getStartMinute() : 0;</span>
+
+<span class="nc" id="L577">        LocalDateTime startTime = LocalDateTime.of(scheduleDate, LocalTime.of(startHour, startMinute));</span>
+
+<span class="nc" id="L579">        int prepareMinutes = getMachinePrepareMinutes(machineCode, context);</span>
+<span class="nc" id="L580">        startTime = startTime.plusMinutes(prepareMinutes);</span>
+
+<span class="nc" id="L582">        return startTime;</span>
+    }
+
+    /**
+     * 计算班次结束时间
+     */
+    private LocalDateTime calculateShiftEndTime(CxShiftConfig shiftConfig, LocalDate scheduleDate) {
+<span class="nc bnc" id="L589" title="All 2 branches missed.">        int endHour = shiftConfig.getEndHour() != null ? shiftConfig.getEndHour() : 8;</span>
+<span class="nc bnc" id="L590" title="All 2 branches missed.">        int endMinute = shiftConfig.getEndMinute() != null ? shiftConfig.getEndMinute() : 0;</span>
+
+<span class="nc" id="L592">        LocalDateTime endTime = LocalDateTime.of(scheduleDate, LocalTime.of(endHour, endMinute));</span>
+
+<span class="nc bnc" id="L594" title="All 4 branches missed.">        if (shiftConfig.getShiftCode().equals(SHIFT_NIGHT) &amp;&amp; endHour &lt;= 8) {</span>
+<span class="nc" id="L595">            endTime = endTime.plusDays(1);</span>
+        }
+
+<span class="nc" id="L598">        return endTime;</span>
+    }
+
+    /**
+     * 获取机台小时产能
+     */
+    private int getMachineHourlyCapacity(String machineCode, String structureName, ScheduleContextDTO context) {
+<span class="nc bnc" id="L605" title="All 6 branches missed.">        if (context.getMachineStructureCapacities() != null &amp;&amp; machineCode != null &amp;&amp; structureName != null) {</span>
+<span class="nc bnc" id="L606" title="All 2 branches missed.">            for (CxMachineStructureCapacity capacity : context.getMachineStructureCapacities()) {</span>
+<span class="nc bnc" id="L607" title="All 2 branches missed.">                if (machineCode.equals(capacity.getCxMachineCode()) </span>
+<span class="nc bnc" id="L608" title="All 2 branches missed.">                        &amp;&amp; structureName.equals(capacity.getStructureCode())) {</span>
+<span class="nc bnc" id="L609" title="All 2 branches missed.">                    return capacity.getHourlyCapacity() != null ? capacity.getHourlyCapacity() : 50;</span>
+                }
+<span class="nc" id="L611">            }</span>
+        }
+<span class="nc bnc" id="L613" title="All 2 branches missed.">        return context.getMachineHourlyCapacity() != null ? context.getMachineHourlyCapacity() : 50;</span>
+    }
+
+    /**
+     * 获取结构的整车容量
+     */
+    private int getTripCapacity(String structureCode, ScheduleContextDTO context) {
+<span class="nc bnc" id="L620" title="All 2 branches missed.">        if (context.getStructureShiftCapacities() != null) {</span>
+<span class="nc bnc" id="L621" title="All 2 branches missed.">            for (CxStructureShiftCapacity capacity : context.getStructureShiftCapacities()) {</span>
+<span class="nc bnc" id="L622" title="All 2 branches missed.">                if (capacity.getStructureCode() != null &amp;&amp;</span>
+<span class="nc bnc" id="L623" title="All 2 branches missed.">                        capacity.getStructureCode().equals(structureCode)) {</span>
+<span class="nc bnc" id="L624" title="All 4 branches missed.">                    if (capacity.getTripQty() != null &amp;&amp; capacity.getTripQty() &gt; 0) {</span>
+<span class="nc" id="L625">                        return capacity.getTripQty();</span>
+                    }
+                }
+<span class="nc" id="L628">            }</span>
+        }
+<span class="nc bnc" id="L630" title="All 2 branches missed.">        return context.getDefaultTripCapacity() != null ? context.getDefaultTripCapacity() : 12;</span>
+    }
+
+    /**
+     * 获取机台准备时间（分钟）
+     */
+    private int getMachinePrepareMinutes(String machineCode, ScheduleContextDTO context) {
+<span class="nc" id="L637">        return 30;</span>
+    }
+
+    /**
+     * 班次排产结果
+     */
+<span class="nc bnc" id="L643" title="All 96 branches missed.">    @lombok.Data</span>
+    public static class ShiftProductionResult {
+<span class="nc" id="L645">        private String machineCode;</span>
+<span class="nc" id="L646">        private String shiftCode;</span>
+<span class="nc" id="L647">        private String shiftName;</span>
+<span class="nc" id="L648">        private String materialCode;</span>
+<span class="nc" id="L649">        private String materialName;</span>
+<span class="nc" id="L650">        private String structureName;</span>
+<span class="nc" id="L651">        private int quantity;</span>
+<span class="nc" id="L652">        private LocalDateTime planStartTime;</span>
+<span class="nc" id="L653">        private LocalDateTime planEndTime;</span>
+<span class="nc" id="L654">        private Boolean isTrialTask;</span>
+<span class="nc" id="L655">        private Boolean isEndingTask;</span>
+<span class="nc" id="L656">        private Boolean isContinueTask;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

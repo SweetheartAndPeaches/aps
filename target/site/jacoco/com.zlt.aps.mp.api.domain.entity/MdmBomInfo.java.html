@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MdmBomInfo.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">APS Forming Schedule System</a> &gt; <a href="index.source.html" class="el_package">com.zlt.aps.mp.api.domain.entity</a> &gt; <span class="el_source">MdmBomInfo.java</span></div><h1>MdmBomInfo.java</h1><pre class="source lang-java linenums">package com.zlt.aps.mp.api.domain.entity;
+
+import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableName;
+import com.zlt.aps.cx.entity.base.ApsBaseEntity;
+import io.swagger.annotations.ApiModel;
+import io.swagger.annotations.ApiModelProperty;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+
+import java.math.BigDecimal;
+import java.util.Date;
+import java.util.List;
+
+/**
+ * BOM示方书对象
+ * 对应表：T_MDM_BOM_INFO
+ *
+ * @author APS Team
+ * @since 2.0.0
+ */
+<span class="nc" id="L22">@Data</span>
+<span class="nc bnc" id="L23" title="All 184 branches missed.">@EqualsAndHashCode(callSuper = true)</span>
+@TableName(&quot;T_MDM_BOM_INFO&quot;)
+@ApiModel(value = &quot;BOM示方书对象&quot;, description = &quot;BOM示方书对象&quot;)
+public class MdmBomInfo extends ApsBaseEntity {
+
+    private static final long serialVersionUID = 1L;
+
+    @ApiModelProperty(value = &quot;子物料品号&quot;)
+    @TableField(&quot;CHILD_MATERIAL_CODE&quot;)
+<span class="nc" id="L32">    private String childMaterialCode;</span>
+
+    @ApiModelProperty(value = &quot;子物料名称&quot;)
+    @TableField(&quot;CHILD_MATERIAL_NAME&quot;)
+<span class="nc" id="L36">    private String childMaterialName;</span>
+
+    @ApiModelProperty(value = &quot;子物料名称编码&quot;)
+    @TableField(&quot;CHILD_MATERIAL_NAME_CODE&quot;)
+<span class="nc" id="L40">    private String childMaterialNameCode;</span>
+
+    @ApiModelProperty(value = &quot;子物料代码&quot;)
+    @TableField(&quot;CHILD_CODE&quot;)
+<span class="nc" id="L44">    private String childCode;</span>
+
+    @ApiModelProperty(value = &quot;单位描述&quot;)
+    @TableField(&quot;UNIT&quot;)
+<span class="nc" id="L48">    private String unit;</span>
+
+    @ApiModelProperty(value = &quot;用量，单胎消耗量&quot;)
+    @TableField(&quot;DOSAGE&quot;)
+<span class="nc" id="L52">    private BigDecimal dosage;</span>
+
+    @ApiModelProperty(value = &quot;组成用量&quot;)
+    @TableField(&quot;DOSAGE_FORM&quot;)
+<span class="nc" id="L56">    private BigDecimal dosageForm;</span>
+
+    @ApiModelProperty(value = &quot;父物料品号&quot;)
+    @TableField(&quot;PARENT_MATERIAL_CODE&quot;)
+<span class="nc" id="L60">    private String parentMaterialCode;</span>
+
+    @ApiModelProperty(value = &quot;父物料名称&quot;)
+    @TableField(&quot;PARENT_MATERIAL_NAME&quot;)
+<span class="nc" id="L64">    private String parentMaterialName;</span>
+
+    @ApiModelProperty(value = &quot;父物料代码&quot;)
+    @TableField(&quot;PARENT_CODE&quot;)
+<span class="nc" id="L68">    private String parentCode;</span>
+
+    @ApiModelProperty(value = &quot;父物料版本&quot;)
+    @TableField(&quot;PARENT_VERSION&quot;)
+<span class="nc" id="L72">    private String parentVersion;</span>
+
+    @ApiModelProperty(value = &quot;生产阶段&quot;)
+    @TableField(&quot;PRODUCTION_STAGE&quot;)
+<span class="nc" id="L76">    private String productionStage;</span>
+
+    @ApiModelProperty(value = &quot;生产阶段中文映射&quot;)
+    @TableField(&quot;PRODUCTION_STAGE_CODE&quot;)
+<span class="nc" id="L80">    private String productionStageCode;</span>
+
+    @ApiModelProperty(value = &quot;BOM信息版本&quot;)
+    @TableField(&quot;BOM_VERSION&quot;)
+<span class="nc" id="L84">    private String bomVersion;</span>
+
+    @ApiModelProperty(value = &quot;子物料版本&quot;)
+    @TableField(&quot;CHILD_MATERIAL_VERSION&quot;)
+<span class="nc" id="L88">    private String childMaterialVersion;</span>
+
+    @ApiModelProperty(value = &quot;BOM类型&quot;)
+    @TableField(&quot;BOM_TYPE&quot;)
+<span class="nc" id="L92">    private String bomType;</span>
+
+    @ApiModelProperty(value = &quot;状态(1正常3废止)&quot;)
+    @TableField(&quot;STATUS&quot;)
+<span class="nc" id="L96">    private String status;</span>
+
+    @ApiModelProperty(value = &quot;MES系统创建时间&quot;)
+    @TableField(&quot;MES_CREATE_DATE&quot;)
+<span class="nc" id="L100">    private Date mesCreateDate;</span>
+
+    @ApiModelProperty(value = &quot;MES更新时间&quot;)
+    @TableField(&quot;MES_UPDATE_DATE&quot;)
+<span class="nc" id="L104">    private Date mesUpdateDate;</span>
+
+    @TableField(exist = false)
+<span class="nc" id="L107">    private MdmBomInfo parent;</span>
+
+    @TableField(exist = false)
+<span class="nc" id="L110">    private Boolean isLeaf;</span>
+
+    @TableField(exist = false)
+<span class="nc" id="L113">    private List&lt;MdmBomInfo&gt; children;</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

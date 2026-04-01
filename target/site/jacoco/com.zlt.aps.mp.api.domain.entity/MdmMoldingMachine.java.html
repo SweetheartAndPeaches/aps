@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MdmMoldingMachine.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">APS Forming Schedule System</a> &gt; <a href="index.source.html" class="el_package">com.zlt.aps.mp.api.domain.entity</a> &gt; <span class="el_source">MdmMoldingMachine.java</span></div><h1>MdmMoldingMachine.java</h1><pre class="source lang-java linenums">package com.zlt.aps.mp.api.domain.entity;
+
+import com.baomidou.mybatisplus.annotation.*;
+import com.zlt.aps.cx.entity.base.ApsBaseEntity;
+import io.swagger.annotations.ApiModel;
+import io.swagger.annotations.ApiModelProperty;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+
+/**
+ * 成型机档案对象
+ * 对应表：T_MDM_MOLDING_MACHINE
+ *
+ * @author APS Team
+ * @since 2.0.0
+ */
+<span class="nc" id="L17">@Data</span>
+<span class="nc bnc" id="L18" title="All 136 branches missed.">@EqualsAndHashCode(callSuper = true)</span>
+@TableName(&quot;T_MDM_MOLDING_MACHINE&quot;)
+@ApiModel(value = &quot;成型机档案对象&quot;, description = &quot;基础数据-成型机档案对象&quot;)
+public class MdmMoldingMachine extends ApsBaseEntity {
+
+    private static final long serialVersionUID = 1L;
+
+    /**
+     * 主键ID
+     */
+    @ApiModelProperty(value = &quot;主键ID&quot;)
+    @TableId(value = &quot;ID&quot;, type = IdType.AUTO)
+<span class="nc" id="L30">    private Long id;</span>
+
+    /**
+     * 工厂编号
+     */
+    @ApiModelProperty(value = &quot;工厂编号&quot;)
+    @TableField(&quot;FACTORY_CODE&quot;)
+<span class="nc" id="L37">    private String factoryCode;</span>
+
+    /**
+     * 成型机编码
+     */
+    @ApiModelProperty(value = &quot;成型机编码&quot;)
+    @TableField(&quot;CX_MACHINE_CODE&quot;)
+<span class="nc" id="L44">    private String cxMachineCode;</span>
+
+    /**
+     * 成型机类型
+     */
+    @ApiModelProperty(value = &quot;成型机类型&quot;)
+    @TableField(&quot;CX_MACHINE_BRAND_CODE&quot;)
+<span class="nc" id="L51">    private String cxMachineBrandCode;</span>
+
+    /**
+     * 机型
+     */
+    @ApiModelProperty(value = &quot;机型&quot;)
+    @TableField(&quot;CX_MACHINE_TYPE_CODE&quot;)
+<span class="nc" id="L58">    private String cxMachineTypeCode;</span>
+
+    /**
+     * 反包方式
+     */
+    @ApiModelProperty(value = &quot;反包方式&quot;)
+    @TableField(&quot;ROLL_OVER_TYPE&quot;)
+<span class="nc" id="L65">    private String rollOverType;</span>
+
+    /**
+     * 是否有零度供料架 数据字典 biz_yes_no 1 是 0 否
+     */
+    @ApiModelProperty(value = &quot;是否有零度供料架 数据字典 biz_yes_no 1 是 0 否&quot;)
+    @TableField(&quot;IS_ZERO_RACK&quot;)
+<span class="nc" id="L72">    private String isZeroRack;</span>
+
+    /**
+     * 硫化机上限
+     */
+    @ApiModelProperty(value = &quot;硫化机上限&quot;)
+    @TableField(&quot;LH_MACHINE_MAX_QTY&quot;)
+<span class="nc" id="L79">    private Integer lhMachineMaxQty;</span>
+
+    /**
+     * 设备最大日产量
+     */
+    @ApiModelProperty(value = &quot;设备最大日产量&quot;)
+    @TableField(&quot;MAX_DAY_CAPACITY&quot;)
+<span class="nc" id="L86">    private Integer maxDayCapacity;</span>
+
+    /**
+     * 产线编号
+     */
+    @ApiModelProperty(value = &quot;产线编号&quot;)
+    @TableField(&quot;LINE_NUMBER&quot;)
+<span class="nc" id="L93">    private Integer lineNumber;</span>
+
+    /**
+     * 是否启用：0-禁用 1-启用
+     */
+    @ApiModelProperty(value = &quot;是否启用：0-禁用 1-启用&quot;)
+    @TableField(&quot;IS_ACTIVE&quot;)
+<span class="nc" id="L100">    private Integer isActive;</span>
+
+    /**
+     * 备注
+     */
+    @ApiModelProperty(value = &quot;备注&quot;)
+    @TableField(&quot;REMARK&quot;)
+<span class="nc" id="L107">    private String remark;</span>
+
+    // ==================== 非数据库字段 ====================
+
+    /**
+     * 展示机台编号
+     */
+    @ApiModelProperty(value = &quot;展示机台编号&quot;)
+    @TableField(exist = false)
+<span class="nc" id="L116">    private String machineCode;</span>
+
+    /**
+     * 展示机台名称
+     */
+    @ApiModelProperty(value = &quot;展示机台名称&quot;)
+    @TableField(exist = false)
+<span class="nc" id="L123">    private String machineName;</span>
+    
+    /**
+     * 成型机名称（用于展示）
+     */
+    @ApiModelProperty(value = &quot;成型机名称&quot;)
+    @TableField(exist = false)
+<span class="nc" id="L130">    private String cxMachineName;</span>
+    
+    /**
+     * 成型机类型名称（用于展示）
+     */
+    @ApiModelProperty(value = &quot;成型机类型名称&quot;)
+    @TableField(exist = false)
+<span class="nc" id="L137">    private String cxMachineTypeName;</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

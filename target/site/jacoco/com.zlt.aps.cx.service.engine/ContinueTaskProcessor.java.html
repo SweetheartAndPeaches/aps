@@ -1,0 +1,628 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ContinueTaskProcessor.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">APS Forming Schedule System</a> &gt; <a href="index.source.html" class="el_package">com.zlt.aps.cx.service.engine</a> &gt; <span class="el_source">ContinueTaskProcessor.java</span></div><h1>ContinueTaskProcessor.java</h1><pre class="source lang-java linenums">package com.zlt.aps.cx.service.engine;
+
+import com.zlt.aps.cx.dto.ScheduleContextDTO;
+import com.zlt.aps.cx.entity.CxMachineStructureCapacity;
+import com.zlt.aps.cx.entity.config.CxParamConfig;
+import com.zlt.aps.cx.entity.config.CxShiftConfig;
+import com.zlt.aps.cx.entity.config.CxStructureShiftCapacity;
+import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
+import com.zlt.aps.mp.api.domain.entity.MdmMoldingMachine;
+import com.zlt.aps.mp.api.domain.entity.MdmStructureLhRatio;
+import com.zlt.aps.mp.api.domain.entity.MpCxCapacityConfiguration;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.util.CollectionUtils;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.*;
+import java.util.stream.Collectors;
+
+/**
+ * 续作任务处理器
+ * 
+ * &lt;p&gt;负责 S5.3 续作任务排产：
+ * &lt;ul&gt;
+ *   &lt;li&gt;按结构分组任务&lt;/li&gt;
+ *   &lt;li&gt;使用 {@link BalancingService} 均衡分配胎胚到机台&lt;/li&gt;
+ *   &lt;li&gt;S5.3.1 分配胎胚库存：按硫化需求占比分配&lt;/li&gt;
+ *   &lt;li&gt;S5.3.2 计算待排产量：(日硫化量 - 库存) × (1 + 损耗率) + 异常平摊&lt;/li&gt;
+ *   &lt;li&gt;S5.3.3 开停产特殊处理&lt;/li&gt;
+ *   &lt;li&gt;S5.3.4 收尾余量处理：主要产品补到一整车&lt;/li&gt;
+ *   &lt;li&gt;S5.3.5 补做逻辑：延误检测和补做计算&lt;/li&gt;
+ * &lt;/ul&gt;
+ *
+ * @author APS Team
+ */
+<span class="fc" id="L38">@Slf4j</span>
+@Service
+<span class="fc" id="L40">@RequiredArgsConstructor</span>
+public class ContinueTaskProcessor {
+
+    private final BalancingService balancingService;
+    private final ProductionCalculator productionCalculator;
+
+    /** 开产首班排产时长（小时） */
+    private static final int OPENING_SHIFT_HOURS = 6;
+    
+    /** 胎胚库容上限比例 */
+    private static final double EMBRYO_STORAGE_RATIO = 0.9;
+    
+    /** 默认整车容量 */
+    private static final int DEFAULT_TRIP_CAPACITY = 12;
+
+    /** 参数编码：强制保留历史任务 */
+    private static final String PARAM_FORCE_KEEP_HISTORY = &quot;FORCE_KEEP_HISTORY_TASK&quot;;
+
+    /**
+     * 处理续作任务
+     */
+    public List&lt;CoreScheduleAlgorithmService.MachineAllocationResult&gt; processContinueTasks(
+            List&lt;CoreScheduleAlgorithmService.DailyEmbryoTask&gt; continueTasks,
+            ScheduleContextDTO context,
+            LocalDate scheduleDate,
+            List&lt;CxShiftConfig&gt; dayShifts,
+            int day) {
+
+<span class="nc" id="L68">        List&lt;CoreScheduleAlgorithmService.MachineAllocationResult&gt; results = new ArrayList&lt;&gt;();</span>
+
+<span class="nc bnc" id="L70" title="All 2 branches missed.">        if (CollectionUtils.isEmpty(continueTasks)) {</span>
+<span class="nc" id="L71">            return results;</span>
+        }
+
+<span class="nc" id="L74">        log.info(&quot;========== 开始处理续作任务，共 {} 个任务 ==========&quot;, continueTasks.size());</span>
+
+        // Step 1: 按结构分组任务
+<span class="nc" id="L77">        Map&lt;String, List&lt;CoreScheduleAlgorithmService.DailyEmbryoTask&gt;&gt; structureTaskMap = </span>
+<span class="nc" id="L78">                groupTasksByStructure(continueTasks);</span>
+<span class="nc" id="L79">        log.info(&quot;按结构分组完成，共 {} 个结构&quot;, structureTaskMap.size());</span>
+
+        // Step 2: 获取是否强制保留历史任务
+<span class="nc" id="L82">        boolean forceKeepHistory = getForceKeepHistoryConfig(context);</span>
+<span class="nc" id="L83">        log.info(&quot;强制保留历史任务配置: {}&quot;, forceKeepHistory);</span>
+
+        // Step 3: 构建历史任务映射
+<span class="nc" id="L86">        Map&lt;String, Set&lt;String&gt;&gt; machineHistoryMap = buildMachineHistoryMap(context);</span>
+<span class="nc" id="L87">        log.info(&quot;构建历史任务映射完成，共 {} 台机台有历史记录&quot;, machineHistoryMap.size());</span>
+
+        // Step 4: 按结构处理每个分组
+<span class="nc bnc" id="L90" title="All 2 branches missed.">        for (Map.Entry&lt;String, List&lt;CoreScheduleAlgorithmService.DailyEmbryoTask&gt;&gt; entry : structureTaskMap.entrySet()) {</span>
+<span class="nc" id="L91">            String structureName = entry.getKey();</span>
+<span class="nc" id="L92">            List&lt;CoreScheduleAlgorithmService.DailyEmbryoTask&gt; tasks = entry.getValue();</span>
+
+<span class="nc" id="L94">            log.info(&quot;--- 处理结构 {}，共 {} 个胎胚 ---&quot;, structureName, tasks.size());</span>
+
+            // 获取该结构可分配的机台列表
+<span class="nc" id="L97">            List&lt;MpCxCapacityConfiguration&gt; availableMachines = getAvailableMachinesForStructure(</span>
+                    structureName, scheduleDate, context);
+            
+<span class="nc bnc" id="L100" title="All 2 branches missed.">            if (availableMachines.isEmpty()) {</span>
+<span class="nc" id="L101">                log.warn(&quot;结构 {} 没有可分配的机台，跳过&quot;, structureName);</span>
+<span class="nc" id="L102">                continue;</span>
+            }
+
+            // 构建机台编码 -&gt; 最大硫化机数 映射（根据每台机台的机型+结构获取）
+<span class="nc" id="L106">            Map&lt;String, Integer&gt; machineMaxLhMap = buildMachineMaxLhMap(availableMachines, structureName, context);</span>
+
+            // 构建机台编码 -&gt; 最大胎胚种类数 映射（根据每台机台的机型+结构获取）
+<span class="nc" id="L109">            Map&lt;String, Integer&gt; machineMaxEmbryoTypesMap = buildMachineMaxEmbryoTypesMap(availableMachines, structureName, context);</span>
+
+            // Step 5: 使用 BalancingService 均衡分配（使用每台机台各自的最大硫化机数和最大胎胚种类数）
+<span class="nc" id="L112">            BalancingService.BalancingResult balancingResult = balancingService.balanceEmbryosToMachinesWithMachineCapacity(</span>
+                    tasks, availableMachines, machineHistoryMap,
+                    machineMaxLhMap, machineMaxEmbryoTypesMap, forceKeepHistory, context);
+
+            // Step 6: 为每个机台分配计划量
+<span class="nc bnc" id="L117" title="All 2 branches missed.">            for (BalancingService.MachineAssignment assignment : balancingResult.getAssignments()) {</span>
+<span class="nc" id="L118">                CoreScheduleAlgorithmService.MachineAllocationResult allocation = createMachineAllocation(</span>
+<span class="nc" id="L119">                        assignment.getMachineCode(), context);</span>
+
+<span class="nc bnc" id="L121" title="All 2 branches missed.">                for (BalancingService.EmbryoAssignment embryoAssignment : assignment.getEmbryoAssignments()) {</span>
+<span class="nc" id="L122">                    CoreScheduleAlgorithmService.DailyEmbryoTask task = embryoAssignment.getTask();</span>
+                    
+                    // S5.3.1 分配胎胚库存
+<span class="nc" id="L125">                    allocateEmbryoStock(task, context, scheduleDate);</span>
+                    
+                    // S5.3.2 计算待排产量
+<span class="nc bnc" id="L128" title="All 4 branches missed.">                    boolean isOpeningDay = Boolean.TRUE.equals(context.getIsOpeningDay()) &amp;&amp; day == 1;</span>
+<span class="nc" id="L129">                    calculatePlannedProduction(task, context, scheduleDate, isOpeningDay);</span>
+                    
+                    // S5.3.3 开停产特殊处理
+<span class="nc" id="L132">                    boolean isClosingDay = Boolean.TRUE.equals(context.getIsClosingDay());</span>
+<span class="nc" id="L133">                    handleOpeningClosingDay(task, context, dayShifts, isOpeningDay, isClosingDay);</span>
+                    
+                    // S5.3.4 收尾余量处理
+<span class="nc" id="L136">                    handleEndingRemainder(task, context, isOpeningDay);</span>
+                    
+                    // S5.3.5 计算延误量和补做
+<span class="nc bnc" id="L139" title="All 4 branches missed.">                    if (Boolean.TRUE.equals(task.getIsNearEnding()) &amp;&amp; !isOpeningDay) {</span>
+<span class="nc" id="L140">                        int catchUpQty = calculateCatchUpQuantity(task, context, scheduleDate);</span>
+<span class="nc bnc" id="L141" title="All 2 branches missed.">                        if (catchUpQty &gt; 0) {</span>
+<span class="nc" id="L142">                            int tripCapacity = getTripCapacity(task.getStructureName(), context);</span>
+<span class="nc" id="L143">                            int catchUpTrips = convertToTrips(catchUpQty, tripCapacity, task.getIsMainProduct());</span>
+<span class="nc" id="L144">                            task.setCatchUpQuantity(catchUpTrips * tripCapacity);</span>
+<span class="nc" id="L145">                            task.setPlannedProduction(task.getPlannedProduction() + task.getCatchUpQuantity());</span>
+                        }
+                    }
+
+                    // 分配任务到机台
+<span class="nc bnc" id="L150" title="All 4 branches missed.">                    if (task.getPlannedProduction() != null &amp;&amp; task.getPlannedProduction() &gt; 0) {</span>
+<span class="nc" id="L151">                        allocateTaskToMachine(allocation, task, context);</span>
+                    }
+<span class="nc" id="L153">                }</span>
+
+<span class="nc bnc" id="L155" title="All 2 branches missed.">                if (!allocation.getTaskAllocations().isEmpty()) {</span>
+<span class="nc" id="L156">                    results.add(allocation);</span>
+                }
+<span class="nc" id="L158">            }</span>
+<span class="nc" id="L159">        }</span>
+
+<span class="nc" id="L161">        log.info(&quot;========== 续作任务处理完成，共 {} 台机台分配任务 ==========&quot;, results.size());</span>
+<span class="nc" id="L162">        return results;</span>
+    }
+
+    // ==================== 辅助方法 ====================
+
+    private Map&lt;String, List&lt;CoreScheduleAlgorithmService.DailyEmbryoTask&gt;&gt; groupTasksByStructure(
+            List&lt;CoreScheduleAlgorithmService.DailyEmbryoTask&gt; tasks) {
+<span class="nc" id="L169">        return tasks.stream()</span>
+<span class="nc bnc" id="L170" title="All 2 branches missed.">                .filter(t -&gt; t.getStructureName() != null)</span>
+<span class="nc" id="L171">                .collect(Collectors.groupingBy(</span>
+                        CoreScheduleAlgorithmService.DailyEmbryoTask::getStructureName,
+                        LinkedHashMap::new,
+<span class="nc" id="L174">                        Collectors.toList()));</span>
+    }
+
+    private boolean getForceKeepHistoryConfig(ScheduleContextDTO context) {
+<span class="nc bnc" id="L178" title="All 2 branches missed.">        if (context.getParamConfigMap() != null) {</span>
+<span class="nc" id="L179">            CxParamConfig config = context.getParamConfigMap().get(PARAM_FORCE_KEEP_HISTORY);</span>
+<span class="nc bnc" id="L180" title="All 4 branches missed.">            if (config != null &amp;&amp; config.getParamValue() != null) {</span>
+<span class="nc bnc" id="L181" title="All 4 branches missed.">                return &quot;1&quot;.equals(config.getParamValue()) || &quot;true&quot;.equalsIgnoreCase(config.getParamValue());</span>
+            }
+        }
+<span class="nc" id="L184">        return false;</span>
+    }
+
+    private Map&lt;String, Set&lt;String&gt;&gt; buildMachineHistoryMap(ScheduleContextDTO context) {
+<span class="nc" id="L188">        Map&lt;String, Set&lt;String&gt;&gt; historyMap = new HashMap&lt;&gt;();</span>
+<span class="nc bnc" id="L189" title="All 2 branches missed.">        if (context.getMachineOnlineEmbryoMap() != null) {</span>
+<span class="nc" id="L190">            historyMap.putAll(context.getMachineOnlineEmbryoMap());</span>
+        }
+<span class="nc" id="L192">        return historyMap;</span>
+    }
+
+    private List&lt;MpCxCapacityConfiguration&gt; getAvailableMachinesForStructure(
+            String structureName, LocalDate scheduleDate, ScheduleContextDTO context) {
+<span class="nc bnc" id="L197" title="All 2 branches missed.">        if (context.getStructureAllocationMap() != null) {</span>
+<span class="nc" id="L198">            List&lt;MpCxCapacityConfiguration&gt; configs = context.getStructureAllocationMap().get(structureName);</span>
+<span class="nc bnc" id="L199" title="All 4 branches missed.">            if (configs != null &amp;&amp; !configs.isEmpty()) {</span>
+<span class="nc" id="L200">                int day = scheduleDate.getDayOfMonth();</span>
+<span class="nc" id="L201">                return configs.stream()</span>
+<span class="nc bnc" id="L202" title="All 4 branches missed.">                        .filter(c -&gt; c.getBeginDay() != null &amp;&amp; c.getEndDay() != null)</span>
+<span class="nc bnc" id="L203" title="All 4 branches missed.">                        .filter(c -&gt; c.getBeginDay() &lt;= day &amp;&amp; c.getEndDay() &gt;= day)</span>
+<span class="nc" id="L204">                        .collect(Collectors.toList());</span>
+            }
+        }
+<span class="nc" id="L207">        return new ArrayList&lt;&gt;();</span>
+    }
+
+    /**
+     * 构建机台最大硫化机数映射
+     *
+     * &lt;p&gt;根据每台机台的机型 + 结构，从 MdmStructureLhRatio 获取对应的最大硫化机数
+     *
+     * @param machineConfigs  机台配置列表
+     * @param structureName   结构名称
+     * @param context         排程上下文
+     * @return 机台编码 -&gt; 最大硫化机数
+     */
+    private Map&lt;String, Integer&gt; buildMachineMaxLhMap(
+            List&lt;MpCxCapacityConfiguration&gt; machineConfigs,
+            String structureName,
+            ScheduleContextDTO context) {
+
+<span class="nc" id="L225">        Map&lt;String, Integer&gt; result = new HashMap&lt;&gt;();</span>
+
+        // 构建机台编码 -&gt; 机型 映射
+<span class="nc" id="L228">        Map&lt;String, String&gt; machineTypeMap = new HashMap&lt;&gt;();</span>
+<span class="nc bnc" id="L229" title="All 2 branches missed.">        if (context.getAvailableMachines() != null) {</span>
+<span class="nc bnc" id="L230" title="All 2 branches missed.">            for (MdmMoldingMachine machine : context.getAvailableMachines()) {</span>
+<span class="nc" id="L231">                machineTypeMap.put(machine.getCxMachineCode(), machine.getCxMachineTypeCode());</span>
+<span class="nc" id="L232">            }</span>
+        }
+
+        // 构建 机型_结构 -&gt; 最大硫化机数 映射
+<span class="nc" id="L236">        Map&lt;String, Integer&gt; typeStructureMap = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L237">        List&lt;MdmStructureLhRatio&gt; ratios = context.getStructureLhRatios();</span>
+<span class="nc bnc" id="L238" title="All 2 branches missed.">        if (ratios != null) {</span>
+<span class="nc bnc" id="L239" title="All 2 branches missed.">            for (MdmStructureLhRatio ratio : ratios) {</span>
+<span class="nc" id="L240">                String key = ratio.getCxMachineTypeCode() + &quot;_&quot; + ratio.getStructureName();</span>
+<span class="nc bnc" id="L241" title="All 2 branches missed.">                if (ratio.getLhMachineMaxQty() != null) {</span>
+<span class="nc" id="L242">                    typeStructureMap.put(key, ratio.getLhMachineMaxQty());</span>
+                }
+<span class="nc" id="L244">            }</span>
+        }
+
+        // 为每台机台获取对应的最大硫化机数
+<span class="nc bnc" id="L248" title="All 2 branches missed.">        for (MpCxCapacityConfiguration config : machineConfigs) {</span>
+<span class="nc" id="L249">            String machineCode = config.getCxMachineCode();</span>
+<span class="nc" id="L250">            String machineType = machineTypeMap.get(machineCode);</span>
+
+            // 根据机型+结构查找
+<span class="nc" id="L253">            String key = machineType + &quot;_&quot; + structureName;</span>
+<span class="nc" id="L254">            Integer maxLh = typeStructureMap.get(key);</span>
+
+            // 如果找不到，尝试只按结构查找（向后兼容）
+<span class="nc bnc" id="L257" title="All 4 branches missed.">            if (maxLh == null &amp;&amp; context.getStructureLhRatioMap() != null) {</span>
+<span class="nc" id="L258">                MdmStructureLhRatio ratioConfig = context.getStructureLhRatioMap().get(structureName);</span>
+<span class="nc bnc" id="L259" title="All 4 branches missed.">                if (ratioConfig != null &amp;&amp; ratioConfig.getLhMachineMaxQty() != null) {</span>
+<span class="nc" id="L260">                    maxLh = ratioConfig.getLhMachineMaxQty();</span>
+                }
+            }
+
+            // 兜底：使用默认值
+<span class="nc bnc" id="L265" title="All 2 branches missed.">            if (maxLh == null) {</span>
+<span class="nc" id="L266">                maxLh = 10;</span>
+<span class="nc" id="L267">                log.debug(&quot;机台 {} 机型 {} 结构 {} 未找到配比配置，使用默认值 10&quot;,</span>
+                        machineCode, machineType, structureName);
+            }
+
+<span class="nc" id="L271">            result.put(machineCode, maxLh);</span>
+<span class="nc" id="L272">        }</span>
+
+<span class="nc" id="L274">        log.info(&quot;结构 {} 机台最大硫化机数映射：{}&quot;, structureName, result);</span>
+<span class="nc" id="L275">        return result;</span>
+    }
+
+    /**
+     * 构建机台最大胎胚种类数映射
+     *
+     * &lt;p&gt;根据每台机台的机型 + 结构，从 MdmStructureLhRatio 获取对应的最大胎胚种类数
+     *
+     * @param machineConfigs  机台配置列表
+     * @param structureName   结构名称
+     * @param context         排程上下文
+     * @return 机台编码 -&gt; 最大胎胚种类数
+     */
+    private Map&lt;String, Integer&gt; buildMachineMaxEmbryoTypesMap(
+            List&lt;MpCxCapacityConfiguration&gt; machineConfigs,
+            String structureName,
+            ScheduleContextDTO context) {
+
+<span class="nc" id="L293">        Map&lt;String, Integer&gt; result = new HashMap&lt;&gt;();</span>
+
+        // 构建机台编码 -&gt; 机型 映射
+<span class="nc" id="L296">        Map&lt;String, String&gt; machineTypeMap = new HashMap&lt;&gt;();</span>
+<span class="nc bnc" id="L297" title="All 2 branches missed.">        if (context.getAvailableMachines() != null) {</span>
+<span class="nc bnc" id="L298" title="All 2 branches missed.">            for (MdmMoldingMachine machine : context.getAvailableMachines()) {</span>
+<span class="nc" id="L299">                machineTypeMap.put(machine.getCxMachineCode(), machine.getCxMachineTypeCode());</span>
+<span class="nc" id="L300">            }</span>
+        }
+
+        // 构建 机型_结构 -&gt; 最大胎胚种类数 映射
+<span class="nc" id="L304">        Map&lt;String, Integer&gt; typeStructureMap = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L305">        List&lt;MdmStructureLhRatio&gt; ratios = context.getStructureLhRatios();</span>
+<span class="nc bnc" id="L306" title="All 2 branches missed.">        if (ratios != null) {</span>
+<span class="nc bnc" id="L307" title="All 2 branches missed.">            for (MdmStructureLhRatio ratio : ratios) {</span>
+<span class="nc" id="L308">                String key = ratio.getCxMachineTypeCode() + &quot;_&quot; + ratio.getStructureName();</span>
+<span class="nc bnc" id="L309" title="All 2 branches missed.">                if (ratio.getMaxEmbryoQty() != null) {</span>
+<span class="nc" id="L310">                    typeStructureMap.put(key, ratio.getMaxEmbryoQty());</span>
+                }
+<span class="nc" id="L312">            }</span>
+        }
+
+        // 为每台机台获取对应的最大胎胚种类数
+<span class="nc bnc" id="L316" title="All 2 branches missed.">        for (MpCxCapacityConfiguration config : machineConfigs) {</span>
+<span class="nc" id="L317">            String machineCode = config.getCxMachineCode();</span>
+<span class="nc" id="L318">            String machineType = machineTypeMap.get(machineCode);</span>
+
+            // 根据机型+结构查找
+<span class="nc" id="L321">            String key = machineType + &quot;_&quot; + structureName;</span>
+<span class="nc" id="L322">            Integer maxTypes = typeStructureMap.get(key);</span>
+
+            // 如果找不到，尝试只按结构查找（向后兼容）
+<span class="nc bnc" id="L325" title="All 4 branches missed.">            if (maxTypes == null &amp;&amp; context.getStructureLhRatioMap() != null) {</span>
+<span class="nc" id="L326">                MdmStructureLhRatio ratioConfig = context.getStructureLhRatioMap().get(structureName);</span>
+<span class="nc bnc" id="L327" title="All 4 branches missed.">                if (ratioConfig != null &amp;&amp; ratioConfig.getMaxEmbryoQty() != null) {</span>
+<span class="nc" id="L328">                    maxTypes = ratioConfig.getMaxEmbryoQty();</span>
+                }
+            }
+
+            // 兜底：使用默认值
+<span class="nc bnc" id="L333" title="All 2 branches missed.">            if (maxTypes == null) {</span>
+<span class="nc bnc" id="L334" title="All 2 branches missed.">                maxTypes = context.getMaxTypesPerMachine() != null ? context.getMaxTypesPerMachine() : 4;</span>
+<span class="nc" id="L335">                log.debug(&quot;机台 {} 机型 {} 结构 {} 未找到胎胚种类数配置，使用默认值 {}&quot;,</span>
+                        machineCode, machineType, structureName, maxTypes);
+            }
+
+<span class="nc" id="L339">            result.put(machineCode, maxTypes);</span>
+<span class="nc" id="L340">        }</span>
+
+<span class="nc" id="L342">        log.info(&quot;结构 {} 机台最大胎胚种类数映射：{}&quot;, structureName, result);</span>
+<span class="nc" id="L343">        return result;</span>
+    }
+
+    // ==================== 原有方法 ====================
+
+    private CoreScheduleAlgorithmService.MachineAllocationResult createMachineAllocation(
+            String machineCode, ScheduleContextDTO context) {
+<span class="nc" id="L350">        CoreScheduleAlgorithmService.MachineAllocationResult allocation = new CoreScheduleAlgorithmService.MachineAllocationResult();</span>
+<span class="nc" id="L351">        allocation.setMachineCode(machineCode);</span>
+<span class="nc" id="L352">        allocation.setTaskAllocations(new ArrayList&lt;&gt;());</span>
+<span class="nc" id="L353">        allocation.setUsedCapacity(0);</span>
+<span class="nc" id="L354">        allocation.setRemainingCapacity(getMachineDailyCapacity(machineCode, context));</span>
+<span class="nc" id="L355">        return allocation;</span>
+    }
+
+    private int getMachineDailyCapacity(String machineCode, ScheduleContextDTO context) {
+<span class="nc bnc" id="L359" title="All 2 branches missed.">        if (context.getAvailableMachines() != null) {</span>
+<span class="nc bnc" id="L360" title="All 2 branches missed.">            for (MdmMoldingMachine machine : context.getAvailableMachines()) {</span>
+<span class="nc bnc" id="L361" title="All 2 branches missed.">                if (machine.getCxMachineCode().equals(machineCode)) {</span>
+<span class="nc bnc" id="L362" title="All 2 branches missed.">                    return machine.getMaxDayCapacity() != null ? machine.getMaxDayCapacity() : 1200;</span>
+                }
+<span class="nc" id="L364">            }</span>
+        }
+<span class="nc" id="L366">        return 1200;</span>
+    }
+
+    public void allocateEmbryoStock(
+            CoreScheduleAlgorithmService.DailyEmbryoTask task,
+            ScheduleContextDTO context,
+            LocalDate scheduleDate) {
+        
+<span class="nc" id="L374">        String embryoCode = task.getMaterialCode();</span>
+<span class="nc bnc" id="L375" title="All 2 branches missed.">        int totalEmbryoStock = task.getCurrentStock() != null ? task.getCurrentStock() : 0;</span>
+<span class="nc bnc" id="L376" title="All 2 branches missed.">        if (totalEmbryoStock &lt;= 0) {</span>
+<span class="nc" id="L377">            task.setAllocatedStock(0);</span>
+<span class="nc" id="L378">            return;</span>
+        }
+        
+<span class="nc" id="L381">        List&lt;LhScheduleResult&gt; lhResults = context.getLhScheduleResults();</span>
+<span class="nc bnc" id="L382" title="All 4 branches missed.">        if (lhResults == null || lhResults.isEmpty()) {</span>
+<span class="nc" id="L383">            task.setAllocatedStock(totalEmbryoStock);</span>
+<span class="nc" id="L384">            return;</span>
+        }
+        
+<span class="nc" id="L387">        List&lt;LhScheduleResult&gt; sameEmbryoResults = lhResults.stream()</span>
+<span class="nc" id="L388">                .filter(r -&gt; embryoCode.equals(r.getEmbryoCode()))</span>
+<span class="nc" id="L389">                .collect(Collectors.toList());</span>
+        
+<span class="nc bnc" id="L391" title="All 2 branches missed.">        if (sameEmbryoResults.isEmpty()) {</span>
+<span class="nc" id="L392">            task.setAllocatedStock(totalEmbryoStock);</span>
+<span class="nc" id="L393">            return;</span>
+        }
+        
+<span class="nc" id="L396">        int totalDailyVulcanize = sameEmbryoResults.stream()</span>
+<span class="nc bnc" id="L397" title="All 2 branches missed.">                .mapToInt(r -&gt; r.getDailyPlanQty() != null ? r.getDailyPlanQty() : 0)</span>
+<span class="nc" id="L398">                .sum();</span>
+        
+<span class="nc bnc" id="L400" title="All 2 branches missed.">        if (totalDailyVulcanize &lt;= 0) {</span>
+<span class="nc" id="L401">            task.setAllocatedStock(totalEmbryoStock);</span>
+<span class="nc" id="L402">            return;</span>
+        }
+        
+<span class="nc bnc" id="L405" title="All 2 branches missed.">        int currentSkuDailyVulcanize = task.getVulcanizeDemand() != null ? task.getVulcanizeDemand() : 0;</span>
+        
+        int allocatedStock;
+<span class="nc bnc" id="L408" title="All 2 branches missed.">        if (sameEmbryoResults.size() == 1) {</span>
+<span class="nc" id="L409">            allocatedStock = totalEmbryoStock;</span>
+        } else {
+<span class="nc" id="L411">            allocatedStock = (int) ((double) currentSkuDailyVulcanize / totalDailyVulcanize * totalEmbryoStock);</span>
+        }
+        
+<span class="nc" id="L414">        task.setAllocatedStock(allocatedStock);</span>
+<span class="nc" id="L415">        log.debug(&quot;胎胚 {} 库存分配：总库存={}, 分配量={}&quot;, embryoCode, totalEmbryoStock, allocatedStock);</span>
+<span class="nc" id="L416">    }</span>
+    
+    public void calculatePlannedProduction(
+            CoreScheduleAlgorithmService.DailyEmbryoTask task,
+            ScheduleContextDTO context,
+            LocalDate scheduleDate,
+            boolean isOpeningDay) {
+        
+        // 使用 ProductionCalculator 计算计划量
+        // 注意：task.getMaterialCode() 返回的是胎胚编码(embryoCode)
+        // task.getRelatedMaterialCode() 返回的是真正的物料编码(materialCode)
+<span class="nc" id="L427">        String embryoCode = task.getMaterialCode();  // 胎胚编码（用于判断关键产品）</span>
+<span class="nc" id="L428">        String materialCode = task.getRelatedMaterialCode();  // 物料编码（用于判断主销产品）</span>
+        
+<span class="nc" id="L430">        ProductionCalculator.PlanQuantityResult calcResult = productionCalculator.calculateComprehensive(</span>
+                embryoCode,
+<span class="nc" id="L432">                task.getStructureName(),</span>
+                materialCode,
+                null, // 续作任务不是试制
+                null, // 续作任务单独处理收尾
+                context,
+                scheduleDate
+        );
+
+<span class="nc" id="L440">        int plannedProduction = calcResult.getPlanQuantity();</span>
+
+        // 考虑机台产能限制
+<span class="nc" id="L443">        int machineMaxCapacity = getMachineDailyCapacity(</span>
+<span class="nc bnc" id="L444" title="All 4 branches missed.">                task.getContinueMachineCodes() != null &amp;&amp; !task.getContinueMachineCodes().isEmpty() </span>
+<span class="nc" id="L445">                        ? task.getContinueMachineCodes().get(0) : null, context);</span>
+        
+<span class="nc" id="L447">        int embryoStorageLimit = (int) (getEmbryoStorageLimit(task.getMaterialCode(), context) * EMBRYO_STORAGE_RATIO);</span>
+        
+<span class="nc" id="L449">        plannedProduction = Math.min(plannedProduction, machineMaxCapacity);</span>
+<span class="nc" id="L450">        plannedProduction = Math.min(plannedProduction, embryoStorageLimit);</span>
+<span class="nc" id="L451">        plannedProduction = Math.max(0, plannedProduction);</span>
+        
+<span class="nc" id="L453">        task.setPlannedProduction(plannedProduction);</span>
+
+        // 保存班次分配结果
+<span class="nc bnc" id="L456" title="All 2 branches missed.">        if (calcResult.getShiftAllocation() != null) {</span>
+<span class="nc" id="L457">            task.setShiftAllocation(calcResult.getShiftAllocation());</span>
+        }
+<span class="nc" id="L459">    }</span>
+    
+    public void handleOpeningClosingDay(
+            CoreScheduleAlgorithmService.DailyEmbryoTask task,
+            ScheduleContextDTO context,
+            List&lt;CxShiftConfig&gt; dayShifts,
+            boolean isOpeningDay,
+            boolean isClosingDay) {
+        
+<span class="nc bnc" id="L468" title="All 2 branches missed.">        if (isClosingDay) {</span>
+<span class="nc" id="L469">            task.setPlannedProduction(0);</span>
+<span class="nc" id="L470">            task.setIsClosingDayTask(true);</span>
+<span class="nc" id="L471">            return;</span>
+        }
+        
+<span class="nc bnc" id="L474" title="All 2 branches missed.">        if (isOpeningDay) {</span>
+<span class="nc" id="L475">            int hourlyCapacity = getMachineHourlyCapacity(</span>
+<span class="nc bnc" id="L476" title="All 4 branches missed.">                    task.getContinueMachineCodes() != null &amp;&amp; !task.getContinueMachineCodes().isEmpty()</span>
+<span class="nc" id="L477">                            ? task.getContinueMachineCodes().get(0) : null,</span>
+<span class="nc" id="L478">                    task.getStructureName(), context);</span>
+            
+<span class="nc" id="L480">            int openingShiftCapacity = hourlyCapacity * OPENING_SHIFT_HOURS;</span>
+            
+            // 关键产品判断：使用胎胚编码（task.getMaterialCode() 返回的是 embryoCode）
+<span class="nc bnc" id="L483" title="All 2 branches missed.">            boolean isKeyProduct = context.getKeyProductCodes() != null </span>
+<span class="nc bnc" id="L484" title="All 2 branches missed.">                    &amp;&amp; context.getKeyProductCodes().contains(task.getMaterialCode());</span>
+            
+<span class="nc bnc" id="L486" title="All 2 branches missed.">            if (isKeyProduct) {</span>
+<span class="nc" id="L487">                task.setIsKeyProductOnOpening(true);</span>
+<span class="nc" id="L488">                task.setOpeningShiftCapacity(0);</span>
+            } else {
+<span class="nc" id="L490">                task.setOpeningShiftCapacity(openingShiftCapacity);</span>
+<span class="nc bnc" id="L491" title="All 2 branches missed.">                int originalPlanned = task.getPlannedProduction() != null ? task.getPlannedProduction() : 0;</span>
+<span class="nc" id="L492">                task.setPlannedProduction(Math.min(originalPlanned, openingShiftCapacity));</span>
+            }
+            
+<span class="nc" id="L495">            task.setIsOpeningDayTask(true);</span>
+        }
+<span class="nc" id="L497">    }</span>
+    
+    public void handleEndingRemainder(
+            CoreScheduleAlgorithmService.DailyEmbryoTask task,
+            ScheduleContextDTO context,
+            boolean isOpeningDay) {
+        
+<span class="nc bnc" id="L504" title="All 2 branches missed.">        if (isOpeningDay) return;</span>
+<span class="nc bnc" id="L505" title="All 4 branches missed.">        if (!Boolean.TRUE.equals(task.getIsEndingTask()) &amp;&amp; !Boolean.TRUE.equals(task.getIsNearEnding())) return;</span>
+        
+<span class="nc" id="L507">        Integer endingSurplus = task.getEndingSurplusQty();</span>
+<span class="nc bnc" id="L508" title="All 4 branches missed.">        if (endingSurplus == null || endingSurplus &lt;= 0) return;</span>
+        
+<span class="nc bnc" id="L510" title="All 2 branches missed.">        int plannedProduction = task.getPlannedProduction() != null ? task.getPlannedProduction() : 0;</span>
+<span class="nc bnc" id="L511" title="All 2 branches missed.">        int allocatedStock = task.getAllocatedStock() != null ? task.getAllocatedStock() : 0;</span>
+<span class="nc" id="L512">        int totalPlanned = plannedProduction + allocatedStock;</span>
+        
+        // 使用 ProductionCalculator 计算收尾计划量
+<span class="nc" id="L515">        boolean isMainProduct = Boolean.TRUE.equals(task.getIsMainProduct());</span>
+<span class="nc" id="L516">        int remainingToProduce = Math.max(0, endingSurplus - allocatedStock);</span>
+        
+<span class="nc" id="L518">        ProductionCalculator.PlanQuantityResult endingResult = productionCalculator.calculateEndingQuantity(</span>
+                remainingToProduce,
+<span class="nc" id="L520">                getTripCapacity(task.getStructureName(), context),</span>
+                isMainProduct,
+<span class="nc" id="L522">                task.getMaterialCode()</span>
+        );
+        
+        // 更新任务状态
+<span class="nc bnc" id="L526" title="All 2 branches missed.">        if (endingResult.isAbandoned()) {</span>
+            // 非主销产品余量≤2条，舍弃
+<span class="nc" id="L528">            task.setPlannedProduction(0);</span>
+<span class="nc" id="L529">            task.setEndingAbandoned(true);</span>
+<span class="nc" id="L530">            task.setEndingAbandonedQty(endingResult.getAbandonedQuantity());</span>
+<span class="nc" id="L531">            log.info(&quot;收尾任务 {} 余量 {} 条被舍弃&quot;, task.getMaterialCode(), endingResult.getAbandonedQuantity());</span>
+        } else {
+            // 更新计划量
+<span class="nc" id="L534">            int newPlanQuantity = endingResult.getPlanQuantity();</span>
+<span class="nc" id="L535">            task.setPlannedProduction(newPlanQuantity);</span>
+            
+            // 记录额外库存（主销产品多做的部分）
+<span class="nc bnc" id="L538" title="All 2 branches missed.">            if (endingResult.getExtraInventory() &gt; 0) {</span>
+<span class="nc" id="L539">                task.setEndingExtraInventory(endingResult.getExtraInventory());</span>
+<span class="nc" id="L540">                log.info(&quot;收尾任务 {} 主销产品，多做 {} 条当库存&quot;, </span>
+<span class="nc" id="L541">                        task.getMaterialCode(), endingResult.getExtraInventory());</span>
+            }
+            
+            // 标记是否为收尾最后一批
+<span class="nc bnc" id="L545" title="All 4 branches missed.">            if (totalPlanned &gt;= endingSurplus || newPlanQuantity &gt;= remainingToProduce) {</span>
+<span class="nc" id="L546">                task.setIsLastEndingBatch(true);</span>
+            }
+        }
+        
+        // 保存班次分配
+<span class="nc bnc" id="L551" title="All 2 branches missed.">        if (endingResult.getShiftAllocation() != null) {</span>
+<span class="nc" id="L552">            task.setShiftAllocation(endingResult.getShiftAllocation());</span>
+        }
+<span class="nc" id="L554">    }</span>
+    
+    public int calculateCatchUpQuantity(
+            CoreScheduleAlgorithmService.DailyEmbryoTask task,
+            ScheduleContextDTO context,
+            LocalDate scheduleDate) {
+
+<span class="nc" id="L561">        Integer formingRemainder = task.getEndingSurplusQty();</span>
+<span class="nc bnc" id="L562" title="All 4 branches missed.">        if (formingRemainder == null || formingRemainder &lt;= 0) return 0;</span>
+
+<span class="nc" id="L564">        LocalDate endingDate = task.getEndingDate();</span>
+<span class="nc bnc" id="L565" title="All 2 branches missed.">        if (endingDate == null) return 0;</span>
+
+<span class="nc" id="L567">        int plannedQty = calculatePlannedQuantityToDate(task.getMaterialCode(), scheduleDate, endingDate, context);</span>
+<span class="nc" id="L568">        int gap = formingRemainder - plannedQty;</span>
+        
+<span class="nc bnc" id="L570" title="All 2 branches missed.">        return gap &gt; 0 ? gap : 0;</span>
+    }
+
+    private int calculatePlannedQuantityToDate(String materialCode, LocalDate startDate, LocalDate endDate, ScheduleContextDTO context) {
+<span class="nc" id="L574">        return 0; // TODO</span>
+    }
+
+    private int convertToTrips(int quantity, int tripCapacity, Boolean isMainProduct) {
+<span class="nc bnc" id="L578" title="All 2 branches missed.">        if (quantity &lt;= 0) return 0;</span>
+<span class="nc bnc" id="L579" title="All 2 branches missed.">        return Boolean.TRUE.equals(isMainProduct) </span>
+<span class="nc" id="L580">                ? (int) Math.ceil((double) quantity / tripCapacity) </span>
+                : quantity / tripCapacity;
+    }
+
+    private int getTripCapacity(String structureCode, ScheduleContextDTO context) {
+<span class="nc" id="L585">        return productionCalculator.getTripCapacity(structureCode, context);</span>
+    }
+
+    private int getMachineHourlyCapacity(String machineCode, String structureName, ScheduleContextDTO context) {
+<span class="nc bnc" id="L589" title="All 6 branches missed.">        if (context.getMachineStructureCapacities() != null &amp;&amp; machineCode != null &amp;&amp; structureName != null) {</span>
+<span class="nc bnc" id="L590" title="All 2 branches missed.">            for (CxMachineStructureCapacity capacity : context.getMachineStructureCapacities()) {</span>
+<span class="nc bnc" id="L591" title="All 4 branches missed.">                if (machineCode.equals(capacity.getCxMachineCode()) &amp;&amp; structureName.equals(capacity.getStructureCode())) {</span>
+<span class="nc bnc" id="L592" title="All 2 branches missed.">                    return capacity.getHourlyCapacity() != null ? capacity.getHourlyCapacity() : 50;</span>
+                }
+<span class="nc" id="L594">            }</span>
+        }
+<span class="nc bnc" id="L596" title="All 2 branches missed.">        return context.getMachineHourlyCapacity() != null ? context.getMachineHourlyCapacity() : 50;</span>
+    }
+
+    private int getEmbryoStorageLimit(String materialCode, ScheduleContextDTO context) {
+<span class="nc" id="L600">        return Integer.MAX_VALUE;</span>
+    }
+
+    private void allocateTaskToMachine(
+            CoreScheduleAlgorithmService.MachineAllocationResult allocation,
+            CoreScheduleAlgorithmService.DailyEmbryoTask task,
+            ScheduleContextDTO context) {
+
+<span class="nc bnc" id="L608" title="All 4 branches missed.">        int quantity = task.getPlannedProduction() != null &amp;&amp; task.getPlannedProduction() &gt; 0 </span>
+<span class="nc" id="L609">                ? task.getPlannedProduction() : task.getDemandQuantity();</span>
+
+<span class="nc" id="L611">        CoreScheduleAlgorithmService.TaskAllocation taskAllocation = new CoreScheduleAlgorithmService.TaskAllocation();</span>
+<span class="nc" id="L612">        taskAllocation.setMaterialCode(task.getMaterialCode());</span>
+<span class="nc" id="L613">        taskAllocation.setMaterialName(task.getMaterialName());</span>
+<span class="nc" id="L614">        taskAllocation.setStructureName(task.getStructureName());</span>
+<span class="nc" id="L615">        taskAllocation.setQuantity(quantity);</span>
+<span class="nc" id="L616">        taskAllocation.setPriority(task.getPriority());</span>
+<span class="nc" id="L617">        taskAllocation.setStockHours(task.getStockHours());</span>
+<span class="nc" id="L618">        taskAllocation.setIsTrialTask(task.getIsTrialTask());</span>
+<span class="nc" id="L619">        taskAllocation.setIsEndingTask(task.getIsEndingTask());</span>
+<span class="nc" id="L620">        taskAllocation.setEndingSurplusQty(task.getEndingSurplusQty());</span>
+<span class="nc" id="L621">        taskAllocation.setIsMainProduct(task.getIsMainProduct());</span>
+
+<span class="nc" id="L623">        allocation.getTaskAllocations().add(taskAllocation);</span>
+<span class="nc" id="L624">        allocation.setUsedCapacity(allocation.getUsedCapacity() + quantity);</span>
+<span class="nc" id="L625">        allocation.setRemainingCapacity(allocation.getRemainingCapacity() - quantity);</span>
+<span class="nc" id="L626">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

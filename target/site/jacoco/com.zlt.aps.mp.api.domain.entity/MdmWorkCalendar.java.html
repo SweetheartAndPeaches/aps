@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MdmWorkCalendar.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">APS Forming Schedule System</a> &gt; <a href="index.source.html" class="el_package">com.zlt.aps.mp.api.domain.entity</a> &gt; <span class="el_source">MdmWorkCalendar.java</span></div><h1>MdmWorkCalendar.java</h1><pre class="source lang-java linenums">package com.zlt.aps.mp.api.domain.entity;
+
+import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableName;
+import com.fasterxml.jackson.annotation.JsonFormat;
+import com.zlt.aps.cx.entity.base.ApsBaseEntity;
+import io.swagger.annotations.ApiModel;
+import io.swagger.annotations.ApiModelProperty;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+
+import java.util.Date;
+
+/**
+ * 工作日历对象
+ * 对应表：T_MDM_WORK_CALENDAR
+ *
+ * @author APS Team
+ * @since 2.0.0
+ */
+<span class="nc" id="L21">@Data</span>
+<span class="nc bnc" id="L22" title="All 168 branches missed.">@EqualsAndHashCode(callSuper = true)</span>
+@TableName(&quot;T_MDM_WORK_CALENDAR&quot;)
+@ApiModel(value = &quot;工作日历对象&quot;, description = &quot;工作日历对象&quot;)
+public class MdmWorkCalendar extends ApsBaseEntity {
+
+    private static final long serialVersionUID = 1L;
+
+    @ApiModelProperty(value = &quot;工序编码&quot;)
+    @TableField(&quot;PROC_CODE&quot;)
+<span class="nc" id="L31">    private String procCode;</span>
+
+    @ApiModelProperty(value = &quot;年份&quot;)
+    @TableField(&quot;YEAR&quot;)
+<span class="nc" id="L35">    private Integer year;</span>
+
+    @ApiModelProperty(value = &quot;月份&quot;)
+    @TableField(&quot;MONTH&quot;)
+<span class="nc" id="L39">    private Integer month;</span>
+
+    @ApiModelProperty(value = &quot;日期&quot;)
+    @TableField(&quot;DAY&quot;)
+<span class="nc" id="L43">    private Integer day;</span>
+
+    @ApiModelProperty(value = &quot;生产日期&quot;)
+    @JsonFormat(pattern = &quot;yyyy-MM-dd&quot;)
+    @TableField(&quot;PRODUCTION_DATE&quot;)
+<span class="nc" id="L48">    private Date productionDate;</span>
+
+    @ApiModelProperty(value = &quot;一班开停产标志，0-停,1-开&quot;)
+    @TableField(&quot;ONE_SHIFT_FLAG&quot;)
+<span class="nc" id="L52">    private String oneShiftFlag;</span>
+
+    @ApiModelProperty(value = &quot;二班开停产标志，0-停,1-开&quot;)
+    @TableField(&quot;TWO_SHIFT_FLAG&quot;)
+<span class="nc" id="L56">    private String twoShiftFlag;</span>
+
+    @ApiModelProperty(value = &quot;三班开停产标志，0-停,1-开&quot;)
+    @TableField(&quot;THREE_SHIFT_FLAG&quot;)
+<span class="nc" id="L60">    private String threeShiftFlag;</span>
+
+    @ApiModelProperty(value = &quot;日期开停产标志，0-停,1-开&quot;)
+    @TableField(&quot;DAY_FLAG&quot;)
+<span class="nc" id="L64">    private String dayFlag;</span>
+
+    @ApiModelProperty(value = &quot;比例&quot;)
+    @TableField(&quot;RATE&quot;)
+<span class="nc" id="L68">    private Integer rate;</span>
+
+    @ApiModelProperty(value = &quot;日期&quot;)
+    @JsonFormat(pattern = &quot;yyyy-MM-dd&quot;)
+    @TableField(exist = false)
+<span class="nc" id="L73">    private Date calendarTime;</span>
+
+    @ApiModelProperty(value = &quot;节假日名称&quot;)
+    @TableField(exist = false)
+<span class="nc" id="L77">    private String holidayNames;</span>
+
+    @ApiModelProperty(value = &quot;源工序&quot;)
+    @TableField(exist = false)
+<span class="nc" id="L81">    private String sourceProcCode;</span>
+
+    @ApiModelProperty(value = &quot;目标工序&quot;)
+    @TableField(exist = false)
+<span class="nc" id="L85">    private String targetProcCode;</span>
+
+    @ApiModelProperty(value = &quot;源年份&quot;)
+    @TableField(exist = false)
+<span class="nc" id="L89">    private Integer sourceYear;</span>
+
+    @ApiModelProperty(value = &quot;源月份&quot;)
+    @TableField(exist = false)
+<span class="nc" id="L93">    private Integer sourceMonth;</span>
+
+    @ApiModelProperty(value = &quot;目标年份&quot;)
+    @TableField(exist = false)
+<span class="nc" id="L97">    private Integer targetYear;</span>
+
+    @ApiModelProperty(value = &quot;目标月份&quot;)
+    @TableField(exist = false)
+<span class="nc" id="L101">    private Integer targetMonth;</span>
+
+    @ApiModelProperty(value = &quot;复制时源工厂编号&quot;)
+    @TableField(exist = false)
+<span class="nc" id="L105">    private String sourceFactoryCode;</span>
+
+    @ApiModelProperty(value = &quot;复制时目标工厂编号&quot;)
+    @TableField(exist = false)
+<span class="nc" id="L109">    private String targetFactoryCode;</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

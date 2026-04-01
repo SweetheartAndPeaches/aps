@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MdmDevicePlanShut.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">APS Forming Schedule System</a> &gt; <a href="index.source.html" class="el_package">com.zlt.aps.mp.api.domain.entity</a> &gt; <span class="el_source">MdmDevicePlanShut.java</span></div><h1>MdmDevicePlanShut.java</h1><pre class="source lang-java linenums">package com.zlt.aps.mp.api.domain.entity;
+
+import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableName;
+import com.fasterxml.jackson.annotation.JsonFormat;
+import com.ruoyi.common.core.annotation.Excel;
+import com.ruoyi.common.core.web.domain.BaseEntity;
+import io.swagger.annotations.ApiModel;
+import io.swagger.annotations.ApiModelProperty;
+import lombok.Data;
+
+import java.util.Date;
+
+/**
+ * 设备计划停机对象 t_mdm_device_plan_shut
+ * 用于记录机台的计划停机时间（精度校验、润滑、巡检点检、维修等）
+ *
+ * @author APS Team
+ */
+@ApiModel(value = &quot;设备计划停机对象&quot;, description = &quot;设备计划停机对象&quot;)
+<span class="nc bnc" id="L21" title="All 62 branches missed.">@Data</span>
+@TableName(value = &quot;T_MDM_DEVICE_PLAN_SHUT&quot;)
+public class MdmDevicePlanShut extends BaseEntity {
+
+    private static final long serialVersionUID = 1L;
+
+    /**
+     * 工厂编号，字典：biz_factory_name
+     */
+    @Excel(name = &quot;工厂编号&quot;)
+    @ApiModelProperty(value = &quot;工厂编号&quot;, name = &quot;factoryCode&quot;)
+    @TableField(value = &quot;FACTORY_CODE&quot;)
+<span class="nc" id="L33">    private String factoryCode;</span>
+
+    /**
+     * 机台类型，字典：device_shut_machine_type；硫化、成型、压出、裁断、压延、密炼；
+     */
+    @Excel(name = &quot;机台类型&quot;)
+    @ApiModelProperty(value = &quot;机台类型&quot;, name = &quot;machineType&quot;)
+    @TableField(value = &quot;MACHINE_TYPE&quot;)
+<span class="nc" id="L41">    private String machineType;</span>
+
+    /**
+     * 机台编号
+     */
+    @Excel(name = &quot;机台编号&quot;)
+    @ApiModelProperty(value = &quot;机台编号&quot;, name = &quot;machineCode&quot;)
+    @TableField(value = &quot;MACHINE_CODE&quot;)
+<span class="nc" id="L49">    private String machineCode;</span>
+
+    /**
+     * 停机类型，字典：machine_stop_type；
+     * 00-精度校验、01-润滑、02-巡检点检、03-预见性维护、04-预防性维护、05-计划性维修、06-临时性故障
+     */
+    @Excel(name = &quot;停机类型&quot;)
+    @ApiModelProperty(value = &quot;停机类型&quot;, name = &quot;machineStopType&quot;)
+    @TableField(value = &quot;MACHINE_STOP_TYPE&quot;)
+<span class="nc" id="L58">    private String machineStopType;</span>
+
+    /**
+     * 开始日期
+     */
+    @JsonFormat(pattern = &quot;yyyy-MM-dd HH:mm:ss&quot;)
+    @Excel(name = &quot;开始日期&quot;, width = 30, dateFormat = &quot;yyyy-MM-dd HH:mm:ss&quot;)
+    @ApiModelProperty(value = &quot;开始日期&quot;, name = &quot;beginDate&quot;)
+    @TableField(value = &quot;BEGIN_DATE&quot;)
+<span class="nc" id="L67">    private Date beginDate;</span>
+
+    /**
+     * 结束日期
+     */
+    @JsonFormat(pattern = &quot;yyyy-MM-dd HH:mm:ss&quot;)
+    @Excel(name = &quot;结束日期&quot;, width = 30, dateFormat = &quot;yyyy-MM-dd HH:mm:ss&quot;)
+    @ApiModelProperty(value = &quot;结束日期&quot;, name = &quot;endDate&quot;)
+    @TableField(value = &quot;END_DATE&quot;)
+<span class="nc" id="L76">    private Date endDate;</span>
+
+    /**
+     * 备注
+     */
+    @Excel(name = &quot;备注&quot;)
+    @ApiModelProperty(&quot;备注&quot;)
+    @TableField(&quot;REMARK&quot;)
+<span class="nc" id="L84">    private String remark;</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

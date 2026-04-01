@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ScheduleDetailController.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">APS Forming Schedule System</a> &gt; <a href="index.source.html" class="el_package">com.zlt.aps.cx.controller</a> &gt; <span class="el_source">ScheduleDetailController.java</span></div><h1>ScheduleDetailController.java</h1><pre class="source lang-java linenums">package com.zlt.aps.cx.controller;
+
+import com.ruoyi.common.core.web.domain.AjaxResult;
+import com.zlt.aps.cx.entity.schedule.CxScheduleDetail;
+import com.zlt.aps.cx.service.CxScheduleDetailService;
+import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiOperation;
+import io.swagger.annotations.ApiParam;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDate;
+import java.util.List;
+
+/**
+ * 排程明细Controller
+ *
+ * @author APS Team
+ */
+@Api(tags = &quot;排程明细管理&quot;)
+@RestController
+@RequestMapping(&quot;/schedule/detail&quot;)
+<span class="fc" id="L24">public class ScheduleDetailController {</span>
+
+    @Autowired
+    private CxScheduleDetailService cxScheduleDetailService;
+
+    @ApiOperation(value = &quot;根据主表ID获取明细&quot;, notes = &quot;根据排程主表ID查询明细列表&quot;)
+    @GetMapping(&quot;/main/{mainId}&quot;)
+    public AjaxResult listByMainId(
+            @ApiParam(value = &quot;主表ID&quot;) @PathVariable Long mainId) {
+<span class="nc" id="L33">        return AjaxResult.success(cxScheduleDetailService.listByMainId(mainId));</span>
+    }
+
+    @ApiOperation(value = &quot;根据机台和日期获取明细&quot;, notes = &quot;根据机台编号和日期查询明细&quot;)
+    @GetMapping(&quot;/machine&quot;)
+    public AjaxResult listByMachineAndDate(
+            @ApiParam(value = &quot;机台编号&quot;) @RequestParam String machineCode,
+            @ApiParam(value = &quot;计划日期&quot;) @RequestParam @DateTimeFormat(pattern = &quot;yyyy-MM-dd&quot;) LocalDate scheduleDate) {
+<span class="nc" id="L41">        return AjaxResult.success(cxScheduleDetailService.listByMachineAndDate(machineCode, scheduleDate));</span>
+    }
+
+    @ApiOperation(value = &quot;根据班次获取明细&quot;, notes = &quot;根据主表ID和班次编码查询明细&quot;)
+    @GetMapping(&quot;/shift&quot;)
+    public AjaxResult listByShift(
+            @ApiParam(value = &quot;主表ID&quot;) @RequestParam Long mainId,
+            @ApiParam(value = &quot;班次编码&quot;) @RequestParam String shiftCode) {
+<span class="nc" id="L49">        return AjaxResult.success(cxScheduleDetailService.listByShift(mainId, shiftCode));</span>
+    }
+
+    @ApiOperation(value = &quot;更新完成量&quot;, notes = &quot;更新排程明细的完成量&quot;)
+    @PutMapping(&quot;/complete/{detailId}&quot;)
+    public AjaxResult updateCompletedQuantity(
+            @ApiParam(value = &quot;明细ID&quot;) @PathVariable Long detailId,
+            @ApiParam(value = &quot;完成量&quot;) @RequestParam Integer completedQuantity) {
+<span class="nc" id="L57">        return AjaxResult.success(cxScheduleDetailService.updateCompletedQuantity(detailId, completedQuantity));</span>
+    }
+
+    @ApiOperation(value = &quot;更新车次状态&quot;, notes = &quot;更新排程明细的车次状态&quot;)
+    @PutMapping(&quot;/trip-status/{detailId}&quot;)
+    public AjaxResult updateTripStatus(
+            @ApiParam(value = &quot;明细ID&quot;) @PathVariable Long detailId,
+            @ApiParam(value = &quot;车次状态&quot;) @RequestParam String tripStatus) {
+<span class="nc" id="L65">        return AjaxResult.success(cxScheduleDetailService.updateTripStatus(detailId, tripStatus));</span>
+    }
+
+    @ApiOperation(value = &quot;根据ID获取明细&quot;, notes = &quot;根据明细ID查询详情&quot;)
+    @GetMapping(&quot;/{id}&quot;)
+    public AjaxResult getById(
+            @ApiParam(value = &quot;明细ID&quot;) @PathVariable Long id) {
+<span class="nc" id="L72">        return AjaxResult.success(cxScheduleDetailService.getById(id));</span>
+    }
+
+    @ApiOperation(value = &quot;新增明细&quot;, notes = &quot;新增排程明细&quot;)
+    @PostMapping
+    public AjaxResult save(@RequestBody CxScheduleDetail detail) {
+<span class="nc" id="L78">        return AjaxResult.success(cxScheduleDetailService.save(detail));</span>
+    }
+
+    @ApiOperation(value = &quot;更新明细&quot;, notes = &quot;更新排程明细&quot;)
+    @PutMapping
+    public AjaxResult update(@RequestBody CxScheduleDetail detail) {
+<span class="nc" id="L84">        return AjaxResult.success(cxScheduleDetailService.updateById(detail));</span>
+    }
+
+    @ApiOperation(value = &quot;删除明细&quot;, notes = &quot;删除指定ID的明细&quot;)
+    @DeleteMapping(&quot;/{id}&quot;)
+    public AjaxResult delete(
+            @ApiParam(value = &quot;明细ID&quot;) @PathVariable Long id) {
+<span class="nc" id="L91">        return AjaxResult.success(cxScheduleDetailService.removeById(id));</span>
+    }
+
+    @ApiOperation(value = &quot;删除主表下所有明细&quot;, notes = &quot;删除指定主表ID下的所有明细&quot;)
+    @DeleteMapping(&quot;/main/{mainId}&quot;)
+    public AjaxResult deleteByMainId(
+            @ApiParam(value = &quot;主表ID&quot;) @PathVariable Long mainId) {
+<span class="nc" id="L98">        return AjaxResult.success(cxScheduleDetailService.deleteByMainId(mainId));</span>
+    }
+
+    @ApiOperation(value = &quot;获取下一个车次号&quot;, notes = &quot;获取指定主表和班次的下一个车次号&quot;)
+    @GetMapping(&quot;/next-trip-no&quot;)
+    public AjaxResult getNextTripNo(
+            @ApiParam(value = &quot;主表ID&quot;) @RequestParam Long mainId,
+            @ApiParam(value = &quot;班次编码&quot;) @RequestParam String shiftCode) {
+<span class="nc" id="L106">        return AjaxResult.success(cxScheduleDetailService.getNextTripNo(mainId, shiftCode));</span>
+    }
+
+    @ApiOperation(value = &quot;批量保存明细&quot;, notes = &quot;批量保存排程明细&quot;)
+    @PostMapping(&quot;/batch&quot;)
+    public AjaxResult batchSave(@RequestBody List&lt;CxScheduleDetail&gt; details) {
+<span class="nc" id="L112">        return AjaxResult.success(cxScheduleDetailService.batchSave(details));</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

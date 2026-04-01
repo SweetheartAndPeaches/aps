@@ -1,0 +1,607 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>HolidayScheduleServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">APS Forming Schedule System</a> &gt; <a href="index.source.html" class="el_package">com.zlt.aps.cx.service.impl</a> &gt; <span class="el_source">HolidayScheduleServiceImpl.java</span></div><h1>HolidayScheduleServiceImpl.java</h1><pre class="source lang-java linenums">package com.zlt.aps.cx.service.impl;
+
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.zlt.aps.cx.dto.ScheduleContextDTO;
+import com.zlt.aps.cx.entity.CxStock;
+import com.zlt.aps.mp.api.domain.entity.MdmWorkCalendar;
+import com.zlt.aps.cx.entity.config.CxKeyProduct;
+import com.zlt.aps.cx.entity.config.CxParamConfig;
+import com.zlt.aps.cx.entity.config.CxShiftConfig;
+import com.zlt.aps.mp.api.domain.entity.MdmMoldingMachine;
+import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
+import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
+import com.zlt.aps.cx.mapper.*;
+import com.zlt.aps.cx.service.HolidayScheduleService;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.util.CollectionUtils;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.sql.Date;
+import java.time.DayOfWeek;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.temporal.ChronoUnit;
+import java.util.*;
+
+/**
+ * 节假日处理服务实现类
+ *
+ * @author APS Team
+ */
+<span class="fc" id="L35">@Slf4j</span>
+@Service
+<span class="fc" id="L37">public class HolidayScheduleServiceImpl implements HolidayScheduleService {</span>
+
+    @Autowired
+    private MdmWorkCalendarMapper workCalendarMapper;
+
+    @Autowired
+    private CxStockMapper stockMapper;
+
+    @Autowired
+    private LhScheduleResultMapper lhScheduleResultMapper;
+
+    @Autowired
+    private CxKeyProductMapper keyProductMapper;
+
+    @Autowired
+    private CxShiftConfigMapper shiftConfigMapper;
+
+    @Autowired
+    private CxParamConfigMapper paramConfigMapper;
+
+    @Autowired
+    private MdmMoldingMachineMapper moldingMachineMapper;
+
+    /** 预留消化时间默认值（小时） */
+    private static final int DEFAULT_RESERVED_DIGEST_HOURS = 1;
+
+    /** 胎胚最长停放时间默认值（小时） */
+    private static final int DEFAULT_MAX_PARKING_HOURS = 24;
+
+    /** 成型工序编码 */
+    private static final String PROC_CODE_CX = &quot;CX&quot;;
+
+    @Override
+    public boolean isHoliday(LocalDate date) {
+        // 使用工作日历判断是否停产（按工序CX查询）
+        // MdmWorkCalendar.dayFlag: 0-停,1-开
+<span class="nc" id="L73">        Date queryDate = Date.valueOf(date);</span>
+<span class="nc" id="L74">        MdmWorkCalendar workCalendar = workCalendarMapper.selectOne(</span>
+                new LambdaQueryWrapper&lt;MdmWorkCalendar&gt;()
+<span class="nc" id="L76">                        .eq(MdmWorkCalendar::getProcCode, PROC_CODE_CX)</span>
+<span class="nc" id="L77">                        .eq(MdmWorkCalendar::getProductionDate, queryDate));</span>
+
+<span class="nc bnc" id="L79" title="All 2 branches missed.">        if (workCalendar != null) {</span>
+            // dayFlag = '0' 表示停产
+<span class="nc" id="L81">            return &quot;0&quot;.equals(workCalendar.getDayFlag());</span>
+        }
+
+        // 如果工作日历中没有配置，检查是否为周日
+<span class="nc bnc" id="L85" title="All 2 branches missed.">        if (date.getDayOfWeek() == DayOfWeek.SUNDAY) {</span>
+<span class="nc" id="L86">            return true;</span>
+        }
+
+<span class="nc" id="L89">        return false;</span>
+    }
+
+    @Override
+    public boolean isStopProductionDay(LocalDate date) {
+<span class="nc bnc" id="L94" title="All 2 branches missed.">        if (!isHoliday(date)) {</span>
+<span class="nc" id="L95">            return false;</span>
+        }
+
+        // 检查前一天是否为工作日
+<span class="nc" id="L99">        LocalDate previousDay = date.minusDays(1);</span>
+<span class="nc bnc" id="L100" title="All 2 branches missed.">        return !isHoliday(previousDay);</span>
+    }
+
+    @Override
+    public boolean isStartProductionDay(LocalDate date) {
+<span class="nc bnc" id="L105" title="All 2 branches missed.">        if (isHoliday(date)) {</span>
+<span class="nc" id="L106">            return false;</span>
+        }
+
+        // 检查前一天是否为节假日
+<span class="nc" id="L110">        LocalDate previousDay = date.minusDays(1);</span>
+<span class="nc" id="L111">        return isHoliday(previousDay);</span>
+    }
+
+    @Override
+    public boolean isBeforeHoliday(LocalDate date) {
+        // 检查明天是否为停产日
+<span class="nc" id="L117">        LocalDate nextDay = date.plusDays(1);</span>
+<span class="nc" id="L118">        return isStopProductionDay(nextDay);</span>
+    }
+
+    @Override
+    public HolidayInfo getHolidayInfo(LocalDate date) {
+<span class="nc" id="L123">        HolidayInfo.HolidayInfoBuilder builder = HolidayInfo.builder();</span>
+<span class="nc" id="L124">        builder.isHoliday(isHoliday(date));</span>
+<span class="nc" id="L125">        builder.isBeforeHoliday(isBeforeHoliday(date));</span>
+
+        // 使用工作日历获取节假日信息（按工序CX查询）
+<span class="nc" id="L128">        Date queryDate = Date.valueOf(date);</span>
+<span class="nc" id="L129">        MdmWorkCalendar workCalendar = workCalendarMapper.selectOne(</span>
+                new LambdaQueryWrapper&lt;MdmWorkCalendar&gt;()
+<span class="nc" id="L131">                        .eq(MdmWorkCalendar::getProcCode, PROC_CODE_CX)</span>
+<span class="nc" id="L132">                        .eq(MdmWorkCalendar::getProductionDate, queryDate));</span>
+
+<span class="nc bnc" id="L134" title="All 4 branches missed.">        if (workCalendar != null &amp;&amp; &quot;0&quot;.equals(workCalendar.getDayFlag())) {</span>
+            // 停产日
+<span class="nc" id="L136">            builder.holidayName(&quot;停产日&quot;)</span>
+<span class="nc" id="L137">                    .startDate(date)</span>
+<span class="nc" id="L138">                    .endDate(date)</span>
+<span class="nc" id="L139">                    .totalDays(1);</span>
+<span class="nc bnc" id="L140" title="All 2 branches missed.">        } else if (date.getDayOfWeek() == DayOfWeek.SUNDAY) {</span>
+<span class="nc" id="L141">            builder.holidayName(&quot;周日&quot;)</span>
+<span class="nc" id="L142">                    .startDate(date)</span>
+<span class="nc" id="L143">                    .endDate(date)</span>
+<span class="nc" id="L144">                    .totalDays(1);</span>
+        }
+
+<span class="nc" id="L147">        builder.isStopProductionDay(isStopProductionDay(date))</span>
+<span class="nc" id="L148">                .isStartProductionDay(isStartProductionDay(date));</span>
+
+<span class="nc" id="L150">        return builder.build();</span>
+    }
+
+    @Override
+    public HolidayScheduleResult handleBeforeHoliday(ScheduleContextDTO context) {
+<span class="nc" id="L155">        HolidayScheduleResult result = new HolidayScheduleResult();</span>
+<span class="nc" id="L156">        result.setAdjusted(false);</span>
+<span class="nc" id="L157">        result.setAdjustments(new ArrayList&lt;&gt;());</span>
+
+<span class="nc" id="L159">        LocalDate scheduleDate = context.getScheduleDate();</span>
+
+<span class="nc bnc" id="L161" title="All 2 branches missed.">        if (!isBeforeHoliday(scheduleDate)) {</span>
+<span class="nc" id="L162">            result.setMessage(&quot;非停产前一天，无需特殊处理&quot;);</span>
+<span class="nc" id="L163">            return result;</span>
+        }
+
+<span class="nc" id="L166">        log.info(&quot;处理停产前一天排程调整: {}&quot;, scheduleDate);</span>
+
+        // 获取节假日信息
+<span class="nc" id="L169">        HolidayInfo holidayInfo = getHolidayInfo(scheduleDate.plusDays(1));</span>
+<span class="nc bnc" id="L170" title="All 2 branches missed.">        int holidayDays = holidayInfo.getTotalDays() &gt; 0 ? holidayInfo.getTotalDays() : 1;</span>
+
+        // 1. 计算硫化最低需求
+<span class="nc" id="L173">        Map&lt;String, Integer&gt; minDemand = calculateMinDemandForHoliday(</span>
+<span class="nc bnc" id="L174" title="All 2 branches missed.">                holidayInfo.getStartDate() != null ? holidayInfo.getStartDate() : scheduleDate.plusDays(1),</span>
+                holidayDays);
+
+        // 2. 获取当前库存
+<span class="nc" id="L178">        Map&lt;String, Integer&gt; currentStock = new HashMap&lt;&gt;();</span>
+<span class="nc bnc" id="L179" title="All 2 branches missed.">        for (CxStock stock : context.getStocks()) {</span>
+<span class="nc" id="L180">            currentStock.put(stock.getEmbryoCode(), stock.getEffectiveStock());</span>
+<span class="nc" id="L181">        }</span>
+
+        // 3. 计算过剩库存
+<span class="nc" id="L184">        Map&lt;String, Integer&gt; excessStock = calculateExcessStock(minDemand, currentStock);</span>
+<span class="nc" id="L185">        result.setExcessStockToConsume(excessStock);</span>
+
+        // 4. 确定停机时间
+        // 从硫化排程结果中获取硫化停机时间
+        // 一个胎胚可能对应多个硫化任务（通过物料编码关联），取所有硫化任务中最大的specEndTime
+<span class="nc" id="L190">        LocalDateTime vulcanizingStopTime = determineVulcanizingStopTimeFromSchedule(scheduleDate);</span>
+<span class="nc" id="L191">        Integer reservedDigestHours = getReservedDigestHours();</span>
+<span class="nc" id="L192">        LocalDateTime formingStopTime = determineFormingStopTime(vulcanizingStopTime, reservedDigestHours);</span>
+<span class="nc" id="L193">        result.setFormingStopTime(formingStopTime);</span>
+
+        // 5. 计算成型可排产时长
+        // 从班次配置表获取第一个班次的开始时间
+<span class="nc" id="L197">        LocalTime firstShiftStartTime = getFirstShiftStartTime();</span>
+<span class="nc" id="L198">        LocalDateTime shiftStartTime = LocalDateTime.of(scheduleDate, firstShiftStartTime);</span>
+<span class="nc" id="L199">        Integer formingAvailableHours = calculateFormingAvailableHours(shiftStartTime, formingStopTime);</span>
+<span class="nc" id="L200">        result.setFormingAvailableHours(formingAvailableHours);</span>
+
+        // 6. 检查胎胚停放时间约束
+<span class="nc" id="L203">        List&lt;EmbryoConsumptionSuggestion&gt; parkingViolations = checkEmbryoParkingTime(scheduleDate, formingStopTime);</span>
+
+        // 7. 生成调整建议
+<span class="nc bnc" id="L206" title="All 2 branches missed.">        for (Map.Entry&lt;String, Integer&gt; entry : excessStock.entrySet()) {</span>
+<span class="nc bnc" id="L207" title="All 2 branches missed.">            if (entry.getValue() &gt; 0) {</span>
+<span class="nc" id="L208">                result.getAdjustments().add(String.format(&quot;物料 %s 过剩库存 %d 条，需停产前消耗&quot;,</span>
+<span class="nc" id="L209">                        entry.getKey(), entry.getValue()));</span>
+            }
+<span class="nc" id="L211">        }</span>
+
+<span class="nc bnc" id="L213" title="All 2 branches missed.">        for (EmbryoConsumptionSuggestion suggestion : parkingViolations) {</span>
+<span class="nc" id="L214">            result.getAdjustments().add(String.format(&quot;胎胚 %s 停放时间 %.2f 小时，需强制消耗&quot;,</span>
+<span class="nc" id="L215">                    suggestion.getEmbryoCode(), suggestion.getParkingHours()));</span>
+<span class="nc" id="L216">        }</span>
+
+        // 设置到上下文
+<span class="nc" id="L219">        context.setIsBeforeClosingDay(true);</span>
+<span class="nc" id="L220">        context.setHolidayDays(holidayDays);</span>
+<span class="nc" id="L221">        context.setVulcanizingStopTime(vulcanizingStopTime);</span>
+<span class="nc" id="L222">        context.setFormingStopTime(formingStopTime);</span>
+<span class="nc" id="L223">        context.setReservedDigestHours(reservedDigestHours);</span>
+<span class="nc" id="L224">        context.setFormingAvailableHours(formingAvailableHours);</span>
+<span class="nc" id="L225">        context.setExcessStockToConsume(excessStock);</span>
+
+<span class="nc bnc" id="L227" title="All 2 branches missed.">        result.setAdjusted(!CollectionUtils.isEmpty(result.getAdjustments()));</span>
+<span class="nc bnc" id="L228" title="All 2 branches missed.">        result.setMessage(result.isAdjusted() ? &quot;已完成停产前一天调整&quot; : &quot;无需调整&quot;);</span>
+
+<span class="nc" id="L230">        return result;</span>
+    }
+
+    @Override
+    public HolidayScheduleResult handleOpeningDay(ScheduleContextDTO context) {
+<span class="nc" id="L235">        HolidayScheduleResult result = new HolidayScheduleResult();</span>
+<span class="nc" id="L236">        result.setAdjusted(false);</span>
+<span class="nc" id="L237">        result.setAdjustments(new ArrayList&lt;&gt;());</span>
+
+<span class="nc" id="L239">        LocalDate scheduleDate = context.getScheduleDate();</span>
+
+<span class="nc bnc" id="L241" title="All 2 branches missed.">        if (!isStartProductionDay(scheduleDate)) {</span>
+<span class="nc" id="L242">            result.setMessage(&quot;非开产日，无需特殊处理&quot;);</span>
+<span class="nc" id="L243">            return result;</span>
+        }
+
+<span class="nc" id="L246">        log.info(&quot;处理开产日排程调整: {}&quot;, scheduleDate);</span>
+
+        // 1. 确定成型开产班次和硫化开模班次
+        // 假设班次顺序：夜班(0-8) -&gt; 早班(8-16) -&gt; 中班(16-24)
+        // 成型开产班次 = 早班（第一个班次）
+        // 硫化开模班次 = 中班（第二个班次）
+<span class="nc" id="L252">        String formingStartShift = &quot;SHIFT_DAY&quot;;</span>
+<span class="nc" id="L253">        String vulcanizingStartShift = &quot;SHIFT_AFTERNOON&quot;;</span>
+
+<span class="nc" id="L255">        result.setFormingStartShift(formingStartShift);</span>
+<span class="nc" id="L256">        result.setVulcanizingStartShift(vulcanizingStartShift);</span>
+
+        // 2. 加载关键产品配置
+<span class="nc" id="L259">        Set&lt;String&gt; keyProductCodes = context.getKeyProductCodes();</span>
+<span class="nc bnc" id="L260" title="All 2 branches missed.">        if (keyProductCodes == null) {</span>
+<span class="nc" id="L261">            keyProductCodes = loadKeyProductCodes();</span>
+<span class="nc" id="L262">            context.setKeyProductCodes(keyProductCodes);</span>
+        }
+
+        // 3. 首班不排关键产品
+<span class="nc bnc" id="L266" title="All 2 branches missed.">        if (!CollectionUtils.isEmpty(keyProductCodes)) {</span>
+<span class="nc" id="L267">            result.getAdjustments().add(String.format(&quot;开产首班(%s)不排关键产品，共 %d 个&quot;,</span>
+<span class="nc" id="L268">                    formingStartShift, keyProductCodes.size()));</span>
+        }
+
+        // 设置到上下文
+<span class="nc" id="L272">        context.setIsOpeningDay(true);</span>
+<span class="nc" id="L273">        context.setFormingStartShift(formingStartShift);</span>
+<span class="nc" id="L274">        context.setVulcanizingStartShift(vulcanizingStartShift);</span>
+
+<span class="nc" id="L276">        result.setAdjusted(true);</span>
+<span class="nc" id="L277">        result.setMessage(&quot;已完成开产日调整：成型早于硫化1个班开产，首班不排关键产品&quot;);</span>
+
+<span class="nc" id="L279">        return result;</span>
+    }
+
+    /**
+     * 从硫化排程结果中获取硫化停机时间
+     *
+     * 逻辑说明：
+     * 1. 一个胎胚(embryoCode)可能对应多个硫化任务（通过物料编码关联）
+     * 2. 每个硫化任务有各自的specEndTime（规格结束时间）
+     * 3. 按胎胚维度分组，找出每个胎胚对应的所有硫化任务中最大的specEndTime
+     * 4. 取所有胎胚中最大的停机时间作为最终的硫化停机时间
+     *
+     * @param scheduleDate 排程日期
+     * @return 硫化停机时间
+     */
+    private LocalDateTime determineVulcanizingStopTimeFromSchedule(LocalDate scheduleDate) {
+        // 获取该日期的硫化排程结果
+<span class="nc" id="L296">        List&lt;LhScheduleResult&gt; lhResults = lhScheduleResultMapper.selectByDate(scheduleDate);</span>
+
+<span class="nc bnc" id="L298" title="All 2 branches missed.">        if (CollectionUtils.isEmpty(lhResults)) {</span>
+<span class="nc" id="L299">            log.warn(&quot;未找到硫化排程结果，使用默认停机时间22:00&quot;);</span>
+<span class="nc" id="L300">            return LocalDateTime.of(scheduleDate, LocalTime.of(22, 0));</span>
+        }
+
+        // 按胎胚编码(embryoCode)分组，找出每个胎胚的最大停机时间
+        // 然后取所有胎胚中最大的那个作为最终停机时间
+<span class="nc" id="L305">        LocalDateTime maxStopTime = null;</span>
+
+        // 按胎胚分组
+<span class="nc" id="L308">        Map&lt;String, List&lt;LhScheduleResult&gt;&gt; embryoGroupMap = new HashMap&lt;&gt;();</span>
+<span class="nc bnc" id="L309" title="All 2 branches missed.">        for (LhScheduleResult result : lhResults) {</span>
+<span class="nc" id="L310">            String embryoCode = result.getEmbryoCode();</span>
+<span class="nc bnc" id="L311" title="All 2 branches missed.">            if (embryoCode != null) {</span>
+<span class="nc" id="L312">                embryoGroupMap.computeIfAbsent(embryoCode, k -&gt; new ArrayList&lt;&gt;()).add(result);</span>
+            }
+<span class="nc" id="L314">        }</span>
+
+        // 遍历每个胎胚组，找出该胎胚对应的所有硫化任务中最大的specEndTime
+<span class="nc bnc" id="L317" title="All 2 branches missed.">        for (Map.Entry&lt;String, List&lt;LhScheduleResult&gt;&gt; entry : embryoGroupMap.entrySet()) {</span>
+<span class="nc" id="L318">            String embryoCode = entry.getKey();</span>
+<span class="nc" id="L319">            List&lt;LhScheduleResult&gt; embryoResults = entry.getValue();</span>
+
+            // 找出该胎胚对应的所有硫化任务中最大的specEndTime
+<span class="nc" id="L322">            LocalDateTime embryoMaxStopTime = null;</span>
+<span class="nc bnc" id="L323" title="All 2 branches missed.">            for (LhScheduleResult result : embryoResults) {</span>
+<span class="nc" id="L324">                LocalDateTime specEndTime = result.getSpecEndTime();</span>
+<span class="nc bnc" id="L325" title="All 2 branches missed.">                if (specEndTime != null) {</span>
+<span class="nc bnc" id="L326" title="All 4 branches missed.">                    if (embryoMaxStopTime == null || specEndTime.isAfter(embryoMaxStopTime)) {</span>
+<span class="nc" id="L327">                        embryoMaxStopTime = specEndTime;</span>
+                    }
+                }
+<span class="nc" id="L330">            }</span>
+
+            // 取所有胎胚中最大的停机时间
+<span class="nc bnc" id="L333" title="All 2 branches missed.">            if (embryoMaxStopTime != null) {</span>
+<span class="nc bnc" id="L334" title="All 4 branches missed.">                if (maxStopTime == null || embryoMaxStopTime.isAfter(maxStopTime)) {</span>
+<span class="nc" id="L335">                    maxStopTime = embryoMaxStopTime;</span>
+<span class="nc" id="L336">                    log.debug(&quot;胎胚 {} 的最大硫化停机时间: {}&quot;, embryoCode, embryoMaxStopTime);</span>
+                }
+            }
+<span class="nc" id="L339">        }</span>
+
+<span class="nc bnc" id="L341" title="All 2 branches missed.">        if (maxStopTime == null) {</span>
+<span class="nc" id="L342">            log.warn(&quot;未能从硫化排程结果获取停机时间，使用默认停机时间22:00&quot;);</span>
+<span class="nc" id="L343">            return LocalDateTime.of(scheduleDate, LocalTime.of(22, 0));</span>
+        }
+
+<span class="nc" id="L346">        log.info(&quot;从硫化排程结果获取硫化停机时间: {}，涉及胎胚种类: {}&quot;, maxStopTime, embryoGroupMap.size());</span>
+<span class="nc" id="L347">        return maxStopTime;</span>
+    }
+
+    /**
+     * 从班次配置表获取第一个班次的开始时间
+     *
+     * 逻辑说明：
+     * 1. 从 T_CX_SHIFT_CONFIG 表查询班次配置
+     * 2. 按班次序号(shiftOrder)排序，取第一个启用的班次
+     * 3. 解析其开始时间(startTime)，格式为 HH:mm:ss
+     *
+     * @return 第一个班次的开始时间
+     */
+    private LocalTime getFirstShiftStartTime() {
+        // 查询启用的班次配置，按序号排序取第一个
+<span class="nc" id="L362">        CxShiftConfig firstShift = shiftConfigMapper.selectOne(</span>
+                new LambdaQueryWrapper&lt;CxShiftConfig&gt;()
+<span class="nc" id="L364">                        .eq(CxShiftConfig::getIsActive, 1)</span>
+<span class="nc" id="L365">                        .orderByAsc(CxShiftConfig::getShiftOrder)</span>
+<span class="nc" id="L366">                        .last(&quot;LIMIT 1&quot;));</span>
+
+<span class="nc bnc" id="L368" title="All 4 branches missed.">        if (firstShift != null &amp;&amp; firstShift.getStartTime() != null) {</span>
+<span class="nc" id="L369">            String startTimeStr = firstShift.getStartTime();</span>
+<span class="nc" id="L370">            log.info(&quot;从班次配置获取首个班次开始时间: {}，班次编码: {}&quot;, startTimeStr, firstShift.getShiftCode());</span>
+            // 解析 HH:mm:ss 格式的时间
+<span class="nc" id="L372">            return LocalTime.parse(startTimeStr);</span>
+        }
+
+<span class="nc" id="L375">        log.warn(&quot;未找到有效的班次配置，使用默认开始时间08:00&quot;);</span>
+<span class="nc" id="L376">        return LocalTime.of(8, 0);</span>
+    }
+
+    @Override
+    public Map&lt;String, Integer&gt; calculateMinDemandForHoliday(LocalDate holidayStartDate, int holidayDays) {
+<span class="nc" id="L381">        Map&lt;String, Integer&gt; minDemand = new HashMap&lt;&gt;();</span>
+
+        // 获取损耗率配置
+<span class="nc" id="L384">        BigDecimal lossRate = getLossRate();</span>
+
+        // 从硫化排程结果表获取节假日期间的硫化计划
+<span class="nc bnc" id="L387" title="All 2 branches missed.">        for (int i = 0; i &lt; holidayDays; i++) {</span>
+<span class="nc" id="L388">            LocalDate planDate = holidayStartDate.plusDays(i);</span>
+
+            // 从硫化排程结果表获取该日期的计划
+<span class="nc" id="L391">            List&lt;LhScheduleResult&gt; lhResults = lhScheduleResultMapper.selectByDate(planDate);</span>
+            
+<span class="nc bnc" id="L393" title="All 4 branches missed.">            if (lhResults != null &amp;&amp; !lhResults.isEmpty()) {</span>
+<span class="nc bnc" id="L394" title="All 2 branches missed.">                for (LhScheduleResult result : lhResults) {</span>
+<span class="nc" id="L395">                    String embryoCode = result.getEmbryoCode();</span>
+<span class="nc" id="L396">                    Integer dailyPlanQty = result.getDailyPlanQty();</span>
+                    
+<span class="nc bnc" id="L398" title="All 6 branches missed.">                    if (embryoCode != null &amp;&amp; dailyPlanQty != null &amp;&amp; dailyPlanQty &gt; 0) {</span>
+                        // 累加该胎胚在节假日期间的需求
+<span class="nc" id="L400">                        minDemand.merge(embryoCode, dailyPlanQty, Integer::sum);</span>
+                    }
+<span class="nc" id="L402">                }</span>
+            }
+        }
+
+        // 应用损耗率
+<span class="nc bnc" id="L407" title="All 2 branches missed.">        for (Map.Entry&lt;String, Integer&gt; entry : minDemand.entrySet()) {</span>
+<span class="nc" id="L408">            int demand = entry.getValue();</span>
+<span class="nc" id="L409">            int demandWithLoss = (int) Math.ceil(demand * (1 + lossRate.doubleValue()));</span>
+<span class="nc" id="L410">            entry.setValue(demandWithLoss);</span>
+<span class="nc" id="L411">        }</span>
+
+<span class="nc" id="L413">        log.info(&quot;计算节假日最低需求完成，共 {} 种胎胚&quot;, minDemand.size());</span>
+        
+<span class="nc" id="L415">        return minDemand;</span>
+    }
+
+    @Override
+    public Map&lt;String, Integer&gt; calculateExcessStock(Map&lt;String, Integer&gt; minDemand, Map&lt;String, Integer&gt; currentStock) {
+<span class="nc" id="L420">        Map&lt;String, Integer&gt; excessStock = new HashMap&lt;&gt;();</span>
+
+<span class="nc bnc" id="L422" title="All 2 branches missed.">        for (Map.Entry&lt;String, Integer&gt; entry : minDemand.entrySet()) {</span>
+<span class="nc" id="L423">            String materialCode = entry.getKey();</span>
+<span class="nc" id="L424">            int demand = entry.getValue();</span>
+<span class="nc" id="L425">            int stock = currentStock.getOrDefault(materialCode, 0);</span>
+
+<span class="nc" id="L427">            int excess = stock - demand;</span>
+<span class="nc" id="L428">            excessStock.put(materialCode, Math.max(excess, 0));</span>
+<span class="nc" id="L429">        }</span>
+
+<span class="nc" id="L431">        return excessStock;</span>
+    }
+
+    @Override
+    public LocalDateTime determineFormingStopTime(LocalDateTime vulcanizingStopTime, Integer reservedDigestHours) {
+<span class="nc bnc" id="L436" title="All 2 branches missed.">        if (reservedDigestHours == null) {</span>
+<span class="nc" id="L437">            reservedDigestHours = DEFAULT_RESERVED_DIGEST_HOURS;</span>
+        }
+<span class="nc" id="L439">        return vulcanizingStopTime.minusHours(reservedDigestHours);</span>
+    }
+
+    @Override
+    public Integer calculateFormingAvailableHours(LocalDateTime shiftStartTime, LocalDateTime formingStopTime) {
+<span class="nc bnc" id="L444" title="All 4 branches missed.">        if (shiftStartTime == null || formingStopTime == null) {</span>
+<span class="nc" id="L445">            return 8; // 默认8小时</span>
+        }
+
+<span class="nc" id="L448">        long hours = ChronoUnit.HOURS.between(shiftStartTime, formingStopTime);</span>
+<span class="nc" id="L449">        return Math.max((int) hours, 0);</span>
+    }
+
+    @Override
+    public List&lt;EmbryoConsumptionSuggestion&gt; checkEmbryoParkingTime(LocalDate scheduleDate, LocalDateTime formingStopTime) {
+<span class="nc" id="L454">        List&lt;EmbryoConsumptionSuggestion&gt; suggestions = new ArrayList&lt;&gt;();</span>
+
+        // 获取胎胚停放时间配置
+<span class="nc" id="L457">        int maxParkingHours = getMaxParkingHours();</span>
+<span class="nc" id="L458">        int reservedDigestHours = getReservedDigestHours();</span>
+
+        // 获取所有胎胚库存
+<span class="nc" id="L461">        List&lt;CxStock&gt; stocks = stockMapper.selectList(</span>
+<span class="nc" id="L462">                new LambdaQueryWrapper&lt;CxStock&gt;().gt(CxStock::getStockNum, 0));</span>
+
+<span class="nc bnc" id="L464" title="All 2 branches missed.">        for (CxStock stock : stocks) {</span>
+            // 获取胎胚已停放时间（从生产时间计算）
+            // TODO: 需要从库存记录获取生产时间
+<span class="nc" id="L467">            BigDecimal parkingHours = stock.getStockHours();</span>
+
+<span class="nc bnc" id="L469" title="All 2 branches missed.">            if (parkingHours != null) {</span>
+                // 预测停放时间 = 已停放时间 + 预留消化时间
+<span class="nc" id="L471">                BigDecimal predictedParkingHours = parkingHours.add(BigDecimal.valueOf(reservedDigestHours));</span>
+
+<span class="nc bnc" id="L473" title="All 2 branches missed.">                if (predictedParkingHours.compareTo(BigDecimal.valueOf(maxParkingHours)) &gt; 0) {</span>
+<span class="nc" id="L474">                    EmbryoConsumptionSuggestion suggestion = new EmbryoConsumptionSuggestion();</span>
+<span class="nc" id="L475">                    suggestion.setEmbryoCode(stock.getEmbryoCode());</span>
+<span class="nc" id="L476">                    suggestion.setEmbryoName(stock.getMaterialName());</span>
+<span class="nc" id="L477">                    suggestion.setCurrentStock(stock.getStockNum());</span>
+<span class="nc" id="L478">                    suggestion.setParkingHours(parkingHours);</span>
+<span class="nc" id="L479">                    suggestion.setSuggestedConsumption(stock.getEffectiveStock());</span>
+<span class="nc" id="L480">                    suggestion.setReason(String.format(&quot;停放时间 %.2f 小时，加预留时间后将超过 %d 小时限制&quot;,</span>
+<span class="nc" id="L481">                            parkingHours, maxParkingHours));</span>
+<span class="nc" id="L482">                    suggestions.add(suggestion);</span>
+                }
+            }
+<span class="nc" id="L485">        }</span>
+
+<span class="nc" id="L487">        return suggestions;</span>
+    }
+
+    @Override
+    public List&lt;CxScheduleResult&gt; adjustHolidaySchedule(LocalDate scheduleDate, List&lt;CxScheduleResult&gt; originalResult, ScheduleContextDTO context) {
+<span class="nc bnc" id="L492" title="All 2 branches missed.">        if (CollectionUtils.isEmpty(originalResult)) {</span>
+<span class="nc" id="L493">            return originalResult;</span>
+        }
+
+        // 检查是否需要特殊处理
+<span class="nc bnc" id="L497" title="All 2 branches missed.">        if (isStopProductionDay(scheduleDate)) {</span>
+<span class="nc" id="L498">            log.info(&quot;停产日 {} 不排程&quot;, scheduleDate);</span>
+<span class="nc" id="L499">            return new ArrayList&lt;&gt;();</span>
+        }
+
+<span class="nc bnc" id="L502" title="All 2 branches missed.">        if (isBeforeHoliday(scheduleDate)) {</span>
+<span class="nc" id="L503">            HolidayScheduleResult adjustResult = handleBeforeHoliday(context);</span>
+<span class="nc bnc" id="L504" title="All 2 branches missed.">            if (adjustResult.isAdjusted()) {</span>
+<span class="nc" id="L505">                log.info(&quot;停产前一天 {} 已调整排程: {}&quot;, scheduleDate, adjustResult.getAdjustments());</span>
+            }
+        }
+
+<span class="nc bnc" id="L509" title="All 2 branches missed.">        if (isStartProductionDay(scheduleDate)) {</span>
+<span class="nc" id="L510">            HolidayScheduleResult adjustResult = handleOpeningDay(context);</span>
+<span class="nc bnc" id="L511" title="All 2 branches missed.">            if (adjustResult.isAdjusted()) {</span>
+<span class="nc" id="L512">                log.info(&quot;开产日 {} 已调整排程: {}&quot;, scheduleDate, adjustResult.getAdjustments());</span>
+
+                // 首班不排关键产品
+<span class="nc" id="L515">                String firstShift = context.getFormingStartShift();</span>
+<span class="nc" id="L516">                Set&lt;String&gt; keyProductCodes = context.getKeyProductCodes();</span>
+
+<span class="nc bnc" id="L518" title="All 4 branches missed.">                if (keyProductCodes != null &amp;&amp; !keyProductCodes.isEmpty()) {</span>
+<span class="nc bnc" id="L519" title="All 2 branches missed.">                    for (CxScheduleResult result : originalResult) {</span>
+                        // 一班=夜班，二班=早班，三班=中班
+                        // 成型开产班次默认为早班（二班）
+<span class="nc bnc" id="L522" title="All 2 branches missed.">                        if (&quot;SHIFT_DAY&quot;.equals(firstShift) &amp;&amp; </span>
+<span class="nc bnc" id="L523" title="All 2 branches missed.">                            result.getClass2PlanQty() != null &amp;&amp; </span>
+<span class="nc bnc" id="L524" title="All 2 branches missed.">                            result.getClass2PlanQty().compareTo(BigDecimal.ZERO) &gt; 0) {</span>
+                            // 标记早班需要排除关键产品
+<span class="nc" id="L526">                            result.setRemark(&quot;开产首班(早班) - 不排关键产品&quot;);</span>
+                        }
+<span class="nc" id="L528">                    }</span>
+                }
+            }
+        }
+
+<span class="nc" id="L533">        return originalResult;</span>
+    }
+
+    /**
+     * 加载关键产品编码集合
+     */
+    private Set&lt;String&gt; loadKeyProductCodes() {
+<span class="nc" id="L540">        List&lt;CxKeyProduct&gt; keyProducts = keyProductMapper.selectList(</span>
+<span class="nc" id="L541">                new LambdaQueryWrapper&lt;CxKeyProduct&gt;().eq(CxKeyProduct::getIsActive, 1));</span>
+
+<span class="nc" id="L543">        Set&lt;String&gt; codes = new HashSet&lt;&gt;();</span>
+<span class="nc bnc" id="L544" title="All 2 branches missed.">        for (CxKeyProduct product : keyProducts) {</span>
+<span class="nc" id="L545">            codes.add(product.getEmbryoCode());</span>
+<span class="nc" id="L546">        }</span>
+<span class="nc" id="L547">        return codes;</span>
+    }
+
+    /**
+     * 获取预留消化时间（小时）
+     */
+    private Integer getReservedDigestHours() {
+<span class="nc" id="L554">        CxParamConfig config = paramConfigMapper.selectOne(</span>
+                new LambdaQueryWrapper&lt;CxParamConfig&gt;()
+<span class="nc" id="L556">                        .eq(CxParamConfig::getParamCode, &quot;RESERVED_DIGEST_HOURS&quot;)</span>
+<span class="nc" id="L557">                        .eq(CxParamConfig::getIsActive, 1));</span>
+
+<span class="nc bnc" id="L559" title="All 4 branches missed.">        if (config != null &amp;&amp; config.getParamValue() != null) {</span>
+            try {
+<span class="nc" id="L561">                return Integer.parseInt(config.getParamValue());</span>
+<span class="nc" id="L562">            } catch (NumberFormatException e) {</span>
+<span class="nc" id="L563">                log.warn(&quot;预留消化时间配置值无效: {}&quot;, config.getParamValue());</span>
+            }
+        }
+<span class="nc" id="L566">        return DEFAULT_RESERVED_DIGEST_HOURS;</span>
+    }
+
+    /**
+     * 获取胎胚最长停放时间（小时）
+     */
+    private int getMaxParkingHours() {
+<span class="nc" id="L573">        CxParamConfig config = paramConfigMapper.selectOne(</span>
+                new LambdaQueryWrapper&lt;CxParamConfig&gt;()
+<span class="nc" id="L575">                        .eq(CxParamConfig::getParamCode, &quot;MAX_PARKING_HOURS&quot;)</span>
+<span class="nc" id="L576">                        .eq(CxParamConfig::getIsActive, 1));</span>
+
+<span class="nc bnc" id="L578" title="All 4 branches missed.">        if (config != null &amp;&amp; config.getParamValue() != null) {</span>
+            try {
+<span class="nc" id="L580">                return Integer.parseInt(config.getParamValue());</span>
+<span class="nc" id="L581">            } catch (NumberFormatException e) {</span>
+<span class="nc" id="L582">                log.warn(&quot;胎胚最长停放时间配置值无效: {}&quot;, config.getParamValue());</span>
+            }
+        }
+<span class="nc" id="L585">        return DEFAULT_MAX_PARKING_HOURS;</span>
+    }
+
+    /**
+     * 获取损耗率
+     */
+    private BigDecimal getLossRate() {
+<span class="nc" id="L592">        CxParamConfig config = paramConfigMapper.selectOne(</span>
+                new LambdaQueryWrapper&lt;CxParamConfig&gt;()
+<span class="nc" id="L594">                        .eq(CxParamConfig::getParamCode, &quot;LOSS_RATE&quot;)</span>
+<span class="nc" id="L595">                        .eq(CxParamConfig::getIsActive, 1));</span>
+
+<span class="nc bnc" id="L597" title="All 4 branches missed.">        if (config != null &amp;&amp; config.getParamValue() != null) {</span>
+            try {
+<span class="nc" id="L599">                return new BigDecimal(config.getParamValue());</span>
+<span class="nc" id="L600">            } catch (NumberFormatException e) {</span>
+<span class="nc" id="L601">                log.warn(&quot;损耗率配置值无效: {}&quot;, config.getParamValue());</span>
+            }
+        }
+<span class="nc" id="L604">        return new BigDecimal(&quot;0.02&quot;); // 默认2%</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

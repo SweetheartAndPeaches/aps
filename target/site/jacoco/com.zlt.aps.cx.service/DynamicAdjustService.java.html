@@ -1,0 +1,225 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DynamicAdjustService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">APS Forming Schedule System</a> &gt; <a href="index.source.html" class="el_package">com.zlt.aps.cx.service</a> &gt; <span class="el_source">DynamicAdjustService.java</span></div><h1>DynamicAdjustService.java</h1><pre class="source lang-java linenums">package com.zlt.aps.cx.service;
+
+import com.zlt.aps.cx.entity.CxMaterialException;
+import com.zlt.aps.cx.entity.CxStock;
+import com.zlt.aps.cx.entity.schedule.CxScheduleDetail;
+import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.List;
+
+/**
+ * 动态调整服务接口
+ * 
+ * 实现排程执行过程中的动态调整：
+ * - 交班库存检查
+ * - 计划量微调
+ * - 顺位重新计算
+ * - 材料异常处理
+ *
+ * @author APS Team
+ */
+public interface DynamicAdjustService {
+
+    /**
+     * 执行交班前检查和调整
+     * 每班结束前1小时执行
+     *
+     * @param scheduleDate 排程日期
+     * @param shiftCode    当前班次
+     * @return 调整结果
+     */
+    ShiftAdjustResult checkAndAdjustBeforeShiftEnd(LocalDateTime scheduleDate, String shiftCode);
+
+    /**
+     * 计算预计交班库存
+     * 公式：预计交班库存 = 当前库存 + 本班已做 + 本班剩余计划 - 本班剩余消耗
+     *
+     * @param materialCode 物料编码
+     * @param scheduleDate 排程日期
+     * @param shiftCode    班次编码
+     * @return 预计交班库存
+     */
+    Integer calculateExpectedShiftEndStock(String materialCode, LocalDateTime scheduleDate, String shiftCode);
+
+    /**
+     * 计算交班可供时长
+     * 公式：交班可供时长 = 预计交班库存 / (硫化机数×单台模数) - 剩余班次时间
+     *
+     * @param materialCode      物料编码
+     * @param expectedStock     预计交班库存
+     * @param remainingShiftHours 剩余班次时间（小时）
+     * @return 交班可供时长（小时）
+     */
+    BigDecimal calculateShiftEndAvailableHours(String materialCode, Integer expectedStock, BigDecimal remainingShiftHours);
+
+    /**
+     * 检查库存预警
+     * 交班可供时长 &lt; 6小时：断料风险，需加量
+     * 交班可供时长 &gt; 18小时：库存过高预警
+     *
+     * @param materialCode 物料编码
+     * @param availableHours 可供时长
+     * @return 预警类型（LOW/HIGH/NORMAL）
+     */
+    String checkStockAlert(String materialCode, BigDecimal availableHours);
+
+    /**
+     * 执行计划量微调
+     * 库存低的加1整车，库存高的减1整车
+     *
+     * @param lowStockMaterial  低库存物料编码
+     * @param highStockMaterial 高库存物料编码
+     * @param scheduleDate      排程日期
+     * @param nextShiftCode     下个班次编码
+     * @return 是否调整成功
+     */
+    boolean adjustPlanQuantity(String lowStockMaterial, String highStockMaterial, 
+                               LocalDateTime scheduleDate, String nextShiftCode);
+
+    /**
+     * 重新计算顺位
+     * 根据最新的库存情况重新排序
+     *
+     * @param scheduleDate 排程日期
+     * @param shiftCode    班次编码
+     * @param machineCode  机台编码
+     * @return 新的顺位列表
+     */
+    List&lt;CxScheduleDetail&gt; recalculateSequence(LocalDateTime scheduleDate, String shiftCode, String machineCode);
+
+    /**
+     * 检查胎面到位情况
+     * 胎面停放时间4小时，检查每个任务开始时胎面是否到位
+     *
+     * @param detail 排程明细
+     * @return 是否到位
+     */
+    boolean checkTreadAvailability(CxScheduleDetail detail);
+
+    /**
+     * 处理材料异常
+     * 包括胎面卷曲米数不够、大卷帘布用完等
+     *
+     * @param exception 材料异常记录
+     * @return 处理结果
+     */
+    MaterialExceptionResult handleMaterialException(CxMaterialException exception);
+
+    /**
+     * 处理胎面卷曲米数不够
+     * 完成率低于80%时，调高完成率并备注原因
+     *
+     * @param scheduleDetailId 排程明细ID
+     * @param plannedLength    计划长度
+     * @param actualLength     实际长度
+     * @return 处理结果
+     */
+    boolean handleTreadLengthShortage(Long scheduleDetailId, BigDecimal plannedLength, BigDecimal actualLength);
+
+    /**
+     * 处理大卷帘布用完
+     * 主销产品可加量生产，按单生产产品不可加量
+     *
+     * @param materialCode 物料编码
+     * @return 处理结果
+     */
+    boolean handleCurtainRollDepletion(String materialCode);
+
+    /**
+     * 滚动更新未来8个班次的计划
+     *
+     * @param startShift 起始班次
+     * @return 更新结果
+     */
+    boolean updateFutureShiftsPlan(String startShift);
+
+    /**
+     * 获取需要调整的物料列表
+     * 返回库存过低和过高的物料
+     *
+     * @param scheduleDate 排程日期
+     * @return 调整物料列表
+     */
+    AdjustmentMaterialList getAdjustmentMaterials(LocalDateTime scheduleDate);
+
+    /**
+     * 班次调整结果
+     */
+<span class="nc" id="L150">    class ShiftAdjustResult {</span>
+        private boolean adjusted;
+        private List&lt;String&gt; adjustedMaterials;
+        private List&lt;String&gt; warningMaterials;
+        private String message;
+
+        public boolean isAdjusted() {
+<span class="nc" id="L157">            return adjusted;</span>
+        }
+
+        public boolean getAdjusted() {
+<span class="nc" id="L161">            return adjusted;</span>
+        }
+
+        public void setAdjusted(boolean adjusted) {
+<span class="nc" id="L165">            this.adjusted = adjusted;</span>
+<span class="nc" id="L166">        }</span>
+
+        public List&lt;String&gt; getAdjustedMaterials() {
+<span class="nc" id="L169">            return adjustedMaterials;</span>
+        }
+
+        public void setAdjustedMaterials(List&lt;String&gt; adjustedMaterials) {
+<span class="nc" id="L173">            this.adjustedMaterials = adjustedMaterials;</span>
+<span class="nc" id="L174">        }</span>
+
+        public List&lt;String&gt; getWarningMaterials() {
+<span class="nc" id="L177">            return warningMaterials;</span>
+        }
+
+        public void setWarningMaterials(List&lt;String&gt; warningMaterials) {
+<span class="nc" id="L181">            this.warningMaterials = warningMaterials;</span>
+<span class="nc" id="L182">        }</span>
+
+        public String getMessage() {
+<span class="nc" id="L185">            return message;</span>
+        }
+
+        public void setMessage(String message) {
+<span class="nc" id="L189">            this.message = message;</span>
+<span class="nc" id="L190">        }</span>
+    }
+
+    /**
+     * 材料异常处理结果
+     */
+<span class="nc bnc" id="L196" title="All 34 branches missed.">    @lombok.Data</span>
+    class MaterialExceptionResult {
+<span class="nc" id="L198">        private boolean handled;</span>
+<span class="nc" id="L199">        private String handlingMethod;</span>
+<span class="nc" id="L200">        private String message;</span>
+<span class="nc" id="L201">        private List&lt;String&gt; affectedSchedules;</span>
+    }
+
+    /**
+     * 调整物料列表
+     */
+<span class="nc bnc" id="L207" title="All 22 branches missed.">    @lombok.Data</span>
+    class AdjustmentMaterialList {
+<span class="nc" id="L209">        private List&lt;StockInfo&gt; lowStockMaterials;</span>
+<span class="nc" id="L210">        private List&lt;StockInfo&gt; highStockMaterials;</span>
+    }
+
+    /**
+     * 库存信息
+     */
+<span class="nc bnc" id="L216" title="All 46 branches missed.">    @lombok.Data</span>
+    class StockInfo {
+<span class="nc" id="L218">        private String materialCode;</span>
+<span class="nc" id="L219">        private String materialName;</span>
+<span class="nc" id="L220">        private Integer currentStock;</span>
+<span class="nc" id="L221">        private BigDecimal stockHours;</span>
+<span class="nc" id="L222">        private BigDecimal availableHours;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

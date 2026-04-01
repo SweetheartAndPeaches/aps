@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MdmMonthSurplus.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">APS Forming Schedule System</a> &gt; <a href="index.source.html" class="el_package">com.zlt.aps.mp.api.domain.entity</a> &gt; <span class="el_source">MdmMonthSurplus.java</span></div><h1>MdmMonthSurplus.java</h1><pre class="source lang-java linenums">package com.zlt.aps.mp.api.domain.entity;
+
+import com.baomidou.mybatisplus.annotation.*;
+import io.swagger.annotations.ApiModel;
+import io.swagger.annotations.ApiModelProperty;
+import lombok.Data;
+
+import java.io.Serializable;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+/**
+ * 月底计划余量实体
+ * 
+ * 用于计算硫化余量和收尾判断
+ *
+ * @author APS Team
+ */
+<span class="nc bnc" id="L19" title="All 150 branches missed.">@Data</span>
+@TableName(&quot;t_mdm_month_surplus&quot;)
+@ApiModel(value = &quot;月底计划余量&quot;)
+public class MdmMonthSurplus implements Serializable {
+
+    private static final long serialVersionUID = 1L;
+
+    @ApiModelProperty(value = &quot;主键ID&quot;)
+    @TableId(value = &quot;ID&quot;, type = IdType.AUTO)
+<span class="nc" id="L28">    private Long id;</span>
+
+    @ApiModelProperty(value = &quot;工厂编号&quot;)
+    @TableField(&quot;FACTORY_CODE&quot;)
+<span class="nc" id="L32">    private String factoryCode;</span>
+
+    @ApiModelProperty(value = &quot;产品品类&quot;)
+    @TableField(&quot;PRODUCT_TYPE_CODE&quot;)
+<span class="nc" id="L36">    private String productTypeCode;</span>
+
+    @ApiModelProperty(value = &quot;年份&quot;)
+    @TableField(&quot;YEAR&quot;)
+<span class="nc" id="L40">    private BigDecimal year;</span>
+
+    @ApiModelProperty(value = &quot;月份&quot;)
+    @TableField(&quot;MONTH&quot;)
+<span class="nc" id="L44">    private BigDecimal month;</span>
+
+    @ApiModelProperty(value = &quot;需求版本号&quot;)
+    @TableField(&quot;REQUIRE_VERSION&quot;)
+<span class="nc" id="L48">    private String requireVersion;</span>
+
+    @ApiModelProperty(value = &quot;品牌&quot;)
+    @TableField(&quot;BRAND&quot;)
+<span class="nc" id="L52">    private String brand;</span>
+
+    @ApiModelProperty(value = &quot;产品结构&quot;)
+    @TableField(&quot;STRUCTURE_NAME&quot;)
+<span class="nc" id="L56">    private String structureName;</span>
+
+    @ApiModelProperty(value = &quot;物料编码&quot;)
+    @TableField(&quot;MATERIAL_CODE&quot;)
+<span class="nc" id="L60">    private String materialCode;</span>
+
+    @ApiModelProperty(value = &quot;物料描述&quot;)
+    @TableField(&quot;MATERIAL_DESC&quot;)
+<span class="nc" id="L64">    private String materialDesc;</span>
+
+    @ApiModelProperty(value = &quot;计划余量（硫化余量 = 总计划量 - 硫化真实完成量，已由系统计算好）&quot;)
+    @TableField(&quot;PLAN_SURPLUS_QTY&quot;)
+<span class="nc" id="L68">    private BigDecimal planSurplusQty;</span>
+
+    @ApiModelProperty(value = &quot;库存抓取日&quot;)
+    @TableField(&quot;STOCK_CAPTURE_DATE&quot;)
+<span class="nc" id="L72">    private LocalDateTime stockCaptureDate;</span>
+
+    @ApiModelProperty(value = &quot;备注&quot;)
+    @TableField(&quot;REMARK&quot;)
+<span class="nc" id="L76">    private String remark;</span>
+
+    @ApiModelProperty(value = &quot;是否删除：0-未删除 1-已删除&quot;)
+    @TableField(&quot;IS_DELETE&quot;)
+<span class="nc" id="L80">    private Integer isDelete;</span>
+
+    @ApiModelProperty(value = &quot;创建时间&quot;)
+    @TableField(&quot;CREATE_TIME&quot;)
+<span class="nc" id="L84">    private LocalDateTime createTime;</span>
+
+    @ApiModelProperty(value = &quot;更新时间&quot;)
+    @TableField(&quot;UPDATE_TIME&quot;)
+<span class="nc" id="L88">    private LocalDateTime updateTime;</span>
+
+    @ApiModelProperty(value = &quot;创建人&quot;)
+    @TableField(&quot;CREATE_BY&quot;)
+<span class="nc" id="L92">    private String createBy;</span>
+
+    @ApiModelProperty(value = &quot;修改人&quot;)
+    @TableField(&quot;UPDATE_BY&quot;)
+<span class="nc" id="L96">    private String updateBy;</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

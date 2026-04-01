@@ -1,0 +1,292 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CxScheduleResult.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">APS Forming Schedule System</a> &gt; <a href="index.source.html" class="el_package">com.zlt.aps.cx.entity.schedule</a> &gt; <span class="el_source">CxScheduleResult.java</span></div><h1>CxScheduleResult.java</h1><pre class="source lang-java linenums">package com.zlt.aps.cx.entity.schedule;
+
+import com.baomidou.mybatisplus.annotation.*;
+import com.fasterxml.jackson.annotation.JsonFormat;
+import com.zlt.aps.cx.entity.base.ApsBaseEntity;
+import io.swagger.annotations.ApiModel;
+import io.swagger.annotations.ApiModel;
+import io.swagger.annotations.ApiModelProperty;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.List;
+
+/**
+ * 成型排程结果表
+ * 对应表：T_CX_SCHEDULE_RESULT
+ *
+ * @author APS Team
+ * @since 2.0.0
+ */
+<span class="nc" id="L24">@Data</span>
+<span class="nc bnc" id="L25" title="All 504 branches missed.">@EqualsAndHashCode(callSuper = true)</span>
+@TableName(&quot;T_CX_SCHEDULE_RESULT&quot;)
+@ApiModel(value = &quot;成型排程结果对象&quot;, description = &quot;成型排程结果表&quot;)
+public class CxScheduleResult extends ApsBaseEntity {
+
+    private static final long serialVersionUID = 1L;
+
+    @ApiModelProperty(value = &quot;主键ID&quot;)
+    @TableId(value = &quot;ID&quot;, type = IdType.AUTO)
+<span class="nc" id="L34">    private Long id;</span>
+
+    @ApiModelProperty(value = &quot;成型批次号&quot;)
+    @TableField(&quot;CX_BATCH_NO&quot;)
+<span class="nc" id="L38">    private String cxBatchNo;</span>
+
+    @ApiModelProperty(value = &quot;工单号&quot;)
+    @TableField(&quot;ORDER_NO&quot;)
+<span class="nc" id="L42">    private String orderNo;</span>
+
+    @ApiModelProperty(value = &quot;生产状态：0-未生产；1-生产中；2-已收尾&quot;)
+    @TableField(&quot;PRODUCTION_STATUS&quot;)
+<span class="nc" id="L46">    private String productionStatus;</span>
+
+    @ApiModelProperty(value = &quot;是否发布：0--未发布，1--已发布&quot;)
+    @TableField(&quot;IS_RELEASE&quot;)
+<span class="nc" id="L50">    private String isRelease;</span>
+
+    @ApiModelProperty(value = &quot;排程日期&quot;)
+    @JsonFormat(pattern = &quot;yyyy-MM-dd&quot;)
+    @TableField(&quot;SCHEDULE_DATE&quot;)
+<span class="nc" id="L55">    private LocalDateTime scheduleDate;</span>
+
+    @ApiModelProperty(value = &quot;成型机台编号&quot;)
+    @TableField(&quot;CX_MACHINE_CODE&quot;)
+<span class="nc" id="L59">    private String cxMachineCode;</span>
+
+    @ApiModelProperty(value = &quot;成型机台名称&quot;)
+    @TableField(&quot;CX_MACHINE_NAME&quot;)
+<span class="nc" id="L63">    private String cxMachineName;</span>
+
+    @ApiModelProperty(value = &quot;成型机台类型&quot;)
+    @TableField(&quot;CX_MACHINE_TYPE&quot;)
+<span class="nc" id="L67">    private String cxMachineType;</span>
+
+    @ApiModelProperty(value = &quot;硫化排程任务序号&quot;)
+    @TableField(&quot;LH_SCHEDULE_IDS&quot;)
+<span class="nc" id="L71">    private String lhScheduleIds;</span>
+
+    @ApiModelProperty(value = &quot;硫化机台编号&quot;)
+    @TableField(&quot;LH_MACHINE_CODE&quot;)
+<span class="nc" id="L75">    private String lhMachineCode;</span>
+
+    @ApiModelProperty(value = &quot;硫化机台名称&quot;)
+    @TableField(&quot;LH_MACHINE_NAME&quot;)
+<span class="nc" id="L79">    private String lhMachineName;</span>
+
+    @ApiModelProperty(value = &quot;硫化机使用总模数&quot;)
+    @TableField(&quot;LH_MACHINE_QTY&quot;)
+<span class="nc" id="L83">    private BigDecimal lhMachineQty;</span>
+
+    @ApiModelProperty(value = &quot;外胎代码&quot;)
+    @TableField(&quot;SAP_CODE&quot;)
+<span class="nc" id="L87">    private String sapCode;</span>
+
+    @ApiModelProperty(value = &quot;外胎规格描述&quot;)
+    @TableField(&quot;SPEC_DESC&quot;)
+<span class="nc" id="L91">    private String specDesc;</span>
+
+    @ApiModelProperty(value = &quot;胎胚代码&quot;)
+    @TableField(&quot;EMBRYO_CODE&quot;)
+<span class="nc" id="L95">    private String embryoCode;</span>
+
+    @ApiModelProperty(value = &quot;胎胚寸口&quot;)
+    @TableField(&quot;SPEC_DIMENSION&quot;)
+<span class="nc" id="L99">    private BigDecimal specDimension;</span>
+
+    @ApiModelProperty(value = &quot;结构&quot;)
+    @TableField(&quot;STRUCTURE_NAME&quot;)
+<span class="nc" id="L103">    private String structureName;</span>
+
+    @ApiModelProperty(value = &quot;胎胚库存&quot;)
+    @TableField(&quot;TOTAL_STOCK&quot;)
+<span class="nc" id="L107">    private BigDecimal totalStock;</span>
+
+    @ApiModelProperty(value = &quot;施工版本信息&quot;)
+    @TableField(&quot;BOM_DATA_VERSION&quot;)
+<span class="nc" id="L111">    private String bomDataVersion;</span>
+
+    @ApiModelProperty(value = &quot;胎胚总计划量&quot;)
+    @TableField(&quot;PRODUCT_NUM&quot;)
+<span class="nc" id="L115">    private BigDecimal productNum;</span>
+
+    // ========== 一班 ==========
+    @ApiModelProperty(value = &quot;一班计划数&quot;)
+    @TableField(&quot;CLASS1_PLAN_QTY&quot;)
+<span class="nc" id="L120">    private BigDecimal class1PlanQty;</span>
+
+    @ApiModelProperty(value = &quot;一班原因分析手工输入&quot;)
+    @TableField(&quot;CLASS1_ANALYSIS_INPUT&quot;)
+<span class="nc" id="L124">    private String class1AnalysisInput;</span>
+
+    @ApiModelProperty(value = &quot;一班完成量&quot;)
+    @TableField(&quot;CLASS1_FINISH_QTY&quot;)
+<span class="nc" id="L128">    private BigDecimal class1FinishQty;</span>
+
+    @ApiModelProperty(value = &quot;一班原因分析&quot;)
+    @TableField(&quot;CLASS1_ANALYSIS&quot;)
+<span class="nc" id="L132">    private String class1Analysis;</span>
+
+    // ========== 二班 ==========
+    @ApiModelProperty(value = &quot;二班计划数&quot;)
+    @TableField(&quot;CLASS2_PLAN_QTY&quot;)
+<span class="nc" id="L137">    private BigDecimal class2PlanQty;</span>
+
+    @ApiModelProperty(value = &quot;二班原因分析手工输入&quot;)
+    @TableField(&quot;CLASS2_ANALYSIS_INPUT&quot;)
+<span class="nc" id="L141">    private String class2AnalysisInput;</span>
+
+    @ApiModelProperty(value = &quot;二班完成量&quot;)
+    @TableField(&quot;CLASS2_FINISH_QTY&quot;)
+<span class="nc" id="L145">    private BigDecimal class2FinishQty;</span>
+
+    @ApiModelProperty(value = &quot;二班原因分析&quot;)
+    @TableField(&quot;CLASS2_ANALYSIS&quot;)
+<span class="nc" id="L149">    private String class2Analysis;</span>
+
+    // ========== 三班 ==========
+    @ApiModelProperty(value = &quot;三班计划数&quot;)
+    @TableField(&quot;CLASS3_PLAN_QTY&quot;)
+<span class="nc" id="L154">    private BigDecimal class3PlanQty;</span>
+
+    @ApiModelProperty(value = &quot;三班原因分析手工输入&quot;)
+    @TableField(&quot;CLASS3_ANALYSIS_INPUT&quot;)
+<span class="nc" id="L158">    private String class3AnalysisInput;</span>
+
+    @ApiModelProperty(value = &quot;三班完成量&quot;)
+    @TableField(&quot;CLASS3_FINISH_QTY&quot;)
+<span class="nc" id="L162">    private BigDecimal class3FinishQty;</span>
+
+    @ApiModelProperty(value = &quot;三班原因分析&quot;)
+    @TableField(&quot;CLASS3_ANALYSIS&quot;)
+<span class="nc" id="L166">    private String class3Analysis;</span>
+
+    // ========== 四班 ==========
+    @ApiModelProperty(value = &quot;四班计划数&quot;)
+    @TableField(&quot;CLASS4_PLAN_QTY&quot;)
+<span class="nc" id="L171">    private BigDecimal class4PlanQty;</span>
+
+    @ApiModelProperty(value = &quot;四班原因分析手工输入&quot;)
+    @TableField(&quot;CLASS4_ANALYSIS_INPUT&quot;)
+<span class="nc" id="L175">    private String class4AnalysisInput;</span>
+
+    @ApiModelProperty(value = &quot;四班完成量&quot;)
+    @TableField(&quot;CLASS4_FINISH_QTY&quot;)
+<span class="nc" id="L179">    private BigDecimal class4FinishQty;</span>
+
+    @ApiModelProperty(value = &quot;四班原因分析&quot;)
+    @TableField(&quot;CLASS4_ANALYSIS&quot;)
+<span class="nc" id="L183">    private String class4Analysis;</span>
+
+    // ========== 五班 ==========
+    @ApiModelProperty(value = &quot;五班计划数&quot;)
+    @TableField(&quot;CLASS5_PLAN_QTY&quot;)
+<span class="nc" id="L188">    private BigDecimal class5PlanQty;</span>
+
+    @ApiModelProperty(value = &quot;五班原因分析手工输入&quot;)
+    @TableField(&quot;CLASS5_ANALYSIS_INPUT&quot;)
+<span class="nc" id="L192">    private String class5AnalysisInput;</span>
+
+    @ApiModelProperty(value = &quot;五班完成量&quot;)
+    @TableField(&quot;CLASS5_FINISH_QTY&quot;)
+<span class="nc" id="L196">    private BigDecimal class5FinishQty;</span>
+
+    @ApiModelProperty(value = &quot;五班原因分析&quot;)
+    @TableField(&quot;CLASS5_ANALYSIS&quot;)
+<span class="nc" id="L200">    private String class5Analysis;</span>
+
+    // ========== 六班 ==========
+    @ApiModelProperty(value = &quot;六班计划数&quot;)
+    @TableField(&quot;CLASS6_PLAN_QTY&quot;)
+<span class="nc" id="L205">    private BigDecimal class6PlanQty;</span>
+
+    @ApiModelProperty(value = &quot;六班原因分析手工输入&quot;)
+    @TableField(&quot;CLASS6_ANALYSIS_INPUT&quot;)
+<span class="nc" id="L209">    private String class6AnalysisInput;</span>
+
+    @ApiModelProperty(value = &quot;六班完成量&quot;)
+    @TableField(&quot;CLASS6_FINISH_QTY&quot;)
+<span class="nc" id="L213">    private BigDecimal class6FinishQty;</span>
+
+    @ApiModelProperty(value = &quot;六班原因分析&quot;)
+    @TableField(&quot;CLASS6_ANALYSIS&quot;)
+<span class="nc" id="L217">    private String class6Analysis;</span>
+
+    // ========== 七班 ==========
+    @ApiModelProperty(value = &quot;七班计划数&quot;)
+    @TableField(&quot;CLASS7_PLAN_QTY&quot;)
+<span class="nc" id="L222">    private BigDecimal class7PlanQty;</span>
+
+    @ApiModelProperty(value = &quot;七班原因分析手工输入&quot;)
+    @TableField(&quot;CLASS7_ANALYSIS_INPUT&quot;)
+<span class="nc" id="L226">    private String class7AnalysisInput;</span>
+
+    @ApiModelProperty(value = &quot;七班完成量&quot;)
+    @TableField(&quot;CLASS7_FINISH_QTY&quot;)
+<span class="nc" id="L230">    private BigDecimal class7FinishQty;</span>
+
+    @ApiModelProperty(value = &quot;七班原因分析&quot;)
+    @TableField(&quot;CLASS7_ANALYSIS&quot;)
+<span class="nc" id="L234">    private String class7Analysis;</span>
+
+    // ========== 八班 ==========
+    @ApiModelProperty(value = &quot;八班计划数&quot;)
+    @TableField(&quot;CLASS8_PLAN_QTY&quot;)
+<span class="nc" id="L239">    private BigDecimal class8PlanQty;</span>
+
+    @ApiModelProperty(value = &quot;八班原因分析手工输入&quot;)
+    @TableField(&quot;CLASS8_ANALYSIS_INPUT&quot;)
+<span class="nc" id="L243">    private String class8AnalysisInput;</span>
+
+    @ApiModelProperty(value = &quot;八班完成量&quot;)
+    @TableField(&quot;CLASS8_FINISH_QTY&quot;)
+<span class="nc" id="L247">    private BigDecimal class8FinishQty;</span>
+
+    @ApiModelProperty(value = &quot;八班原因分析&quot;)
+    @TableField(&quot;CLASS8_ANALYSIS&quot;)
+<span class="nc" id="L251">    private String class8Analysis;</span>
+
+    // ========== 其他字段 ==========
+    @ApiModelProperty(value = &quot;收尾提示标识：0-提示收尾；1-不需要提示&quot;)
+    @TableField(&quot;MARK_CLOSE_OUT_TIP&quot;)
+<span class="nc" id="L256">    private String markCloseOutTip;</span>
+
+    @ApiModelProperty(value = &quot;数据来源：0-自动排程；1-插单；2-导入&quot;)
+    @TableField(&quot;DATA_SOURCE&quot;)
+<span class="nc" id="L260">    private String dataSource;</span>
+
+    @ApiModelProperty(value = &quot;特殊要求&quot;)
+    @TableField(&quot;SPECIAL_REQUIREMENTS&quot;)
+<span class="nc" id="L264">    private String specialRequirements;</span>
+
+    // ========== 非数据库字段 ==========
+    
+    @ApiModelProperty(value = &quot;排程明细列表&quot;)
+    @TableField(exist = false)
+<span class="nc" id="L270">    private List&lt;CxScheduleDetail&gt; details;</span>
+    
+    @ApiModelProperty(value = &quot;状态&quot;)
+    @TableField(exist = false)
+<span class="nc" id="L274">    private String status;</span>
+    
+    @ApiModelProperty(value = &quot;班次编码&quot;)
+    @TableField(exist = false)
+<span class="nc" id="L278">    private String shiftCode;</span>
+    
+    @ApiModelProperty(value = &quot;试制计划ID&quot;)
+    @TableField(exist = false)
+<span class="nc" id="L282">    private Long trialPlanId;</span>
+    
+    @ApiModelProperty(value = &quot;是否试制&quot;)
+    @TableField(exist = false)
+<span class="nc" id="L286">    private Integer isTrial;</span>
+    
+    @ApiModelProperty(value = &quot;完成率&quot;)
+    @TableField(exist = false)
+<span class="nc" id="L290">    private BigDecimal completionRate;</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

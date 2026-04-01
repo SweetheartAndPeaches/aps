@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>LhScheduleResultServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">APS Forming Schedule System</a> &gt; <a href="index.source.html" class="el_package">com.zlt.aps.cx.service.impl</a> &gt; <span class="el_source">LhScheduleResultServiceImpl.java</span></div><h1>LhScheduleResultServiceImpl.java</h1><pre class="source lang-java linenums">package com.zlt.aps.cx.service.impl;
+
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
+import com.zlt.aps.cx.mapper.LhScheduleResultMapper;
+import com.zlt.aps.cx.service.LhScheduleResultService;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+
+import java.time.LocalDate;
+import java.util.List;
+
+/**
+ * 硫化排程结果服务实现类
+ *
+ * @author APS Team
+ */
+<span class="nc" id="L23">@Slf4j</span>
+@Service
+<span class="nc" id="L25">public class LhScheduleResultServiceImpl extends ServiceImpl&lt;LhScheduleResultMapper, LhScheduleResult&gt;</span>
+        implements LhScheduleResultService {
+
+    @Override
+    public List&lt;LhScheduleResult&gt; listByScheduleDate(LocalDate scheduleDate) {
+<span class="nc" id="L30">        return list(new LambdaQueryWrapper&lt;LhScheduleResult&gt;()</span>
+<span class="nc" id="L31">                .eq(LhScheduleResult::getScheduleDate, scheduleDate)</span>
+<span class="nc" id="L32">                .orderByAsc(LhScheduleResult::getLhMachineCode)</span>
+<span class="nc" id="L33">                .orderByAsc(LhScheduleResult::getMachineOrder));</span>
+    }
+
+    @Override
+    public List&lt;LhScheduleResult&gt; listByMachineAndDate(String lhMachineCode, LocalDate scheduleDate) {
+<span class="nc" id="L38">        return list(new LambdaQueryWrapper&lt;LhScheduleResult&gt;()</span>
+<span class="nc" id="L39">                .eq(LhScheduleResult::getLhMachineCode, lhMachineCode)</span>
+<span class="nc" id="L40">                .eq(LhScheduleResult::getScheduleDate, scheduleDate)</span>
+<span class="nc" id="L41">                .orderByAsc(LhScheduleResult::getMachineOrder));</span>
+    }
+
+    @Override
+    public List&lt;LhScheduleResult&gt; listByEmbryoCode(String embryoCode) {
+<span class="nc" id="L46">        return list(new LambdaQueryWrapper&lt;LhScheduleResult&gt;()</span>
+<span class="nc" id="L47">                .eq(LhScheduleResult::getEmbryoCode, embryoCode)</span>
+<span class="nc" id="L48">                .orderByDesc(LhScheduleResult::getScheduleDate));</span>
+    }
+
+    @Override
+    public Page&lt;LhScheduleResult&gt; pageList(LocalDate scheduleDate, String lhMachineCode, Integer pageNum, Integer pageSize) {
+<span class="nc" id="L53">        Page&lt;LhScheduleResult&gt; page = new Page&lt;&gt;(pageNum, pageSize);</span>
+        
+<span class="nc" id="L55">        LambdaQueryWrapper&lt;LhScheduleResult&gt; wrapper = new LambdaQueryWrapper&lt;&gt;();</span>
+        
+<span class="nc bnc" id="L57" title="All 2 branches missed.">        if (scheduleDate != null) {</span>
+<span class="nc" id="L58">            wrapper.eq(LhScheduleResult::getScheduleDate, scheduleDate);</span>
+        }
+<span class="nc bnc" id="L60" title="All 2 branches missed.">        if (StringUtils.hasText(lhMachineCode)) {</span>
+<span class="nc" id="L61">            wrapper.eq(LhScheduleResult::getLhMachineCode, lhMachineCode);</span>
+        }
+        
+<span class="nc" id="L64">        wrapper.orderByDesc(LhScheduleResult::getScheduleDate)</span>
+<span class="nc" id="L65">               .orderByAsc(LhScheduleResult::getLhMachineCode)</span>
+<span class="nc" id="L66">               .orderByAsc(LhScheduleResult::getMachineOrder);</span>
+        
+<span class="nc" id="L68">        return page(page, wrapper);</span>
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean updateProductionStatus(Long id, String productionStatus) {
+<span class="nc" id="L74">        return update(new LambdaUpdateWrapper&lt;LhScheduleResult&gt;()</span>
+<span class="nc" id="L75">                .eq(LhScheduleResult::getId, id)</span>
+<span class="nc" id="L76">                .set(LhScheduleResult::getProductionStatus, productionStatus));</span>
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean releaseSchedule(Long id) {
+<span class="nc" id="L82">        return update(new LambdaUpdateWrapper&lt;LhScheduleResult&gt;()</span>
+<span class="nc" id="L83">                .eq(LhScheduleResult::getId, id)</span>
+<span class="nc" id="L84">                .set(LhScheduleResult::getIsRelease, &quot;1&quot;));</span>
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean batchReleaseSchedule(List&lt;Long&gt; ids) {
+<span class="nc bnc" id="L90" title="All 4 branches missed.">        if (ids == null || ids.isEmpty()) {</span>
+<span class="nc" id="L91">            return false;</span>
+        }
+<span class="nc" id="L93">        return update(new LambdaUpdateWrapper&lt;LhScheduleResult&gt;()</span>
+<span class="nc" id="L94">                .in(LhScheduleResult::getId, ids)</span>
+<span class="nc" id="L95">                .set(LhScheduleResult::getIsRelease, &quot;1&quot;));</span>
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean updateShiftPlanQty(Long id, Integer shiftNo, Integer planQty) {
+<span class="nc" id="L101">        LambdaUpdateWrapper&lt;LhScheduleResult&gt; wrapper = new LambdaUpdateWrapper&lt;LhScheduleResult&gt;()</span>
+<span class="nc" id="L102">                .eq(LhScheduleResult::getId, id);</span>
+        
+<span class="nc bnc" id="L104" title="All 5 branches missed.">        switch (shiftNo) {</span>
+            case 1:
+<span class="nc" id="L106">                wrapper.set(LhScheduleResult::getClass1PlanQty, planQty);</span>
+<span class="nc" id="L107">                break;</span>
+            case 2:
+<span class="nc" id="L109">                wrapper.set(LhScheduleResult::getClass2PlanQty, planQty);</span>
+<span class="nc" id="L110">                break;</span>
+            case 3:
+<span class="nc" id="L112">                wrapper.set(LhScheduleResult::getClass3PlanQty, planQty);</span>
+<span class="nc" id="L113">                break;</span>
+            case 4:
+<span class="nc" id="L115">                wrapper.set(LhScheduleResult::getClass4PlanQty, planQty);</span>
+<span class="nc" id="L116">                break;</span>
+            default:
+<span class="nc" id="L118">                return false;</span>
+        }
+        
+<span class="nc" id="L121">        return update(wrapper);</span>
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean updateShiftFinishQty(Long id, Integer shiftNo, Integer finishQty) {
+<span class="nc" id="L127">        LambdaUpdateWrapper&lt;LhScheduleResult&gt; wrapper = new LambdaUpdateWrapper&lt;LhScheduleResult&gt;()</span>
+<span class="nc" id="L128">                .eq(LhScheduleResult::getId, id);</span>
+        
+<span class="nc bnc" id="L130" title="All 5 branches missed.">        switch (shiftNo) {</span>
+            case 1:
+<span class="nc" id="L132">                wrapper.set(LhScheduleResult::getClass1FinishQty, finishQty);</span>
+<span class="nc" id="L133">                break;</span>
+            case 2:
+<span class="nc" id="L135">                wrapper.set(LhScheduleResult::getClass2FinishQty, finishQty);</span>
+<span class="nc" id="L136">                break;</span>
+            case 3:
+<span class="nc" id="L138">                wrapper.set(LhScheduleResult::getClass3FinishQty, finishQty);</span>
+<span class="nc" id="L139">                break;</span>
+            case 4:
+<span class="nc" id="L141">                wrapper.set(LhScheduleResult::getClass4FinishQty, finishQty);</span>
+<span class="nc" id="L142">                break;</span>
+            default:
+<span class="nc" id="L144">                return false;</span>
+        }
+        
+<span class="nc" id="L147">        return update(wrapper);</span>
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean deleteByScheduleDate(LocalDate scheduleDate) {
+<span class="nc" id="L153">        return remove(new LambdaQueryWrapper&lt;LhScheduleResult&gt;()</span>
+<span class="nc" id="L154">                .eq(LhScheduleResult::getScheduleDate, scheduleDate));</span>
+    }
+
+    @Override
+    public List&lt;LhScheduleResult&gt; listByCxScheduleId(Long cxScheduleId) {
+        // 通过成型排程的 lhScheduleIds 字段关联
+        // 这里需要根据实际业务逻辑实现
+<span class="nc" id="L161">        return list(new LambdaQueryWrapper&lt;LhScheduleResult&gt;()</span>
+<span class="nc" id="L162">                .isNotNull(LhScheduleResult::getBatchNo)</span>
+<span class="nc" id="L163">                .orderByAsc(LhScheduleResult::getLhMachineCode));</span>
+    }
+
+    @Override
+    public Integer calculateShiftCapacity(String lhMachineCode, Integer mouldQty, Integer lhTime) {
+<span class="nc bnc" id="L168" title="All 8 branches missed.">        if (mouldQty == null || mouldQty == 0 || lhTime == null || lhTime == 0) {</span>
+<span class="nc" id="L169">            return 0;</span>
+        }
+        
+        // 假设每班工作8小时
+<span class="nc" id="L173">        int shiftMinutes = 8 * 60;</span>
+        
+        // 单班产能 = (班次分钟数 / 硫化时长分钟数) * 模数
+        // 硫化时长从秒转换为分钟
+<span class="nc" id="L177">        double lhTimeMinutes = lhTime / 60.0;</span>
+        
+<span class="nc bnc" id="L179" title="All 2 branches missed.">        if (lhTimeMinutes &lt;= 0) {</span>
+<span class="nc" id="L180">            return 0;</span>
+        }
+        
+        // 计算每班可以硫化多少次
+<span class="nc" id="L184">        int cyclesPerShift = (int) (shiftMinutes / lhTimeMinutes);</span>
+        
+        // 单班产能 = 硫化次数 * 模数
+<span class="nc" id="L187">        return cyclesPerShift * mouldQty;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

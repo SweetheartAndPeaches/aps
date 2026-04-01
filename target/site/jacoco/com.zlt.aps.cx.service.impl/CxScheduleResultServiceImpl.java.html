@@ -1,0 +1,269 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CxScheduleResultServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">APS Forming Schedule System</a> &gt; <a href="index.source.html" class="el_package">com.zlt.aps.cx.service.impl</a> &gt; <span class="el_source">CxScheduleResultServiceImpl.java</span></div><h1>CxScheduleResultServiceImpl.java</h1><pre class="source lang-java linenums">package com.zlt.aps.cx.service.impl;
+
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.zlt.aps.cx.dto.ScheduleQueryDTO;
+import com.zlt.aps.cx.dto.ScheduleResultDTO;
+import com.zlt.aps.cx.entity.schedule.CxScheduleDetail;
+import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
+import com.zlt.aps.cx.mapper.CxScheduleResultMapper;
+import com.zlt.aps.cx.service.CxScheduleDetailService;
+import com.zlt.aps.cx.service.CxScheduleResultService;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.List;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+/**
+ * 成型排程结果服务实现类
+ *
+ * @author APS Team
+ */
+<span class="nc" id="L33">@Slf4j</span>
+@Service
+<span class="nc" id="L35">public class CxScheduleResultServiceImpl extends ServiceImpl&lt;CxScheduleResultMapper, CxScheduleResult&gt;</span>
+        implements CxScheduleResultService {
+
+    @Autowired
+    private CxScheduleDetailService cxScheduleDetailService;
+
+    @Override
+    public List&lt;CxScheduleResult&gt; listByScheduleDate(LocalDate scheduleDate) {
+<span class="nc" id="L43">        return list(new LambdaQueryWrapper&lt;CxScheduleResult&gt;()</span>
+<span class="nc" id="L44">                .eq(CxScheduleResult::getScheduleDate, scheduleDate.atStartOfDay())</span>
+<span class="nc" id="L45">                .orderByAsc(CxScheduleResult::getCxMachineCode));</span>
+    }
+
+    @Override
+    public List&lt;CxScheduleResult&gt; listByMachineAndDate(String cxMachineCode, LocalDate scheduleDate) {
+<span class="nc" id="L50">        return list(new LambdaQueryWrapper&lt;CxScheduleResult&gt;()</span>
+<span class="nc" id="L51">                .eq(CxScheduleResult::getCxMachineCode, cxMachineCode)</span>
+<span class="nc" id="L52">                .eq(CxScheduleResult::getScheduleDate, scheduleDate.atStartOfDay())</span>
+<span class="nc" id="L53">                .orderByAsc(CxScheduleResult::getId));</span>
+    }
+
+    @Override
+    public List&lt;CxScheduleResult&gt; listByEmbryoCode(String embryoCode) {
+<span class="nc" id="L58">        return list(new LambdaQueryWrapper&lt;CxScheduleResult&gt;()</span>
+<span class="nc" id="L59">                .eq(CxScheduleResult::getEmbryoCode, embryoCode)</span>
+<span class="nc" id="L60">                .orderByDesc(CxScheduleResult::getScheduleDate));</span>
+    }
+
+    @Override
+    public Page&lt;ScheduleResultDTO&gt; pageList(ScheduleQueryDTO queryDTO) {
+<span class="nc" id="L65">        Page&lt;CxScheduleResult&gt; page = new Page&lt;&gt;(queryDTO.getPageNum(), queryDTO.getPageSize());</span>
+        
+<span class="nc" id="L67">        LambdaQueryWrapper&lt;CxScheduleResult&gt; wrapper = new LambdaQueryWrapper&lt;&gt;();</span>
+        
+        // 日期范围
+<span class="nc bnc" id="L70" title="All 2 branches missed.">        if (queryDTO.getStartDate() != null) {</span>
+<span class="nc" id="L71">            wrapper.ge(CxScheduleResult::getScheduleDate, queryDTO.getStartDate().atStartOfDay());</span>
+        }
+<span class="nc bnc" id="L73" title="All 2 branches missed.">        if (queryDTO.getEndDate() != null) {</span>
+<span class="nc" id="L74">            wrapper.le(CxScheduleResult::getScheduleDate, queryDTO.getEndDate().atStartOfDay());</span>
+        }
+        
+        // 其他条件
+<span class="nc bnc" id="L78" title="All 2 branches missed.">        if (StringUtils.hasText(queryDTO.getCxMachineCode())) {</span>
+<span class="nc" id="L79">            wrapper.eq(CxScheduleResult::getCxMachineCode, queryDTO.getCxMachineCode());</span>
+        }
+<span class="nc bnc" id="L81" title="All 2 branches missed.">        if (StringUtils.hasText(queryDTO.getEmbryoCode())) {</span>
+<span class="nc" id="L82">            wrapper.eq(CxScheduleResult::getEmbryoCode, queryDTO.getEmbryoCode());</span>
+        }
+<span class="nc bnc" id="L84" title="All 2 branches missed.">        if (StringUtils.hasText(queryDTO.getStructureName())) {</span>
+<span class="nc" id="L85">            wrapper.eq(CxScheduleResult::getStructureName, queryDTO.getStructureName());</span>
+        }
+<span class="nc bnc" id="L87" title="All 2 branches missed.">        if (StringUtils.hasText(queryDTO.getProductionStatus())) {</span>
+<span class="nc" id="L88">            wrapper.eq(CxScheduleResult::getProductionStatus, queryDTO.getProductionStatus());</span>
+        }
+<span class="nc bnc" id="L90" title="All 2 branches missed.">        if (StringUtils.hasText(queryDTO.getIsRelease())) {</span>
+<span class="nc" id="L91">            wrapper.eq(CxScheduleResult::getIsRelease, queryDTO.getIsRelease());</span>
+        }
+        
+<span class="nc" id="L94">        wrapper.orderByDesc(CxScheduleResult::getScheduleDate)</span>
+<span class="nc" id="L95">               .orderByAsc(CxScheduleResult::getCxMachineCode);</span>
+        
+<span class="nc" id="L97">        Page&lt;CxScheduleResult&gt; resultPage = page(page, wrapper);</span>
+        
+        // 转换为DTO
+<span class="nc" id="L100">        Page&lt;ScheduleResultDTO&gt; dtoPage = new Page&lt;&gt;(resultPage.getCurrent(), resultPage.getSize(), resultPage.getTotal());</span>
+<span class="nc" id="L101">        dtoPage.setRecords(resultPage.getRecords().stream()</span>
+<span class="nc" id="L102">                .map(this::convertToDTO)</span>
+<span class="nc" id="L103">                .collect(Collectors.toList()));</span>
+        
+<span class="nc" id="L105">        return dtoPage;</span>
+    }
+
+    @Override
+    public ScheduleResultDTO getDetailById(Long id) {
+<span class="nc" id="L110">        CxScheduleResult result = getById(id);</span>
+<span class="nc bnc" id="L111" title="All 2 branches missed.">        if (result == null) {</span>
+<span class="nc" id="L112">            return null;</span>
+        }
+        
+<span class="nc" id="L115">        ScheduleResultDTO dto = convertToDTO(result);</span>
+        
+        // 查询明细
+<span class="nc" id="L118">        List&lt;CxScheduleDetail&gt; details = cxScheduleDetailService.listByMainId(id);</span>
+<span class="nc" id="L119">        dto.setDetails(details.stream().map(this::convertDetailToDTO).collect(Collectors.toList()));</span>
+        
+<span class="nc" id="L121">        return dto;</span>
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean updateProductionStatus(Long id, String productionStatus) {
+<span class="nc" id="L127">        return update(new LambdaUpdateWrapper&lt;CxScheduleResult&gt;()</span>
+<span class="nc" id="L128">                .eq(CxScheduleResult::getId, id)</span>
+<span class="nc" id="L129">                .set(CxScheduleResult::getProductionStatus, productionStatus));</span>
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean releaseSchedule(Long id) {
+<span class="nc" id="L135">        return update(new LambdaUpdateWrapper&lt;CxScheduleResult&gt;()</span>
+<span class="nc" id="L136">                .eq(CxScheduleResult::getId, id)</span>
+<span class="nc" id="L137">                .set(CxScheduleResult::getIsRelease, &quot;1&quot;));</span>
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean batchReleaseSchedule(List&lt;Long&gt; ids) {
+<span class="nc bnc" id="L143" title="All 4 branches missed.">        if (ids == null || ids.isEmpty()) {</span>
+<span class="nc" id="L144">            return false;</span>
+        }
+<span class="nc" id="L146">        return update(new LambdaUpdateWrapper&lt;CxScheduleResult&gt;()</span>
+<span class="nc" id="L147">                .in(CxScheduleResult::getId, ids)</span>
+<span class="nc" id="L148">                .set(CxScheduleResult::getIsRelease, &quot;1&quot;));</span>
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean updateShiftPlanQty(Long id, String shiftCode, BigDecimal planQty) {
+<span class="nc" id="L154">        LambdaUpdateWrapper&lt;CxScheduleResult&gt; wrapper = new LambdaUpdateWrapper&lt;CxScheduleResult&gt;()</span>
+<span class="nc" id="L155">                .eq(CxScheduleResult::getId, id);</span>
+        
+<span class="nc bnc" id="L157" title="All 9 branches missed.">        switch (shiftCode) {</span>
+            case &quot;SHIFT1&quot;:
+<span class="nc" id="L159">                wrapper.set(CxScheduleResult::getClass1PlanQty, planQty);</span>
+<span class="nc" id="L160">                break;</span>
+            case &quot;SHIFT2&quot;:
+<span class="nc" id="L162">                wrapper.set(CxScheduleResult::getClass2PlanQty, planQty);</span>
+<span class="nc" id="L163">                break;</span>
+            case &quot;SHIFT3&quot;:
+<span class="nc" id="L165">                wrapper.set(CxScheduleResult::getClass3PlanQty, planQty);</span>
+<span class="nc" id="L166">                break;</span>
+            case &quot;SHIFT4&quot;:
+<span class="nc" id="L168">                wrapper.set(CxScheduleResult::getClass4PlanQty, planQty);</span>
+<span class="nc" id="L169">                break;</span>
+            case &quot;SHIFT5&quot;:
+<span class="nc" id="L171">                wrapper.set(CxScheduleResult::getClass5PlanQty, planQty);</span>
+<span class="nc" id="L172">                break;</span>
+            case &quot;SHIFT6&quot;:
+<span class="nc" id="L174">                wrapper.set(CxScheduleResult::getClass6PlanQty, planQty);</span>
+<span class="nc" id="L175">                break;</span>
+            case &quot;SHIFT7&quot;:
+<span class="nc" id="L177">                wrapper.set(CxScheduleResult::getClass7PlanQty, planQty);</span>
+<span class="nc" id="L178">                break;</span>
+            case &quot;SHIFT8&quot;:
+<span class="nc" id="L180">                wrapper.set(CxScheduleResult::getClass8PlanQty, planQty);</span>
+<span class="nc" id="L181">                break;</span>
+            default:
+<span class="nc" id="L183">                return false;</span>
+        }
+        
+<span class="nc" id="L186">        return update(wrapper);</span>
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean updateShiftFinishQty(Long id, String shiftCode, BigDecimal finishQty) {
+<span class="nc" id="L192">        LambdaUpdateWrapper&lt;CxScheduleResult&gt; wrapper = new LambdaUpdateWrapper&lt;CxScheduleResult&gt;()</span>
+<span class="nc" id="L193">                .eq(CxScheduleResult::getId, id);</span>
+        
+<span class="nc bnc" id="L195" title="All 9 branches missed.">        switch (shiftCode) {</span>
+            case &quot;SHIFT1&quot;:
+<span class="nc" id="L197">                wrapper.set(CxScheduleResult::getClass1FinishQty, finishQty);</span>
+<span class="nc" id="L198">                break;</span>
+            case &quot;SHIFT2&quot;:
+<span class="nc" id="L200">                wrapper.set(CxScheduleResult::getClass2FinishQty, finishQty);</span>
+<span class="nc" id="L201">                break;</span>
+            case &quot;SHIFT3&quot;:
+<span class="nc" id="L203">                wrapper.set(CxScheduleResult::getClass3FinishQty, finishQty);</span>
+<span class="nc" id="L204">                break;</span>
+            case &quot;SHIFT4&quot;:
+<span class="nc" id="L206">                wrapper.set(CxScheduleResult::getClass4FinishQty, finishQty);</span>
+<span class="nc" id="L207">                break;</span>
+            case &quot;SHIFT5&quot;:
+<span class="nc" id="L209">                wrapper.set(CxScheduleResult::getClass5FinishQty, finishQty);</span>
+<span class="nc" id="L210">                break;</span>
+            case &quot;SHIFT6&quot;:
+<span class="nc" id="L212">                wrapper.set(CxScheduleResult::getClass6FinishQty, finishQty);</span>
+<span class="nc" id="L213">                break;</span>
+            case &quot;SHIFT7&quot;:
+<span class="nc" id="L215">                wrapper.set(CxScheduleResult::getClass7FinishQty, finishQty);</span>
+<span class="nc" id="L216">                break;</span>
+            case &quot;SHIFT8&quot;:
+<span class="nc" id="L218">                wrapper.set(CxScheduleResult::getClass8FinishQty, finishQty);</span>
+<span class="nc" id="L219">                break;</span>
+            default:
+<span class="nc" id="L221">                return false;</span>
+        }
+        
+<span class="nc" id="L224">        return update(wrapper);</span>
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean deleteByScheduleDate(LocalDate scheduleDate) {
+        // 先删除明细
+<span class="nc" id="L231">        List&lt;CxScheduleResult&gt; results = listByScheduleDate(scheduleDate);</span>
+<span class="nc bnc" id="L232" title="All 2 branches missed.">        for (CxScheduleResult result : results) {</span>
+<span class="nc" id="L233">            cxScheduleDetailService.deleteByMainId(result.getId());</span>
+<span class="nc" id="L234">        }</span>
+        
+        // 删除主表
+<span class="nc" id="L237">        return remove(new LambdaQueryWrapper&lt;CxScheduleResult&gt;()</span>
+<span class="nc" id="L238">                .eq(CxScheduleResult::getScheduleDate, scheduleDate.atStartOfDay()));</span>
+    }
+
+    @Override
+    public String generateBatchNo(LocalDate scheduleDate) {
+<span class="nc" id="L243">        String dateStr = scheduleDate.format(DateTimeFormatter.ofPattern(&quot;yyyyMMdd&quot;));</span>
+<span class="nc" id="L244">        String randomStr = UUID.randomUUID().toString().substring(0, 4).toUpperCase();</span>
+<span class="nc" id="L245">        return &quot;CX&quot; + dateStr + randomStr;</span>
+    }
+
+    /**
+     * 转换为DTO
+     */
+    private ScheduleResultDTO convertToDTO(CxScheduleResult entity) {
+<span class="nc" id="L252">        ScheduleResultDTO dto = new ScheduleResultDTO();</span>
+<span class="nc" id="L253">        BeanUtils.copyProperties(entity, dto);</span>
+<span class="nc bnc" id="L254" title="All 2 branches missed.">        if (entity.getScheduleDate() != null) {</span>
+<span class="nc" id="L255">            dto.setScheduleDate(entity.getScheduleDate().toLocalDate());</span>
+        }
+<span class="nc" id="L257">        return dto;</span>
+    }
+
+    /**
+     * 转换明细为DTO
+     */
+    private ScheduleResultDTO.ScheduleDetailDTO convertDetailToDTO(CxScheduleDetail detail) {
+<span class="nc" id="L264">        ScheduleResultDTO.ScheduleDetailDTO dto = new ScheduleResultDTO.ScheduleDetailDTO();</span>
+<span class="nc" id="L265">        BeanUtils.copyProperties(detail, dto);</span>
+<span class="nc" id="L266">        return dto;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

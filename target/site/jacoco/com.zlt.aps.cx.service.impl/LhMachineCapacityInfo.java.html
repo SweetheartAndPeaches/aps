@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>LhMachineCapacityInfo.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">APS Forming Schedule System</a> &gt; <a href="index.source.html" class="el_package">com.zlt.aps.cx.service.impl</a> &gt; <span class="el_source">LhMachineCapacityInfo.java</span></div><h1>LhMachineCapacityInfo.java</h1><pre class="source lang-java linenums">package com.zlt.aps.cx.service.impl;
+
+import lombok.Data;
+
+import java.io.Serializable;
+
+/**
+ * 硫化机台日产能信息
+ * 用于计算成型机台的满算力
+ *
+ * @author APS Team
+ */
+<span class="nc bnc" id="L13" title="All 46 branches missed.">@Data</span>
+public class LhMachineCapacityInfo implements Serializable {
+
+    private static final long serialVersionUID = 1L;
+
+    /**
+     * 硫化机台编码
+     */
+<span class="nc" id="L21">    private String lhMachineCode;</span>
+
+    /**
+     * 物料编码（胎胚编码）
+     */
+<span class="nc" id="L26">    private String materialCode;</span>
+
+    /**
+     * 日硫化产能（条/天）
+     */
+<span class="nc" id="L31">    private Integer dailyCapacity;</span>
+
+    /**
+     * 是否配比塞满（0-未塞满，1-塞满）
+     * 根据最大配比数量判断
+     */
+<span class="nc" id="L37">    private Integer isFullRatio;</span>
+
+    /**
+     * 备注
+     */
+<span class="nc" id="L42">    private String remark;</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

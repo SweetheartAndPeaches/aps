@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>HolidayScheduleService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">APS Forming Schedule System</a> &gt; <a href="index.source.html" class="el_package">com.zlt.aps.cx.service</a> &gt; <span class="el_source">HolidayScheduleService.java</span></div><h1>HolidayScheduleService.java</h1><pre class="source lang-java linenums">package com.zlt.aps.cx.service;
+
+import com.zlt.aps.cx.dto.ScheduleContextDTO;
+import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * 节假日处理服务接口
+ * 
+ * 实现节假日相关的排程逻辑：
+ * - 停产前处理（消耗过剩库存、确定停机时间）
+ * - 开产后处理（成型早硫化1班开产、首班不排关键产品）
+ * - 节假日排程策略调整
+ *
+ * @author APS Team
+ */
+public interface HolidayScheduleService {
+
+    /**
+     * 检查是否为节假日
+     *
+     * @param date 日期
+     * @return 是否为节假日
+     */
+    boolean isHoliday(LocalDate date);
+
+    /**
+     * 检查是否为停产日
+     * 停产日 = 节假日首日
+     *
+     * @param date 日期
+     * @return 是否为停产日
+     */
+    boolean isStopProductionDay(LocalDate date);
+
+    /**
+     * 检查是否为开产日
+     * 开产日 = 节假日后首个工作日
+     *
+     * @param date 日期
+     * @return 是否为开产日
+     */
+    boolean isStartProductionDay(LocalDate date);
+
+    /**
+     * 检查是否为停产前一天
+     *
+     * @param date 日期
+     * @return 是否为停产前一天
+     */
+    boolean isBeforeHoliday(LocalDate date);
+
+    /**
+     * 获取节假日信息
+     *
+     * @param date 日期
+     * @return 节假日信息（名称、天数等）
+     */
+    HolidayInfo getHolidayInfo(LocalDate date);
+
+    /**
+     * 处理停产前一天排程
+     * 
+     * 核心逻辑：
+     * 1. 计算硫化最低需求 = 硫化计划需求 × (1 + 损耗率)
+     * 2. 计算过剩库存 = 当前库存 - 最低需求
+     * 3. 确定成型停机时间 = 硫化停机时间 - 预留消化时间
+     * 4. 计算成型可排产时长和可排产量
+     * 5. 检查胎胚停放时间约束
+     *
+     * @param context 排程上下文
+     * @return 处理结果
+     */
+    HolidayScheduleResult handleBeforeHoliday(ScheduleContextDTO context);
+
+    /**
+     * 处理开产日排程
+     * 
+     * 核心逻辑：
+     * 1. 成型比硫化早1个班开始生产
+     * 2. 成型开产班次（第一个班次）不排关键产品
+     * 3. 关键产品从配置表判断
+     *
+     * @param context 排程上下文
+     * @return 处理结果
+     */
+    HolidayScheduleResult handleOpeningDay(ScheduleContextDTO context);
+
+    /**
+     * 计算硫化最低需求
+     * 最低需求 = 硫化计划需求 × (1 + 损耗率)
+     *
+     * @param holidayStartDate 节假日开始日期
+     * @param holidayDays      节假日天数
+     * @return 各物料的最低需求
+     */
+    Map&lt;String, Integer&gt; calculateMinDemandForHoliday(LocalDate holidayStartDate, int holidayDays);
+
+    /**
+     * 计算过剩库存
+     * 过剩量 = 当前库存 - 最低需求
+     *
+     * @param minDemand 各物料最低需求
+     * @param currentStock 各物料当前库存
+     * @return 各物料的过剩库存量
+     */
+    Map&lt;String, Integer&gt; calculateExcessStock(Map&lt;String, Integer&gt; minDemand, Map&lt;String, Integer&gt; currentStock);
+
+    /**
+     * 确定成型停机时间
+     * 成型停机时间 = 硫化停机时间 - 预留消化时间
+     *
+     * @param vulcanizingStopTime 硫化停机时间
+     * @param reservedDigestHours 预留消化时间（小时）
+     * @return 成型停机时间
+     */
+    LocalDateTime determineFormingStopTime(LocalDateTime vulcanizingStopTime, Integer reservedDigestHours);
+
+    /**
+     * 计算成型可排产时长
+     *
+     * @param shiftStartTime    班次开始时间
+     * @param formingStopTime   成型停机时间
+     * @return 可排产时长（小时）
+     */
+    Integer calculateFormingAvailableHours(LocalDateTime shiftStartTime, LocalDateTime formingStopTime);
+
+    /**
+     * 检查胎胚停放时间约束
+     * 胎胚已停放时间 + 预留消化时间 &gt; 胎胚最长停放时间 → 需强制消耗
+     *
+     * @param scheduleDate      排程日期
+     * @param formingStopTime   成型停机时间
+     * @return 需要强制消耗的胎胚列表
+     */
+    List&lt;EmbryoConsumptionSuggestion&gt; checkEmbryoParkingTime(LocalDate scheduleDate, LocalDateTime formingStopTime);
+
+    /**
+     * 调整节假日排程策略
+     * 根据节假日类型调整排程策略
+     *
+     * @param scheduleDate 排程日期
+     * @param originalResult 原始排程结果
+     * @param context 排程上下文
+     * @return 调整后的排程结果
+     */
+    List&lt;CxScheduleResult&gt; adjustHolidaySchedule(LocalDate scheduleDate, List&lt;CxScheduleResult&gt; originalResult, ScheduleContextDTO context);
+
+    /**
+     * 节假日信息
+     */
+<span class="nc bnc" id="L157" title="All 48 branches missed.">    @lombok.Data</span>
+<span class="nc" id="L158">    @lombok.Builder</span>
+<span class="nc" id="L159">    @lombok.NoArgsConstructor</span>
+<span class="nc" id="L160">    @lombok.AllArgsConstructor</span>
+    class HolidayInfo {
+<span class="nc" id="L162">        private boolean isHoliday;</span>
+<span class="nc" id="L163">        private String holidayName;</span>
+<span class="nc" id="L164">        private LocalDate startDate;</span>
+<span class="nc" id="L165">        private LocalDate endDate;</span>
+<span class="nc" id="L166">        private int totalDays;</span>
+<span class="nc" id="L167">        private boolean isStopProductionDay;</span>
+<span class="nc" id="L168">        private boolean isStartProductionDay;</span>
+<span class="nc" id="L169">        private boolean isBeforeHoliday;</span>
+    }
+
+    /**
+     * 节假日排程结果
+     */
+<span class="nc bnc" id="L175" title="All 66 branches missed.">    @lombok.Data</span>
+    class HolidayScheduleResult {
+<span class="nc" id="L177">        private boolean adjusted;</span>
+<span class="nc" id="L178">        private String message;</span>
+<span class="nc" id="L179">        private List&lt;String&gt; adjustments;</span>
+<span class="nc" id="L180">        private Map&lt;String, Integer&gt; excessStockToConsume;</span>
+<span class="nc" id="L181">        private LocalDateTime formingStopTime;</span>
+<span class="nc" id="L182">        private Integer formingAvailableHours;</span>
+<span class="nc" id="L183">        private String formingStartShift;</span>
+<span class="nc" id="L184">        private String vulcanizingStartShift;</span>
+    }
+
+    /**
+     * 胎胚消耗建议
+     */
+<span class="nc bnc" id="L190" title="All 54 branches missed.">    @lombok.Data</span>
+    class EmbryoConsumptionSuggestion {
+<span class="nc" id="L192">        private String embryoCode;</span>
+<span class="nc" id="L193">        private String embryoName;</span>
+<span class="nc" id="L194">        private Integer currentStock;</span>
+<span class="nc" id="L195">        private BigDecimal parkingHours;</span>
+<span class="nc" id="L196">        private Integer suggestedConsumption;</span>
+<span class="nc" id="L197">        private String reason;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

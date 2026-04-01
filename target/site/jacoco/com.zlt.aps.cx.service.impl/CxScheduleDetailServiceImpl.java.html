@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CxScheduleDetailServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">APS Forming Schedule System</a> &gt; <a href="index.source.html" class="el_package">com.zlt.aps.cx.service.impl</a> &gt; <span class="el_source">CxScheduleDetailServiceImpl.java</span></div><h1>CxScheduleDetailServiceImpl.java</h1><pre class="source lang-java linenums">package com.zlt.aps.cx.service.impl;
+
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.zlt.aps.cx.entity.schedule.CxScheduleDetail;
+import com.zlt.aps.cx.mapper.CxScheduleDetailMapper;
+import com.zlt.aps.cx.service.CxScheduleDetailService;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDate;
+import java.util.List;
+
+/**
+ * 排程明细服务实现类
+ *
+ * @author APS Team
+ */
+<span class="fc" id="L21">@Slf4j</span>
+@Service
+<span class="fc" id="L23">public class CxScheduleDetailServiceImpl extends ServiceImpl&lt;CxScheduleDetailMapper, CxScheduleDetail&gt;</span>
+        implements CxScheduleDetailService {
+
+    @Override
+    public List&lt;CxScheduleDetail&gt; listByMainId(Long mainId) {
+<span class="nc" id="L28">        return list(new LambdaQueryWrapper&lt;CxScheduleDetail&gt;()</span>
+<span class="nc" id="L29">                .eq(CxScheduleDetail::getMainId, mainId)</span>
+<span class="nc" id="L30">                .orderByAsc(CxScheduleDetail::getSequence));</span>
+    }
+
+    @Override
+    public List&lt;CxScheduleDetail&gt; listByMachineAndDate(String cxMachineCode, LocalDate scheduleDate) {
+<span class="nc" id="L35">        return list(new LambdaQueryWrapper&lt;CxScheduleDetail&gt;()</span>
+<span class="nc" id="L36">                .eq(CxScheduleDetail::getCxMachineCode, cxMachineCode)</span>
+<span class="nc" id="L37">                .eq(CxScheduleDetail::getScheduleDate, scheduleDate)</span>
+<span class="nc" id="L38">                .orderByAsc(CxScheduleDetail::getSequence));</span>
+    }
+
+    @Override
+    public List&lt;CxScheduleDetail&gt; listByShift(Long mainId, String shiftCode) {
+<span class="nc" id="L43">        return list(new LambdaQueryWrapper&lt;CxScheduleDetail&gt;()</span>
+<span class="nc" id="L44">                .eq(CxScheduleDetail::getMainId, mainId)</span>
+<span class="nc" id="L45">                .eq(CxScheduleDetail::getShiftCode, shiftCode)</span>
+<span class="nc" id="L46">                .orderByAsc(CxScheduleDetail::getSequenceInGroup));</span>
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean updateCompletedQuantity(Long detailId, Integer completedQuantity) {
+<span class="nc" id="L52">        return update(new LambdaUpdateWrapper&lt;CxScheduleDetail&gt;()</span>
+<span class="nc" id="L53">                .eq(CxScheduleDetail::getId, detailId)</span>
+<span class="nc" id="L54">                .set(CxScheduleDetail::getTripActualQty, completedQuantity));</span>
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean updateTripStatus(Long detailId, String tripStatus) {
+        // 这里可以根据业务需要扩展状态字段
+        // 当前实体类中通过 tripActualQty 与 tripCapacity 的比较来判断状态
+<span class="nc" id="L62">        return true;</span>
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean batchSave(List&lt;CxScheduleDetail&gt; details) {
+<span class="nc bnc" id="L68" title="All 4 branches missed.">        if (details == null || details.isEmpty()) {</span>
+<span class="nc" id="L69">            return false;</span>
+        }
+<span class="nc" id="L71">        return saveBatch(details);</span>
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean deleteByMainId(Long mainId) {
+<span class="nc" id="L77">        return remove(new LambdaQueryWrapper&lt;CxScheduleDetail&gt;()</span>
+<span class="nc" id="L78">                .eq(CxScheduleDetail::getMainId, mainId));</span>
+    }
+
+    @Override
+    public Integer getNextTripNo(Long mainId, String shiftCode) {
+<span class="nc" id="L83">        List&lt;CxScheduleDetail&gt; details = listByShift(mainId, shiftCode);</span>
+<span class="nc bnc" id="L84" title="All 2 branches missed.">        if (details.isEmpty()) {</span>
+<span class="nc" id="L85">            return 1;</span>
+        }
+<span class="nc" id="L87">        return details.stream()</span>
+<span class="nc" id="L88">                .mapToInt(CxScheduleDetail::getTripNo)</span>
+<span class="nc" id="L89">                .max()</span>
+<span class="nc" id="L90">                .orElse(0) + 1;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

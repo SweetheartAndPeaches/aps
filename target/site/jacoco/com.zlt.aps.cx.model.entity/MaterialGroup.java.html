@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MaterialGroup.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">APS Forming Schedule System</a> &gt; <a href="index.source.html" class="el_package">com.zlt.aps.cx.model.entity</a> &gt; <span class="el_source">MaterialGroup.java</span></div><h1>MaterialGroup.java</h1><pre class="source lang-java linenums">package com.zlt.aps.cx.model.entity;
+
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * 物料分组实体
+ * 用于将相同产品结构的胎胚物料归组，按组分配和计算
+ * 
+ * @author APS Team
+ */
+public class MaterialGroup implements Serializable {
+    private static final long serialVersionUID = 1L;
+
+    /** 分组ID */
+    private String groupId;
+
+    /** 产品结构 */
+    private String productStructure;
+
+    /** 分组包含的物料列表 */
+    private List&lt;String&gt; materialCodes;
+
+    /** 分组总计划量 */
+    private int totalPlanQuantity;
+
+    /** 分组总库存 */
+    private int totalStock;
+
+    /** 分组总硫化机台数 */
+    private int totalVulcanizeMachines;
+
+    /** 是否主销产品分组 */
+    private boolean isMainProduct;
+
+    /** 分组优先级 */
+    private int priority;
+
+    /** 分组排序 */
+    private int sortOrder;
+
+<span class="nc" id="L43">    public MaterialGroup() {</span>
+<span class="nc" id="L44">        this.materialCodes = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L45">    }</span>
+
+<span class="nc" id="L47">    public MaterialGroup(String productStructure) {</span>
+<span class="nc" id="L48">        this.groupId = &quot;MG_&quot; + productStructure.replace(&quot;/&quot;, &quot;_&quot;);</span>
+<span class="nc" id="L49">        this.productStructure = productStructure;</span>
+<span class="nc" id="L50">        this.materialCodes = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L51">    }</span>
+
+    /**
+     * 添加物料到分组
+     */
+    public void addMaterial(String materialCode, int planQuantity, int stock, int vulcanizeMachines, boolean isMainProduct) {
+<span class="nc bnc" id="L57" title="All 2 branches missed.">        if (!this.materialCodes.contains(materialCode)) {</span>
+<span class="nc" id="L58">            this.materialCodes.add(materialCode);</span>
+<span class="nc" id="L59">            this.totalPlanQuantity += planQuantity;</span>
+<span class="nc" id="L60">            this.totalStock += stock;</span>
+<span class="nc" id="L61">            this.totalVulcanizeMachines += vulcanizeMachines;</span>
+<span class="nc bnc" id="L62" title="All 4 branches missed.">            this.isMainProduct = this.isMainProduct || isMainProduct;</span>
+        }
+<span class="nc" id="L64">    }</span>
+
+    /**
+     * 计算分组库存可供硫化时长（小时）
+     * 公式：库存可供硫化时长 = 总库存 / (总硫化机台数 × 4车/小时)
+     */
+    public double calculateStockHours() {
+<span class="nc bnc" id="L71" title="All 2 branches missed.">        if (totalVulcanizeMachines == 0) {</span>
+<span class="nc" id="L72">            return 0.0;</span>
+        }
+        // 假设每台硫化机每小时可硫化4车（48条）
+<span class="nc" id="L75">        double vulcanizeCapacityPerHour = totalVulcanizeMachines * 48.0;</span>
+<span class="nc" id="L76">        return totalStock / vulcanizeCapacityPerHour;</span>
+    }
+
+    // Getters and Setters
+    public String getGroupId() {
+<span class="nc" id="L81">        return groupId;</span>
+    }
+
+    public void setGroupId(String groupId) {
+<span class="nc" id="L85">        this.groupId = groupId;</span>
+<span class="nc" id="L86">    }</span>
+
+    public String getProductStructure() {
+<span class="nc" id="L89">        return productStructure;</span>
+    }
+
+    public void setProductStructure(String productStructure) {
+<span class="nc" id="L93">        this.productStructure = productStructure;</span>
+<span class="nc" id="L94">    }</span>
+
+    public List&lt;String&gt; getMaterialCodes() {
+<span class="nc" id="L97">        return materialCodes;</span>
+    }
+
+    public void setMaterialCodes(List&lt;String&gt; materialCodes) {
+<span class="nc" id="L101">        this.materialCodes = materialCodes;</span>
+<span class="nc" id="L102">    }</span>
+
+    public int getTotalPlanQuantity() {
+<span class="nc" id="L105">        return totalPlanQuantity;</span>
+    }
+
+    public void setTotalPlanQuantity(int totalPlanQuantity) {
+<span class="nc" id="L109">        this.totalPlanQuantity = totalPlanQuantity;</span>
+<span class="nc" id="L110">    }</span>
+
+    public int getTotalStock() {
+<span class="nc" id="L113">        return totalStock;</span>
+    }
+
+    public void setTotalStock(int totalStock) {
+<span class="nc" id="L117">        this.totalStock = totalStock;</span>
+<span class="nc" id="L118">    }</span>
+
+    public int getTotalVulcanizeMachines() {
+<span class="nc" id="L121">        return totalVulcanizeMachines;</span>
+    }
+
+    public void setTotalVulcanizeMachines(int totalVulcanizeMachines) {
+<span class="nc" id="L125">        this.totalVulcanizeMachines = totalVulcanizeMachines;</span>
+<span class="nc" id="L126">    }</span>
+
+    public boolean isMainProduct() {
+<span class="nc" id="L129">        return isMainProduct;</span>
+    }
+
+    public void setMainProduct(boolean mainProduct) {
+<span class="nc" id="L133">        isMainProduct = mainProduct;</span>
+<span class="nc" id="L134">    }</span>
+
+    public int getPriority() {
+<span class="nc" id="L137">        return priority;</span>
+    }
+
+    public void setPriority(int priority) {
+<span class="nc" id="L141">        this.priority = priority;</span>
+<span class="nc" id="L142">    }</span>
+
+    public int getSortOrder() {
+<span class="nc" id="L145">        return sortOrder;</span>
+    }
+
+    public void setSortOrder(int sortOrder) {
+<span class="nc" id="L149">        this.sortOrder = sortOrder;</span>
+<span class="nc" id="L150">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

@@ -1,0 +1,803 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DatabaseInitializer.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">APS Forming Schedule System</a> &gt; <a href="index.source.html" class="el_package">com.zlt.aps.cx.config</a> &gt; <span class="el_source">DatabaseInitializer.java</span></div><h1>DatabaseInitializer.java</h1><pre class="source lang-java linenums">package com.zlt.aps.cx.config;
+
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.context.annotation.Profile;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Component;
+
+/**
+ * 数据库初始化器 - MySQL版本
+ * 在应用启动时创建表和初始化数据
+ * 
+ * 按照技术文档V5.0.0定义的完整表结构
+ * 
+ * 注意：此初始化器仅在非测试环境执行
+ *
+ * @author APS Team
+ */
+@Component
+@Profile(&quot;!test&quot;)
+public class DatabaseInitializer implements CommandLineRunner {
+
+    private final JdbcTemplate jdbcTemplate;
+
+<span class="nc" id="L24">    public DatabaseInitializer(JdbcTemplate jdbcTemplate) {</span>
+<span class="nc" id="L25">        this.jdbcTemplate = jdbcTemplate;</span>
+<span class="nc" id="L26">    }</span>
+
+    @Override
+    public void run(String... args) throws Exception {
+<span class="nc" id="L30">        System.out.println(&quot;========================================&quot;);</span>
+<span class="nc" id="L31">        System.out.println(&quot;  开始初始化MySQL数据库...&quot;);</span>
+<span class="nc" id="L32">        System.out.println(&quot;========================================&quot;);</span>
+
+        // ==================== 一、基础配置表 ====================
+<span class="nc" id="L35">        createShiftConfigTable();</span>
+<span class="nc" id="L36">        createAlertConfigTable();</span>
+
+        // ==================== 二、核心业务表 ====================
+<span class="nc" id="L39">        createMachineTable();</span>
+<span class="nc" id="L40">        createMaterialTable();</span>
+<span class="nc" id="L41">        createStockTable();</span>
+<span class="nc" id="L42">        createScheduleMainTable();</span>
+<span class="nc" id="L43">        createScheduleDetailTable();</span>
+
+        // ==================== 三、计划与任务表 ====================
+<span class="nc" id="L46">        createLhScheduleResultTable();</span>
+<span class="nc" id="L47">        createDailyEmbryoTaskTable();</span>
+
+        // ==================== 三之一、月度计划表 ====================
+<span class="nc" id="L50">        createFactoryMonthPlanProductionFinalResultTable();</span>
+
+        // ==================== 四、计算辅助表 ====================
+<span class="nc" id="L53">        createTrialAllocationLogTable();</span>
+<span class="nc" id="L54">        createScheduleIntermediateTable();</span>
+<span class="nc" id="L55">        createShiftBalanceAdjustTable();</span>
+<span class="nc" id="L56">        createConstraintCheckRecordTable();</span>
+
+        // ==================== 五、特殊场景表 ====================
+<span class="nc" id="L59">        createPrecisionPlanTable();</span>
+<span class="nc" id="L60">        createTrialPlanTable();</span>
+<span class="nc" id="L61">        createMachineStatusLogTable();</span>
+<span class="nc" id="L62">        createStructureSwitchTable();</span>
+
+        // ==================== 六、操作与日志表 ====================
+<span class="nc" id="L65">        createDispatcherLogTable();</span>
+<span class="nc" id="L66">        createCompletionReportTable();</span>
+<span class="nc" id="L67">        createAlertRecordTable();</span>
+
+        // ==================== 初始化基础数据 ====================
+<span class="nc" id="L70">        initShiftConfigData();</span>
+<span class="nc" id="L71">        initAlertConfigData();</span>
+<span class="nc" id="L72">        initMachineData();</span>
+<span class="nc" id="L73">        initMaterialData();</span>
+<span class="nc" id="L74">        initStockData();</span>
+<span class="nc" id="L75">        initLhScheduleResultData();</span>
+
+<span class="nc" id="L77">        System.out.println(&quot;========================================&quot;);</span>
+<span class="nc" id="L78">        System.out.println(&quot;  MySQL数据库初始化完成!&quot;);</span>
+<span class="nc" id="L79">        System.out.println(&quot;========================================&quot;);</span>
+<span class="nc" id="L80">        System.out.println(&quot;  APS成型排程系统启动成功!&quot;);</span>
+<span class="nc" id="L81">        System.out.println(&quot;  Swagger文档地址: http://localhost:5000/api/swagger-ui/index.html&quot;);</span>
+<span class="nc" id="L82">        System.out.println(&quot;========================================&quot;);</span>
+<span class="nc" id="L83">    }</span>
+
+    // ==================== 一、基础配置表 ====================
+
+    /**
+     * 创建班次配置表
+     */
+    private void createShiftConfigTable() {
+<span class="nc" id="L91">        jdbcTemplate.execute(&quot;DROP TABLE IF EXISTS t_cx_shift_config&quot;);</span>
+<span class="nc" id="L92">        jdbcTemplate.execute(&quot;CREATE TABLE t_cx_shift_config (&quot; +</span>
+                &quot;id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', &quot; +
+                &quot;shift_code VARCHAR(20) NOT NULL UNIQUE COMMENT '班次编码', &quot; +
+                &quot;shift_name VARCHAR(50) NOT NULL COMMENT '班次名称', &quot; +
+                &quot;start_time TIME NOT NULL COMMENT '开始时间', &quot; +
+                &quot;end_time TIME NOT NULL COMMENT '结束时间', &quot; +
+                &quot;sort_order INT DEFAULT 0 COMMENT '排序', &quot; +
+                &quot;is_active SMALLINT DEFAULT 1 COMMENT '是否启用', &quot; +
+                &quot;create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'&quot; +
+                &quot;) COMMENT='班次配置表'&quot;);
+<span class="nc" id="L102">    }</span>
+
+    /**
+     * 创建预警配置表
+     */
+    private void createAlertConfigTable() {
+<span class="nc" id="L108">        jdbcTemplate.execute(&quot;DROP TABLE IF EXISTS t_cx_alert_config&quot;);</span>
+<span class="nc" id="L109">        jdbcTemplate.execute(&quot;CREATE TABLE t_cx_alert_config (&quot; +</span>
+                &quot;id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', &quot; +
+                &quot;config_code VARCHAR(50) NOT NULL UNIQUE COMMENT '配置编码', &quot; +
+                &quot;config_name VARCHAR(100) NOT NULL COMMENT '配置名称', &quot; +
+                &quot;config_value VARCHAR(500) NOT NULL COMMENT '配置值', &quot; +
+                &quot;config_type VARCHAR(20) DEFAULT 'NUMBER' COMMENT '配置类型', &quot; +
+                &quot;config_unit VARCHAR(20) COMMENT '配置单位', &quot; +
+                &quot;description VARCHAR(500) COMMENT '配置说明', &quot; +
+                &quot;is_active SMALLINT DEFAULT 1 COMMENT '是否启用', &quot; +
+                &quot;effective_date DATE COMMENT '生效日期', &quot; +
+                &quot;create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间', &quot; +
+                &quot;update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间', &quot; +
+                &quot;create_by VARCHAR(50) COMMENT '创建人', &quot; +
+                &quot;update_by VARCHAR(50) COMMENT '更新人'&quot; +
+                &quot;) COMMENT='预警配置表'&quot;);
+<span class="nc" id="L124">    }</span>
+
+    // ==================== 二、核心业务表 ====================
+
+    /**
+     * 创建成型机台表
+     */
+    private void createMachineTable() {
+<span class="nc" id="L132">        jdbcTemplate.execute(&quot;DROP TABLE IF EXISTS t_cx_machine&quot;);</span>
+<span class="nc" id="L133">        jdbcTemplate.execute(&quot;CREATE TABLE t_cx_machine (&quot; +</span>
+                &quot;id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', &quot; +
+                &quot;machine_code VARCHAR(50) NOT NULL UNIQUE COMMENT '机台编号', &quot; +
+                &quot;machine_name VARCHAR(100) COMMENT '机台名称', &quot; +
+                &quot;machine_type VARCHAR(50) COMMENT '机台类型', &quot; +
+                &quot;wrapping_type VARCHAR(50) COMMENT '反包方式', &quot; +
+                &quot;has_zero_degree_feeder SMALLINT DEFAULT 0 COMMENT '是否有零度供料架', &quot; +
+                &quot;structure VARCHAR(50) COMMENT '在产结构', &quot; +
+                &quot;max_capacity_per_hour DECIMAL(10,2) COMMENT '每小时最大产能', &quot; +
+                &quot;max_daily_capacity INT COMMENT '设备最大日产能', &quot; +
+                &quot;max_curing_machines INT COMMENT '对应硫化机上限', &quot; +
+                &quot;fixed_structure1 VARCHAR(100) COMMENT '固定规格1', &quot; +
+                &quot;fixed_structure2 VARCHAR(100) COMMENT '固定规格2', &quot; +
+                &quot;fixed_structure3 VARCHAR(100) COMMENT '固定规格3', &quot; +
+                &quot;restricted_structures TEXT COMMENT '不可作业结构', &quot; +
+                &quot;production_restriction VARCHAR(500) COMMENT '排产限制说明', &quot; +
+                &quot;line_number INT COMMENT '产线编号', &quot; +
+                &quot;status VARCHAR(20) DEFAULT 'RUNNING' COMMENT '状态', &quot; +
+                &quot;is_active SMALLINT DEFAULT 1 COMMENT '是否启用', &quot; +
+                &quot;create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间', &quot; +
+                &quot;update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'&quot; +
+                &quot;) COMMENT='成型机台表'&quot;);
+<span class="nc" id="L155">    }</span>
+
+    /**
+     * 创建物料主数据表
+     */
+    private void createMaterialTable() {
+<span class="nc" id="L161">        jdbcTemplate.execute(&quot;DROP TABLE IF EXISTS t_cx_material&quot;);</span>
+<span class="nc" id="L162">        jdbcTemplate.execute(&quot;CREATE TABLE t_cx_material (&quot; +</span>
+                &quot;id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', &quot; +
+                &quot;material_code VARCHAR(50) NOT NULL UNIQUE COMMENT '胎胚物料编码', &quot; +
+                &quot;material_name VARCHAR(200) COMMENT '物料名称', &quot; +
+                &quot;specification VARCHAR(100) COMMENT '规格型号', &quot; +
+                &quot;product_structure VARCHAR(100) COMMENT '产品结构', &quot; +
+                &quot;main_pattern VARCHAR(100) COMMENT '主花纹', &quot; +
+                &quot;pattern VARCHAR(100) COMMENT '花纹', &quot; +
+                &quot;category VARCHAR(50) COMMENT '物料分类', &quot; +
+                &quot;unit VARCHAR(20) DEFAULT '条' COMMENT '单位', &quot; +
+                &quot;vulcanize_time_minutes DECIMAL(10,2) COMMENT '硫化时间(分钟)', &quot; +
+                &quot;is_main_product SMALLINT DEFAULT 0 COMMENT '是否主销产品', &quot; +
+                &quot;is_active SMALLINT DEFAULT 1 COMMENT '是否启用', &quot; +
+                &quot;create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'&quot; +
+                &quot;) COMMENT='物料主数据表'&quot;);
+<span class="nc" id="L177">    }</span>
+
+    /**
+     * 创建胎胚库存表
+     */
+    private void createStockTable() {
+<span class="nc" id="L183">        jdbcTemplate.execute(&quot;DROP TABLE IF EXISTS t_cx_stock&quot;);</span>
+<span class="nc" id="L184">        jdbcTemplate.execute(&quot;CREATE TABLE t_cx_stock (&quot; +</span>
+                &quot;id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', &quot; +
+                &quot;material_code VARCHAR(50) NOT NULL COMMENT '胎胚物料编码', &quot; +
+                &quot;current_stock INT NOT NULL DEFAULT 0 COMMENT '实时库存数量', &quot; +
+                &quot;planned_in_qty INT DEFAULT 0 COMMENT '计划入库量', &quot; +
+                &quot;planned_out_qty INT DEFAULT 0 COMMENT '计划出库量', &quot; +
+                &quot;available_stock INT DEFAULT 0 COMMENT '可用库存', &quot; +
+                &quot;vulcanize_machine_count INT DEFAULT 0 COMMENT '可用硫化机台数', &quot; +
+                &quot;vulcanize_mold_count INT DEFAULT 0 COMMENT '总模数', &quot; +
+                &quot;stock_hours DECIMAL(10,2) COMMENT '库存可供硫化时长(小时)', &quot; +
+                &quot;stock_hours_formula VARCHAR(500) COMMENT '计算公式记录', &quot; +
+                &quot;shift_end_available_hours DECIMAL(10,2) COMMENT '交班剩余可供硫化时长', &quot; +
+                &quot;alert_status VARCHAR(20) DEFAULT 'NORMAL' COMMENT '预警状态', &quot; +
+                &quot;alert_time TIMESTAMP COMMENT '预警触发时间', &quot; +
+                &quot;is_ending_sku SMALLINT DEFAULT 0 COMMENT '是否收尾SKU', &quot; +
+                &quot;ending_date DATE COMMENT '预计收尾日期', &quot; +
+                &quot;calc_time TIMESTAMP COMMENT '计算时间', &quot; +
+                &quot;create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间', &quot; +
+                &quot;update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'&quot; +
+                &quot;) COMMENT='胎胚库存表'&quot;);
+<span class="nc" id="L204">    }</span>
+
+    /**
+     * 创建排程主表
+     */
+    private void createScheduleMainTable() {
+<span class="nc" id="L210">        jdbcTemplate.execute(&quot;DROP TABLE IF EXISTS t_cx_schedule_main&quot;);</span>
+<span class="nc" id="L211">        jdbcTemplate.execute(&quot;CREATE TABLE t_cx_schedule_main (&quot; +</span>
+                &quot;id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', &quot; +
+                &quot;schedule_code VARCHAR(50) NOT NULL UNIQUE COMMENT '排程单号', &quot; +
+                &quot;schedule_date DATE NOT NULL COMMENT '计划日期', &quot; +
+                &quot;schedule_type VARCHAR(20) DEFAULT 'NORMAL' COMMENT '排程类型', &quot; +
+                &quot;status VARCHAR(20) DEFAULT 'DRAFT' COMMENT '状态', &quot; +
+                &quot;total_machines INT DEFAULT 0 COMMENT '参与排程机台数', &quot; +
+                &quot;total_quantity INT DEFAULT 0 COMMENT '总计划量', &quot; +
+                &quot;total_vehicles INT DEFAULT 0 COMMENT '总车次数', &quot; +
+                &quot;version INT DEFAULT 1 COMMENT '版本号', &quot; +
+                &quot;create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间', &quot; +
+                &quot;update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间', &quot; +
+                &quot;create_by VARCHAR(50) COMMENT '创建人', &quot; +
+                &quot;update_by VARCHAR(50) COMMENT '更新人', &quot; +
+                &quot;confirm_time TIMESTAMP COMMENT '确认时间', &quot; +
+                &quot;confirm_by VARCHAR(50) COMMENT '确认人', &quot; +
+                &quot;remark VARCHAR(500) COMMENT '备注'&quot; +
+                &quot;) COMMENT='排程主表'&quot;);
+<span class="nc" id="L229">    }</span>
+
+    /**
+     * 创建排程明细表
+     */
+    private void createScheduleDetailTable() {
+<span class="nc" id="L235">        jdbcTemplate.execute(&quot;DROP TABLE IF EXISTS t_cx_schedule_detail&quot;);</span>
+<span class="nc" id="L236">        jdbcTemplate.execute(&quot;CREATE TABLE t_cx_schedule_detail (&quot; +</span>
+                &quot;id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', &quot; +
+                &quot;main_id BIGINT NOT NULL COMMENT '所属主表ID', &quot; +
+                &quot;schedule_date DATE NOT NULL COMMENT '计划日期', &quot; +
+                &quot;shift_code VARCHAR(20) NOT NULL COMMENT '班次编码', &quot; +
+                &quot;machine_code VARCHAR(50) NOT NULL COMMENT '成型机台编号', &quot; +
+                &quot;material_code VARCHAR(50) NOT NULL COMMENT '胎胚物料编码', &quot; +
+                &quot;plan_quantity INT NOT NULL COMMENT '计划量', &quot; +
+                &quot;completed_quantity INT DEFAULT 0 COMMENT '完成量', &quot; +
+                &quot;material_group_id VARCHAR(100) COMMENT '物料分组ID', &quot; +
+                &quot;trip_no INT COMMENT '车次号', &quot; +
+                &quot;trip_sequence INT COMMENT '车内序号', &quot; +
+                &quot;trip_group_id VARCHAR(100) COMMENT '车次分组ID', &quot; +
+                &quot;trip_capacity INT DEFAULT 12 COMMENT '本车次容量', &quot; +
+                &quot;trip_actual_qty INT DEFAULT 0 COMMENT '本车次实际完成数量', &quot; +
+                &quot;trip_status VARCHAR(20) DEFAULT 'PENDING' COMMENT '车次状态', &quot; +
+                &quot;trip_create_time TIMESTAMP COMMENT '车次创建时间', &quot; +
+                &quot;trip_complete_time TIMESTAMP COMMENT '车次齐套时间', &quot; +
+                &quot;sequence INT COMMENT '顺位', &quot; +
+                &quot;sequence_in_group INT COMMENT '组内顺位', &quot; +
+                &quot;stock_hours_at_calc DECIMAL(10,2) COMMENT '计算顺位时的库存可供硫化时长', &quot; +
+                &quot;production_mode VARCHAR(20) COMMENT '生产方式', &quot; +
+                &quot;is_ending SMALLINT DEFAULT 0 COMMENT '是否收尾', &quot; +
+                &quot;is_starting SMALLINT DEFAULT 0 COMMENT '是否投产', &quot; +
+                &quot;is_trial SMALLINT DEFAULT 0 COMMENT '是否试制', &quot; +
+                &quot;is_precision SMALLINT DEFAULT 0 COMMENT '是否精度计划', &quot; +
+                &quot;is_continue SMALLINT DEFAULT 0 COMMENT '是否续作', &quot; +
+                &quot;status VARCHAR(20) DEFAULT 'PLANNED' COMMENT '状态', &quot; +
+                &quot;plan_start_time TIMESTAMP COMMENT '计划开始时间', &quot; +
+                &quot;plan_end_time TIMESTAMP COMMENT '计划结束时间', &quot; +
+                &quot;actual_start_time TIMESTAMP COMMENT '实际开始时间', &quot; +
+                &quot;actual_end_time TIMESTAMP COMMENT '实际结束时间', &quot; +
+                &quot;priority INT DEFAULT 0 COMMENT '优先级', &quot; +
+                &quot;remark VARCHAR(500) COMMENT '备注'&quot; +
+                &quot;) COMMENT='排程明细表'&quot;);
+<span class="nc" id="L271">    }</span>
+
+    // ==================== 三、计划与任务表 ====================
+
+    /**
+     * 创建硫化计划表
+     */
+    private void createLhScheduleResultTable() {
+<span class="nc" id="L279">        jdbcTemplate.execute(&quot;DROP TABLE IF EXISTS T_LH_SCHEDULE_RESULT&quot;);</span>
+<span class="nc" id="L280">        jdbcTemplate.execute(&quot;CREATE TABLE T_LH_SCHEDULE_RESULT (&quot; +</span>
+                &quot;ID BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', &quot; +
+                &quot;BATCH_NO VARCHAR(50) COMMENT '批次号', &quot; +
+                &quot;ORDER_NO VARCHAR(50) COMMENT '工单号', &quot; +
+                &quot;LH_MACHINE_CODE VARCHAR(50) COMMENT '硫化机台编号', &quot; +
+                &quot;LEFT_RIGHT_MOULD VARCHAR(10) COMMENT '左右模', &quot; +
+                &quot;LH_MACHINE_NAME VARCHAR(100) COMMENT '硫化机台名称', &quot; +
+                &quot;MATERIAL_CODE VARCHAR(50) COMMENT '物料编号', &quot; +
+                &quot;SPEC_CODE VARCHAR(50) COMMENT '规格代码', &quot; +
+                &quot;EMBRYO_CODE VARCHAR(50) COMMENT '胎胚代码', &quot; +
+                &quot;STRUCTURE_NAME VARCHAR(100) COMMENT '产品结构', &quot; +
+                &quot;MATERIAL_DESC VARCHAR(200) COMMENT '物料描述', &quot; +
+                &quot;MAIN_MATERIAL_DESC VARCHAR(200) COMMENT '主物料', &quot; +
+                &quot;EMBRYO_STOCK INT COMMENT '胎胚库存', &quot; +
+                &quot;SPEC_DESC VARCHAR(200) COMMENT '规格描述', &quot; +
+                &quot;LH_TIME INT COMMENT '硫化时长(秒)', &quot; +
+                &quot;DAILY_PLAN_QTY INT COMMENT '日计划数量', &quot; +
+                &quot;SCHEDULE_DATE DATE COMMENT '排程日期', &quot; +
+                &quot;SPEC_END_TIME DATETIME COMMENT '规格结束时间', &quot; +
+                &quot;PRODUCTION_STATUS VARCHAR(20) DEFAULT 'PENDING' COMMENT '生产状态', &quot; +
+                &quot;CLASS1_PLAN_QTY INT COMMENT '1班计划量', &quot; +
+                &quot;CLASS1_START_TIME DATETIME COMMENT '1班开始时间', &quot; +
+                &quot;CLASS1_END_TIME DATETIME COMMENT '1班结束时间', &quot; +
+                &quot;CLASS1_ANALYSIS VARCHAR(500) COMMENT '1班原因分析', &quot; +
+                &quot;CLASS1_FINISH_QTY INT COMMENT '1班完成量', &quot; +
+                &quot;CLASS2_PLAN_QTY INT COMMENT '2班计划量', &quot; +
+                &quot;CLASS2_START_TIME DATETIME COMMENT '2班开始时间', &quot; +
+                &quot;CLASS2_END_TIME DATETIME COMMENT '2班结束时间', &quot; +
+                &quot;CLASS2_ANALYSIS VARCHAR(500) COMMENT '2班原因分析', &quot; +
+                &quot;CLASS2_FINISH_QTY INT COMMENT '2班完成量', &quot; +
+                &quot;CLASS3_PLAN_QTY INT COMMENT '3班计划量', &quot; +
+                &quot;CLASS3_START_TIME DATETIME COMMENT '3班开始时间', &quot; +
+                &quot;CLASS3_END_TIME DATETIME COMMENT '3班结束时间', &quot; +
+                &quot;CLASS3_ANALYSIS VARCHAR(500) COMMENT '3班原因分析', &quot; +
+                &quot;CLASS3_FINISH_QTY INT COMMENT '3班完成量', &quot; +
+                &quot;CLASS4_PLAN_QTY INT COMMENT '4班计划量', &quot; +
+                &quot;CLASS4_START_TIME DATETIME COMMENT '4班开始时间', &quot; +
+                &quot;CLASS4_END_TIME DATETIME COMMENT '4班结束时间', &quot; +
+                &quot;CLASS4_ANALYSIS VARCHAR(500) COMMENT '4班原因分析', &quot; +
+                &quot;CLASS4_FINISH_QTY INT COMMENT '4班完成量', &quot; +
+                &quot;IS_DELIVERY VARCHAR(10) COMMENT '是否交期', &quot; +
+                &quot;IS_RELEASE VARCHAR(10) COMMENT '是否发布', &quot; +
+                &quot;DATA_SOURCE VARCHAR(20) COMMENT '数据来源', &quot; +
+                &quot;MOULD_QTY INT COMMENT '使用模数', &quot; +
+                &quot;MOULD_METHOD VARCHAR(20) COMMENT '硫化方式', &quot; +
+                &quot;MACHINE_ORDER INT COMMENT '机台排序号', &quot; +
+                &quot;IS_TRIAL VARCHAR(10) COMMENT '是否试制量试', &quot; +
+                &quot;MOULD_SURPLUS_QTY INT COMMENT '硫化余量', &quot; +
+                &quot;IS_END VARCHAR(10) COMMENT '是否收尾', &quot; +
+                &quot;CREATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间', &quot; +
+                &quot;UPDATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间', &quot; +
+                &quot;CREATE_BY VARCHAR(50) COMMENT '创建人'&quot; +
+                &quot;) COMMENT='硫化排程结果表'&quot;);
+<span class="nc" id="L333">    }</span>
+
+    /**
+     * 创建日胎胚任务表
+     */
+    private void createDailyEmbryoTaskTable() {
+<span class="nc" id="L339">        jdbcTemplate.execute(&quot;DROP TABLE IF EXISTS t_cx_daily_embryo_task&quot;);</span>
+<span class="nc" id="L340">        jdbcTemplate.execute(&quot;CREATE TABLE t_cx_daily_embryo_task (&quot; +</span>
+                &quot;id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', &quot; +
+                &quot;schedule_main_id BIGINT NOT NULL COMMENT '排程主表ID', &quot; +
+                &quot;task_group_id VARCHAR(100) COMMENT '任务分组ID', &quot; +
+                &quot;material_code VARCHAR(50) NOT NULL COMMENT '胎胚物料编码', &quot; +
+                &quot;task_quantity INT NOT NULL COMMENT '任务量', &quot; +
+                &quot;product_structure VARCHAR(100) COMMENT '产品结构', &quot; +
+                &quot;is_main_product SMALLINT DEFAULT 0 COMMENT '是否主销产品', &quot; +
+                &quot;priority INT DEFAULT 0 COMMENT '优先级', &quot; +
+                &quot;sort_order INT COMMENT '排序', &quot; +
+                &quot;assigned_quantity INT DEFAULT 0 COMMENT '已分配量', &quot; +
+                &quot;remainder_quantity INT DEFAULT 0 COMMENT '剩余量', &quot; +
+                &quot;is_fully_assigned SMALLINT DEFAULT 0 COMMENT '是否全部分配', &quot; +
+                &quot;create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'&quot; +
+                &quot;) COMMENT='日胎胚任务表'&quot;);
+<span class="nc" id="L355">    }</span>
+
+    // ==================== 三之一、月度计划表 ====================
+
+    /**
+     * 创建工厂月生产计划-最终排产计划定稿表
+     * 数据来源：ERP/MES系统月度生产计划
+     */
+    private void createFactoryMonthPlanProductionFinalResultTable() {
+<span class="nc" id="L364">        jdbcTemplate.execute(&quot;DROP TABLE IF EXISTS T_FACTORY_MONTH_PLAN_PRODUCTION_FINAL_RESULT&quot;);</span>
+<span class="nc" id="L365">        jdbcTemplate.execute(&quot;CREATE TABLE T_FACTORY_MONTH_PLAN_PRODUCTION_FINAL_RESULT (&quot; +</span>
+                &quot;ID BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', &quot; +
+                &quot;PRODUCTION_NO VARCHAR(50) COMMENT '工单号', &quot; +
+                &quot;FACTORY_CODE VARCHAR(50) COMMENT '工厂编码', &quot; +
+                &quot;YEAR INT COMMENT '年份', &quot; +
+                &quot;MONTH INT COMMENT '月份', &quot; +
+                &quot;`YEAR_MONTH` INT COMMENT '年月YYYYMM', &quot; +
+                &quot;MONTH_PLAN_VERSION VARCHAR(50) COMMENT '销售生产需求计划版本', &quot; +
+                &quot;LAST_MONTH_PLAN_VERSION VARCHAR(50) COMMENT '最新需求计划版本', &quot; +
+                &quot;PRODUCTION_VERSION VARCHAR(50) COMMENT '排产计划版本', &quot; +
+                &quot;PRODUCT_TYPE_CODE VARCHAR(50) COMMENT '产品品类', &quot; +
+                &quot;MATERIAL_CODE VARCHAR(50) COMMENT '物料编码', &quot; +
+                &quot;MATERIAL_DESC VARCHAR(200) COMMENT '物料描述', &quot; +
+                &quot;MES_MATERIAL_CODE VARCHAR(50) COMMENT 'MES物料编码', &quot; +
+                &quot;STRUCTURE_NAME VARCHAR(100) COMMENT '产品结构', &quot; +
+                &quot;PRO_SIZE VARCHAR(20) COMMENT '英寸', &quot; +
+                &quot;PRODUCT_CATEGORY VARCHAR(50) COMMENT '产品分类', &quot; +
+                &quot;PRODUCT_STATUS VARCHAR(20) COMMENT '产品状态', &quot; +
+                &quot;STRUCTURE_TYPE VARCHAR(20) COMMENT '结构类型', &quot; +
+                &quot;PRODUCTION_TYPE VARCHAR(50) COMMENT '排产分类', &quot; +
+                &quot;EMBRYO_CODE VARCHAR(50) COMMENT '生胎代码', &quot; +
+                &quot;MAIN_MATERIAL_DESC VARCHAR(200) COMMENT '主物料胎胚号', &quot; +
+                &quot;CONSTRUCTION_STAGE VARCHAR(20) COMMENT '施工阶段', &quot; +
+                &quot;IS_ZERO_RACK VARCHAR(10) COMMENT '是否零度材料', &quot; +
+                &quot;EMBRYO_NO VARCHAR(50) COMMENT '制造示方书号', &quot; +
+                &quot;TEXT_NO VARCHAR(50) COMMENT '文字示方书号', &quot; +
+                &quot;LH_NO VARCHAR(50) COMMENT '硫化示方书号', &quot; +
+                &quot;BRAND VARCHAR(50) COMMENT '品牌', &quot; +
+                &quot;SPECIFICATIONS VARCHAR(100) COMMENT '规格', &quot; +
+                &quot;MAIN_PATTERN VARCHAR(100) COMMENT '主花纹', &quot; +
+                &quot;PATTERN VARCHAR(100) COMMENT '花纹', &quot; +
+                &quot;MOULD_CAVITY_QTY INT COMMENT '型腔数量', &quot; +
+                &quot;TYPE_BLOCK_QTY INT COMMENT '活块数量', &quot; +
+                &quot;HEIGHT_QTY INT COMMENT '高优先级数量', &quot; +
+                &quot;AVERAGE_SALE_QTY INT COMMENT '月均销量', &quot; +
+                &quot;INVENTORY_SALES_RATIO DECIMAL(10,4) COMMENT '库销比', &quot; +
+                &quot;DAY_VULCANIZATION_QTY INT COMMENT '日硫化量', &quot; +
+                &quot;CX_MACHINE_CODE VARCHAR(500) COMMENT '成型机台信息', &quot; +
+                &quot;MOULD_CHANGE_INFO VARCHAR(100) COMMENT '模具使用变化信息', &quot; +
+                &quot;DYNAMIC_BALANCE_QTY VARCHAR(100) COMMENT '动平衡数量', &quot; +
+                &quot;UNIFORMITY_QTY INT COMMENT '均匀性数量', &quot; +
+                &quot;CURING_TIME INT COMMENT '单条硫化时间分钟', &quot; +
+                &quot;PROD_REQ_PLAN INT COMMENT '生产需求计划净需求', &quot; +
+                &quot;TRIAL_QTY INT COMMENT '试制量试计划需求量', &quot; +
+                &quot;HEIGHT_PRODUCTION_QTY INT COMMENT '高优先级排产数量', &quot; +
+                &quot;FACT_PROD_REQ_QTY INT COMMENT '实际生产需求含损耗', &quot; +
+                &quot;TOTAL_QTY INT COMMENT '生产实际排产量', &quot; +
+                &quot;MID_PRODUCTION_QTY INT COMMENT '中优先级排产数量', &quot; +
+                &quot;CYCLE_PRODUCTION_QTY INT COMMENT '周期排产储备排产数量', &quot; +
+                &quot;CONVENTION_PRODUCTION_QTY INT COMMENT '常规储备排产数量', &quot; +
+                &quot;POSTPONE_PRODUCTION_QTY INT COMMENT '暂缓订单排产数量', &quot; +
+                &quot;TRIAL_PRODUCTION_QTY INT COMMENT '试制量试排产量', &quot; +
+                &quot;DIFFERENCE_QTY INT COMMENT '差异量未排产数量', &quot; +
+                &quot;ADJUST_QTY1 INT COMMENT '第1周调整量', &quot; +
+                &quot;ADJUST_QTY2 INT COMMENT '第2周调整量', &quot; +
+                &quot;ADJUST_QTY3 INT COMMENT '第3周调整量', &quot; +
+                &quot;ADJUST_QTY4 INT COMMENT '第4周调整量', &quot; +
+                &quot;REASON VARCHAR(500) COMMENT '未排产原因', &quot; +
+                &quot;BEGIN_DAY INT COMMENT '开始日期', &quot; +
+                &quot;END_DAY INT COMMENT '结束日期', &quot; +
+                &quot;DAY_1 INT COMMENT '第1天排产量', &quot; +
+                &quot;DAY_2 INT COMMENT '第2天排产量', &quot; +
+                &quot;DAY_3 INT COMMENT '第3天排产量', &quot; +
+                &quot;DAY_4 INT COMMENT '第4天排产量', &quot; +
+                &quot;DAY_5 INT COMMENT '第5天排产量', &quot; +
+                &quot;DAY_6 INT COMMENT '第6天排产量', &quot; +
+                &quot;DAY_7 INT COMMENT '第7天排产量', &quot; +
+                &quot;DAY_8 INT COMMENT '第8天排产量', &quot; +
+                &quot;DAY_9 INT COMMENT '第9天排产量', &quot; +
+                &quot;DAY_10 INT COMMENT '第10天排产量', &quot; +
+                &quot;DAY_11 INT COMMENT '第11天排产量', &quot; +
+                &quot;DAY_12 INT COMMENT '第12天排产量', &quot; +
+                &quot;DAY_13 INT COMMENT '第13天排产量', &quot; +
+                &quot;DAY_14 INT COMMENT '第14天排产量', &quot; +
+                &quot;DAY_15 INT COMMENT '第15天排产量', &quot; +
+                &quot;DAY_16 INT COMMENT '第16天排产量', &quot; +
+                &quot;DAY_17 INT COMMENT '第17天排产量', &quot; +
+                &quot;DAY_18 INT COMMENT '第18天排产量', &quot; +
+                &quot;DAY_19 INT COMMENT '第19天排产量', &quot; +
+                &quot;DAY_20 INT COMMENT '第20天排产量', &quot; +
+                &quot;DAY_21 INT COMMENT '第21天排产量', &quot; +
+                &quot;DAY_22 INT COMMENT '第22天排产量', &quot; +
+                &quot;DAY_23 INT COMMENT '第23天排产量', &quot; +
+                &quot;DAY_24 INT COMMENT '第24天排产量', &quot; +
+                &quot;DAY_25 INT COMMENT '第25天排产量', &quot; +
+                &quot;DAY_26 INT COMMENT '第26天排产量', &quot; +
+                &quot;DAY_27 INT COMMENT '第27天排产量', &quot; +
+                &quot;DAY_28 INT COMMENT '第28天排产量', &quot; +
+                &quot;DAY_29 INT COMMENT '第29天排产量', &quot; +
+                &quot;DAY_30 INT COMMENT '第30天排产量', &quot; +
+                &quot;DAY_31 INT COMMENT '第31天排产量', &quot; +
+                &quot;TOTAL_VULCANIZATION_MINUTES DECIMAL(15,2) COMMENT '硫化总工时', &quot; +
+                &quot;DISPLAY_SEQ INT COMMENT '显示顺序', &quot; +
+                &quot;IS_RELEASE VARCHAR(10) COMMENT '发布状态', &quot; +
+                &quot;IS_IMPORT VARCHAR(10) COMMENT '是否EXCEL导入', &quot; +
+                &quot;PRODUCTION_SEQUENCE BIGINT COMMENT '排产顺序', &quot; +
+                &quot;CREATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间', &quot; +
+                &quot;UPDATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间', &quot; +
+                &quot;CREATE_BY VARCHAR(50) COMMENT '创建人', &quot; +
+                &quot;UPDATE_BY VARCHAR(50) COMMENT '更新人', &quot; +
+                &quot;REMARK VARCHAR(500) COMMENT '备注', &quot; +
+                &quot;INDEX IDX_YEAR_MONTH (`YEAR_MONTH`), &quot; +
+                &quot;INDEX IDX_MATERIAL_CODE (MATERIAL_CODE), &quot; +
+                &quot;INDEX IDX_PRODUCTION_NO (PRODUCTION_NO)&quot; +
+                &quot;) COMMENT='工厂月生产计划-最终排产计划定稿表'&quot;);
+<span class="nc" id="L470">    }</span>
+
+    // ==================== 四、计算辅助表 ====================
+
+    /**
+     * 创建试错分配日志表
+     */
+    private void createTrialAllocationLogTable() {
+<span class="nc" id="L478">        jdbcTemplate.execute(&quot;DROP TABLE IF EXISTS t_cx_trial_allocation_log&quot;);</span>
+<span class="nc" id="L479">        jdbcTemplate.execute(&quot;CREATE TABLE t_cx_trial_allocation_log (&quot; +</span>
+                &quot;id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', &quot; +
+                &quot;schedule_main_id BIGINT NOT NULL COMMENT '排程主表ID', &quot; +
+                &quot;task_group_id VARCHAR(100) COMMENT '任务分组ID', &quot; +
+                &quot;recursion_depth INT DEFAULT 0 COMMENT '递归深度', &quot; +
+                &quot;task_index INT COMMENT '任务索引', &quot; +
+                &quot;machine_code VARCHAR(50) COMMENT '机台编号', &quot; +
+                &quot;material_code VARCHAR(50) COMMENT '分配的物料', &quot; +
+                &quot;allocated_qty INT COMMENT '分配数量', &quot; +
+                &quot;remainder_before INT COMMENT '分配前任务余量', &quot; +
+                &quot;remainder_after INT COMMENT '分配后任务余量', &quot; +
+                &quot;constraint_checks TEXT COMMENT '约束检查结果JSON', &quot; +
+                &quot;is_feasible SMALLINT DEFAULT 1 COMMENT '是否可行', &quot; +
+                &quot;is_best_solution SMALLINT DEFAULT 0 COMMENT '是否为最优方案', &quot; +
+                &quot;load_diff INT COMMENT '当前方案负载差', &quot; +
+                &quot;sku_diff INT COMMENT '当前方案种类差', &quot; +
+                &quot;total_load INT COMMENT '当前方案总负载', &quot; +
+                &quot;is_backtrack SMALLINT DEFAULT 0 COMMENT '是否回溯', &quot; +
+                &quot;backtrack_reason VARCHAR(200) COMMENT '回溯原因', &quot; +
+                &quot;create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'&quot; +
+                &quot;) COMMENT='试错分配日志表'&quot;);
+<span class="nc" id="L500">    }</span>
+
+    /**
+     * 创建排程计算中间状态表
+     */
+    private void createScheduleIntermediateTable() {
+<span class="nc" id="L506">        jdbcTemplate.execute(&quot;DROP TABLE IF EXISTS t_cx_schedule_intermediate&quot;);</span>
+<span class="nc" id="L507">        jdbcTemplate.execute(&quot;CREATE TABLE t_cx_schedule_intermediate (&quot; +</span>
+                &quot;id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', &quot; +
+                &quot;schedule_main_id BIGINT NOT NULL COMMENT '排程主表ID', &quot; +
+                &quot;calc_stage VARCHAR(50) NOT NULL COMMENT '计算阶段', &quot; +
+                &quot;input_data TEXT COMMENT '阶段输入数据JSON', &quot; +
+                &quot;output_data TEXT COMMENT '阶段输出数据JSON', &quot; +
+                &quot;stage_status VARCHAR(20) DEFAULT 'PROCESSING' COMMENT '阶段状态', &quot; +
+                &quot;error_message VARCHAR(500) COMMENT '错误信息', &quot; +
+                &quot;start_time TIMESTAMP COMMENT '阶段开始时间', &quot; +
+                &quot;end_time TIMESTAMP COMMENT '阶段结束时间', &quot; +
+                &quot;execution_time_ms INT COMMENT '执行耗时毫秒', &quot; +
+                &quot;create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'&quot; +
+                &quot;) COMMENT='排程计算中间状态表'&quot;);
+<span class="nc" id="L520">    }</span>
+
+    /**
+     * 创建班次均衡调整记录表
+     */
+    private void createShiftBalanceAdjustTable() {
+<span class="nc" id="L526">        jdbcTemplate.execute(&quot;DROP TABLE IF EXISTS t_cx_shift_balance_adjust&quot;);</span>
+<span class="nc" id="L527">        jdbcTemplate.execute(&quot;CREATE TABLE t_cx_shift_balance_adjust (&quot; +</span>
+                &quot;id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', &quot; +
+                &quot;schedule_main_id BIGINT NOT NULL COMMENT '排程主表ID', &quot; +
+                &quot;schedule_date DATE NOT NULL COMMENT '计划日期', &quot; +
+                &quot;shift_code VARCHAR(20) NOT NULL COMMENT '班次编码', &quot; +
+                &quot;qty_before INT COMMENT '调整前产量', &quot; +
+                &quot;deviation_rate_before DECIMAL(5,2) COMMENT '调整前偏差率', &quot; +
+                &quot;qty_after INT COMMENT '调整后产量', &quot; +
+                &quot;deviation_rate_after DECIMAL(5,2) COMMENT '调整后偏差率', &quot; +
+                &quot;adjust_qty INT COMMENT '调整数量', &quot; +
+                &quot;adjust_type VARCHAR(20) COMMENT '调整类型', &quot; +
+                &quot;adjust_mode VARCHAR(20) COMMENT '调整模式', &quot; +
+                &quot;affected_materials TEXT COMMENT '受影响的物料列表JSON', &quot; +
+                &quot;trigger_reason VARCHAR(200) COMMENT '触发原因', &quot; +
+                &quot;create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'&quot; +
+                &quot;) COMMENT='班次均衡调整记录表'&quot;);
+<span class="nc" id="L543">    }</span>
+
+    /**
+     * 创建约束检查记录表
+     */
+    private void createConstraintCheckRecordTable() {
+<span class="nc" id="L549">        jdbcTemplate.execute(&quot;DROP TABLE IF EXISTS t_cx_constraint_check_record&quot;);</span>
+<span class="nc" id="L550">        jdbcTemplate.execute(&quot;CREATE TABLE t_cx_constraint_check_record (&quot; +</span>
+                &quot;id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', &quot; +
+                &quot;schedule_main_id BIGINT COMMENT '排程主表ID', &quot; +
+                &quot;schedule_detail_id BIGINT COMMENT '排程明细ID', &quot; +
+                &quot;rule_code VARCHAR(50) COMMENT '规则编码', &quot; +
+                &quot;rule_name VARCHAR(100) COMMENT '规则名称', &quot; +
+                &quot;constraint_type VARCHAR(50) COMMENT '约束类型', &quot; +
+                &quot;check_result VARCHAR(20) COMMENT '检查结果', &quot; +
+                &quot;actual_value VARCHAR(100) COMMENT '实际值', &quot; +
+                &quot;limit_value VARCHAR(100) COMMENT '限制值', &quot; +
+                &quot;error_message VARCHAR(500) COMMENT '错误信息', &quot; +
+                &quot;suggestion VARCHAR(500) COMMENT '调整建议', &quot; +
+                &quot;is_resolved SMALLINT DEFAULT 0 COMMENT '是否已解决', &quot; +
+                &quot;resolve_time TIMESTAMP COMMENT '解决时间', &quot; +
+                &quot;create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'&quot; +
+                &quot;) COMMENT='约束检查记录表'&quot;);
+<span class="nc" id="L566">    }</span>
+
+    // ==================== 五、特殊场景表 ====================
+
+    /**
+     * 创建精度计划表
+     */
+    private void createPrecisionPlanTable() {
+<span class="nc" id="L574">        jdbcTemplate.execute(&quot;DROP TABLE IF EXISTS t_cx_precision_plan&quot;);</span>
+<span class="nc" id="L575">        jdbcTemplate.execute(&quot;CREATE TABLE t_cx_precision_plan (&quot; +</span>
+                &quot;id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', &quot; +
+                &quot;machine_code VARCHAR(50) NOT NULL COMMENT '机台编号', &quot; +
+                &quot;schedule_date DATE NOT NULL COMMENT '精度计划日期', &quot; +
+                &quot;shift_code VARCHAR(20) COMMENT '班次编码', &quot; +
+                &quot;accuracy_duration INT COMMENT '精度时长分钟', &quot; +
+                &quot;priority INT DEFAULT 1 COMMENT '优先级', &quot; +
+                &quot;status VARCHAR(20) DEFAULT 'PENDING' COMMENT '状态', &quot; +
+                &quot;curing_stop_required SMALLINT DEFAULT 0 COMMENT '是否需要硫化停机', &quot; +
+                &quot;remark VARCHAR(500) COMMENT '备注', &quot; +
+                &quot;create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间', &quot; +
+                &quot;create_by VARCHAR(50) COMMENT '创建人'&quot; +
+                &quot;) COMMENT='精度计划表'&quot;);
+<span class="nc" id="L588">    }</span>
+
+    /**
+     * 创建试制计划表
+     */
+    private void createTrialPlanTable() {
+<span class="nc" id="L594">        jdbcTemplate.execute(&quot;DROP TABLE IF EXISTS t_cx_trial_plan&quot;);</span>
+<span class="nc" id="L595">        jdbcTemplate.execute(&quot;CREATE TABLE t_cx_trial_plan (&quot; +</span>
+                &quot;id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', &quot; +
+                &quot;trial_code VARCHAR(50) NOT NULL UNIQUE COMMENT '试制单号', &quot; +
+                &quot;material_code VARCHAR(50) NOT NULL COMMENT '试制胎胚物料编码', &quot; +
+                &quot;trial_qty INT NOT NULL COMMENT '试制数量', &quot; +
+                &quot;schedule_date DATE COMMENT '计划日期', &quot; +
+                &quot;shift_code VARCHAR(20) COMMENT '班次编码', &quot; +
+                &quot;machine_code VARCHAR(50) COMMENT '指定机台', &quot; +
+                &quot;priority INT DEFAULT 999 COMMENT '优先级', &quot; +
+                &quot;status VARCHAR(20) DEFAULT 'PLANNED' COMMENT '状态', &quot; +
+                &quot;apply_date DATE COMMENT '申请日期', &quot; +
+                &quot;create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间', &quot; +
+                &quot;create_by VARCHAR(50) COMMENT '创建人', &quot; +
+                &quot;remark VARCHAR(500) COMMENT '备注'&quot; +
+                &quot;) COMMENT='试制计划表'&quot;);
+<span class="nc" id="L610">    }</span>
+
+    /**
+     * 创建开产/停产记录表
+     */
+    private void createMachineStatusLogTable() {
+<span class="nc" id="L616">        jdbcTemplate.execute(&quot;DROP TABLE IF EXISTS t_cx_machine_status_log&quot;);</span>
+<span class="nc" id="L617">        jdbcTemplate.execute(&quot;CREATE TABLE t_cx_machine_status_log (&quot; +</span>
+                &quot;id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', &quot; +
+                &quot;machine_code VARCHAR(50) NOT NULL COMMENT '机台编号', &quot; +
+                &quot;operation_type VARCHAR(20) NOT NULL COMMENT '操作类型', &quot; +
+                &quot;operation_date DATE NOT NULL COMMENT '操作日期', &quot; +
+                &quot;shift_code VARCHAR(20) COMMENT '班次', &quot; +
+                &quot;stop_reason VARCHAR(500) COMMENT '停产原因', &quot; +
+                &quot;stop_mode VARCHAR(20) COMMENT '停产方式', &quot; +
+                &quot;start_production_qty INT COMMENT '开产首班计划量', &quot; +
+                &quot;reason VARCHAR(200) COMMENT '原因', &quot; +
+                &quot;operator VARCHAR(50) COMMENT '操作人', &quot; +
+                &quot;operation_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '操作时间', &quot; +
+                &quot;affect_schedule_id BIGINT COMMENT '影响的排程ID'&quot; +
+                &quot;) COMMENT='开产/停产记录表'&quot;);
+<span class="nc" id="L631">    }</span>
+
+    /**
+     * 创建结构切换记录表
+     */
+    private void createStructureSwitchTable() {
+<span class="nc" id="L637">        jdbcTemplate.execute(&quot;DROP TABLE IF EXISTS t_cx_structure_switch&quot;);</span>
+<span class="nc" id="L638">        jdbcTemplate.execute(&quot;CREATE TABLE t_cx_structure_switch (&quot; +</span>
+                &quot;id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', &quot; +
+                &quot;machine_code VARCHAR(50) NOT NULL COMMENT '机台编号', &quot; +
+                &quot;switch_date DATE NOT NULL COMMENT '切换日期', &quot; +
+                &quot;shift_code VARCHAR(20) COMMENT '班次编码', &quot; +
+                &quot;old_structure VARCHAR(100) COMMENT '原结构', &quot; +
+                &quot;new_structure VARCHAR(100) COMMENT '新结构', &quot; +
+                &quot;switch_type VARCHAR(50) COMMENT '切换类型', &quot; +
+                &quot;is_first_inspection SMALLINT DEFAULT 0 COMMENT '是否首检', &quot; +
+                &quot;first_inspection_duration INT COMMENT '首检时长分钟', &quot; +
+                &quot;switch_sequence INT COMMENT '当日切换顺序', &quot; +
+                &quot;create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间', &quot; +
+                &quot;create_by VARCHAR(50) COMMENT '记录人'&quot; +
+                &quot;) COMMENT='结构切换记录表'&quot;);
+<span class="nc" id="L652">    }</span>
+
+    // ==================== 六、操作与日志表 ====================
+
+    /**
+     * 创建调度员操作日志表
+     */
+    private void createDispatcherLogTable() {
+<span class="nc" id="L660">        jdbcTemplate.execute(&quot;DROP TABLE IF EXISTS t_cx_dispatcher_log&quot;);</span>
+<span class="nc" id="L661">        jdbcTemplate.execute(&quot;CREATE TABLE t_cx_dispatcher_log (&quot; +</span>
+                &quot;id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', &quot; +
+                &quot;operation_type VARCHAR(50) NOT NULL COMMENT '操作类型', &quot; +
+                &quot;operation_desc VARCHAR(500) COMMENT '操作描述', &quot; +
+                &quot;operator VARCHAR(50) NOT NULL COMMENT '操作人', &quot; +
+                &quot;operation_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '操作时间', &quot; +
+                &quot;ip_address VARCHAR(50) COMMENT 'IP地址', &quot; +
+                &quot;request_params TEXT COMMENT '请求参数JSON', &quot; +
+                &quot;response_result TEXT COMMENT '响应结果JSON', &quot; +
+                &quot;execution_time_ms INT COMMENT '执行耗时毫秒'&quot; +
+                &quot;) COMMENT='调度员操作日志表'&quot;);
+<span class="nc" id="L672">    }</span>
+
+    /**
+     * 创建完成量回报表
+     */
+    private void createCompletionReportTable() {
+<span class="nc" id="L678">        jdbcTemplate.execute(&quot;DROP TABLE IF EXISTS t_cx_completion_report&quot;);</span>
+<span class="nc" id="L679">        jdbcTemplate.execute(&quot;CREATE TABLE t_cx_completion_report (&quot; +</span>
+                &quot;id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', &quot; +
+                &quot;schedule_detail_id BIGINT NOT NULL COMMENT '排程明细ID', &quot; +
+                &quot;report_date DATE NOT NULL COMMENT '回报日期', &quot; +
+                &quot;shift_code VARCHAR(20) NOT NULL COMMENT '班次', &quot; +
+                &quot;completed_qty INT NOT NULL COMMENT '完成数量', &quot; +
+                &quot;complete_rate DECIMAL(5,2) COMMENT '完成率', &quot; +
+                &quot;reporter VARCHAR(50) COMMENT '回报人', &quot; +
+                &quot;report_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '回报时间', &quot; +
+                &quot;is_confirmed SMALLINT DEFAULT 0 COMMENT '是否确认', &quot; +
+                &quot;confirm_time TIMESTAMP COMMENT '确认时间', &quot; +
+                &quot;remark VARCHAR(200) COMMENT '备注'&quot; +
+                &quot;) COMMENT='完成量回报表'&quot;);
+<span class="nc" id="L692">    }</span>
+
+    /**
+     * 创建预警记录表
+     */
+    private void createAlertRecordTable() {
+<span class="nc" id="L698">        jdbcTemplate.execute(&quot;DROP TABLE IF EXISTS t_cx_alert_record&quot;);</span>
+<span class="nc" id="L699">        jdbcTemplate.execute(&quot;CREATE TABLE t_cx_alert_record (&quot; +</span>
+                &quot;id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', &quot; +
+                &quot;alert_type VARCHAR(50) NOT NULL COMMENT '预警类型', &quot; +
+                &quot;alert_level VARCHAR(20) DEFAULT 'WARNING' COMMENT '预警级别', &quot; +
+                &quot;material_code VARCHAR(50) COMMENT '相关物料编码', &quot; +
+                &quot;material_group_id VARCHAR(100) COMMENT '相关物料分组', &quot; +
+                &quot;alert_content VARCHAR(500) NOT NULL COMMENT '预警内容', &quot; +
+                &quot;alert_value DECIMAL(10,2) COMMENT '预警值', &quot; +
+                &quot;threshold_value DECIMAL(10,2) COMMENT '阈值', &quot; +
+                &quot;suggestion VARCHAR(500) COMMENT '处理建议', &quot; +
+                &quot;status VARCHAR(20) DEFAULT 'ACTIVE' COMMENT '状态', &quot; +
+                &quot;trigger_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '触发时间', &quot; +
+                &quot;resolve_time TIMESTAMP COMMENT '解决时间', &quot; +
+                &quot;handler VARCHAR(50) COMMENT '处理人', &quot; +
+                &quot;handle_remark VARCHAR(500) COMMENT '处理备注'&quot; +
+                &quot;) COMMENT='预警记录表'&quot;);
+<span class="nc" id="L715">    }</span>
+
+    // ==================== 初始化基础数据 ====================
+
+    /**
+     * 初始化班次配置数据
+     */
+    private void initShiftConfigData() {
+<span class="nc" id="L723">        jdbcTemplate.execute(&quot;INSERT INTO t_cx_shift_config (shift_code, shift_name, start_time, end_time, sort_order) VALUES &quot; +</span>
+                &quot;('NIGHT', '夜班', '00:00:00', '07:59:59', 1), &quot; +
+                &quot;('DAY', '早班', '08:00:00', '15:59:59', 2), &quot; +
+                &quot;('AFTERNOON', '中班', '16:00:00', '23:59:59', 3)&quot;);
+<span class="nc" id="L727">    }</span>
+
+    /**
+     * 初始化预警配置数据
+     */
+    private void initAlertConfigData() {
+<span class="nc" id="L733">        jdbcTemplate.execute(&quot;INSERT INTO t_cx_alert_config (config_code, config_name, config_value, config_type, config_unit, description) VALUES &quot; +</span>
+                &quot;('INVENTORY_HIGH_HOURS', '胎胚库存高水位预警时长', '18', 'NUMBER', '小时', '胎胚库存可供硫化时长大于此值时触发高库存预警'), &quot; +
+                &quot;('INVENTORY_LOW_HOURS', '胎胚库存低水位预警时长', '4', 'NUMBER', '小时', '胎胚库存可供硫化时长小于此值时触发低库存预警'), &quot; +
+                &quot;('MAX_SKU_PER_MACHINE_PER_DAY', '单台成型机每天最大胎胚种类数', '4', 'NUMBER', '种', '硬性约束：超过则必须调整'), &quot; +
+                &quot;('MAX_STRUCTURE_SWITCH_PER_DAY', '每日结构切换最大次数', '2', 'NUMBER', '次', '硬性约束：超过则禁止切换'), &quot; +
+                &quot;('TRIP_DEFAULT_CAPACITY', '默认胎面整车容量', '12', 'NUMBER', '条', '每车默认装载胎胚数量'), &quot; +
+                &quot;('SHIFT_BALANCE_RATIO', '班次均衡分配比例', '1:2:1', 'STRING', '', '夜班:早班:中班的分配比例'), &quot; +
+                &quot;('CONTINUOUS_SAME_STRUCTURE_PRIORITY', '连续同结构优先权重', '10', 'NUMBER', '', '续作时相同结构SKU的优先权重')&quot;);
+<span class="nc" id="L741">    }</span>
+
+    /**
+     * 初始化机台数据
+     */
+    private void initMachineData() {
+        // 机台数据：部分机台设置在产结构（structure字段），用于测试续作排产
+<span class="nc" id="L748">        jdbcTemplate.execute(&quot;INSERT INTO t_cx_machine (machine_code, machine_name, machine_type, line_number, max_daily_capacity, max_capacity_per_hour, status, wrapping_type, has_zero_degree_feeder, structure) VALUES &quot; +</span>
+                &quot;('GM01', '成型机01', '软控三鼓', 1, 120, 15.0, 'RUNNING', 'A型', 1, '12R22.5'), &quot; +  // 在产结构：12R22.5
+                &quot;('GM02', '成型机02', '软控三鼓', 1, 120, 15.0, 'RUNNING', 'A型', 1, '11R22.5'), &quot; +  // 在产结构：11R22.5
+                &quot;('GM03', '成型机03', '软控三鼓', 2, 120, 15.0, 'RUNNING', 'A型', 0, '295/80R22.5'), &quot; + // 在产结构：295/80R22.5
+                &quot;('GM04', '成型机04', '赛象三鼓', 2, 120, 15.0, 'RUNNING', 'B型', 1, NULL), &quot; +  // 无在产结构
+                &quot;('GM05', '成型机05', '赛象三鼓', 3, 120, 15.0, 'RUNNING', 'B型', 0, NULL)&quot;);   // 无在产结构
+<span class="nc" id="L754">    }</span>
+
+    /**
+     * 初始化物料数据
+     */
+    private void initMaterialData() {
+<span class="nc" id="L760">        jdbcTemplate.execute(&quot;INSERT INTO t_cx_material (material_code, material_name, product_structure, main_pattern, pattern, is_main_product, vulcanize_time_minutes) VALUES &quot; +</span>
+                &quot;('MAT001', '12R22.5-18PR-JA511', '12R22.5', 'JA511', 'JA511', 1, 12.5), &quot; +
+                &quot;('MAT002', '11R22.5-16PR-JA511', '11R22.5', 'JA511', 'JA511', 1, 11.8), &quot; +
+                &quot;('MAT003', '295/80R22.5-18PR-JA511', '295/80R22.5', 'JA511', 'JA511', 0, 13.2), &quot; +
+                &quot;('MAT004', '275/80R22.5-16PR-JA511', '275/80R22.5', 'JA511', 'JA511', 0, 11.5), &quot; +
+                &quot;('MAT005', '315/80R22.5-18PR-JA511', '315/80R22.5', 'JA511', 'JA511', 1, 14.0), &quot; +
+                &quot;('MAT006', '385/65R22.5-20PR-JA511', '385/65R22.5', 'JA511', 'JA511', 0, 15.5)&quot;);
+<span class="nc" id="L767">    }</span>
+
+    /**
+     * 初始化库存数据
+     */
+    private void initStockData() {
+<span class="nc" id="L773">        jdbcTemplate.execute(&quot;INSERT INTO t_cx_stock (material_code, current_stock, vulcanize_machine_count, vulcanize_mold_count, alert_status, stock_hours) VALUES &quot; +</span>
+                &quot;('MAT001', 500, 4, 16, 'NORMAL', 16.0), &quot; +
+                &quot;('MAT002', 350, 3, 12, 'NORMAL', 12.0), &quot; +
+                &quot;('MAT003', 200, 2, 8, 'LOW', 5.0), &quot; +
+                &quot;('MAT004', 800, 3, 12, 'HIGH', 24.0), &quot; +
+                &quot;('MAT005', 150, 2, 8, 'LOW', 3.5), &quot; +
+                &quot;('MAT006', 600, 4, 16, 'NORMAL', 18.0)&quot;);
+<span class="nc" id="L780">    }</span>
+
+    /**
+     * 初始化硫化排程结果数据
+     * 使用相对日期，确保与测试排程日期匹配
+     */
+    private void initLhScheduleResultData() {
+        // 硫化排程日期：当天和第二天，方便测试
+<span class="nc" id="L788">        jdbcTemplate.execute(&quot;INSERT INTO T_LH_SCHEDULE_RESULT (BATCH_NO, SCHEDULE_DATE, MATERIAL_CODE, STRUCTURE_NAME, DAILY_PLAN_QTY, PRODUCTION_STATUS, MACHINE_ORDER, DATA_SOURCE) VALUES &quot; +</span>
+                &quot;('LH2024010001', CURDATE(), 'MAT001', '12R22.5', 240, 'PENDING', 1, 'MONTH_PLAN'), &quot; +
+                &quot;('LH2024010002', CURDATE(), 'MAT002', '11R22.5', 180, 'PENDING', 2, 'MONTH_PLAN'), &quot; +
+                &quot;('LH2024010003', CURDATE(), 'MAT003', '295/80R22.5', 120, 'PENDING', 3, 'MONTH_PLAN'), &quot; +
+                &quot;('LH2024010004', CURDATE(), 'MAT004', '275/80R22.5', 200, 'PENDING', 4, 'MONTH_PLAN'), &quot; +
+                &quot;('LH2024010005', CURDATE(), 'MAT005', '315/80R22.5', 100, 'PENDING', 5, 'MONTH_PLAN'), &quot; +
+                &quot;('LH2024010006', CURDATE(), 'MAT006', '385/65R22.5', 150, 'PENDING', 6, 'MONTH_PLAN'), &quot; +
+                &quot;('LH2024010007', DATE_ADD(CURDATE(), INTERVAL 1 DAY), 'MAT001', '12R22.5', 240, 'PENDING', 1, 'MONTH_PLAN'), &quot; +
+                &quot;('LH2024010008', DATE_ADD(CURDATE(), INTERVAL 1 DAY), 'MAT002', '11R22.5', 180, 'PENDING', 2, 'MONTH_PLAN'), &quot; +
+                &quot;('LH2024010009', DATE_ADD(CURDATE(), INTERVAL 1 DAY), 'MAT003', '295/80R22.5', 120, 'PENDING', 3, 'MONTH_PLAN'), &quot; +
+                &quot;('LH2024010010', DATE_ADD(CURDATE(), INTERVAL 1 DAY), 'MAT004', '275/80R22.5', 200, 'PENDING', 4, 'MONTH_PLAN'), &quot; +
+                &quot;('LH2024010011', DATE_ADD(CURDATE(), INTERVAL 1 DAY), 'MAT005', '315/80R22.5', 100, 'PENDING', 5, 'MONTH_PLAN'), &quot; +
+                &quot;('LH2024010012', DATE_ADD(CURDATE(), INTERVAL 1 DAY), 'MAT006', '385/65R22.5', 150, 'PENDING', 6, 'MONTH_PLAN')&quot;);
+<span class="nc" id="L801">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ScheduleDataValidator.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">APS Forming Schedule System</a> &gt; <a href="index.source.html" class="el_package">com.zlt.aps.cx.service.impl</a> &gt; <span class="el_source">ScheduleDataValidator.java</span></div><h1>ScheduleDataValidator.java</h1><pre class="source lang-java linenums">package com.zlt.aps.cx.service.impl;
+
+import com.zlt.aps.cx.dto.ScheduleContextDTO;
+import com.zlt.aps.cx.service.impl.validation.BaseValidationStrategy;
+import com.zlt.aps.cx.service.impl.validation.ValidationItem;
+import com.zlt.aps.cx.service.impl.validation.ValidationStrategy;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+
+import javax.annotation.PostConstruct;
+import java.time.LocalDate;
+import java.util.*;
+import java.util.stream.Collectors;
+
+/**
+ * 排程数据完整性校验器（策略模式版本）
+ *
+ * 特性：
+ * 1. 自动注册：所有实现 ValidationStrategy 的类都会被自动注入执行
+ * 2. 可扩展：新增校验只需添加新的策略类
+ * 3. 可配置：通过 @ConditionalOnProperty 或 isEnabled() 方法控制是否执行
+ * 4. 可排序：按 getOrder() 返回值顺序执行
+ *
+ * 新增校验项：
+ * 1. 在 ValidationItem 枚举中添加新的校验项
+ * 2. 创建新的策略类继承 BaseValidationStrategy 或实现 ValidationStrategy
+ * 3. 添加 @Component 注解（自动注册）
+ *
+ * @author APS Team
+ */
+<span class="fc" id="L32">@Slf4j</span>
+@Component
+<span class="fc" id="L34">public class ScheduleDataValidator {</span>
+
+    /** 自动注入的校验策略列表 */
+    private List&lt;ValidationStrategy&gt; validationStrategies;
+
+    /** 策略映射（用于快速查找） */
+    private Map&lt;ValidationItem, ValidationStrategy&gt; strategyMap;
+
+    @Autowired
+    private List&lt;ValidationStrategy&gt; strategies;
+
+    @PostConstruct
+    public void init() {
+        // 按 order 排序
+<span class="fc" id="L48">        this.validationStrategies = strategies.stream()</span>
+<span class="fc" id="L49">                .filter(ValidationStrategy::isEnabled)</span>
+<span class="fc" id="L50">                .sorted(Comparator.comparingInt(ValidationStrategy::getOrder))</span>
+<span class="fc" id="L51">                .collect(Collectors.toList());</span>
+
+        // 构建映射
+<span class="fc" id="L54">        this.strategyMap = new HashMap&lt;&gt;();</span>
+<span class="fc bfc" id="L55" title="All 2 branches covered.">        for (ValidationStrategy strategy : validationStrategies) {</span>
+            // 获取策略对应的校验项（如果有）
+<span class="pc bpc" id="L57" title="1 of 2 branches missed.">            if (strategy instanceof BaseValidationStrategy) {</span>
+<span class="fc" id="L58">                ValidationItem item = ((BaseValidationStrategy) strategy).getValidationItem();</span>
+<span class="pc bpc" id="L59" title="1 of 2 branches missed.">                if (item != null) {</span>
+<span class="fc" id="L60">                    strategyMap.put(item, strategy);</span>
+                }
+            }
+<span class="fc" id="L63">        }</span>
+
+<span class="fc" id="L65">        log.info(&quot;数据校验器初始化完成，已注册 {} 个校验策略&quot;, validationStrategies.size());</span>
+<span class="fc bfc" id="L66" title="All 2 branches covered.">        for (ValidationStrategy strategy : validationStrategies) {</span>
+<span class="fc" id="L67">            log.debug(&quot;  - {} (order={})&quot;, strategy.getDataItemName(), strategy.getOrder());</span>
+<span class="fc" id="L68">        }</span>
+<span class="fc" id="L69">    }</span>
+
+    /**
+     * 执行所有校验
+     *
+     * @param context 排程上下文
+     * @param scheduleDate 排程日期
+     * @param factoryCode 工厂编码
+     * @return 校验结果
+     */
+    public ScheduleDataValidationResult validate(ScheduleContextDTO context,
+                                               LocalDate scheduleDate,
+                                               String factoryCode) {
+<span class="nc" id="L82">        ScheduleDataValidationResult result = new ScheduleDataValidationResult();</span>
+<span class="nc" id="L83">        log.info(&quot;===== 开始数据完整性校验 =====&quot;);</span>
+<span class="nc" id="L84">        log.info(&quot;排程日期：{}，工厂编码：{}&quot;, scheduleDate, factoryCode);</span>
+<span class="nc" id="L85">        log.info(&quot;已注册 {} 个校验策略&quot;, validationStrategies.size());</span>
+
+<span class="nc" id="L87">        long startTime = System.currentTimeMillis();</span>
+
+        // 按顺序执行所有策略
+<span class="nc bnc" id="L90" title="All 2 branches missed.">        for (ValidationStrategy strategy : validationStrategies) {</span>
+            try {
+<span class="nc" id="L92">                log.debug(&quot;执行校验：{}&quot;, strategy.getDataItemName());</span>
+<span class="nc" id="L93">                strategy.validate(context, scheduleDate, factoryCode, result);</span>
+<span class="nc" id="L94">            } catch (Exception e) {</span>
+<span class="nc" id="L95">                log.error(&quot;校验策略执行异常：{}&quot;, strategy.getDataItemName(), e);</span>
+<span class="nc" id="L96">                result.addError(strategy.getDataItemName(),</span>
+<span class="nc" id="L97">                        &quot;校验执行异常：&quot; + e.getMessage(),</span>
+                        &quot;请联系系统管理员&quot;);
+<span class="nc" id="L99">            }</span>
+<span class="nc" id="L100">        }</span>
+
+<span class="nc" id="L102">        long costTime = System.currentTimeMillis() - startTime;</span>
+
+        // 生成摘要
+<span class="nc" id="L105">        result.generateSummary();</span>
+        
+<span class="nc" id="L107">        log.info(&quot;===== 数据完整性校验完成 =====&quot;);</span>
+<span class="nc" id="L108">        log.info(&quot;校验结果：{}，耗时：{}ms&quot;, result.getSummary(), costTime);</span>
+<span class="nc" id="L109">        log.info(&quot;错误：{}，警告：{}，提示：{}&quot;, </span>
+<span class="nc" id="L110">                result.getErrorCount(), result.getWarnCount(), result.getInfoCount());</span>
+
+        // 输出详细结果
+<span class="nc bnc" id="L113" title="All 4 branches missed.">        if (!result.isPassed() || result.getWarnCount() &gt; 0) {</span>
+<span class="nc" id="L114">            logValidationDetails(result);</span>
+        }
+
+<span class="nc" id="L117">        return result;</span>
+    }
+
+    /**
+     * 执行指定校验项
+     *
+     * @param context 排程上下文
+     * @param scheduleDate 排程日期
+     * @param factoryCode 工厂编码
+     * @param validationItems 需要校验的项
+     * @return 校验结果
+     */
+    public ScheduleDataValidationResult validate(ScheduleContextDTO context,
+                                               LocalDate scheduleDate,
+                                               String factoryCode,
+                                               ValidationItem... validationItems) {
+<span class="nc" id="L133">        ScheduleDataValidationResult result = new ScheduleDataValidationResult();</span>
+<span class="nc" id="L134">        log.info(&quot;执行指定校验项：{}&quot;, Arrays.toString(validationItems));</span>
+
+<span class="nc bnc" id="L136" title="All 2 branches missed.">        for (ValidationItem item : validationItems) {</span>
+<span class="nc" id="L137">            ValidationStrategy strategy = strategyMap.get(item);</span>
+<span class="nc bnc" id="L138" title="All 2 branches missed.">            if (strategy != null) {</span>
+                try {
+<span class="nc" id="L140">                    strategy.validate(context, scheduleDate, factoryCode, result);</span>
+<span class="nc" id="L141">                } catch (Exception e) {</span>
+<span class="nc" id="L142">                    log.error(&quot;校验策略执行异常：{}&quot;, item.getName(), e);</span>
+<span class="nc" id="L143">                    result.addError(item.getName(),</span>
+<span class="nc" id="L144">                            &quot;校验执行异常：&quot; + e.getMessage(),</span>
+                            &quot;请联系系统管理员&quot;);
+<span class="nc" id="L146">                }</span>
+            } else {
+<span class="nc" id="L148">                log.warn(&quot;未找到校验策略：{}&quot;, item.getName());</span>
+<span class="nc" id="L149">                result.addInfo(item.getName(), &quot;校验策略未实现&quot;, null);</span>
+            }
+        }
+
+<span class="nc" id="L153">        result.generateSummary();</span>
+<span class="nc" id="L154">        return result;</span>
+    }
+
+    /**
+     * 获取已注册的校验策略列表
+     */
+    public List&lt;ValidationStrategy&gt; getValidationStrategies() {
+<span class="nc" id="L161">        return Collections.unmodifiableList(validationStrategies);</span>
+    }
+
+    /**
+     * 获取策略映射
+     */
+    public Map&lt;ValidationItem, ValidationStrategy&gt; getStrategyMap() {
+<span class="nc" id="L168">        return Collections.unmodifiableMap(strategyMap);</span>
+    }
+
+    /**
+     * 输出校验详情
+     */
+    private void logValidationDetails(ScheduleDataValidationResult result) {
+<span class="nc" id="L175">        log.warn(&quot;========== 校验详情 ==========&quot;);</span>
+
+        // 按级别分组输出
+<span class="nc bnc" id="L178" title="All 2 branches missed.">        for (ScheduleDataValidationResult.ValidationDetail detail : result.getDetails()) {</span>
+            String levelStr;
+<span class="nc bnc" id="L180" title="All 3 branches missed.">            switch (detail.getLevel()) {</span>
+                case ERROR:
+<span class="nc" id="L182">                    levelStr = &quot;❌ ERROR&quot;;</span>
+<span class="nc" id="L183">                    break;</span>
+                case WARN:
+<span class="nc" id="L185">                    levelStr = &quot;⚠️  WARN&quot;;</span>
+<span class="nc" id="L186">                    break;</span>
+                default:
+<span class="nc" id="L188">                    levelStr = &quot;ℹ️  INFO&quot;;</span>
+            }
+
+<span class="nc" id="L191">            log.warn(&quot;{} [{}] {}&quot;, levelStr, detail.getDataItem(), detail.getMessage());</span>
+<span class="nc bnc" id="L192" title="All 4 branches missed.">            if (detail.getSuggestion() != null &amp;&amp; !detail.getSuggestion().isEmpty()) {</span>
+<span class="nc" id="L193">                log.warn(&quot;    → 建议：{}&quot;, detail.getSuggestion());</span>
+            }
+<span class="nc" id="L195">        }</span>
+
+<span class="nc" id="L197">        log.warn(&quot;==============================&quot;);</span>
+<span class="nc" id="L198">    }</span>
+
+    // ==================== 便捷方法 ====================
+
+    /**
+     * 快速校验（用于外部调用）
+     */
+    public boolean quickValidate(ScheduleContextDTO context, LocalDate scheduleDate, String factoryCode) {
+<span class="nc" id="L206">        ScheduleDataValidationResult result = validate(context, scheduleDate, factoryCode);</span>
+<span class="nc" id="L207">        return result.isPassed();</span>
+    }
+
+    /**
+     * 获取错误信息摘要
+     */
+    public String getErrorSummary(ScheduleContextDTO context, LocalDate scheduleDate, String factoryCode) {
+<span class="nc" id="L214">        ScheduleDataValidationResult result = validate(context, scheduleDate, factoryCode);</span>
+<span class="nc" id="L215">        return result.getDetails().stream()</span>
+<span class="nc bnc" id="L216" title="All 2 branches missed.">                .filter(d -&gt; d.getLevel() == ScheduleDataValidationResult.ValidationLevel.ERROR)</span>
+<span class="nc" id="L217">                .map(d -&gt; &quot;[&quot; + d.getDataItem() + &quot;] &quot; + d.getMessage())</span>
+<span class="nc" id="L218">                .collect(Collectors.joining(&quot;; &quot;));</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

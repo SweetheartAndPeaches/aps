@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MdmSkuScheduleCategory.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">APS Forming Schedule System</a> &gt; <a href="index.source.html" class="el_package">com.zlt.aps.mp.api.domain.entity</a> &gt; <span class="el_source">MdmSkuScheduleCategory.java</span></div><h1>MdmSkuScheduleCategory.java</h1><pre class="source lang-java linenums">package com.zlt.aps.mp.api.domain.entity;
+
+import com.baomidou.mybatisplus.annotation.*;
+import io.swagger.annotations.ApiModel;
+import io.swagger.annotations.ApiModelProperty;
+import lombok.Data;
+
+import java.io.Serializable;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+/**
+ * SKU排产分类实体
+ * 
+ * 用于判断产品是否为主销产品
+ * SCHEDULE_TYPE = '01' 表示主销产品（月均销量&gt;=500条）
+ *
+ * @author APS Team
+ */
+<span class="nc bnc" id="L20" title="All 94 branches missed.">@Data</span>
+@TableName(&quot;t_mdm_sku_schedule_category&quot;)
+@ApiModel(value = &quot;SKU排产分类&quot;)
+public class MdmSkuScheduleCategory implements Serializable {
+
+    private static final long serialVersionUID = 1L;
+
+    @ApiModelProperty(value = &quot;主键ID&quot;)
+    @TableId(value = &quot;ID&quot;, type = IdType.AUTO)
+<span class="nc" id="L29">    private Long id;</span>
+
+    @ApiModelProperty(value = &quot;工厂编号&quot;)
+    @TableField(&quot;FACTORY_CODE&quot;)
+<span class="nc" id="L33">    private String factoryCode;</span>
+
+    @ApiModelProperty(value = &quot;物料编码&quot;)
+    @TableField(&quot;MATERIAL_CODE&quot;)
+<span class="nc" id="L37">    private String materialCode;</span>
+
+    @ApiModelProperty(value = &quot;排产类型：01-主销产品、02-常规产品、03-常规周期产品、04-波动性产品、05-按单排产产品&quot;)
+    @TableField(&quot;SCHEDULE_TYPE&quot;)
+<span class="nc" id="L41">    private String scheduleType;</span>
+
+    @ApiModelProperty(value = &quot;生成日期&quot;)
+    @TableField(&quot;GENRATE_DATE&quot;)
+<span class="nc" id="L45">    private LocalDateTime genrateDate;</span>
+
+    @ApiModelProperty(value = &quot;备注&quot;)
+    @TableField(&quot;REMARK&quot;)
+<span class="nc" id="L49">    private String remark;</span>
+
+    @ApiModelProperty(value = &quot;是否删除：0-未删除 1-已删除&quot;)
+    @TableField(&quot;IS_DELETE&quot;)
+<span class="nc" id="L53">    private Integer isDelete;</span>
+
+    @ApiModelProperty(value = &quot;创建时间&quot;)
+    @TableField(&quot;CREATE_TIME&quot;)
+<span class="nc" id="L57">    private LocalDateTime createTime;</span>
+
+    @ApiModelProperty(value = &quot;更新时间&quot;)
+    @TableField(&quot;UPDATE_TIME&quot;)
+<span class="nc" id="L61">    private LocalDateTime updateTime;</span>
+
+    @ApiModelProperty(value = &quot;创建人&quot;)
+    @TableField(&quot;CREATE_BY&quot;)
+<span class="nc" id="L65">    private String createBy;</span>
+
+    @ApiModelProperty(value = &quot;修改人&quot;)
+    @TableField(&quot;UPDATE_BY&quot;)
+<span class="nc" id="L69">    private String updateBy;</span>
+
+    /**
+     * 是否为主销产品
+     * 主销产品：月均销量 &gt;= 500条
+     */
+    public boolean isMainProduct() {
+<span class="nc" id="L76">        return &quot;01&quot;.equals(this.scheduleType);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>

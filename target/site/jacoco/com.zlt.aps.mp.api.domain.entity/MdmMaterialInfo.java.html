@@ -1,0 +1,224 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MdmMaterialInfo.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">APS Forming Schedule System</a> &gt; <a href="index.source.html" class="el_package">com.zlt.aps.mp.api.domain.entity</a> &gt; <span class="el_source">MdmMaterialInfo.java</span></div><h1>MdmMaterialInfo.java</h1><pre class="source lang-java linenums">package com.zlt.aps.mp.api.domain.entity;
+
+import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableName;
+import com.zlt.aps.cx.entity.base.ApsBaseEntity;
+import io.swagger.annotations.ApiModel;
+import io.swagger.annotations.ApiModelProperty;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+
+import java.math.BigDecimal;
+
+/**
+ * 物料信息对象
+ * 对应表：T_MDM_MATERIAL_INFO
+ *
+ * @author APS Team
+ * @since 2.0.0
+ */
+<span class="nc" id="L20">@Data</span>
+<span class="nc bnc" id="L21" title="All 400 branches missed.">@EqualsAndHashCode(callSuper = true)</span>
+@TableName(&quot;T_MDM_MATERIAL_INFO&quot;)
+@ApiModel(value = &quot;物料信息对象&quot;, description = &quot;物料信息对象&quot;)
+public class MdmMaterialInfo extends ApsBaseEntity {
+
+    private static final long serialVersionUID = 1L;
+
+    @ApiModelProperty(value = &quot;MES物料大类编码&quot;)
+    @TableField(&quot;MES_MATERIAL_CATEGORY&quot;)
+<span class="nc" id="L30">    private String mesMaterialCategory;</span>
+
+    @ApiModelProperty(value = &quot;MES物料细类编码&quot;)
+    @TableField(&quot;MES_MATERIAL_SUBCATEGORY&quot;)
+<span class="nc" id="L34">    private String mesMaterialSubcategory;</span>
+
+    @ApiModelProperty(value = &quot;MES物料大类名称&quot;)
+    @TableField(&quot;MES_MATERIAL_CATE_NAME&quot;)
+<span class="nc" id="L38">    private String mesMaterialCateName;</span>
+
+    @ApiModelProperty(value = &quot;MES物料细类名称&quot;)
+    @TableField(&quot;MES_MATERIAL_SUBCAT_NAME&quot;)
+<span class="nc" id="L42">    private String mesMaterialSubcatName;</span>
+
+    @ApiModelProperty(value = &quot;物料类型&quot;)
+    @TableField(&quot;MATERIAL_CATEGORY&quot;)
+<span class="nc" id="L46">    private String materialCategory;</span>
+
+    @ApiModelProperty(value = &quot;产品分类&quot;)
+    @TableField(&quot;PRODUCT_CATEGORY&quot;)
+<span class="nc" id="L50">    private String productCategory;</span>
+
+    @ApiModelProperty(value = &quot;结构&quot;)
+    @TableField(&quot;STRUCTURE_NAME&quot;)
+<span class="nc" id="L54">    private String structureName;</span>
+
+    @ApiModelProperty(value = &quot;物料编号&quot;)
+    @TableField(&quot;MATERIAL_CODE&quot;)
+<span class="nc" id="L58">    private String materialCode;</span>
+
+    @ApiModelProperty(value = &quot;物料名称&quot;)
+    @TableField(exist = false)
+<span class="nc" id="L62">    private String materialName;</span>
+
+    @ApiModelProperty(value = &quot;产品结构&quot;)
+    @TableField(exist = false)
+<span class="nc" id="L66">    private String productStructure;</span>
+
+    @ApiModelProperty(value = &quot;物料编号(查询参数)&quot;)
+    @TableField(exist = false)
+<span class="nc" id="L70">    private String materialCodes;</span>
+
+    @ApiModelProperty(value = &quot;MES物料编号&quot;)
+    @TableField(&quot;MES_MATERIAL_CODE&quot;)
+<span class="nc" id="L74">    private String mesMaterialCode;</span>
+
+    @ApiModelProperty(value = &quot;物料描述&quot;)
+    @TableField(&quot;MATERIAL_DESC&quot;)
+<span class="nc" id="L78">    private String materialDesc;</span>
+
+    @ApiModelProperty(value = &quot;规格&quot;)
+    @TableField(&quot;SPECIFICATIONS&quot;)
+<span class="nc" id="L82">    private String specifications;</span>
+
+    @ApiModelProperty(value = &quot;主花纹&quot;)
+    @TableField(&quot;MAIN_PATTERN&quot;)
+<span class="nc" id="L86">    private String mainPattern;</span>
+
+    @ApiModelProperty(value = &quot;花纹&quot;)
+    @TableField(&quot;PATTERN&quot;)
+<span class="nc" id="L90">    private String pattern;</span>
+
+    @ApiModelProperty(value = &quot;品牌&quot;)
+    @TableField(&quot;BRAND&quot;)
+<span class="nc" id="L94">    private String brand;</span>
+
+    @ApiModelProperty(value = &quot;速度&quot;)
+    @TableField(&quot;SPEED&quot;)
+<span class="nc" id="L98">    private String speed;</span>
+
+    @ApiModelProperty(value = &quot;层级&quot;)
+    @TableField(&quot;HIERARCHY&quot;)
+<span class="nc" id="L102">    private String hierarchy;</span>
+
+    @ApiModelProperty(value = &quot;英寸&quot;)
+    @TableField(&quot;PRO_SIZE&quot;)
+<span class="nc" id="L106">    private String proSize;</span>
+
+    @ApiModelProperty(value = &quot;性能&quot;)
+    @TableField(&quot;ABILITY&quot;)
+<span class="nc" id="L110">    private String ability;</span>
+
+    @ApiModelProperty(value = &quot;不可生产：0-否 1-是&quot;)
+    @TableField(&quot;CANT_PRODUCE&quot;)
+<span class="nc" id="L114">    private Integer cantProduce;</span>
+
+    @ApiModelProperty(value = &quot;胎胚编码&quot;)
+    @TableField(&quot;EMBRYO_CODE&quot;)
+<span class="nc" id="L118">    private String embryoCode;</span>
+
+    @ApiModelProperty(value = &quot;胎胚描述&quot;)
+    @TableField(&quot;EMBRYO_DESC&quot;)
+<span class="nc" id="L122">    private String embryoDesc;</span>
+
+    @ApiModelProperty(value = &quot;断面宽&quot;)
+    @TableField(&quot;SECTION_WIDTH&quot;)
+<span class="nc" id="L126">    private String sectionWidth;</span>
+
+    @ApiModelProperty(value = &quot;品名编码&quot;)
+    @TableField(&quot;PRODUCT_TYPE_CODE&quot;)
+<span class="nc" id="L130">    private String productTypeCode;</span>
+
+    @ApiModelProperty(value = &quot;品名&quot;)
+    @TableField(&quot;PRODUCT_TYPE_NAME&quot;)
+<span class="nc" id="L134">    private String productTypeName;</span>
+
+    @ApiModelProperty(value = &quot;模具大类&quot;)
+    @TableField(&quot;MOULD_CATEGORY&quot;)
+<span class="nc" id="L138">    private String mouldCategory;</span>
+
+    @ApiModelProperty(value = &quot;轮胎类型&quot;)
+    @TableField(&quot;TIRE_TYPE&quot;)
+<span class="nc" id="L142">    private String tireType;</span>
+
+    @ApiModelProperty(value = &quot;公用类型&quot;)
+    @TableField(&quot;COMMON_TYPE&quot;)
+<span class="nc" id="L146">    private String commonType;</span>
+
+    @ApiModelProperty(value = &quot;替换品种分组&quot;)
+    @TableField(&quot;REPLACE_GROUP&quot;)
+<span class="nc" id="L150">    private String replaceGroup;</span>
+
+    @ApiModelProperty(value = &quot;不能发货：0-否 1-是&quot;)
+    @TableField(&quot;NO_DELIVERY&quot;)
+<span class="nc" id="L154">    private Integer noDelivery;</span>
+
+    @ApiModelProperty(value = &quot;环保&quot;)
+    @TableField(&quot;ENVIRONMENT_PROTECTION&quot;)
+<span class="nc" id="L158">    private String environmentProtection;</span>
+
+    @ApiModelProperty(value = &quot;认证串&quot;)
+    @TableField(&quot;AUTHENTICATION&quot;)
+<span class="nc" id="L162">    private String authentication;</span>
+
+    @ApiModelProperty(value = &quot;物料组&quot;)
+    @TableField(&quot;MATERIAL_GROUP_CODE&quot;)
+<span class="nc" id="L166">    private String materialGroupCode;</span>
+
+    @ApiModelProperty(value = &quot;废停标志&quot;)
+    @TableField(&quot;FORBID_TAG&quot;)
+<span class="nc" id="L170">    private String forbidTag;</span>
+
+    @ApiModelProperty(value = &quot;单胎重量&quot;)
+    @TableField(&quot;SINGLE_TIRE_WEIGHT&quot;)
+<span class="nc" id="L174">    private BigDecimal singleTireWeight;</span>
+
+    @ApiModelProperty(value = &quot;合模压力 PA&quot;)
+    @TableField(&quot;MOULD_CLAMPING_PRESSURE&quot;)
+<span class="nc" id="L178">    private BigDecimal mouldClampingPressure;</span>
+
+    @ApiModelProperty(value = &quot;毛利率Json&quot;)
+    @TableField(&quot;GROSS_RATE_JSON&quot;)
+<span class="nc" id="L182">    private String grossRateJson;</span>
+
+    @ApiModelProperty(value = &quot;外销毛利率&quot;)
+    @TableField(exist = false)
+<span class="nc" id="L186">    private BigDecimal outGrossRate;</span>
+
+    @ApiModelProperty(value = &quot;内销毛利率&quot;)
+    @TableField(exist = false)
+<span class="nc" id="L190">    private BigDecimal inGrossRate;</span>
+
+    @ApiModelProperty(value = &quot;OE毛利率&quot;)
+    @TableField(exist = false)
+<span class="nc" id="L194">    private BigDecimal oeGrossRate;</span>
+
+    @ApiModelProperty(value = &quot;是否查询轮胎类型空数据&quot;)
+    @TableField(exist = false)
+<span class="nc" id="L198">    private String isTireTypeNullData;</span>
+
+    @ApiModelProperty(value = &quot;是否查询共用类型空数据&quot;)
+    @TableField(exist = false)
+<span class="nc" id="L202">    private String isCommonTypeNullData;</span>
+
+    @ApiModelProperty(value = &quot;是否查询品牌空数据&quot;)
+    @TableField(exist = false)
+<span class="nc" id="L206">    private String isBrandNullData;</span>
+
+    @ApiModelProperty(value = &quot;质控状态&quot;)
+    @TableField(&quot;QUALITY_STATE_CODE&quot;)
+<span class="nc" id="L210">    private String qualityStateCode;</span>
+
+    @ApiModelProperty(value = &quot;制造示方书号&quot;)
+    @TableField(exist = false)
+<span class="nc" id="L214">    private String embryoNo;</span>
+
+    @ApiModelProperty(value = &quot;文字示方书号&quot;)
+    @TableField(exist = false)
+<span class="nc" id="L218">    private String textNo;</span>
+
+    @ApiModelProperty(value = &quot;硫化示方书号&quot;)
+    @TableField(exist = false)
+<span class="nc" id="L222">    private String lhNo;</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.8.202204050719</span></div></body></html>
