@@ -442,6 +442,156 @@ public class ProductionCalculator {
     }
 
     /**
+     * 收尾计划量计算
+     *
+     * <p>收尾规则：
+     * <ul>
+     *   <li><b>主销产品</b>（月均销量≥500条）：即使收尾剩下的量不够一整车，也按整车下，多做的当库存</li>
+     *   <li><b>非主销产品</b>：
+     *     <ul>
+     *       <li>余量≤2条：不做了，直接舍弃</li>
+     *       <li>余量>2条：按实际量下，不凑整车</li>
+     *     </ul>
+     *   </li>
+     * </ul>
+     *
+     * <p>示例：
+     * <ul>
+     *   <li>主销产品，余量8条，整车12条 → 计划12条，多做的4条当库存</li>
+     *   <li>非主销产品，余量2条 → 计划0条，舍弃2条</li>
+     *   <li>非主销产品，余量5条 → 计划5条，不凑整车</li>
+     * </ul>
+     *
+     * @param endingSurplus 收尾余量
+     * @param tripCapacity  整车容量
+     * @param isMainProduct 是否主销产品
+     * @param embryoCode    胎胚编码（日志用）
+     * @return 收尾计划量结果
+     */
+    public PlanQuantityResult calculateEndingQuantity(
+            int endingSurplus,
+            int tripCapacity,
+            boolean isMainProduct,
+            String embryoCode) {
+
+        PlanQuantityResult result = new PlanQuantityResult();
+        result.setEndingTask(true);
+        result.setTripCapacity(tripCapacity);
+        result.setMainProduct(isMainProduct);
+
+        if (endingSurplus <= 0) {
+            result.setPlanQuantity(0);
+            result.setTripCount(0);
+            log.info("收尾任务 {} 余量为 {}，不需要生产", embryoCode, endingSurplus);
+            return result;
+        }
+
+        if (isMainProduct) {
+            // 主销产品：按整车下，多做的当库存
+            int trips = calculateTrips(endingSurplus, tripCapacity);
+            int planQuantity = trips * tripCapacity;
+            int extraInventory = planQuantity - endingSurplus; // 多做的部分
+
+            result.setPlanQuantity(planQuantity);
+            result.setTripCount(trips);
+            result.setExactClosing(false); // 按整车取整
+            result.setExtraInventory(extraInventory);
+
+            log.info("收尾任务 {} 主销产品，余量 {} 条，按整车 {} 条下，多做的 {} 条当库存",
+                    embryoCode, endingSurplus, planQuantity, extraInventory);
+        } else {
+            // 非主销产品
+            if (endingSurplus <= 2) {
+                // 余量≤2条：舍弃，不做了
+                result.setPlanQuantity(0);
+                result.setTripCount(0);
+                result.setAbandoned(true);
+                result.setAbandonedQuantity(endingSurplus);
+
+                log.info("收尾任务 {} 非主销产品，余量 {} 条≤2条，舍弃不生产", embryoCode, endingSurplus);
+            } else {
+                // 余量>2条：按实际量下，不凑整车
+                result.setPlanQuantity(endingSurplus);
+                result.setTripCount(0); // 不按车次
+                result.setExactClosing(true); // 精确数量
+
+                log.info("收尾任务 {} 非主销产品，余量 {} 条>2条，按实际量下",
+                        embryoCode, endingSurplus);
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * 收尾计划量计算（完整版）
+     *
+     * <p>包含库存计算的综合版本：
+     * <ol>
+     *   <li>计算待排量 = 收尾余量 - 成型余量（库存）</li>
+     *   <li>根据是否主销产品应用收尾规则</li>
+     * </ol>
+     *
+     * @param embryoCode      胎胚编码
+     * @param structureName   结构名称
+     * @param endingSurplus   收尾余量
+     * @param isMainProduct   是否主销产品
+     * @param context         排程上下文
+     * @param scheduleDate    排程日期
+     * @return 收尾计划量结果
+     */
+    public PlanQuantityResult calculateEndingQuantityWithStock(
+            String embryoCode,
+            String structureName,
+            int endingSurplus,
+            boolean isMainProduct,
+            ScheduleContextDTO context,
+            LocalDate scheduleDate) {
+
+        // 获取成型余量（库存）
+        int formingRemainder = getFormingRemainder(embryoCode, context);
+
+        // 计算待排量 = 收尾余量 - 库存
+        int remainingToProduce = Math.max(0, endingSurplus - formingRemainder);
+
+        // 获取整车容量
+        int tripCapacity = getTripCapacity(structureName, context);
+
+        // 调用基础收尾计算
+        PlanQuantityResult result = calculateEndingQuantity(
+                remainingToProduce, tripCapacity, isMainProduct, embryoCode);
+
+        // 补充信息
+        result.setEmbryoCode(embryoCode);
+        result.setStructureName(structureName);
+        result.setFormingRemainder(formingRemainder);
+        result.setVulcanizeDemand(endingSurplus); // 收尾余量作为需求
+
+        log.info("收尾任务 {} 综合计算：收尾余量={}, 成型余量={}, 待排={}, 是否主销={}, 计划量={}",
+                embryoCode, endingSurplus, formingRemainder, remainingToProduce,
+                isMainProduct, result.getPlanQuantity());
+
+        return result;
+    }
+
+    /**
+     * 检查是否为主销产品
+     *
+     * <p>主销产品定义：月均销量≥500条，SKU排产分类SCHEDULE_TYPE='01'
+     *
+     * @param materialCode 物料编码
+     * @param context      排程上下文
+     * @return 是否主销产品
+     */
+    public boolean isMainProduct(String materialCode, ScheduleContextDTO context) {
+        Set<String> mainProductCodes = context.getMainProductCodes();
+        if (mainProductCodes != null) {
+            return mainProductCodes.contains(materialCode);
+        }
+        return false;
+    }
+
+    /**
      * 试制量试计划量计算
      *
      * <p>试制规则：
@@ -644,6 +794,7 @@ public class ProductionCalculator {
      * <p>处理逻辑：
      * <ol>
      *   <li>判断是否试制任务 → 使用试制规则</li>
+     *   <li>判断是否收尾任务 → 使用收尾规则</li>
      *   <li>判断是否停产日 → 使用停产收尾规则</li>
      *   <li>判断是否开产日 → 使用开产规则</li>
      *   <li>正常情况 → 波浪分配</li>
@@ -651,7 +802,7 @@ public class ProductionCalculator {
      *
      * @param embryoCode    胎胚编码
      * @param structureName 结构名称
-     * @param materialCode  物料编码（用于判断关键产品）
+     * @param materialCode  物料编码（用于判断关键产品/主销产品）
      * @param trialDemand   试制需求量（如果是试制任务）
      * @param context       排程上下文
      * @param scheduleDate  排程日期
@@ -662,6 +813,40 @@ public class ProductionCalculator {
             String structureName,
             String materialCode,
             Integer trialDemand,
+            ScheduleContextDTO context,
+            LocalDate scheduleDate) {
+
+        return calculateComprehensive(embryoCode, structureName, materialCode,
+                trialDemand, null, context, scheduleDate);
+    }
+
+    /**
+     * 综合计划量计算（完整版，支持收尾场景）
+     *
+     * <p>处理逻辑：
+     * <ol>
+     *   <li>判断是否试制任务 → 使用试制规则</li>
+     *   <li>判断是否收尾任务 → 使用收尾规则</li>
+     *   <li>判断是否停产日 → 使用停产收尾规则</li>
+     *   <li>判断是否开产日 → 使用开产规则</li>
+     *   <li>正常情况 → 波浪分配</li>
+     * </ol>
+     *
+     * @param embryoCode      胎胚编码
+     * @param structureName   结构名称
+     * @param materialCode    物料编码（用于判断关键产品/主销产品）
+     * @param trialDemand     试制需求量（如果是试制任务）
+     * @param endingSurplus   收尾余量（如果是收尾任务）
+     * @param context         排程上下文
+     * @param scheduleDate    排程日期
+     * @return 计算结果（包含班次分配）
+     */
+    public PlanQuantityResult calculateComprehensive(
+            String embryoCode,
+            String structureName,
+            String materialCode,
+            Integer trialDemand,
+            Integer endingSurplus,
             ScheduleContextDTO context,
             LocalDate scheduleDate) {
 
@@ -680,13 +865,33 @@ public class ProductionCalculator {
             return trialResult;
         }
 
-        // Step 2: 判断是否停产日
+        // Step 2: 判断是否收尾任务
+        if (endingSurplus != null && endingSurplus > 0) {
+            boolean isMainProduct = isMainProduct(materialCode, context);
+            PlanQuantityResult endingResult = calculateEndingQuantityWithStock(
+                    embryoCode, structureName, endingSurplus, isMainProduct, context, scheduleDate);
+
+            // 收尾任务：安排在早班或中班（不安排夜班）
+            int planQuantity = endingResult.getPlanQuantity();
+            if (planQuantity > 0) {
+                Map<String, Integer> endingShiftAllocation = new LinkedHashMap<>();
+                // 收尾任务优先安排在早班
+                endingShiftAllocation.put("SHIFT_NIGHT", 0);
+                endingShiftAllocation.put(TRIAL_SHIFT_DAY, planQuantity);
+                endingShiftAllocation.put(TRIAL_SHIFT_AFTERNOON, 0);
+                endingResult.setShiftAllocation(endingShiftAllocation);
+            }
+
+            return endingResult;
+        }
+
+        // Step 3: 判断是否停产日
         Boolean isClosingDay = context.getIsClosingDay();
         if (isClosingDay != null && isClosingDay) {
             return calculateClosingDayQuantity(embryoCode, structureName, context, scheduleDate);
         }
 
-        // Step 3: 判断是否开产日
+        // Step 4: 判断是否开产日
         Boolean isOpeningDay = context.getIsOpeningDay();
         if (isOpeningDay != null && isOpeningDay) {
             boolean isKeyProduct = isKeyProduct(materialCode, context);
@@ -723,7 +928,7 @@ public class ProductionCalculator {
             return openingResult;
         }
 
-        // Step 4: 正常情况计算
+        // Step 5: 正常情况计算
         PlanQuantityResult result = calculatePlanQuantity(embryoCode, structureName, context, scheduleDate);
 
         // 波浪分配到班次
@@ -810,6 +1015,18 @@ public class ProductionCalculator {
         private int firstShiftHours;
         private int openingShiftReduction;
         private List<String> allowedShifts;
+
+        // 收尾相关字段
+        /** 是否收尾任务 */
+        private boolean endingTask;
+        /** 是否主销产品 */
+        private boolean mainProduct;
+        /** 是否被舍弃（非主销产品余量≤2条） */
+        private boolean abandoned;
+        /** 舍弃数量（被舍弃的余量） */
+        private int abandonedQuantity;
+        /** 多做的库存量（主销产品按整车下时） */
+        private int extraInventory;
     }
 
     /**

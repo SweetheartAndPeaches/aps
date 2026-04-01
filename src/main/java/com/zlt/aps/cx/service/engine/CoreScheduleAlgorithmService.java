@@ -253,6 +253,14 @@ public interface CoreScheduleAlgorithmService {
         private Boolean isLastEndingBatch;
         /** 班次分配结果（班次编码 -> 计划量） */
         private Map<String, Integer> shiftAllocation;
+
+        // ==================== 收尾处理新增字段 ====================
+        /** 收尾是否被舍弃（非主销产品余量≤2条） */
+        private Boolean endingAbandoned;
+        /** 舍弃数量 */
+        private Integer endingAbandonedQty;
+        /** 多做的库存量（主销产品按整车下时） */
+        private Integer endingExtraInventory;
         
         // ==================== 新增任务排序相关字段 ====================
         /** 月计划优先级 */
