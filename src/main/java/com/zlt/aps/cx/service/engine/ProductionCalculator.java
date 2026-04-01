@@ -777,11 +777,37 @@ public class ProductionCalculator {
 
     /**
      * 检查是否为关键产品
+     *
+     * <p>关键产品定义：从 CxKeyProduct 表获取，使用胎胚编码（embryoCode）
+     * <p>用于开产首班排除等场景判断
+     *
+     * @param embryoCode 胎胚编码
+     * @param context    排程上下文
+     * @return 是否关键产品
      */
-    public boolean isKeyProduct(String materialCode, ScheduleContextDTO context) {
+    public boolean isKeyProduct(String embryoCode, ScheduleContextDTO context) {
         Set<String> keyProductCodes = context.getKeyProductCodes();
-        if (keyProductCodes != null) {
-            return keyProductCodes.contains(materialCode);
+        if (keyProductCodes != null && embryoCode != null) {
+            return keyProductCodes.contains(embryoCode);
+        }
+        return false;
+    }
+
+    /**
+     * 检查是否为主销产品
+     *
+     * <p>主销产品定义：月均销量≥500条，SKU排产分类SCHEDULE_TYPE='01'
+     * <p>从 MdmSkuScheduleCategory 表获取，使用物料编码（materialCode）
+     * <p>用于收尾时判断是否按整车下
+     *
+     * @param materialCode 物料编码
+     * @param context      排程上下文
+     * @return 是否主销产品
+     */
+    public boolean isMainProduct(String materialCode, ScheduleContextDTO context) {
+        Set<String> mainProductCodes = context.getMainProductCodes();
+        if (mainProductCodes != null && materialCode != null) {
+            return mainProductCodes.contains(materialCode);
         }
         return false;
     }
@@ -800,9 +826,9 @@ public class ProductionCalculator {
      *   <li>正常情况 → 波浪分配</li>
      * </ol>
      *
-     * @param embryoCode    胎胚编码
+     * @param embryoCode    胎胚编码（用于判断关键产品，来自 CxKeyProduct.embryoCode）
      * @param structureName 结构名称
-     * @param materialCode  物料编码（用于判断关键产品/主销产品）
+     * @param materialCode  物料编码（用于判断主销产品，来自 MdmSkuScheduleCategory.materialCode）
      * @param trialDemand   试制需求量（如果是试制任务）
      * @param context       排程上下文
      * @param scheduleDate  排程日期
@@ -832,9 +858,16 @@ public class ProductionCalculator {
      *   <li>正常情况 → 波浪分配</li>
      * </ol>
      *
-     * @param embryoCode      胎胚编码
+     * <p><b>数据来源说明：</b>
+     * <ul>
+     *   <li><b>关键产品</b>：CxKeyProduct 表，使用胎胚编码（embryoCode）判断</li>
+     *   <li><b>主销产品</b>：MdmSkuScheduleCategory 表（scheduleType='01'），使用物料编码（materialCode）判断</li>
+     *   <li><b>成型余量</b>：MdmMonthSurplus 表，按物料维度计算</li>
+     * </ul>
+     *
+     * @param embryoCode      胎胚编码（用于判断关键产品）
      * @param structureName   结构名称
-     * @param materialCode    物料编码（用于判断关键产品/主销产品）
+     * @param materialCode    物料编码（用于判断主销产品）
      * @param trialDemand     试制需求量（如果是试制任务）
      * @param endingSurplus   收尾余量（如果是收尾任务）
      * @param context         排程上下文
@@ -894,7 +927,8 @@ public class ProductionCalculator {
         // Step 4: 判断是否开产日
         Boolean isOpeningDay = context.getIsOpeningDay();
         if (isOpeningDay != null && isOpeningDay) {
-            boolean isKeyProduct = isKeyProduct(materialCode, context);
+            // 关键产品判断使用胎胚编码（embryoCode）
+            boolean isKeyProduct = isKeyProduct(embryoCode, context);
             PlanQuantityResult openingResult = calculateOpeningDayQuantity(
                     embryoCode, structureName, isKeyProduct, context, scheduleDate);
 

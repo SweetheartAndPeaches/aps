@@ -177,8 +177,10 @@ public interface CoreScheduleAlgorithmService {
      */
     @lombok.Data
     class DailyEmbryoTask {
-        /** 胎胚编码 */
+        /** 胎胚编码（注意：此字段名为 materialCode 但实际存储的是 embryoCode） */
         private String materialCode;
+        /** 物料编码（真正的物料编码，用于判断主销产品） */
+        private String relatedMaterialCode;
         /** 物料名称 */
         private String materialName;
         /** 结构名称 */

@@ -217,6 +217,8 @@ public class TaskGroupService {
         if (material != null) {
             task.setMaterialName(material.getMaterialDesc());
             task.setStructureName(material.getStructureName());
+            // 设置关联的物料编码（用于判断主销产品）
+            task.setRelatedMaterialCode(material.getMaterialCode());
         } else {
             task.setMaterialName(embryoCode);
             task.setStructureName(structureName);
@@ -226,9 +228,11 @@ public class TaskGroupService {
         task.setAssignedQuantity(0);
         task.setRemainingQuantity(dailyDemand);
 
-        // 是否主销产品
+        // 是否主销产品（使用物料编码判断，而不是胎胚编码）
+        String relatedMaterialCode = task.getRelatedMaterialCode();
         task.setIsMainProduct(context.getMainProductCodes() != null 
-                && context.getMainProductCodes().contains(embryoCode));
+                && relatedMaterialCode != null
+                && context.getMainProductCodes().contains(relatedMaterialCode));
 
         // 计算库存时长
         calculateStockHours(task, lhResults, currentStock);
