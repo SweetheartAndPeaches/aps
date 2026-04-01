@@ -40,6 +40,7 @@ import java.util.stream.Collectors;
 public class ContinueTaskProcessor {
 
     private final BalancingService balancingService;
+    private final ProductionCalculator productionCalculator;
 
     /** 开产首班排产时长（小时） */
     private static final int OPENING_SHIFT_HOURS = 6;
@@ -419,15 +420,19 @@ public class ContinueTaskProcessor {
             LocalDate scheduleDate,
             boolean isOpeningDay) {
         
-        BigDecimal lossRate = context.getLossRate() != null ? context.getLossRate() : new BigDecimal("0.02");
-        
-        int dailyVulcanize = task.getVulcanizeDemand() != null ? task.getVulcanizeDemand() : 0;
-        int allocatedStock = task.getAllocatedStock() != null ? task.getAllocatedStock() : 0;
-        int exceptionAllocation = task.getCatchUpQuantity() != null ? task.getCatchUpQuantity() : 0;
-        
-        int baseProduction = Math.max(0, dailyVulcanize - allocatedStock);
-        int plannedProduction = (int) Math.ceil(baseProduction * (1 + lossRate.doubleValue())) + exceptionAllocation;
-        
+        // 使用 ProductionCalculator 计算计划量
+        ProductionCalculator.PlanQuantityResult calcResult = productionCalculator.calculateComprehensive(
+                task.getMaterialCode(),
+                task.getStructureName(),
+                task.getMaterialCode(),
+                null, // 续作任务不是试制
+                context,
+                scheduleDate
+        );
+
+        int plannedProduction = calcResult.getPlanQuantity();
+
+        // 考虑机台产能限制
         int machineMaxCapacity = getMachineDailyCapacity(
                 task.getContinueMachineCodes() != null && !task.getContinueMachineCodes().isEmpty() 
                         ? task.getContinueMachineCodes().get(0) : null, context);
@@ -439,6 +444,11 @@ public class ContinueTaskProcessor {
         plannedProduction = Math.max(0, plannedProduction);
         
         task.setPlannedProduction(plannedProduction);
+
+        // 保存班次分配结果
+        if (calcResult.getShiftAllocation() != null) {
+            task.setShiftAllocation(calcResult.getShiftAllocation());
+        }
     }
     
     public void handleOpeningClosingDay(
@@ -533,14 +543,7 @@ public class ContinueTaskProcessor {
     }
 
     private int getTripCapacity(String structureCode, ScheduleContextDTO context) {
-        if (context.getStructureShiftCapacities() != null) {
-            for (CxStructureShiftCapacity capacity : context.getStructureShiftCapacities()) {
-                if (structureCode.equals(capacity.getStructureCode()) && capacity.getTripQty() != null && capacity.getTripQty() > 0) {
-                    return capacity.getTripQty();
-                }
-            }
-        }
-        return context.getDefaultTripCapacity() != null ? context.getDefaultTripCapacity() : DEFAULT_TRIP_CAPACITY;
+        return productionCalculator.getTripCapacity(structureCode, context);
     }
 
     private int getMachineHourlyCapacity(String machineCode, String structureName, ScheduleContextDTO context) {

@@ -1,6 +1,10 @@
 package com.zlt.aps.cx.service.engine;
 
 import com.zlt.aps.cx.dto.ScheduleContextDTO;
+import com.zlt.aps.cx.entity.CxStock;
+import com.zlt.aps.cx.entity.config.CxShiftConfig;
+import com.zlt.aps.cx.entity.config.CxStructureShiftCapacity;
+import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
 import com.zlt.aps.mp.api.domain.entity.MdmCxMachineFixed;
 import com.zlt.aps.mp.api.domain.entity.MdmMoldingMachine;
 import com.zlt.aps.mp.api.domain.entity.MpCxCapacityConfiguration;
@@ -15,15 +19,30 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * 排量计算服务
+ * 计划量计算服务
  * 
- * <p>负责统一处理各种排量计算逻辑：
+ * <p>负责成型排程的计划量计算：
  * <ul>
- *   <li>计算待排产量</li>
- *   <li>计算开停产特殊处理</li>
- *   <li>整车取整</li>
- *   <li>损耗率计算</li>
- *   <li>机台产能计算</li>
+ *   <li>计算待排产量（硫化需求 - 成型余量）</li>
+ *   <li>整车换算</li>
+ *   <li>波浪分配到班次</li>
+ *   <li>特殊情况处理（开产、停产、试制、停机）</li>
+ * </ul>
+ *
+ * <h3>正常情况计算流程：</h3>
+ * <ol>
+ *   <li>已知成型机安排的胎胚及对应的硫化任务</li>
+ *   <li>计算今天需求 = 硫化任务需求 - 成型余量（库存）</li>
+ *   <li>按整车换算（查询 CxStructureShiftCapacity.tripQty）</li>
+ *   <li>波浪分配到3个班次（相邻班次差距不超过1车）</li>
+ * </ol>
+ *
+ * <h3>特殊情况：</h3>
+ * <ul>
+ *   <li><b>停产</b>：成型停机比硫化停火提前1班，精确收尾，库存归零</li>
+ *   <li><b>开产</b>：首班只排6小时，关键产品从第二班开始</li>
+ *   <li><b>试制量试</b>：只能安排早班或中班，数量必须是双数</li>
+ *   <li><b>设备计划停机</b>：库存够4小时继续生产，不够减半消化</li>
  * </ul>
  *
  * @author APS Team
@@ -48,70 +67,495 @@ public class ProductionCalculator {
     /** 默认日产能 */
     public static final int DEFAULT_DAILY_CAPACITY = 1200;
 
+    /** 开产首班工作时长（小时） */
+    public static final int OPENING_SHIFT_HOURS = 6;
+
+    /** 试制量试允许的班次时间范围 */
+    public static final String TRIAL_SHIFT_DAY = "SHIFT_DAY";        // 早班
+    public static final String TRIAL_SHIFT_AFTERNOON = "SHIFT_AFTERNOON";  // 中班
+
+    // ==================== 核心计算方法 ====================
+
     /**
-     * 计算待排产量
+     * 计算胎胚的今日计划量
      *
-     * <p>计算逻辑：
+     * <p>计算流程：
      * <ol>
-     *   <li>获取日硫化需求量</li>
-     *   <li>减去已分配库存</li>
-     *   <li>考虑损耗率</li>
-     *   <li>整车取整</li>
+     *   <li>获取硫化需求</li>
+     *   <li>计算成型余量（库存）</li>
+     *   <li>计算待排产量</li>
+     *   <li>整车换算</li>
      * </ol>
      *
-     * @param dailyVulcanizeDemand 日硫化需求量
-     * @param allocatedStock       已分配库存
-     * @param lossRate             损耗率
-     * @param tripCapacity         整车容量
-     * @param roundMode            取整模式（CEILING/FLOOR/ROUND）
-     * @return 待排产量
+     * @param embryoCode    胎胚编码
+     * @param structureName 结构名称
+     * @param context       排程上下文
+     * @param scheduleDate  排程日期
+     * @return 计划量结果
      */
-    public int calculatePlannedProduction(
-            int dailyVulcanizeDemand,
-            int allocatedStock,
-            BigDecimal lossRate,
-            int tripCapacity,
-            String roundMode) {
+    public PlanQuantityResult calculatePlanQuantity(
+            String embryoCode,
+            String structureName,
+            ScheduleContextDTO context,
+            LocalDate scheduleDate) {
 
-        if (dailyVulcanizeDemand <= 0) {
-            return 0;
-        }
+        PlanQuantityResult result = new PlanQuantityResult();
+        result.setEmbryoCode(embryoCode);
+        result.setStructureName(structureName);
 
-        if (lossRate == null) {
-            lossRate = DEFAULT_LOSS_RATE;
-        }
+        // Step 1: 获取硫化需求
+        int vulcanizeDemand = getVulcanizeDemand(embryoCode, context, scheduleDate);
+        result.setVulcanizeDemand(vulcanizeDemand);
 
-        // 基础产量 = 硫化需求 - 已分配库存
-        int baseProduction = Math.max(0, dailyVulcanizeDemand - allocatedStock);
+        // Step 2: 计算成型余量（库存）
+        int formingRemainder = getFormingRemainder(embryoCode, context);
+        result.setFormingRemainder(formingRemainder);
 
-        // 考虑损耗率
+        // Step 3: 计算待排产量 = 硫化需求 - 成型余量
+        int baseProduction = Math.max(0, vulcanizeDemand - formingRemainder);
+
+        // Step 4: 考虑损耗率
+        BigDecimal lossRate = getLossRate(context);
         int productionWithLoss = (int) Math.ceil(baseProduction * (1 + lossRate.doubleValue()));
 
-        // 整车取整
-        return roundToTrip(productionWithLoss, tripCapacity, roundMode);
+        // Step 5: 整车换算
+        int tripCapacity = getTripCapacity(structureName, context);
+        int trips = calculateTrips(productionWithLoss, tripCapacity);
+        int planQuantity = trips * tripCapacity;
+
+        result.setTripCapacity(tripCapacity);
+        result.setTripCount(trips);
+        result.setPlanQuantity(planQuantity);
+
+        log.debug("胎胚 {} 计划量计算：硫化需求={}, 成型余量={}, 待排={}, 整车容量={}, 车次={}, 计划量={}",
+                embryoCode, vulcanizeDemand, formingRemainder, productionWithLoss,
+                tripCapacity, trips, planQuantity);
+
+        return result;
     }
 
     /**
-     * 计算待排产量（简化版）
+     * 获取硫化需求
+     *
+     * <p>从硫化排程结果中获取该胎胚今日的需求量
      */
-    public int calculatePlannedProduction(
-            Integer dailyVulcanizeDemand,
-            Integer allocatedStock,
-            BigDecimal lossRate) {
+    public int getVulcanizeDemand(String embryoCode, ScheduleContextDTO context, LocalDate scheduleDate) {
+        List<LhScheduleResult> lhResults = context.getLhScheduleResults();
+        if (lhResults == null || lhResults.isEmpty()) {
+            return 0;
+        }
 
-        int demand = dailyVulcanizeDemand != null ? dailyVulcanizeDemand : 0;
-        int stock = allocatedStock != null ? allocatedStock : 0;
-        
-        return calculatePlannedProduction(demand, stock, lossRate, DEFAULT_TRIP_CAPACITY, "CEILING");
+        int totalDemand = 0;
+        for (LhScheduleResult result : lhResults) {
+            if (embryoCode.equals(result.getEmbryoCode())) {
+                // 获取日计划数量
+                Integer dailyPlanQty = result.getDailyPlanQty();
+                if (dailyPlanQty != null && dailyPlanQty > 0) {
+                    totalDemand += dailyPlanQty;
+                }
+            }
+        }
+
+        return totalDemand;
+    }
+
+    /**
+     * 计算成型余量（胎胚库存）
+     *
+     * <p>成型余量 = 该胎胚的当前库存
+     */
+    public int getFormingRemainder(String embryoCode, ScheduleContextDTO context) {
+        List<CxStock> stocks = context.getStocks();
+        if (stocks == null || stocks.isEmpty()) {
+            return 0;
+        }
+
+        for (CxStock stock : stocks) {
+            if (embryoCode.equals(stock.getMaterialCode())) {
+                Integer qty = stock.getQuantity();
+                return qty != null && qty > 0 ? qty : 0;
+            }
+        }
+
+        return 0;
+    }
+
+    /**
+     * 计算需要的车次
+     *
+     * <p>向上取整，确保覆盖需求
+     */
+    public int calculateTrips(int quantity, int tripCapacity) {
+        if (quantity <= 0 || tripCapacity <= 0) {
+            return 0;
+        }
+        return (int) Math.ceil((double) quantity / tripCapacity);
+    }
+
+    /**
+     * 波浪分配车次到班次
+     *
+     * <p>波浪规则：
+     * <ul>
+     *   <li>相邻班次差距不超过1车</li>
+     *   <li>分配顺序：夜班-早班-中班（按班次配置顺序）</li>
+     *   <li>波浪形态：两端多，中间少</li>
+     * </ul>
+     *
+     * <p>示例：5车分配到3班 → 2-1-2 → 30-15-30条
+     *
+     * @param totalTrips  总车次
+     * @param shiftCount  班次数量
+     * @param tripCapacity 每车条数
+     * @return 各班次分配量（条）
+     */
+    public Map<String, Integer> waveAllocation(int totalTrips, int shiftCount, int tripCapacity) {
+        Map<String, Integer> result = new LinkedHashMap<>();
+
+        if (totalTrips <= 0 || shiftCount <= 0) {
+            for (int i = 0; i < shiftCount; i++) {
+                result.put("SHIFT_" + (i + 1), 0);
+            }
+            return result;
+        }
+
+        // 计算基础分配
+        int baseTripsPerShift = totalTrips / shiftCount;
+        int remainder = totalTrips % shiftCount;
+
+        // 波浪分配：将余数分配给两端
+        int[] shiftTrips = new int[shiftCount];
+        for (int i = 0; i < shiftCount; i++) {
+            shiftTrips[i] = baseTripsPerShift;
+        }
+
+        // 分配余数：优先分配给两端，形成波浪
+        if (remainder > 0) {
+            // 先分配给第一个班次
+            shiftTrips[0]++;
+            remainder--;
+
+            // 如果还有余数，分配给最后一个班次
+            if (remainder > 0 && shiftCount > 1) {
+                shiftTrips[shiftCount - 1]++;
+                remainder--;
+            }
+
+            // 如果还有余数，继续从两端分配
+            int left = 1;
+            int right = shiftCount - 2;
+            while (remainder > 0) {
+                if (left <= right) {
+                    shiftTrips[left]++;
+                    remainder--;
+                    left++;
+                }
+                if (remainder > 0 && right >= left) {
+                    shiftTrips[right]++;
+                    remainder--;
+                    right--;
+                }
+            }
+        }
+
+        // 验证波浪规则：相邻班次差距不超过1车
+        for (int i = 1; i < shiftCount; i++) {
+            int diff = Math.abs(shiftTrips[i] - shiftTrips[i - 1]);
+            if (diff > 1) {
+                log.warn("波浪分配警告：班次 {} 和 {} 差距 {} 车超过1车", i, i + 1, diff);
+            }
+        }
+
+        // 转换为条数并生成结果
+        for (int i = 0; i < shiftCount; i++) {
+            result.put("SHIFT_" + (i + 1), shiftTrips[i] * tripCapacity);
+        }
+
+        log.info("波浪分配：总车次={}, 班次数={}, 分配结果={}", totalTrips, shiftCount, result);
+
+        return result;
+    }
+
+    /**
+     * 波浪分配（使用班次配置）
+     *
+     * @param totalTrips    总车次
+     * @param shiftConfigs  班次配置列表
+     * @param tripCapacity  每车条数
+     * @return 班次编码 -> 分配量
+     */
+    public Map<String, Integer> waveAllocationWithShifts(
+            int totalTrips,
+            List<CxShiftConfig> shiftConfigs,
+            int tripCapacity) {
+
+        Map<String, Integer> result = new LinkedHashMap<>();
+
+        if (shiftConfigs == null || shiftConfigs.isEmpty()) {
+            return result;
+        }
+
+        int shiftCount = shiftConfigs.size();
+        int[] shiftTrips = new int[shiftCount];
+
+        if (totalTrips > 0) {
+            // 计算基础分配
+            int baseTripsPerShift = totalTrips / shiftCount;
+            int remainder = totalTrips % shiftCount;
+
+            for (int i = 0; i < shiftCount; i++) {
+                shiftTrips[i] = baseTripsPerShift;
+            }
+
+            // 波浪分配余数
+            if (remainder > 0) {
+                // 分配给两端
+                shiftTrips[0]++;
+                remainder--;
+
+                if (remainder > 0 && shiftCount > 1) {
+                    shiftTrips[shiftCount - 1]++;
+                    remainder--;
+                }
+
+                // 继续分配
+                int left = 1;
+                int right = shiftCount - 2;
+                while (remainder > 0 && left <= right) {
+                    shiftTrips[left]++;
+                    remainder--;
+                    if (remainder > 0) {
+                        shiftTrips[right]--;
+                        remainder--;
+                    }
+                    left++;
+                    right--;
+                }
+            }
+        }
+
+        // 生成结果
+        for (int i = 0; i < shiftCount; i++) {
+            String shiftCode = shiftConfigs.get(i).getShiftCode();
+            if (shiftCode == null) {
+                shiftCode = "SHIFT_" + (i + 1);
+            }
+            result.put(shiftCode, shiftTrips[i] * tripCapacity);
+        }
+
+        return result;
+    }
+
+    // ==================== 特殊情况处理 ====================
+
+    /**
+     * 停产日计划量计算
+     *
+     * <p>停产规则：
+     * <ul>
+     *   <li>成型机停机时间比硫化机停火提前1个班次</li>
+     *   <li>胎胚要求全部收尾，库存为0</li>
+     *   <li>精确计算，保证做完后库存为0，且正好够硫化吃到停火</li>
+     * </ul>
+     *
+     * @param embryoCode    胎胚编码
+     * @param structureName 结构名称
+     * @param context       排程上下文
+     * @param scheduleDate  排程日期
+     * @return 停产计划量结果
+     */
+    public PlanQuantityResult calculateClosingDayQuantity(
+            String embryoCode,
+            String structureName,
+            ScheduleContextDTO context,
+            LocalDate scheduleDate) {
+
+        PlanQuantityResult result = calculatePlanQuantity(embryoCode, structureName, context, scheduleDate);
+        result.setClosingDay(true);
+
+        // 停产日：精确计算，不留库存
+        // 计划量 = 硫化需求 - 成型余量（精确匹配，不整车取整）
+        int vulcanizeDemand = result.getVulcanizeDemand();
+        int formingRemainder = result.getFormingRemainder();
+        int exactQuantity = vulcanizeDemand - formingRemainder;
+
+        if (exactQuantity <= 0) {
+            // 库存足够，不需要生产
+            result.setPlanQuantity(0);
+            result.setTripCount(0);
+            result.setExactClosing(true);
+            log.info("停产日 {} 胎胚 {} 库存足够，不需要生产", scheduleDate, embryoCode);
+        } else {
+            // 精确计算到条数（停产日可以不按整车）
+            result.setPlanQuantity(exactQuantity);
+            result.setExactClosing(true);
+            log.info("停产日 {} 胎胚 {} 精确计划量={}", scheduleDate, embryoCode, exactQuantity);
+        }
+
+        return result;
+    }
+
+    /**
+     * 开产日计划量计算
+     *
+     * <p>开产规则：
+     * <ul>
+     *   <li>成型开产时间早于硫化开模1个班</li>
+     *   <li>开产后第一个班只排6小时</li>
+     *   <li>如果结构里有"关键产品"，开产第一个班不排，从第二个班才开始做</li>
+     * </ul>
+     *
+     * @param embryoCode    胎胚编码
+     * @param structureName 结构名称
+     * @param isKeyProduct  是否关键产品
+     * @param context       排程上下文
+     * @param scheduleDate  排程日期
+     * @return 开产计划量结果
+     */
+    public PlanQuantityResult calculateOpeningDayQuantity(
+            String embryoCode,
+            String structureName,
+            boolean isKeyProduct,
+            ScheduleContextDTO context,
+            LocalDate scheduleDate) {
+
+        PlanQuantityResult result = calculatePlanQuantity(embryoCode, structureName, context, scheduleDate);
+        result.setOpeningDay(true);
+        result.setKeyProduct(isKeyProduct);
+
+        if (isKeyProduct) {
+            // 关键产品：开产第一个班不排
+            result.setSkipFirstShift(true);
+            log.info("开产日 {} 胎胚 {} 是关键产品，跳过第一班", scheduleDate, embryoCode);
+        } else {
+            // 普通产品：第一班只排6小时（约一半产能）
+            result.setFirstShiftHours(OPENING_SHIFT_HOURS);
+            // 第一班产能减半
+            int tripCapacity = result.getTripCapacity();
+            int normalShiftCapacity = result.getPlanQuantity() / 3; // 假设3班制
+            int reducedShiftCapacity = normalShiftCapacity / 2; // 首班减半
+            result.setOpeningShiftReduction(reducedShiftCapacity);
+            log.info("开产日 {} 胎胚 {} 第一班限制{}小时", scheduleDate, embryoCode, OPENING_SHIFT_HOURS);
+        }
+
+        return result;
+    }
+
+    /**
+     * 试制量试计划量计算
+     *
+     * <p>试制规则：
+     * <ul>
+     *   <li>只能安排在早班或中班（7:30-15:00）</li>
+     *   <li>数量必须是双数</li>
+     * </ul>
+     *
+     * @param demand      需求量
+     * @param tripCapacity 整车容量
+     * @return 试制计划量
+     */
+    public PlanQuantityResult calculateTrialQuantity(int demand, int tripCapacity) {
+        PlanQuantityResult result = new PlanQuantityResult();
+        result.setTrialTask(true);
+
+        if (demand <= 0) {
+            result.setPlanQuantity(0);
+            return result;
+        }
+
+        // 数量必须是双数
+        int adjustedDemand = demand % 2 == 0 ? demand : demand + 1;
+        result.setPlanQuantity(adjustedDemand);
+
+        // 试制只能在早班或中班
+        result.setAllowedShifts(Arrays.asList(TRIAL_SHIFT_DAY, TRIAL_SHIFT_AFTERNOON));
+
+        log.info("试制任务需求 {} 调整为双数 {}", demand, adjustedDemand);
+
+        return result;
+    }
+
+    /**
+     * 设备计划停机处理
+     *
+     * <p>停机规则：
+     * <ul>
+     *   <li>如果胎胚库存够硫化机吃4小时以上，硫化机继续生产</li>
+     *   <li>如果不够，硫化机要减产一半，慢慢消化库存</li>
+     *   <li>安排在早班（7:30-11:30）；特殊情况可以安排中班（13:00-17:00）</li>
+     * </ul>
+     *
+     * @param embryoCode     胎胚编码
+     * @param hourlyCapacity 硫化机小时产能
+     * @param context        排程上下文
+     * @return 停机处理结果
+     */
+    public ShutdownHandlingResult handleDeviceShutdown(
+            String embryoCode,
+            int hourlyCapacity,
+            ScheduleContextDTO context) {
+
+        ShutdownHandlingResult result = new ShutdownHandlingResult();
+        result.setEmbryoCode(embryoCode);
+
+        // 获取成型余量
+        int formingRemainder = getFormingRemainder(embryoCode, context);
+        result.setFormingRemainder(formingRemainder);
+
+        // 计算4小时硫化需求
+        int fourHourDemand = hourlyCapacity * 4;
+        result.setFourHourDemand(fourHourDemand);
+
+        if (formingRemainder >= fourHourDemand) {
+            // 库存够4小时，硫化机继续生产
+            result.setVulcanizeContinue(true);
+            result.setReductionRatio(1.0); // 不减产
+            log.info("胎胚 {} 库存 {} 够4小时需求 {}，硫化机继续生产",
+                    embryoCode, formingRemainder, fourHourDemand);
+        } else {
+            // 库存不够，硫化机减产一半
+            result.setVulcanizeContinue(false);
+            result.setReductionRatio(0.5); // 减产一半
+            log.info("胎胚 {} 库存 {} 不够4小时需求 {}，硫化机减产一半",
+                    embryoCode, formingRemainder, fourHourDemand);
+        }
+
+        // 停机安排在早班，特殊情况中班
+        result.setPreferredShift(TRIAL_SHIFT_DAY);
+        result.setAlternativeShift(TRIAL_SHIFT_AFTERNOON);
+
+        return result;
+    }
+
+    // ==================== 辅助方法 ====================
+
+    /**
+     * 获取整车容量
+     */
+    public int getTripCapacity(String structureName, ScheduleContextDTO context) {
+        if (context.getStructureShiftCapacities() != null && structureName != null) {
+            for (CxStructureShiftCapacity capacity : context.getStructureShiftCapacities()) {
+                if (structureName.equals(capacity.getStructureCode())) {
+                    if (capacity.getTripQty() != null && capacity.getTripQty() > 0) {
+                        return capacity.getTripQty();
+                    }
+                }
+            }
+        }
+        return context.getDefaultTripCapacity() != null
+                ? context.getDefaultTripCapacity()
+                : DEFAULT_TRIP_CAPACITY;
+    }
+
+    /**
+     * 获取损耗率
+     */
+    public BigDecimal getLossRate(ScheduleContextDTO context) {
+        return context.getLossRate() != null ? context.getLossRate() : DEFAULT_LOSS_RATE;
     }
 
     /**
      * 整车取整
-     *
-     * @param quantity     数量
-     * @param tripCapacity 整车容量
-     * @param mode         取整模式（CEILING/FLOOR/ROUND）
-     * @return 取整后的数量
      */
     public int roundToTrip(int quantity, int tripCapacity, String mode) {
         if (quantity <= 0 || tripCapacity <= 0) {
@@ -136,89 +580,36 @@ public class ProductionCalculator {
     }
 
     /**
-     * 整车取整（默认整车容量12）
-     */
-    public int roundToTrip(int quantity, String mode) {
-        return roundToTrip(quantity, DEFAULT_TRIP_CAPACITY, mode);
-    }
-
-    /**
-     * 计算硫化机台数（整车数）
-     *
-     * @param quantity     数量
-     * @param tripCapacity 整车容量
-     * @return 硫化机台数
-     */
-    public int calculateVulcanizeMachineCount(int quantity, int tripCapacity) {
-        if (quantity <= 0 || tripCapacity <= 0) {
-            return 0;
-        }
-        return (int) Math.ceil((double) quantity / tripCapacity);
-    }
-
-    /**
-     * 计算硫化机台数（默认整车容量12）
-     */
-    public int calculateVulcanizeMachineCount(int quantity) {
-        return calculateVulcanizeMachineCount(quantity, DEFAULT_TRIP_CAPACITY);
-    }
-
-    /**
      * 计算机台日产能
-     *
-     * @param machine 机台信息
-     * @param context 排程上下文
-     * @return 机台日产能
      */
     public int calculateMachineDailyCapacity(MdmMoldingMachine machine, ScheduleContextDTO context) {
         if (machine == null) {
             return DEFAULT_DAILY_CAPACITY;
         }
 
-        // 优先使用机台配置的日产能
         if (machine.getMaxDayCapacity() != null && machine.getMaxDayCapacity() > 0) {
             return machine.getMaxDayCapacity();
         }
 
-        // 根据小时产能和班次计算
         int hourlyCapacity = getMachineHourlyCapacity(machine, context);
         int shiftHours = getShiftHours(context);
         
         return hourlyCapacity * shiftHours;
     }
 
-    /**
-     * 获取机台小时产能
-     */
     public int getMachineHourlyCapacity(MdmMoldingMachine machine, ScheduleContextDTO context) {
         if (machine == null) {
             return DEFAULT_HOURLY_CAPACITY;
         }
-
-        // 从机台结构产能配置获取
-        if (context.getMachineStructureCapacities() != null && machine.getCxMachineCode() != null) {
-            for (var capacity : context.getMachineStructureCapacities()) {
-                if (machine.getCxMachineCode().equals(capacity.getCxMachineCode())) {
-                    if (capacity.getHourlyCapacity() != null && capacity.getHourlyCapacity() > 0) {
-                        return capacity.getHourlyCapacity();
-                    }
-                }
-            }
-        }
-
-        // 从上下文获取默认值
         return context.getMachineHourlyCapacity() != null 
                 ? context.getMachineHourlyCapacity() 
                 : DEFAULT_HOURLY_CAPACITY;
     }
 
-    /**
-     * 获取班次总时长
-     */
     private int getShiftHours(ScheduleContextDTO context) {
         if (context.getCurrentShiftConfigs() != null && !context.getCurrentShiftConfigs().isEmpty()) {
             int totalHours = 0;
-            for (var shift : context.getCurrentShiftConfigs()) {
+            for (CxShiftConfig shift : context.getCurrentShiftConfigs()) {
                 Integer startHour = shift.getStartHour();
                 Integer endHour = shift.getEndHour();
                 if (startHour != null && endHour != null) {
@@ -235,249 +626,203 @@ public class ProductionCalculator {
     }
 
     /**
-     * 计算机台剩余产能
-     *
-     * @param machine          机台信息
-     * @param usedCapacity     已用产能
-     * @param context          排程上下文
-     * @param scheduleDate     排程日期
-     * @return 剩余产能
+     * 检查是否为关键产品
      */
-    public int calculateMachineRemainingCapacity(
-            MdmMoldingMachine machine,
-            int usedCapacity,
+    public boolean isKeyProduct(String materialCode, ScheduleContextDTO context) {
+        Set<String> keyProductCodes = context.getKeyProductCodes();
+        if (keyProductCodes != null) {
+            return keyProductCodes.contains(materialCode);
+        }
+        return false;
+    }
+
+    // ==================== 综合计算方法 ====================
+
+    /**
+     * 综合计划量计算（处理所有场景）
+     *
+     * <p>处理逻辑：
+     * <ol>
+     *   <li>判断是否试制任务 → 使用试制规则</li>
+     *   <li>判断是否停产日 → 使用停产收尾规则</li>
+     *   <li>判断是否开产日 → 使用开产规则</li>
+     *   <li>正常情况 → 波浪分配</li>
+     * </ol>
+     *
+     * @param embryoCode    胎胚编码
+     * @param structureName 结构名称
+     * @param materialCode  物料编码（用于判断关键产品）
+     * @param trialDemand   试制需求量（如果是试制任务）
+     * @param context       排程上下文
+     * @param scheduleDate  排程日期
+     * @return 计算结果（包含班次分配）
+     */
+    public PlanQuantityResult calculateComprehensive(
+            String embryoCode,
+            String structureName,
+            String materialCode,
+            Integer trialDemand,
             ScheduleContextDTO context,
             LocalDate scheduleDate) {
 
-        int dailyCapacity = calculateMachineDailyCapacity(machine, context);
+        // Step 1: 判断是否试制任务
+        if (trialDemand != null && trialDemand > 0) {
+            int tripCapacity = getTripCapacity(structureName, context);
+            PlanQuantityResult trialResult = calculateTrialQuantity(trialDemand, tripCapacity);
+            trialResult.setEmbryoCode(embryoCode);
+            trialResult.setStructureName(structureName);
 
-        // 扣除停机产能
-        int shutdownDeduction = calculateShutdownDeduction(
-                machine.getCxMachineCode(), scheduleDate, context);
+            // 试制任务：只安排在早班或中班
+            Map<String, Integer> trialShiftAllocation = new LinkedHashMap<>();
+            trialShiftAllocation.put(TRIAL_SHIFT_DAY, trialResult.getPlanQuantity());
+            trialResult.setShiftAllocation(trialShiftAllocation);
 
-        // 扣除精度计划产能
-        int precisionDeduction = calculatePrecisionDeduction(
-                machine.getCxMachineCode(), scheduleDate, context);
-
-        int availableCapacity = dailyCapacity - shutdownDeduction - precisionDeduction - usedCapacity;
-
-        return Math.max(0, availableCapacity);
-    }
-
-    /**
-     * 计算停机扣减产能
-     */
-    private int calculateShutdownDeduction(
-            String machineCode,
-            LocalDate scheduleDate,
-            ScheduleContextDTO context) {
-
-        if (context.getDevicePlanShuts() == null || machineCode == null) {
-            return 0;
+            return trialResult;
         }
 
-        int totalDeduction = 0;
-        for (var shutdown : context.getDevicePlanShuts()) {
-            if (machineCode.equals(shutdown.getMachineCode())) {
-                // TODO: 根据停机时间计算扣减产能
+        // Step 2: 判断是否停产日
+        Boolean isClosingDay = context.getIsClosingDay();
+        if (isClosingDay != null && isClosingDay) {
+            return calculateClosingDayQuantity(embryoCode, structureName, context, scheduleDate);
+        }
+
+        // Step 3: 判断是否开产日
+        Boolean isOpeningDay = context.getIsOpeningDay();
+        if (isOpeningDay != null && isOpeningDay) {
+            boolean isKeyProduct = isKeyProduct(materialCode, context);
+            PlanQuantityResult openingResult = calculateOpeningDayQuantity(
+                    embryoCode, structureName, isKeyProduct, context, scheduleDate);
+
+            // 开产日：调整班次分配
+            if (openingResult.getSkipFirstShift()) {
+                // 关键产品：跳过第一班，平均分配到剩余班次
+                int planQty = openingResult.getPlanQuantity();
+                int remainingShifts = 2; // 假设3班制，跳过第一班后剩2班
+                int qtyPerShift = planQty / remainingShifts;
+
+                Map<String, Integer> shiftAllocation = new LinkedHashMap<>();
+                shiftAllocation.put("SHIFT_NIGHT", 0); // 跳过夜班
+                shiftAllocation.put(TRIAL_SHIFT_DAY, qtyPerShift);
+                shiftAllocation.put(TRIAL_SHIFT_AFTERNOON, planQty - qtyPerShift);
+                openingResult.setShiftAllocation(shiftAllocation);
+            } else {
+                // 普通产品：第一班减半
+                int planQty = openingResult.getPlanQuantity();
+                int normalShiftCapacity = planQty / 3;
+                int firstShiftCapacity = normalShiftCapacity / 2; // 第一班减半
+                int remainingQty = planQty - firstShiftCapacity;
+                int secondShiftCapacity = remainingQty / 2;
+
+                Map<String, Integer> shiftAllocation = new LinkedHashMap<>();
+                shiftAllocation.put("SHIFT_NIGHT", firstShiftCapacity);
+                shiftAllocation.put(TRIAL_SHIFT_DAY, secondShiftCapacity);
+                shiftAllocation.put(TRIAL_SHIFT_AFTERNOON, remainingQty - secondShiftCapacity);
+                openingResult.setShiftAllocation(shiftAllocation);
             }
+
+            return openingResult;
         }
 
-        return totalDeduction;
-    }
+        // Step 4: 正常情况计算
+        PlanQuantityResult result = calculatePlanQuantity(embryoCode, structureName, context, scheduleDate);
 
-    /**
-     * 计算精度计划扣减产能
-     */
-    private int calculatePrecisionDeduction(
-            String machineCode,
-            LocalDate scheduleDate,
-            ScheduleContextDTO context) {
+        // 波浪分配到班次
+        List<CxShiftConfig> shiftConfigs = context.getCurrentShiftConfigs();
+        int tripCapacity = result.getTripCapacity();
+        int totalTrips = result.getTripCount();
 
-        if (context.getPrecisionPlans() == null || machineCode == null) {
-            return 0;
+        Map<String, Integer> shiftAllocation;
+        if (shiftConfigs != null && !shiftConfigs.isEmpty()) {
+            shiftAllocation = waveAllocationWithShifts(totalTrips, shiftConfigs, tripCapacity);
+        } else {
+            // 默认3班制
+            shiftAllocation = waveAllocation(totalTrips, 3, tripCapacity);
         }
 
-        int totalDeduction = 0;
-        for (var plan : context.getPrecisionPlans()) {
-            if (machineCode.equals(plan.getMachineCode())) {
-                // TODO: 根据精度计划计算扣减产能
-            }
-        }
-
-        return totalDeduction;
-    }
-
-    /**
-     * 计算开停产特殊处理后的排产量
-     *
-     * @param baseProduction 基础排产量
-     * @param isOpeningDay   是否开产日
-     * @param isClosingDay   是否停产日
-     * @param isKeyProduct   是否关键产品
-     * @param context        排程上下文
-     * @return 处理后的排产量
-     */
-    public int handleOpeningClosingDay(
-            int baseProduction,
-            boolean isOpeningDay,
-            boolean isClosingDay,
-            boolean isKeyProduct,
-            ScheduleContextDTO context) {
-
-        // 停产日不排产
-        if (isClosingDay) {
-            return 0;
-        }
-
-        // 开产日首班不排关键产品
-        if (isOpeningDay && isKeyProduct) {
-            // 可以延迟到第二班排产
-            return baseProduction;
-        }
-
-        return baseProduction;
-    }
-
-    /**
-     * 计算试制任务排产量
-     *
-     * <p>试制数量必须是双数
-     *
-     * @param demand 需求量
-     * @return 排产量（双数）
-     */
-    public int calculateTrialProduction(int demand) {
-        if (demand <= 0) {
-            return 0;
-        }
-        // 向上取整到双数
-        return demand % 2 == 0 ? demand : demand + 1;
-    }
-
-    /**
-     * 检查机台是否可用于指定结构
-     *
-     * @param machine       机台信息
-     * @param structureName 结构名称
-     * @param context       排程上下文
-     * @return 是否可用
-     */
-    public boolean checkStructureConstraint(
-            MdmMoldingMachine machine,
-            String structureName,
-            ScheduleContextDTO context) {
-
-        if (machine == null || structureName == null) {
-            return true;
-        }
-
-        // 检查禁用结构配置
-        if (context.getMachineFixedConfigs() != null) {
-            for (MdmCxMachineFixed fixed : context.getMachineFixedConfigs()) {
-                if (machine.getCxMachineCode().equals(fixed.getCxMachineCode())) {
-                    if (fixed.getDisableStructure() != null &&
-                            fixed.getDisableStructure().contains(structureName)) {
-                        return false;
-                    }
-                }
-            }
-        }
-
-        return true;
-    }
-
-    /**
-     * 获取可用于指定结构的机台列表
-     *
-     * @param structureName     结构名称
-     * @param availableMachines 可用机台列表
-     * @param context           排程上下文
-     * @return 可用机台列表
-     */
-    public List<MdmMoldingMachine> getMachinesForStructure(
-            String structureName,
-            List<MdmMoldingMachine> availableMachines,
-            ScheduleContextDTO context) {
-
-        if (CollectionUtils.isEmpty(availableMachines)) {
-            return new ArrayList<>();
-        }
-
-        List<MdmMoldingMachine> result = new ArrayList<>();
-
-        // 优先从结构排产配置获取
-        if (context.getStructureAllocationMap() != null && structureName != null) {
-            List<MpCxCapacityConfiguration> configs = context.getStructureAllocationMap().get(structureName);
-            if (configs != null && !configs.isEmpty()) {
-                Set<String> machineCodes = configs.stream()
-                        .map(MpCxCapacityConfiguration::getCxMachineCode)
-                        .filter(Objects::nonNull)
-                        .collect(Collectors.toSet());
-
-                for (MdmMoldingMachine machine : availableMachines) {
-                    if (machineCodes.contains(machine.getCxMachineCode())) {
-                        result.add(machine);
-                    }
-                }
-
-                if (!result.isEmpty()) {
-                    return result;
-                }
-            }
-        }
-
-        // 检查机台固定配置
-        for (MdmMoldingMachine machine : availableMachines) {
-            if (checkStructureConstraint(machine, structureName, context)) {
-                result.add(machine);
-            }
-        }
-
+        result.setShiftAllocation(shiftAllocation);
         return result;
     }
 
     /**
-     * 获取机台种类上限
+     * 处理设备计划停机后的产量调整
      *
-     * @param context 排程上下文
-     * @return 种类上限
+     * <p>返回调整后的班次分配
      */
-    public int getMaxTypesPerMachine(ScheduleContextDTO context) {
-        return context.getMaxTypesPerMachine() != null
-                ? context.getMaxTypesPerMachine()
-                : DEFAULT_MAX_TYPES_PER_MACHINE;
-    }
+    public Map<String, Integer> adjustForDeviceShutdown(
+            String embryoCode,
+            int originalPlanQuantity,
+            int hourlyCapacity,
+            ScheduleContextDTO context) {
 
-    /**
-     * 获取整车容量
-     *
-     * @param structureCode 结构编码
-     * @param context       排程上下文
-     * @return 整车容量
-     */
-    public int getTripCapacity(String structureCode, ScheduleContextDTO context) {
-        if (context.getStructureShiftCapacities() != null && structureCode != null) {
-            for (var capacity : context.getStructureShiftCapacities()) {
-                if (structureCode.equals(capacity.getStructureCode())) {
-                    if (capacity.getTripQty() != null && capacity.getTripQty() > 0) {
-                        return capacity.getTripQty();
-                    }
-                }
-            }
+        ShutdownHandlingResult shutdownResult = handleDeviceShutdown(embryoCode, hourlyCapacity, context);
+
+        Map<String, Integer> adjustedAllocation = new LinkedHashMap<>();
+
+        if (shutdownResult.isVulcanizeContinue()) {
+            // 硫化机继续生产，不需要调整
+            int normalShiftQty = originalPlanQuantity / 3;
+            adjustedAllocation.put("SHIFT_NIGHT", normalShiftQty);
+            adjustedAllocation.put(TRIAL_SHIFT_DAY, normalShiftQty);
+            adjustedAllocation.put(TRIAL_SHIFT_AFTERNOON, originalPlanQuantity - 2 * normalShiftQty);
+        } else {
+            // 硫化机减产一半
+            int reducedQty = (int) (originalPlanQuantity * shutdownResult.getReductionRatio());
+            // 安排在早班
+            adjustedAllocation.put("SHIFT_NIGHT", 0);
+            adjustedAllocation.put(TRIAL_SHIFT_DAY, reducedQty);
+            adjustedAllocation.put(TRIAL_SHIFT_AFTERNOON, 0);
         }
-        return context.getDefaultTripCapacity() != null
-                ? context.getDefaultTripCapacity()
-                : DEFAULT_TRIP_CAPACITY;
+
+        return adjustedAllocation;
+    }
+
+    // ==================== 结果类 ====================
+
+    /**
+     * 计划量计算结果
+     */
+    @lombok.Data
+    public static class PlanQuantityResult {
+        /** 胎胚编码 */
+        private String embryoCode;
+        /** 结构名称 */
+        private String structureName;
+        /** 硫化需求 */
+        private int vulcanizeDemand;
+        /** 成型余量（库存） */
+        private int formingRemainder;
+        /** 整车容量 */
+        private int tripCapacity;
+        /** 车次数 */
+        private int tripCount;
+        /** 计划量 */
+        private int planQuantity;
+        /** 班次分配 */
+        private Map<String, Integer> shiftAllocation;
+
+        // 特殊情况标记
+        private boolean closingDay;
+        private boolean openingDay;
+        private boolean keyProduct;
+        private boolean trialTask;
+        private boolean exactClosing;
+        private boolean skipFirstShift;
+        private int firstShiftHours;
+        private int openingShiftReduction;
+        private List<String> allowedShifts;
     }
 
     /**
-     * 获取损耗率
-     *
-     * @param context 排程上下文
-     * @return 损耗率
+     * 设备停机处理结果
      */
-    public BigDecimal getLossRate(ScheduleContextDTO context) {
-        return context.getLossRate() != null ? context.getLossRate() : DEFAULT_LOSS_RATE;
+    @lombok.Data
+    public static class ShutdownHandlingResult {
+        private String embryoCode;
+        private int formingRemainder;
+        private int fourHourDemand;
+        private boolean vulcanizeContinue;
+        private double reductionRatio;
+        private String preferredShift;
+        private String alternativeShift;
     }
 }
