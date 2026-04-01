@@ -6,7 +6,13 @@ import com.zlt.aps.cx.entity.CxStock;
 import com.zlt.aps.cx.entity.config.CxShiftConfig;
 import com.zlt.aps.cx.entity.schedule.CxScheduleDetail;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
-import com.zlt.aps.cx.service.*;
+// Engine 包 - 核心算法
+import com.zlt.aps.cx.service.engine.ContinueTaskProcessor;
+import com.zlt.aps.cx.service.engine.CoreScheduleAlgorithmService;
+import com.zlt.aps.cx.service.engine.NewTaskProcessor;
+import com.zlt.aps.cx.service.engine.ShiftScheduleService;
+import com.zlt.aps.cx.service.engine.TaskGroupService;
+import com.zlt.aps.cx.service.engine.TrialTaskProcessor;
 import com.zlt.aps.mp.api.domain.entity.MdmMaterialInfo;
 import com.zlt.aps.mp.api.domain.entity.MdmMoldingMachine;
 import lombok.RequiredArgsConstructor;
