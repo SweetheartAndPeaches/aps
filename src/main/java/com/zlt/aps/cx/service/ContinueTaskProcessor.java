@@ -276,21 +276,27 @@ public class ContinueTaskProcessor {
             machineStates.add(state);
         }
 
-        // Step 6: DFS + 剪枝搜索最优方案
+        // Step 7: 如果强制保留历史任务，先进行保底预留
+        if (forceKeepHistory) {
+            reservedHistoryTasks(sortedTasks, machineStates, context);
+        }
+
+        // Step 8: DFS + 剪枝搜索最优方案
         DfsSearchResult searchResult = new DfsSearchResult();
         searchResult.bestScore = Integer.MAX_VALUE;
         searchResult.bestAssignments = null;
         searchResult.searchCount = 0;
         searchResult.pruneCount = 0;
         
-        // 开始DFS搜索
-        dfsAssign(sortedTasks, 0, machineStates, forceKeepHistory, 
+        // 开始DFS搜索（只处理剩余需求）
+        List<CoreScheduleAlgorithmService.DailyEmbryoTask> remainingTasks = getRemainingTasks(sortedTasks);
+        dfsAssign(remainingTasks, 0, machineStates, forceKeepHistory, 
                 typeDiffThreshold, loadDiffThreshold, searchResult);
         
         log.info("DFS搜索统计：总搜索次数={}, 剪枝次数={}, 最优分数={}", 
                 searchResult.searchCount, searchResult.pruneCount, searchResult.bestScore);
 
-        // Step 7: 构建结果
+        // Step 9: 构建结果
         BalancingResult result;
         if (searchResult.bestAssignments != null) {
             result = convertDfsResultToBalancingResult(searchResult.bestAssignments, machineStates, sortedTasks);
@@ -306,12 +312,105 @@ public class ContinueTaskProcessor {
     }
     
     /**
+     * 保底预留历史任务
+     *
+     * <p>当"强制保留历史任务"开关打开时，执行以下逻辑：
+     * <ol>
+     *   <li>遍历每台机台的历史胎胚</li>
+     *   <li>为每种历史胎胚预留至少1个活（如果今天有需求）</li>
+     *   <li>从总需求中扣减这些保底量</li>
+     *   <li>如果总需求不够保底量，就对应少安排</li>
+     * </ol>
+     *
+     * @param tasks         今日任务列表（会被修改）
+     * @param machineStates 机台状态列表（会被修改）
+     * @param context       排程上下文
+     */
+    private void reservedHistoryTasks(
+            List<CoreScheduleAlgorithmService.DailyEmbryoTask> tasks,
+            List<MachineState> machineStates,
+            ScheduleContextDTO context) {
+        
+        log.info("开始保底预留历史任务...");
+        
+        // 构建胎胚编码 -> 任务 的映射
+        Map<String, CoreScheduleAlgorithmService.DailyEmbryoTask> taskMap = tasks.stream()
+                .collect(Collectors.toMap(
+                        CoreScheduleAlgorithmService.DailyEmbryoTask::getMaterialCode,
+                        t -> t,
+                        (a, b) -> a));  // 如果重复，保留第一个
+        
+        int totalReserved = 0;
+        
+        // 遍历每台机台
+        for (MachineState state : machineStates) {
+            Set<String> historyEmbryos = state.getHistoryEmbryos();
+            if (historyEmbryos == null || historyEmbryos.isEmpty()) {
+                continue;
+            }
+            
+            // 遍历该机台的每种历史胎胚
+            for (String embryoCode : historyEmbryos) {
+                CoreScheduleAlgorithmService.DailyEmbryoTask task = taskMap.get(embryoCode);
+                if (task == null) {
+                    // 今天没有这个胎胚的需求，跳过
+                    continue;
+                }
+                
+                // 获取该胎胚的剩余需求（硫化机台数）
+                int remainingDemand = task.getVulcanizeMachineCount() != null 
+                        ? task.getVulcanizeMachineCount() : 0;
+                
+                if (remainingDemand <= 0) {
+                    // 已经没有剩余需求了
+                    continue;
+                }
+                
+                // 检查机台容量是否足够
+                if (state.getCurrentLoad() >= state.getMaxCapacity()) {
+                    log.warn("机台 {} 容量已满，无法保底预留胎胚 {}", 
+                            state.getMachineCode(), embryoCode);
+                    continue;
+                }
+                
+                // 保底预留1个硫化机台数
+                int reservedCount = 1;
+                
+                // 执行保底分配
+                state.getAssignedEmbryos().add(new EmbryoAssignment(embryoCode, task, reservedCount));
+                state.setCurrentLoad(state.getCurrentLoad() + reservedCount);
+                state.setCurrentTypes(state.getCurrentTypes() + 1);
+                
+                // 从任务需求中扣减
+                task.setVulcanizeMachineCount(remainingDemand - reservedCount);
+                
+                totalReserved++;
+                log.debug("机台 {} 保底预留胎胚 {} 共 {} 个硫化机", 
+                        state.getMachineCode(), embryoCode, reservedCount);
+            }
+        }
+        
+        log.info("保底预留完成，共预留 {} 个任务", totalReserved);
+    }
+    
+    /**
+     * 获取剩余待分配的任务（需求量 > 0）
+     */
+    private List<CoreScheduleAlgorithmService.DailyEmbryoTask> getRemainingTasks(
+            List<CoreScheduleAlgorithmService.DailyEmbryoTask> tasks) {
+        
+        return tasks.stream()
+                .filter(t -> t.getVulcanizeMachineCount() != null && t.getVulcanizeMachineCount() > 0)
+                .collect(Collectors.toList());
+    }
+    
+    /**
      * DFS深度优先搜索 + 剪枝
      *
      * @param tasks              待分配任务列表（已排序）
      * @param taskIndex          当前处理的任务索引
      * @param machineStates      机台状态列表（会被修改和恢复）
-     * @param forceKeepHistory   是否强制保留历史任务
+     * @param forceKeepHistory   是否强制保留历史任务（保底预留已处理，此参数保留用于扩展）
      * @param typeDiffThreshold  种类数允许差额
      * @param loadDiffThreshold  负荷允许差额
      * @param searchResult       搜索结果记录对象
@@ -435,6 +534,9 @@ public class ContinueTaskProcessor {
     
     /**
      * 找出可以分配胎胚的候选机台（DFS用）
+     *
+     * <p>注意：当 forceKeepHistory = true 时，保底预留阶段已经处理了历史任务，
+     * 所以均衡分配阶段不再强制限制只分配给历史机台。
      */
     private List<MachineState> findCandidateMachinesForDfs(
             String embryoCode,
@@ -450,12 +552,8 @@ public class ContinueTaskProcessor {
                 continue;
             }
             
-            // 如果强制保留历史，只选择历史机台或没有历史的机台
-            if (forceKeepHistory && !state.getHistoryEmbryos().isEmpty() 
-                    && !state.getHistoryEmbryos().contains(embryoCode)) {
-                continue;
-            }
-            
+            // 保底预留阶段已经处理了历史任务，这里不再强制限制
+            // 所有有剩余容量的机台都是候选
             candidates.add(state);
         }
         
@@ -464,6 +562,15 @@ public class ContinueTaskProcessor {
     
     /**
      * 排序候选机台（DFS用）
+     *
+     * <p>排序优先级：
+     * <ol>
+     *   <li>历史胎胚优先（工人更熟悉，换品种成本低）</li>
+     *   <li>负荷少的优先（均衡分配）</li>
+     *   <li>种类少的优先（均衡分配）</li>
+     * </ol>
+     *
+     * <p>无论"强制保留历史任务"开关是否打开，历史机台都应该优先考虑。
      */
     private void sortCandidatesForDfs(
             List<MachineState> candidates,
@@ -471,7 +578,7 @@ public class ContinueTaskProcessor {
             boolean forceKeepHistory) {
         
         candidates.sort((a, b) -> {
-            // 优先级1：历史胎胚优先
+            // 优先级1：历史胎胚优先（无论是否强制保留，历史机台都优先）
             boolean aHasHistory = a.getHistoryEmbryos().contains(embryoCode);
             boolean bHasHistory = b.getHistoryEmbryos().contains(embryoCode);
             if (aHasHistory && !bHasHistory) return -1;
