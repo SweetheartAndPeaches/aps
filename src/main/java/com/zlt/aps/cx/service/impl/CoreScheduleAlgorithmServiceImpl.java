@@ -28,9 +28,20 @@ import java.util.stream.Collectors;
  * <ul>
  *   <li>{@link TaskGroupService} - 任务分组服务</li>
  *   <li>{@link ContinueTaskProcessor} - 续作任务处理器</li>
+ *   <li>{@link TrialTaskProcessor} - 试制任务处理器</li>
  *   <li>{@link NewTaskProcessor} - 新增任务处理器</li>
  *   <li>{@link ShiftScheduleService} - 班次排产服务</li>
  * </ul>
+ *
+ * <p>任务处理流程（方案A）：
+ * <ol>
+ *   <li>S5.2 任务分组：续作/试制/新增三类</li>
+ *   <li>S5.3 处理续作任务</li>
+ *   <li>S5.3 处理试制任务（独立处理，特殊约束）</li>
+ *   <li>S5.3 处理新增任务（合并续作+新增，重新均衡）</li>
+ *   <li>S5.3.7 班次排产</li>
+ *   <li>生成排程结果</li>
+ * </ol>
  *
  * @author APS Team
  */
@@ -41,6 +52,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
     private final TaskGroupService taskGroupService;
     private final ContinueTaskProcessor continueTaskProcessor;
+    private final TrialTaskProcessor trialTaskProcessor;
     private final NewTaskProcessor newTaskProcessor;
     private final ShiftScheduleService shiftScheduleService;
 
@@ -117,11 +129,12 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     /**
      * 执行单天排程
      *
-     * <p>排程流程：
+     * <p>排程流程（方案A：合并续作+新增重新均衡）：
      * <ol>
      *   <li>S5.2 任务分组：续作/试制/新增三类</li>
      *   <li>S5.3 处理续作任务</li>
-     *   <li>S5.3 处理试制/新增任务</li>
+     *   <li>S5.3 处理试制任务（独立处理，特殊约束）</li>
+     *   <li>S5.3 处理新增任务（合并续作+新增，重新均衡）</li>
      *   <li>S5.3.7 班次排产</li>
      *   <li>生成排程结果</li>
      * </ol>
@@ -151,32 +164,64 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 taskGroup.getContinueTasks(), context, scheduleDate, dayShifts, day);
         log.info("续作任务处理完成，机台分配数: {}", continueAllocations.size());
 
-        // ==================== 第三步：S5.3 处理试制/新增任务 ====================
-        List<MachineAllocationResult> newAllocations = newTaskProcessor.processTrialAndNewTasks(
-                taskGroup.getTrialTasks(), 
+        // ==================== 第三步：S5.3 处理试制任务（独立处理） ====================
+        // 获取未被续作任务占用的机台
+        List<MdmMoldingMachine> availableMachinesForTrial = getAvailableMachinesForTrial(
+                context.getAvailableMachines(), continueAllocations);
+        
+        List<MachineAllocationResult> trialAllocations = trialTaskProcessor.processTrialTasks(
+                taskGroup.getTrialTasks(), context, scheduleDate, dayShifts, availableMachinesForTrial);
+        log.info("试制任务处理完成，机台分配数: {}", trialAllocations.size());
+
+        // ==================== 第四步：S5.3 处理新增任务（合并续作+新增，重新均衡） ====================
+        List<MachineAllocationResult> newAllocations = newTaskProcessor.processNewTasks(
                 taskGroup.getNewTasks(),
                 context, 
                 scheduleDate, 
                 dayShifts, 
                 day,
                 continueAllocations);
-        log.info("试制/新增任务处理完成，机台分配数: {}", newAllocations.size());
+        log.info("新增任务处理完成，机台分配数: {}", newAllocations.size());
 
-        // ==================== 第四步：合并分配结果 ====================
+        // ==================== 第五步：合并分配结果 ====================
+        // 方案A：newAllocations 已经包含续作+新增的合并结果
         List<MachineAllocationResult> allAllocations = new ArrayList<>();
-        allAllocations.addAll(continueAllocations);
         allAllocations.addAll(newAllocations);
+        allAllocations.addAll(trialAllocations);
 
-        // ==================== 第五步：S5.3.7 班次排产 ====================
+        // ==================== 第六步：S5.3.7 班次排产 ====================
         List<ShiftAllocationResult> shiftAllocations = shiftScheduleService.balanceShiftAllocation(
                 allAllocations, dayShifts, context);
         log.info("班次排产完成");
 
-        // ==================== 第六步：生成排程结果 ====================
+        // ==================== 第七步：生成排程结果 ====================
         List<CxScheduleResult> results = buildScheduleResults(context, allAllocations, shiftAllocations, dayShifts);
         
         log.info("========== 第 {} 天排程完成，排程结果数: {} ==========\n", day, results.size());
         return results;
+    }
+
+    /**
+     * 获取未被续作任务占用的机台列表（用于试制任务）
+     */
+    private List<MdmMoldingMachine> getAvailableMachinesForTrial(
+            List<MdmMoldingMachine> allMachines,
+            List<MachineAllocationResult> continueAllocations) {
+        
+        if (CollectionUtils.isEmpty(allMachines)) {
+            return new ArrayList<>();
+        }
+        
+        // 收集已被续作任务占用的机台编码
+        Set<String> occupiedMachineCodes = continueAllocations.stream()
+                .map(MachineAllocationResult::getMachineCode)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        
+        // 过滤出未被占用的机台
+        return allMachines.stream()
+                .filter(m -> !occupiedMachineCodes.contains(m.getCxMachineCode()))
+                .collect(Collectors.toList());
     }
 
     /**
