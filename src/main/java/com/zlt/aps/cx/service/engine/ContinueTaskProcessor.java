@@ -103,13 +103,13 @@ public class ContinueTaskProcessor {
             // 构建机台编码 -> 最大硫化机数 映射（根据每台机台的机型+结构获取）
             Map<String, Integer> machineMaxLhMap = buildMachineMaxLhMap(availableMachines, structureName, context);
 
-            // 获取结构的最大胎胚种类数
-            int maxEmbryoTypes = getMaxEmbryoTypes(structureName, context);
+            // 构建机台编码 -> 最大胎胚种类数 映射（根据每台机台的机型+结构获取）
+            Map<String, Integer> machineMaxEmbryoTypesMap = buildMachineMaxEmbryoTypesMap(availableMachines, structureName, context);
 
-            // Step 5: 使用 BalancingService 均衡分配（使用每台机台各自的最大硫化机数）
+            // Step 5: 使用 BalancingService 均衡分配（使用每台机台各自的最大硫化机数和最大胎胚种类数）
             BalancingService.BalancingResult balancingResult = balancingService.balanceEmbryosToMachinesWithMachineCapacity(
                     tasks, availableMachines, machineHistoryMap,
-                    machineMaxLhMap, maxEmbryoTypes, forceKeepHistory, context);
+                    machineMaxLhMap, machineMaxEmbryoTypesMap, forceKeepHistory, context);
 
             // Step 6: 为每个机台分配计划量
             for (BalancingService.MachineAssignment assignment : balancingResult.getAssignments()) {
@@ -274,28 +274,71 @@ public class ContinueTaskProcessor {
     }
 
     /**
-     * 获取结构的最大胎胚种类数
+     * 构建机台最大胎胚种类数映射
+     *
+     * <p>根据每台机台的机型 + 结构，从 MdmStructureLhRatio 获取对应的最大胎胚种类数
+     *
+     * @param machineConfigs  机台配置列表
+     * @param structureName   结构名称
+     * @param context         排程上下文
+     * @return 机台编码 -> 最大胎胚种类数
      */
-    private int getMaxEmbryoTypes(String structureName, ScheduleContextDTO context) {
-        // 优先从 structureLhRatios 列表查找（按机型）
+    private Map<String, Integer> buildMachineMaxEmbryoTypesMap(
+            List<MpCxCapacityConfiguration> machineConfigs,
+            String structureName,
+            ScheduleContextDTO context) {
+
+        Map<String, Integer> result = new HashMap<>();
+
+        // 构建机台编码 -> 机型 映射
+        Map<String, String> machineTypeMap = new HashMap<>();
+        if (context.getAvailableMachines() != null) {
+            for (MdmMoldingMachine machine : context.getAvailableMachines()) {
+                machineTypeMap.put(machine.getCxMachineCode(), machine.getCxMachineTypeCode());
+            }
+        }
+
+        // 构建 机型_结构 -> 最大胎胚种类数 映射
+        Map<String, Integer> typeStructureMap = new HashMap<>();
         List<MdmStructureLhRatio> ratios = context.getStructureLhRatios();
         if (ratios != null) {
             for (MdmStructureLhRatio ratio : ratios) {
-                if (structureName.equals(ratio.getStructureName()) && ratio.getMaxEmbryoQty() != null) {
-                    return ratio.getMaxEmbryoQty();
+                String key = ratio.getCxMachineTypeCode() + "_" + ratio.getStructureName();
+                if (ratio.getMaxEmbryoQty() != null) {
+                    typeStructureMap.put(key, ratio.getMaxEmbryoQty());
                 }
             }
         }
 
-        // 向后兼容：从 structureLhRatioMap 查找
-        if (context.getStructureLhRatioMap() != null) {
-            MdmStructureLhRatio ratioConfig = context.getStructureLhRatioMap().get(structureName);
-            if (ratioConfig != null && ratioConfig.getMaxEmbryoQty() != null) {
-                return ratioConfig.getMaxEmbryoQty();
+        // 为每台机台获取对应的最大胎胚种类数
+        for (MpCxCapacityConfiguration config : machineConfigs) {
+            String machineCode = config.getCxMachineCode();
+            String machineType = machineTypeMap.get(machineCode);
+
+            // 根据机型+结构查找
+            String key = machineType + "_" + structureName;
+            Integer maxTypes = typeStructureMap.get(key);
+
+            // 如果找不到，尝试只按结构查找（向后兼容）
+            if (maxTypes == null && context.getStructureLhRatioMap() != null) {
+                MdmStructureLhRatio ratioConfig = context.getStructureLhRatioMap().get(structureName);
+                if (ratioConfig != null && ratioConfig.getMaxEmbryoQty() != null) {
+                    maxTypes = ratioConfig.getMaxEmbryoQty();
+                }
             }
+
+            // 兜底：使用默认值
+            if (maxTypes == null) {
+                maxTypes = context.getMaxTypesPerMachine() != null ? context.getMaxTypesPerMachine() : 4;
+                log.debug("机台 {} 机型 {} 结构 {} 未找到胎胚种类数配置，使用默认值 {}",
+                        machineCode, machineType, structureName, maxTypes);
+            }
+
+            result.put(machineCode, maxTypes);
         }
 
-        return context.getMaxTypesPerMachine() != null ? context.getMaxTypesPerMachine() : 4;
+        log.info("结构 {} 机台最大胎胚种类数映射：{}", structureName, result);
+        return result;
     }
 
     // ==================== 原有方法 ====================
