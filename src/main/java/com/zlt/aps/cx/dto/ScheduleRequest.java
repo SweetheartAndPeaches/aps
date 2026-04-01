@@ -21,6 +21,9 @@ public class ScheduleRequest implements Serializable {
     @ApiModelProperty(value = "排程日期", example = "2024-01-01", required = true)
     private LocalDate scheduleDate;
 
+    @ApiModelProperty(value = "工厂编号", example = "DEFAULT")
+    private String factoryCode;
+
     @ApiModelProperty(value = "排程模式：NORMAL-正常排程，RE_SCHEDULE-重排程，STRUCTURE_RE_SCHEDULE-结构重排")
     private String scheduleMode;
 

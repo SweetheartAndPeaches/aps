@@ -21,7 +21,7 @@ import java.util.stream.Collectors;
 public class ShiftConfigValidationStrategy extends BaseValidationStrategy {
 
     @Override
-    protected ValidationItem getValidationItem() {
+    public ValidationItem getValidationItem() {
         return ValidationItem.SHIFT_CONFIG;
     }
 

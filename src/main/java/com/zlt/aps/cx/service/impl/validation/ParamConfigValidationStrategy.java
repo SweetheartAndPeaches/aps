@@ -43,7 +43,7 @@ public class ParamConfigValidationStrategy extends BaseValidationStrategy {
     }
 
     @Override
-    protected ValidationItem getValidationItem() {
+    public ValidationItem getValidationItem() {
         return ValidationItem.PARAM_CONFIG;
     }
 

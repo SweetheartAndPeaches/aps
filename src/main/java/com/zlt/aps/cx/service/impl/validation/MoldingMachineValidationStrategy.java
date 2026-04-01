@@ -19,7 +19,7 @@ import java.util.List;
 public class MoldingMachineValidationStrategy extends BaseValidationStrategy {
 
     @Override
-    protected ValidationItem getValidationItem() {
+    public ValidationItem getValidationItem() {
         return ValidationItem.MOLDING_MACHINE;
     }
 

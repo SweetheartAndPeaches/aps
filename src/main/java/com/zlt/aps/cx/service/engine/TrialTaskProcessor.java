@@ -3,6 +3,7 @@ package com.zlt.aps.cx.service.engine;
 import com.zlt.aps.cx.dto.ScheduleContextDTO;
 import com.zlt.aps.cx.entity.config.CxShiftConfig;
 import com.zlt.aps.mp.api.domain.entity.MdmCxMachineFixed;
+import com.zlt.aps.mp.api.domain.entity.MdmMaterialInfo;
 import com.zlt.aps.mp.api.domain.entity.MdmMoldingMachine;
 import com.zlt.aps.mp.api.domain.entity.MpCxCapacityConfiguration;
 import lombok.RequiredArgsConstructor;
@@ -299,7 +300,7 @@ public class TrialTaskProcessor {
         List<String> recommendedMachines = new ArrayList<>();
         
         if (context.getMaterials() != null) {
-            for (var material : context.getMaterials()) {
+            for (MdmMaterialInfo material : context.getMaterials()) {
                 if (materialCode.equals(material.getMaterialCode())) {
                     String structureName = material.getStructureName();
                     if (structureName != null && context.getStructureAllocationMap() != null) {

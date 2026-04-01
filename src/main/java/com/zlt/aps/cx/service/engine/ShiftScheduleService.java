@@ -1,6 +1,7 @@
 package com.zlt.aps.cx.service.engine;
 
 import com.zlt.aps.cx.dto.ScheduleContextDTO;
+import com.zlt.aps.cx.entity.CxMachineStructureCapacity;
 import com.zlt.aps.cx.entity.CxPrecisionPlan;
 import com.zlt.aps.cx.entity.config.CxParamConfig;
 import com.zlt.aps.cx.entity.config.CxShiftConfig;
@@ -602,7 +603,7 @@ public class ShiftScheduleService {
      */
     private int getMachineHourlyCapacity(String machineCode, String structureName, ScheduleContextDTO context) {
         if (context.getMachineStructureCapacities() != null && machineCode != null && structureName != null) {
-            for (var capacity : context.getMachineStructureCapacities()) {
+            for (CxMachineStructureCapacity capacity : context.getMachineStructureCapacities()) {
                 if (machineCode.equals(capacity.getCxMachineCode()) 
                         && structureName.equals(capacity.getStructureCode())) {
                     return capacity.getHourlyCapacity() != null ? capacity.getHourlyCapacity() : 50;

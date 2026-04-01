@@ -35,7 +35,7 @@ public interface ScheduleService {
      * @param request 重排程请求
      * @return 是否成功
      */
-    ScheduleResult executeSchedule(ScheduleRequest request);
+    boolean reSchedule(ScheduleRequest request);
 
     /**
 

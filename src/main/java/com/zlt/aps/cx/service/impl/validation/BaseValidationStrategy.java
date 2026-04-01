@@ -20,7 +20,7 @@ public abstract class BaseValidationStrategy implements ValidationStrategy {
     /**
      * 获取校验项枚举
      */
-    protected abstract ValidationItem getValidationItem();
+    public abstract ValidationItem getValidationItem();
 
     @Override
     public String getDataItemName() {

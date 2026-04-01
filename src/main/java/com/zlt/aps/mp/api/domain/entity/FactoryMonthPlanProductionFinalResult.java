@@ -8,6 +8,7 @@ import lombok.Data;
 import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Date;
 
 /**
  * 工厂月生产计划-最终排产计划定稿实体类

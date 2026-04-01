@@ -21,7 +21,7 @@ import java.util.stream.Collectors;
 public class MaterialValidationStrategy extends BaseValidationStrategy {
 
     @Override
-    protected ValidationItem getValidationItem() {
+    public ValidationItem getValidationItem() {
         return ValidationItem.MATERIAL_INFO;
     }
 
