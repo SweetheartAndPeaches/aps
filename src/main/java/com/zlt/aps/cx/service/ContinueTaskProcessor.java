@@ -57,17 +57,11 @@ public class ContinueTaskProcessor {
     /** 参数编码：硫化机台数允许差额（均衡阈值） */
     private static final String PARAM_LOAD_DIFF_THRESHOLD = "BALANCE_LOAD_DIFF_THRESHOLD";
     
-    /** 参数编码：硫化机台数允许差额比例（均衡阈值） */
-    private static final String PARAM_LOAD_DIFF_RATIO = "BALANCE_LOAD_DIFF_RATIO";
-    
-    /** 默认：胎胚种类数允许差额 */
+    /** 默认：胎胚种类数允许差额（最多差1种） */
     private static final int DEFAULT_TYPE_DIFF_THRESHOLD = 1;
     
-    /** 默认：硫化机台数允许差额 */
-    private static final int DEFAULT_LOAD_DIFF_THRESHOLD = 5;
-    
-    /** 默认：硫化机台数允许差额比例（20%） */
-    private static final double DEFAULT_LOAD_DIFF_RATIO = 0.2;
+    /** 默认：硫化机台数允许差额（最多差3台） */
+    private static final int DEFAULT_LOAD_DIFF_THRESHOLD = 3;
 
     // ==================== 核心方法：均衡分配 ====================
 
@@ -240,11 +234,10 @@ public class ContinueTaskProcessor {
 
         // Step 1: 获取均衡阈值配置
         int typeDiffThreshold = getTypeDiffThreshold(context);      // 种类数允许差额
-        int loadDiffThreshold = getLoadDiffThreshold(context);      // 负荷允许差额（绝对值）
-        double loadDiffRatio = getLoadDiffRatio(context);           // 负荷允许差额比例
+        int loadDiffThreshold = getLoadDiffThreshold(context);      // 负荷允许差额
         
-        log.info("均衡分配参数：种类差额阈值={}, 负荷差额阈值={}, 负荷差额比例={}", 
-                typeDiffThreshold, loadDiffThreshold, loadDiffRatio);
+        log.info("均衡分配参数：种类差额阈值={}, 负荷差额阈值={}", 
+                typeDiffThreshold, loadDiffThreshold);
         
         // Step 2: 计算总需求（所有胎胚的硫化机台数之和）
         int totalDemand = tasks.stream()
@@ -292,7 +285,7 @@ public class ContinueTaskProcessor {
         
         // 开始DFS搜索
         dfsAssign(sortedTasks, 0, machineStates, forceKeepHistory, 
-                typeDiffThreshold, loadDiffThreshold, loadDiffRatio, searchResult);
+                typeDiffThreshold, loadDiffThreshold, searchResult);
         
         log.info("DFS搜索统计：总搜索次数={}, 剪枝次数={}, 最优分数={}", 
                 searchResult.searchCount, searchResult.pruneCount, searchResult.bestScore);
@@ -305,7 +298,7 @@ public class ContinueTaskProcessor {
         } else {
             log.warn("未找到满足均衡条件的方案，使用贪心算法作为兜底");
             result = greedyAssignFallback(sortedTasks, machineStates, forceKeepHistory, 
-                    typeDiffThreshold, loadDiffThreshold, loadDiffRatio);
+                    typeDiffThreshold, loadDiffThreshold);
         }
 
         logAllocationResult(result, machineStates);
@@ -320,8 +313,7 @@ public class ContinueTaskProcessor {
      * @param machineStates      机台状态列表（会被修改和恢复）
      * @param forceKeepHistory   是否强制保留历史任务
      * @param typeDiffThreshold  种类数允许差额
-     * @param loadDiffThreshold  负荷允许差额（绝对值）
-     * @param loadDiffRatio      负荷允许差额比例
+     * @param loadDiffThreshold  负荷允许差额
      * @param searchResult       搜索结果记录对象
      */
     private void dfsAssign(
@@ -331,7 +323,6 @@ public class ContinueTaskProcessor {
             boolean forceKeepHistory,
             int typeDiffThreshold,
             int loadDiffThreshold,
-            double loadDiffRatio,
             DfsSearchResult searchResult) {
         
         // 搜索计数
@@ -358,7 +349,7 @@ public class ContinueTaskProcessor {
         // 如果硫化机台数为0，跳过
         if (lhMachineCount <= 0) {
             dfsAssign(tasks, taskIndex + 1, machineStates, forceKeepHistory,
-                    typeDiffThreshold, loadDiffThreshold, loadDiffRatio, searchResult);
+                    typeDiffThreshold, loadDiffThreshold, searchResult);
             return;
         }
         
@@ -414,14 +405,8 @@ public class ContinueTaskProcessor {
                 maxLoad = Math.max(maxLoad, load);
             }
             
-            // 剪枝条件1：负荷差额（绝对值）超过阈值
+            // 剪枝条件：负荷差额超过阈值
             if (maxLoad - minLoad > loadDiffThreshold) {
-                searchResult.pruneCount++;
-                continue; // 剪枝
-            }
-            
-            // 剪枝条件2：负荷差额比例超过阈值（避免除零）
-            if (minLoad > 0 && (maxLoad - minLoad) > minLoad * loadDiffRatio) {
                 searchResult.pruneCount++;
                 continue; // 剪枝
             }
@@ -437,7 +422,7 @@ public class ContinueTaskProcessor {
             
             // 递归搜索下一个任务
             dfsAssign(tasks, taskIndex + 1, machineStates, forceKeepHistory,
-                    typeDiffThreshold, loadDiffThreshold, loadDiffRatio, searchResult);
+                    typeDiffThreshold, loadDiffThreshold, searchResult);
             
             // === 回溯 ===
             candidate.getAssignedEmbryos().remove(candidate.getAssignedEmbryos().size() - 1);
@@ -545,8 +530,7 @@ public class ContinueTaskProcessor {
             List<MachineState> machineStates,
             boolean forceKeepHistory,
             int typeDiffThreshold,
-            int loadDiffThreshold,
-            double loadDiffRatio) {
+            int loadDiffThreshold) {
         
         // 重置机台状态
         for (MachineState state : machineStates) {
@@ -610,7 +594,7 @@ public class ContinueTaskProcessor {
     }
     
     /**
-     * 获取负荷允许差额配置（绝对值）
+     * 获取负荷允许差额配置
      */
     private int getLoadDiffThreshold(ScheduleContextDTO context) {
         if (context.getParamConfigMap() != null) {
@@ -624,23 +608,6 @@ public class ContinueTaskProcessor {
             }
         }
         return DEFAULT_LOAD_DIFF_THRESHOLD;
-    }
-    
-    /**
-     * 获取负荷允许差额比例配置
-     */
-    private double getLoadDiffRatio(ScheduleContextDTO context) {
-        if (context.getParamConfigMap() != null) {
-            CxParamConfig config = context.getParamConfigMap().get(PARAM_LOAD_DIFF_RATIO);
-            if (config != null && config.getParamValue() != null) {
-                try {
-                    return Double.parseDouble(config.getParamValue());
-                } catch (NumberFormatException e) {
-                    log.warn("解析负荷差额比例配置失败: {}", config.getParamValue());
-                }
-            }
-        }
-        return DEFAULT_LOAD_DIFF_RATIO;
     }
     
     /**
