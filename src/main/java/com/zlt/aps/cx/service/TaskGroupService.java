@@ -172,6 +172,7 @@ public class TaskGroupService {
      * 查找续作机台
      */
     private List<String> findContinueMachines(String embryoCode, Map<String, Set<String>> machineOnlineEmbryoMap) {
+        //todo 因为这里同胎胚可以被不同硫化任务物料共用，并且不同任务分配的机台不同，这里不能简单的比较在机是那些胎胚就安排
         List<String> machineCodes = new ArrayList<>();
         for (Map.Entry<String, Set<String>> entry : machineOnlineEmbryoMap.entrySet()) {
             if (entry.getValue().contains(embryoCode)) {
