@@ -634,6 +634,13 @@ public class ScheduleServiceImpl implements ScheduleService {
      *
      * <p>成型余量 = 硫化余量 - 该物料对应的所有胎胚库存
      *
+     * <p>处理胎胚共用场景：
+     * <ul>
+     *   <li>一个胎胚可能被多个物料共用</li>
+     *   <li>库存按硫化需求比例分配给各物料</li>
+     *   <li>比例来源：硫化排程结果的日计划量</li>
+     * </ul>
+     *
      * @param materials       物料信息列表
      * @param monthSurplusMap 月度计划余量映射
      * @param stocks          胎胚库存列表
@@ -647,15 +654,27 @@ public class ScheduleServiceImpl implements ScheduleService {
         Map<String, Integer> resultMap = new HashMap<>();
 
         try {
-            // Step 1: 构建胎胚→物料的映射
-            Map<String, String> embryoToMaterialMap = buildEmbryoToMaterialMap(materials);
-            log.debug("构建胎胚→物料映射 {} 条", embryoToMaterialMap.size());
+            // Step 1: 构建胎胚→物料列表的映射（支持一个胎胚对应多个物料）
+            Map<String, List<String>> embryoToMaterialsMap = buildEmbryoToMaterialsMap(materials);
+            log.debug("构建胎胚→物料列表映射 {} 条", embryoToMaterialsMap.size());
 
-            // Step 2: 将胎胚库存按物料汇总
-            Map<String, Integer> materialStockMap = aggregateStockByMaterial(stocks, embryoToMaterialMap);
-            log.debug("按物料汇总胎胚库存 {} 条", materialStockMap.size());
+            // Step 2: 构建物料→胎胚的映射
+            Map<String, String> materialToEmbryoMap = new HashMap<>();
+            for (MdmMaterialInfo material : materials) {
+                if (material.getEmbryoCode() != null && material.getMaterialCode() != null) {
+                    materialToEmbryoMap.put(material.getMaterialCode(), material.getEmbryoCode());
+                }
+            }
 
-            // Step 3: 计算成型余量
+            // Step 3: 计算各物料的硫化需求比例（用于分配共用胎胚库存）
+            Map<String, Integer> materialDemandMap = calculateMaterialDemandRatio(materials, monthSurplusMap);
+            log.debug("计算物料硫化需求比例 {} 条", materialDemandMap.size());
+
+            // Step 4: 按比例分配胎胚库存到物料
+            Map<String, Integer> materialStockMap = allocateStockByMaterialRatio(stocks, embryoToMaterialsMap, materialDemandMap);
+            log.debug("按比例分配胎胚库存到物料 {} 条", materialStockMap.size());
+
+            // Step 5: 计算成型余量
             for (Map.Entry<String, MdmMonthSurplus> entry : monthSurplusMap.entrySet()) {
                 String materialCode = entry.getKey();
                 MdmMonthSurplus surplus = entry.getValue();
@@ -678,39 +697,131 @@ public class ScheduleServiceImpl implements ScheduleService {
     }
 
     /**
-     * 构建胎胚→物料的映射
+     * 构建胎胚→物料列表的映射（支持一个胎胚对应多个物料）
      */
-    private Map<String, String> buildEmbryoToMaterialMap(List<MdmMaterialInfo> materials) {
-        Map<String, String> embryoToMaterialMap = new HashMap<>();
+    private Map<String, List<String>> buildEmbryoToMaterialsMap(List<MdmMaterialInfo> materials) {
+        Map<String, List<String>> embryoToMaterialsMap = new HashMap<>();
         for (MdmMaterialInfo material : materials) {
             String embryoCode = material.getEmbryoCode();
             String materialCode = material.getMaterialCode();
             if (embryoCode != null && materialCode != null) {
-                embryoToMaterialMap.put(embryoCode, materialCode);
+                embryoToMaterialsMap.computeIfAbsent(embryoCode, k -> new ArrayList<>()).add(materialCode);
             }
         }
-        return embryoToMaterialMap;
+        return embryoToMaterialsMap;
     }
 
     /**
-     * 将胎胚库存按物料汇总
+     * 计算各物料的硫化需求比例
+     * 
+     * <p>使用月计划余量作为需求比例的参考值
      */
-    private Map<String, Integer> aggregateStockByMaterial(List<CxStock> stocks, Map<String, String> embryoToMaterialMap) {
+    private Map<String, Integer> calculateMaterialDemandRatio(
+            List<MdmMaterialInfo> materials,
+            Map<String, MdmMonthSurplus> monthSurplusMap) {
+        
+        Map<String, Integer> demandMap = new HashMap<>();
+        
+        for (MdmMaterialInfo material : materials) {
+            String materialCode = material.getMaterialCode();
+            if (materialCode == null) {
+                continue;
+            }
+            
+            // 优先使用月计划余量作为需求比例
+            MdmMonthSurplus surplus = monthSurplusMap.get(materialCode);
+            if (surplus != null && surplus.getPlanSurplusQty() != null) {
+                demandMap.put(materialCode, surplus.getPlanSurplusQty().intValue());
+            } else {
+                // 默认需求为1，避免除零
+                demandMap.put(materialCode, 1);
+            }
+        }
+        
+        return demandMap;
+    }
+
+    /**
+     * 按比例分配胎胚库存到物料
+     * 
+     * <p>当一个胎胚被多个物料共用时，按各物料的硫化需求比例分配库存
+     * <p>例如：胎胚1被物料A和物料B共用，A的需求=300，B的需求=500，库存=800
+     * <p>则A分配: 800 * 300/800 = 300，B分配: 800 * 500/800 = 500
+     */
+    private Map<String, Integer> allocateStockByMaterialRatio(
+            List<CxStock> stocks,
+            Map<String, List<String>> embryoToMaterialsMap,
+            Map<String, Integer> materialDemandMap) {
+        
         Map<String, Integer> materialStockMap = new HashMap<>();
+        
         for (CxStock stock : stocks) {
             String embryoCode = stock.getEmbryoCode();
             if (embryoCode == null) {
                 continue;
             }
-
-            String materialCode = embryoToMaterialMap.get(embryoCode);
-            if (materialCode == null) {
+            
+            int totalStock = stock.getEffectiveStock();
+            List<String> materialCodes = embryoToMaterialsMap.get(embryoCode);
+            
+            if (materialCodes == null || materialCodes.isEmpty()) {
+                // 胎胚没有对应的物料，跳过
+                log.debug("胎胚 {} 没有对应的物料，跳过", embryoCode);
                 continue;
             }
-
-            int effectiveStock = stock.getEffectiveStock();
-            materialStockMap.merge(materialCode, effectiveStock, Integer::sum);
+            
+            if (materialCodes.size() == 1) {
+                // 胎胚只对应一个物料，直接分配全部库存
+                String materialCode = materialCodes.get(0);
+                materialStockMap.merge(materialCode, totalStock, Integer::sum);
+                log.debug("胎胚 {} 只对应物料 {}，分配库存 {}", embryoCode, materialCode, totalStock);
+            } else {
+                // 胎胚对应多个物料，按需求比例分配
+                int totalDemand = 0;
+                Map<String, Integer> demands = new HashMap<>();
+                
+                for (String materialCode : materialCodes) {
+                    int demand = materialDemandMap.getOrDefault(materialCode, 1);
+                    demands.put(materialCode, demand);
+                    totalDemand += demand;
+                }
+                
+                if (totalDemand == 0) {
+                    // 总需求为0，平均分配
+                    int avgStock = totalStock / materialCodes.size();
+                    for (String materialCode : materialCodes) {
+                        materialStockMap.merge(materialCode, avgStock, Integer::sum);
+                    }
+                    log.debug("胎胚 {} 对应多个物料但总需求为0，平均分配库存 {}", embryoCode, avgStock);
+                } else {
+                    // 按比例分配
+                    int allocatedTotal = 0;
+                    String lastMaterial = null;
+                    
+                    for (int i = 0; i < materialCodes.size(); i++) {
+                        String materialCode = materialCodes.get(i);
+                        int demand = demands.get(materialCode);
+                        int allocatedStock;
+                        
+                        if (i == materialCodes.size() - 1) {
+                            // 最后一个物料分配剩余库存，避免四舍五入误差
+                            allocatedStock = totalStock - allocatedTotal;
+                        } else {
+                            // 按比例分配
+                            allocatedStock = (int) ((double) totalStock * demand / totalDemand);
+                        }
+                        
+                        materialStockMap.merge(materialCode, allocatedStock, Integer::sum);
+                        allocatedTotal += allocatedStock;
+                        lastMaterial = materialCode;
+                        
+                        log.debug("胎胚 {} 共用分配：物料 {} 需求占比 {}/{}，分配库存 {}", 
+                                embryoCode, materialCode, demand, totalDemand, allocatedStock);
+                    }
+                }
+            }
         }
+        
         return materialStockMap;
     }
 
