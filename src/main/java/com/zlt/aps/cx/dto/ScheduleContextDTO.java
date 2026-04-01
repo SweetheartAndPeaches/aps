@@ -7,6 +7,7 @@ import com.zlt.aps.cx.entity.config.CxShiftConfig;
 import com.zlt.aps.cx.entity.config.CxStructurePriority;
 import com.zlt.aps.cx.entity.config.CxStructureShiftCapacity;
 import com.zlt.aps.mp.api.domain.entity.*;
+import com.zlt.aps.mp.api.domain.entity.MpCxCapacityConfiguration;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
 import com.zlt.aps.mp.engine.domain.vo.MonthPlanProductLhCapacityVo;
@@ -397,6 +398,26 @@ public class ScheduleContextDTO {
      * 快速查询用
      */
     private Set<String> mainProductCodes;
+
+    // ==================== 结构排产配置 ====================
+
+    /**
+     * 结构排产配置列表
+     * 从 T_MP_STRUCTURE_ALLOCATION 获取，定义了每个结构可分配的机台
+     */
+    private List<MpCxCapacityConfiguration> structureAllocations;
+
+    /**
+     * 结构排产配置映射（结构编码 -> 可分配机台列表）
+     * 快速查询用
+     */
+    private Map<String, List<MpCxCapacityConfiguration>> structureAllocationMap;
+
+    /**
+     * 是否强制保留历史任务
+     * 从 CxParamConfig 获取，控制续作任务是否优先保留在原机台
+     */
+    private Boolean forceKeepHistoryTask;
 
     /**
      * 班次信息

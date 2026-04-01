@@ -42,8 +42,10 @@ import com.zlt.aps.mp.api.domain.entity.MdmMoldingMachine;
 import com.zlt.aps.mp.api.domain.entity.MdmMonthSurplus;
 import com.zlt.aps.mp.api.domain.entity.MdmSkuScheduleCategory;
 import com.zlt.aps.mp.api.domain.entity.MdmStructureLhRatio;
+import com.zlt.aps.mp.api.domain.entity.MpCxCapacityConfiguration;
 import com.zlt.aps.mp.api.mapper.MdmDevicePlanShutMapper;
 import com.zlt.aps.mp.api.mapper.MdmMonthPlanProductLhCapacityMapper;
+import com.zlt.aps.mp.api.mapper.MpCxCapacityConfigurationMapper;
 import com.zlt.aps.mp.engine.domain.vo.MonthPlanProductLhCapacityVo;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -146,6 +148,7 @@ public class ScheduleServiceImpl implements ScheduleService {
     private final CxShiftConfigMapper shiftConfigMapper;
     private final FactoryMonthPlanProductionFinalResultMapper monthPlanMapper;
     private final CxMaterialEndingMapper materialEndingMapper;
+    private final MpCxCapacityConfigurationMapper capacityConfigurationMapper;
 
     // ==================== 公共方法 ====================
 
@@ -247,11 +250,14 @@ public class ScheduleServiceImpl implements ScheduleService {
             // 17. 过滤已收尾物料（成型余量<=0的物料不参与排程）
             filterCompletedMaterials(context);
 
-            // 18. 设置排程参数
+            // 18. 加载结构排产配置（用于均衡分配）
+            loadStructureAllocations(context, scheduleDate);
+
+            // 19. 设置排程参数
             context.setScheduleDate(scheduleDate);
             context.setScheduleMode(request.getScheduleMode());
 
-            // 19. 数据完整性校验
+            // 20. 数据完整性校验
             validateScheduleData(context, scheduleDate, factoryCode);
 
             return context;
@@ -419,6 +425,32 @@ public class ScheduleServiceImpl implements ScheduleService {
             keyProductCodes.add(product.getEmbryoCode());
         }
         context.setKeyProductCodes(keyProductCodes);
+    }
+
+    /**
+     * 加载结构排产配置
+     * 
+     * <p>从 T_MP_STRUCTURE_ALLOCATION 表获取每个结构可分配的机台列表
+     * <p>用于续作任务的均衡分配
+     */
+    private void loadStructureAllocations(ScheduleContextDTO context, LocalDate scheduleDate) {
+        int year = scheduleDate.getYear();
+        int month = scheduleDate.getMonthValue();
+
+        // 查询当月的结构排产配置
+        List<MpCxCapacityConfiguration> allocations = capacityConfigurationMapper.selectByYearAndMonth(year, month);
+        context.setStructureAllocations(allocations);
+
+        // 按结构分组
+        Map<String, List<MpCxCapacityConfiguration>> structureAllocationMap = allocations.stream()
+                .filter(a -> a.getStructureName() != null)
+                .collect(Collectors.groupingBy(
+                        MpCxCapacityConfiguration::getStructureName,
+                        LinkedHashMap::new,
+                        Collectors.toList()));
+
+        context.setStructureAllocationMap(structureAllocationMap);
+        log.info("加载结构排产配置 {} 条，共 {} 个结构", allocations.size(), structureAllocationMap.size());
     }
 
     /**
