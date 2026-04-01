@@ -100,19 +100,16 @@ public class ContinueTaskProcessor {
                 continue;
             }
 
-            // 获取结构的产能限制配置
-            MdmStructureLhRatio ratioConfig = context.getStructureLhRatioMap() != null 
-                    ? context.getStructureLhRatioMap().get(structureName) : null;
-            
-            int maxLhMachines = ratioConfig != null && ratioConfig.getLhMachineMaxQty() != null 
-                    ? ratioConfig.getLhMachineMaxQty() : 10;
-            int maxEmbryoTypes = ratioConfig != null && ratioConfig.getMaxEmbryoQty() != null 
-                    ? ratioConfig.getMaxEmbryoQty() : 4;
+            // 构建机台编码 -> 最大硫化机数 映射（根据每台机台的机型+结构获取）
+            Map<String, Integer> machineMaxLhMap = buildMachineMaxLhMap(availableMachines, structureName, context);
 
-            // Step 5: 使用 BalancingService 均衡分配
-            BalancingService.BalancingResult balancingResult = balancingService.balanceEmbryosToMachines(
+            // 获取结构的最大胎胚种类数
+            int maxEmbryoTypes = getMaxEmbryoTypes(structureName, context);
+
+            // Step 5: 使用 BalancingService 均衡分配（使用每台机台各自的最大硫化机数）
+            BalancingService.BalancingResult balancingResult = balancingService.balanceEmbryosToMachinesWithMachineCapacity(
                     tasks, availableMachines, machineHistoryMap,
-                    maxLhMachines, maxEmbryoTypes, forceKeepHistory, context);
+                    machineMaxLhMap, maxEmbryoTypes, forceKeepHistory, context);
 
             // Step 6: 为每个机台分配计划量
             for (BalancingService.MachineAssignment assignment : balancingResult.getAssignments()) {
@@ -206,6 +203,99 @@ public class ContinueTaskProcessor {
             }
         }
         return new ArrayList<>();
+    }
+
+    /**
+     * 构建机台最大硫化机数映射
+     *
+     * <p>根据每台机台的机型 + 结构，从 MdmStructureLhRatio 获取对应的最大硫化机数
+     *
+     * @param machineConfigs  机台配置列表
+     * @param structureName   结构名称
+     * @param context         排程上下文
+     * @return 机台编码 -> 最大硫化机数
+     */
+    private Map<String, Integer> buildMachineMaxLhMap(
+            List<MpCxCapacityConfiguration> machineConfigs,
+            String structureName,
+            ScheduleContextDTO context) {
+
+        Map<String, Integer> result = new HashMap<>();
+
+        // 构建机台编码 -> 机型 映射
+        Map<String, String> machineTypeMap = new HashMap<>();
+        if (context.getAvailableMachines() != null) {
+            for (MdmMoldingMachine machine : context.getAvailableMachines()) {
+                machineTypeMap.put(machine.getCxMachineCode(), machine.getCxMachineTypeCode());
+            }
+        }
+
+        // 构建 机型_结构 -> 最大硫化机数 映射
+        Map<String, Integer> typeStructureMap = new HashMap<>();
+        List<MdmStructureLhRatio> ratios = context.getStructureLhRatios();
+        if (ratios != null) {
+            for (MdmStructureLhRatio ratio : ratios) {
+                String key = ratio.getCxMachineTypeCode() + "_" + ratio.getStructureName();
+                if (ratio.getLhMachineMaxQty() != null) {
+                    typeStructureMap.put(key, ratio.getLhMachineMaxQty());
+                }
+            }
+        }
+
+        // 为每台机台获取对应的最大硫化机数
+        for (MpCxCapacityConfiguration config : machineConfigs) {
+            String machineCode = config.getCxMachineCode();
+            String machineType = machineTypeMap.get(machineCode);
+
+            // 根据机型+结构查找
+            String key = machineType + "_" + structureName;
+            Integer maxLh = typeStructureMap.get(key);
+
+            // 如果找不到，尝试只按结构查找（向后兼容）
+            if (maxLh == null && context.getStructureLhRatioMap() != null) {
+                MdmStructureLhRatio ratioConfig = context.getStructureLhRatioMap().get(structureName);
+                if (ratioConfig != null && ratioConfig.getLhMachineMaxQty() != null) {
+                    maxLh = ratioConfig.getLhMachineMaxQty();
+                }
+            }
+
+            // 兜底：使用默认值
+            if (maxLh == null) {
+                maxLh = 10;
+                log.debug("机台 {} 机型 {} 结构 {} 未找到配比配置，使用默认值 10",
+                        machineCode, machineType, structureName);
+            }
+
+            result.put(machineCode, maxLh);
+        }
+
+        log.info("结构 {} 机台最大硫化机数映射：{}", structureName, result);
+        return result;
+    }
+
+    /**
+     * 获取结构的最大胎胚种类数
+     */
+    private int getMaxEmbryoTypes(String structureName, ScheduleContextDTO context) {
+        // 优先从 structureLhRatios 列表查找（按机型）
+        List<MdmStructureLhRatio> ratios = context.getStructureLhRatios();
+        if (ratios != null) {
+            for (MdmStructureLhRatio ratio : ratios) {
+                if (structureName.equals(ratio.getStructureName()) && ratio.getMaxEmbryoQty() != null) {
+                    return ratio.getMaxEmbryoQty();
+                }
+            }
+        }
+
+        // 向后兼容：从 structureLhRatioMap 查找
+        if (context.getStructureLhRatioMap() != null) {
+            MdmStructureLhRatio ratioConfig = context.getStructureLhRatioMap().get(structureName);
+            if (ratioConfig != null && ratioConfig.getMaxEmbryoQty() != null) {
+                return ratioConfig.getMaxEmbryoQty();
+            }
+        }
+
+        return context.getMaxTypesPerMachine() != null ? context.getMaxTypesPerMachine() : 4;
     }
 
     // ==================== 原有方法 ====================
