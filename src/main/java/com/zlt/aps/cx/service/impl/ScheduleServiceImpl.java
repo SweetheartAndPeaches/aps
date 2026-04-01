@@ -232,10 +232,10 @@ public class ScheduleServiceImpl implements ScheduleService {
             // 11. 获取关键产品配置
             loadKeyProducts(context);
 
-            // 12. 构建产能映射
+            // 12. 构建物料日产能映射/成型硫化配比
             buildCapacityMaps(context);
 
-            // 13. 获取月度计划余量并计算成型余量
+            // 13. 获取月度计划余量并计算成型余量（考虑共用胎胚）
             loadMonthSurplusAndCalculateFormingRemainder(context, scheduleDate);
 
             // 14. 获取SKU排产分类
