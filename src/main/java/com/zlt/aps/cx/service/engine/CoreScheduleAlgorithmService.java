@@ -251,6 +251,8 @@ public interface CoreScheduleAlgorithmService {
         private Boolean isKeyProductOnOpening;
         /** 是否收尾最后一批 */
         private Boolean isLastEndingBatch;
+        /** 班次分配结果（班次编码 -> 计划量） */
+        private Map<String, Integer> shiftAllocation;
         
         // ==================== 新增任务排序相关字段 ====================
         /** 月计划优先级 */
