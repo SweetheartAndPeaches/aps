@@ -205,7 +205,7 @@ public class ScheduleServiceImpl implements ScheduleService {
             // 3. 获取所有机台
             loadMoldingMachines(context);
 
-            // 4. 获取硫化排程结果
+            // 4. 获取硫化排程结果（后续会根据成型余量过滤）
             loadLhScheduleResults(context, scheduleDate);
 
             // 5. 根据硫化排程结果获取物料信息
@@ -217,7 +217,7 @@ public class ScheduleServiceImpl implements ScheduleService {
             // 7. 获取成型在机信息
             loadOnlineInfos(context, scheduleDate);
 
-            // 8. 构建机台在机胎胚映射
+            // 8. 构建机台在机胎胚映射（后续会根据成型余量过滤）
             buildMachineOnlineEmbryoMap(context);
 
             // 9. 获取参数配置
@@ -244,11 +244,14 @@ public class ScheduleServiceImpl implements ScheduleService {
             // 16. 加载物料收尾信息并计算收尾日
             loadMaterialEndings(context, scheduleDate);
 
-            // 17. 设置排程参数
+            // 17. 过滤已收尾物料（成型余量<=0的物料不参与排程）
+            filterCompletedMaterials(context);
+
+            // 18. 设置排程参数
             context.setScheduleDate(scheduleDate);
             context.setScheduleMode(request.getScheduleMode());
 
-            // 18. 数据完整性校验
+            // 19. 数据完整性校验
             validateScheduleData(context, scheduleDate, factoryCode);
 
             return context;
@@ -642,7 +645,7 @@ public class ScheduleServiceImpl implements ScheduleService {
      * </ul>
      *
      * @param materials       物料信息列表
-     * @param monthSurplusMap 月度计划余量映射
+     * @param monthSurplusMap 月度计划硫化余量映射
      * @param stocks          胎胚库存列表
      * @return 成型余量映射
      */
@@ -971,6 +974,126 @@ public class ScheduleServiceImpl implements ScheduleService {
                 .count();
         if (urgentCount > 0) {
             log.warn("发现 {} 个紧急收尾物料", urgentCount);
+        }
+    }
+
+    /**
+     * 过滤已收尾物料
+     *
+     * <p>成型余量 <= 0 的物料表示已经收尾完成，不参与排程。
+     * <p>需要过滤：
+     * <ul>
+     *   <li>硫化排程结果：移除已收尾物料的任务</li>
+     *   <li>在机信息：移除已收尾物料的在机记录</li>
+     *   <li>机台在机胎胚映射：移除已收尾物料的映射</li>
+     * </ul>
+     *
+     * @param context 排程上下文
+     */
+    private void filterCompletedMaterials(ScheduleContextDTO context) {
+        // 获取成型余量映射
+        Map<String, Integer> formingRemainderMap = context.getFormingRemainderMap();
+        if (formingRemainderMap == null || formingRemainderMap.isEmpty()) {
+            log.debug("成型余量映射为空，跳过过滤");
+            return;
+        }
+
+        // 构建已收尾物料集合（成型余量 <= 0）
+        Set<String> completedMaterialCodes = new HashSet<>();
+        for (Map.Entry<String, Integer> entry : formingRemainderMap.entrySet()) {
+            if (entry.getValue() != null && entry.getValue() <= 0) {
+                completedMaterialCodes.add(entry.getKey());
+            }
+        }
+
+        if (completedMaterialCodes.isEmpty()) {
+            log.debug("没有已收尾的物料，跳过过滤");
+            return;
+        }
+
+        log.info("发现 {} 个已收尾物料，开始过滤", completedMaterialCodes.size());
+
+        // 1. 过滤硫化排程结果
+        int originalLhCount = context.getLhScheduleResults() != null ? context.getLhScheduleResults().size() : 0;
+        if (context.getLhScheduleResults() != null) {
+            List<LhScheduleResult> filteredLhResults = context.getLhScheduleResults().stream()
+                    .filter(r -> {
+                        String materialCode = r.getMaterialCode();
+                        // 如果物料编码在已收尾集合中，则过滤掉
+                        if (materialCode != null && completedMaterialCodes.contains(materialCode)) {
+                            log.debug("过滤硫化排程结果：物料={}，成型余量={}", 
+                                    materialCode, formingRemainderMap.get(materialCode));
+                            return false;
+                        }
+                        return true;
+                    })
+                    .collect(Collectors.toList());
+            context.setLhScheduleResults(filteredLhResults);
+            log.info("过滤硫化排程结果：{} -> {} 条（移除 {} 条已收尾物料任务）",
+                    originalLhCount, filteredLhResults.size(), originalLhCount - filteredLhResults.size());
+        }
+
+        // 2. 过滤在机信息
+        int originalOnlineCount = context.getOnlineInfos() != null ? context.getOnlineInfos().size() : 0;
+        if (context.getOnlineInfos() != null) {
+            // 需要先将物料编码转换为胎胚编码
+            Map<String, String> materialToEmbryoMap = new HashMap<>();
+            if (context.getMaterials() != null) {
+                for (MdmMaterialInfo material : context.getMaterials()) {
+                    if (material.getMaterialCode() != null && material.getEmbryoCode() != null) {
+                        materialToEmbryoMap.put(material.getMaterialCode(), material.getEmbryoCode());
+                    }
+                }
+            }
+
+            // 构建已收尾的胎胚编码集合
+            Set<String> completedEmbryoCodes = new HashSet<>();
+            for (String materialCode : completedMaterialCodes) {
+                String embryoCode = materialToEmbryoMap.get(materialCode);
+                if (embryoCode != null) {
+                    completedEmbryoCodes.add(embryoCode);
+                }
+            }
+
+            List<MdmCxMachineOnlineInfo> filteredOnlineInfos = context.getOnlineInfos().stream()
+                    .filter(info -> {
+                        String embryoCode = info.getMesMaterialCode();
+                        // 如果胎胚编码在已收尾集合中，则过滤掉
+                        if (embryoCode != null && completedEmbryoCodes.contains(embryoCode)) {
+                            log.debug("过滤在机信息：机台={}，胎胚={}，对应物料已收尾",
+                                    info.getCxCode(), embryoCode);
+                            return false;
+                        }
+                        return true;
+                    })
+                    .collect(Collectors.toList());
+            context.setOnlineInfos(filteredOnlineInfos);
+            log.info("过滤在机信息：{} -> {} 条（移除 {} 条已收尾物料在机记录）",
+                    originalOnlineCount, filteredOnlineInfos.size(), originalOnlineCount - filteredOnlineInfos.size());
+        }
+
+        // 3. 重新构建机台在机胎胚映射（使用过滤后的在机信息）
+        if (context.getOnlineInfos() != null) {
+            Map<String, Set<String>> machineOnlineEmbryoMap = new HashMap<>();
+            for (MdmCxMachineOnlineInfo onlineInfo : context.getOnlineInfos()) {
+                String cxCode = onlineInfo.getCxCode();
+                String embryoCode = onlineInfo.getMesMaterialCode();
+                if (cxCode != null && embryoCode != null) {
+                    machineOnlineEmbryoMap.computeIfAbsent(cxCode, k -> new HashSet<>()).add(embryoCode);
+                }
+            }
+            context.setMachineOnlineEmbryoMap(machineOnlineEmbryoMap);
+            log.info("重新构建机台在机胎胚映射，共 {} 个机台有在机任务", machineOnlineEmbryoMap.size());
+        }
+
+        // 4. 记录被过滤的物料信息
+        if (!completedMaterialCodes.isEmpty()) {
+            StringBuilder sb = new StringBuilder("已收尾物料列表：\n");
+            for (String materialCode : completedMaterialCodes) {
+                Integer remainder = formingRemainderMap.get(materialCode);
+                sb.append(String.format("  - 物料: %s, 成型余量: %d\n", materialCode, remainder));
+            }
+            log.info(sb.toString());
         }
     }
 
