@@ -266,12 +266,18 @@ public class ContinueTaskProcessor {
                 })
                 .collect(Collectors.toList());
 
-        // Step 5: 使用贪心算法分配（尝试找到最均衡的方案）
+        // Step 5: 使用贪心算法分配（尝试多种排序策略，选择最均衡的方案）
+        // 定义不同的分配策略：
+        // 0 = 负荷优先（选择当前负荷最少的机台）
+        // 1 = 种类优先（选择当前胎胚种类最少的机台）
+        // 2 = 历史+负荷（优先历史机台，其次负荷少）
+        // 3 = 历史+种类（优先历史机台，其次种类少）
+        final int[] strategies = {0, 1, 2, 3};
+        
         BalancingResult bestResult = null;
         int bestScore = Integer.MAX_VALUE;
 
-        // 尝试多次分配，选择最均衡的方案
-        for (int attempt = 0; attempt < 3; attempt++) {
+        for (int strategy : strategies) {
             // 重置机台状态
             for (MachineState state : machineStates) {
                 state.setCurrentLoad(0);
@@ -280,7 +286,7 @@ public class ContinueTaskProcessor {
             }
 
             // 分配胎胚
-            boolean success = assignEmbryosGreedy(sortedTasks, machineStates, forceKeepHistory, attempt);
+            boolean success = assignEmbryosGreedy(sortedTasks, machineStates, forceKeepHistory, strategy);
 
             if (success) {
                 // 计算均衡分数
@@ -307,12 +313,22 @@ public class ContinueTaskProcessor {
      * 贪心算法分配胎胚
      *
      * <p>按硫化机台数分配，每个胎胚的硫化机数作为一个整体分配给一个机台
+     *
+     * @param tasks            待分配的胎胚任务列表
+     * @param machineStates    机台状态列表
+     * @param forceKeepHistory 是否强制保留历史任务
+     * @param strategy         分配策略：
+     *                          0 = 负荷优先
+     *                          1 = 种类优先
+     *                          2 = 历史+负荷
+     *                          3 = 历史+种类
+     * @return 是否分配成功
      */
     private boolean assignEmbryosGreedy(
             List<CoreScheduleAlgorithmService.DailyEmbryoTask> tasks,
             List<MachineState> machineStates,
             boolean forceKeepHistory,
-            int attempt) {
+            int strategy) {
 
         for (CoreScheduleAlgorithmService.DailyEmbryoTask task : tasks) {
             String embryoCode = task.getMaterialCode();
@@ -329,7 +345,7 @@ public class ContinueTaskProcessor {
             }
 
             // 按优先级排序候选机台
-            sortCandidates(candidates, embryoCode, forceKeepHistory, attempt);
+            sortCandidates(candidates, embryoCode, forceKeepHistory, strategy);
 
             // 分配到第一个候选机台
             MachineState selected = candidates.get(0);
@@ -389,34 +405,62 @@ public class ContinueTaskProcessor {
 
     /**
      * 排序候选机台
+     *
+     * @param candidates       候选机台列表
+     * @param embryoCode       胎胚编码
+     * @param forceKeepHistory 是否强制保留历史任务
+     * @param strategy         分配策略：
+     *                          0 = 负荷优先（选择当前负荷最少的机台）
+     *                          1 = 种类优先（选择当前胎胚种类最少的机台）
+     *                          2 = 历史+负荷（优先历史机台，其次负荷少）
+     *                          3 = 历史+种类（优先历史机台，其次种类少）
      */
     private void sortCandidates(
             List<MachineState> candidates,
             String embryoCode,
             boolean forceKeepHistory,
-            int attempt) {
+            int strategy) {
         
         candidates.sort((a, b) -> {
-            // 优先级1：历史胎胚优先（如果强制保留）
-            if (forceKeepHistory) {
-                boolean aHasHistory = a.getHistoryEmbryos().contains(embryoCode);
-                boolean bHasHistory = b.getHistoryEmbryos().contains(embryoCode);
-                if (aHasHistory && !bHasHistory) return -1;
-                if (!aHasHistory && bHasHistory) return 1;
+            boolean aHasHistory = a.getHistoryEmbryos().contains(embryoCode);
+            boolean bHasHistory = b.getHistoryEmbryos().contains(embryoCode);
+            
+            switch (strategy) {
+                case 0: // 负荷优先
+                    // 历史胎胚优先（如果强制保留）
+                    if (forceKeepHistory) {
+                        if (aHasHistory && !bHasHistory) return -1;
+                        if (!aHasHistory && bHasHistory) return 1;
+                    }
+                    // 当前负荷少的优先
+                    return Integer.compare(a.getCurrentLoad(), b.getCurrentLoad());
+                    
+                case 1: // 种类优先
+                    // 历史胎胚优先（如果强制保留）
+                    if (forceKeepHistory) {
+                        if (aHasHistory && !bHasHistory) return -1;
+                        if (!aHasHistory && bHasHistory) return 1;
+                    }
+                    // 当前种类数少的优先
+                    return Integer.compare(a.getCurrentTypes(), b.getCurrentTypes());
+                    
+                case 2: // 历史+负荷
+                    // 优先级1：历史胎胚优先
+                    if (aHasHistory && !bHasHistory) return -1;
+                    if (!aHasHistory && bHasHistory) return 1;
+                    // 优先级2：当前负荷少的优先
+                    return Integer.compare(a.getCurrentLoad(), b.getCurrentLoad());
+                    
+                case 3: // 历史+种类
+                    // 优先级1：历史胎胚优先
+                    if (aHasHistory && !bHasHistory) return -1;
+                    if (!aHasHistory && bHasHistory) return 1;
+                    // 优先级2：当前种类数少的优先
+                    return Integer.compare(a.getCurrentTypes(), b.getCurrentTypes());
+                    
+                default:
+                    return Integer.compare(a.getCurrentLoad(), b.getCurrentLoad());
             }
-            
-            // 优先级2：当前负荷少的优先
-            int loadCompare = Integer.compare(a.getCurrentLoad(), b.getCurrentLoad());
-            if (loadCompare != 0) return loadCompare;
-            
-            // 优先级3：当前种类数少的优先
-            int typeCompare = Integer.compare(a.getCurrentTypes(), b.getCurrentTypes());
-            if (typeCompare != 0) return typeCompare;
-            
-            // 优先级4：尝试次数影响（增加随机性）
-            return Integer.compare(
-                    a.getMachineCode().hashCode() % (attempt + 1),
-                    b.getMachineCode().hashCode() % (attempt + 1));
         });
     }
 
