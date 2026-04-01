@@ -131,8 +131,10 @@ public class BalancingService {
         // 根据机型+结构获取每台机台的最大硫化机数
         Map<String, Integer> machineMaxLhMap = buildMachineMaxLhMap(availableMachines, structureName, context);
 
+        // 根据机型+结构获取每台机台的最大胎胚种类数
+        Map<String, Integer> machineMaxEmbryoTypesMap = buildMachineMaxEmbryoTypesMap(availableMachines, structureName, context);
+
         // 获取其他参数
-        int maxEmbryoTypes = getMaxEmbryoTypes(structureName, context);
         boolean forceKeepHistory = getForceKeepHistoryConfig(context);
         Map<String, Set<String>> machineHistoryMap = context.getMachineOnlineEmbryoMap();
         if (machineHistoryMap == null) {
@@ -141,7 +143,7 @@ public class BalancingService {
 
         return balanceEmbryosToMachinesWithMachineCapacity(
                 tasks, configs, machineHistoryMap,
-                machineMaxLhMap, maxEmbryoTypes, forceKeepHistory, context);
+                machineMaxLhMap, machineMaxEmbryoTypesMap, forceKeepHistory, context);
     }
 
     /**
@@ -197,30 +199,68 @@ public class BalancingService {
     }
 
     /**
-     * 获取结构的最大胎胚种类数
+     * 构建机台最大胎胚种类数映射
+     *
+     * <p>根据每台机台的机型 + 结构，从 MdmStructureLhRatio 获取对应的最大胎胚种类数
+     *
+     * @param machines      机台列表
+     * @param structureName 结构名称
+     * @param context       排程上下文
+     * @return 机台编码 -> 最大胎胚种类数
      */
-    private int getMaxEmbryoTypes(String structureName, ScheduleContextDTO context) {
+    private Map<String, Integer> buildMachineMaxEmbryoTypesMap(
+            List<MdmMoldingMachine> machines,
+            String structureName,
+            ScheduleContextDTO context) {
+
+        Map<String, Integer> result = new HashMap<>();
+
+        // 构建机台编码 -> 机型 映射
+        Map<String, String> machineTypeMap = new HashMap<>();
+        for (MdmMoldingMachine machine : machines) {
+            machineTypeMap.put(machine.getCxMachineCode(), machine.getCxMachineTypeCode());
+        }
+
+        // 构建 机型_结构 -> 最大胎胚种类数 映射
+        Map<String, Integer> typeStructureMap = new HashMap<>();
         List<MdmStructureLhRatio> ratios = context.getStructureLhRatios();
         if (ratios != null) {
             for (MdmStructureLhRatio ratio : ratios) {
-                if (structureName.equals(ratio.getStructureName()) && ratio.getMaxEmbryoQty() != null) {
-                    return ratio.getMaxEmbryoQty();
+                String key = ratio.getCxMachineTypeCode() + "_" + ratio.getStructureName();
+                if (ratio.getMaxEmbryoQty() != null) {
+                    typeStructureMap.put(key, ratio.getMaxEmbryoQty());
                 }
             }
         }
-        return context.getMaxTypesPerMachine() != null ? context.getMaxTypesPerMachine() : 4;
+
+        for (MdmMoldingMachine machine : machines) {
+            String machineCode = machine.getCxMachineCode();
+            String machineType = machineTypeMap.get(machineCode);
+
+            String key = machineType + "_" + structureName;
+            Integer maxTypes = typeStructureMap.get(key);
+
+            // 如果找不到，使用默认值
+            if (maxTypes == null) {
+                maxTypes = context.getMaxTypesPerMachine() != null ? context.getMaxTypesPerMachine() : 4;
+            }
+
+            result.put(machineCode, maxTypes);
+        }
+
+        return result;
     }
 
     /**
-     * 均衡分配胎胚到机台（支持每台机台有不同的最大硫化机数）
+     * 均衡分配胎胚到机台（支持每台机台有不同的最大硫化机数和最大胎胚种类数）
      *
-     * @param tasks               胎胚任务列表
-     * @param availableMachines   可分配机台列表
-     * @param machineHistoryMap   历史任务映射
-     * @param machineMaxLhMap     机台最大硫化机数映射（机台编码 -> 最大硫化机数）
-     * @param maxEmbryoTypes      最大胎胚种类数
-     * @param forceKeepHistory    是否强制保留历史任务
-     * @param context             排程上下文
+     * @param tasks                   胎胚任务列表
+     * @param availableMachines       可分配机台列表
+     * @param machineHistoryMap       历史任务映射
+     * @param machineMaxLhMap         机台最大硫化机数映射（机台编码 -> 最大硫化机数）
+     * @param machineMaxEmbryoTypesMap 机台最大胎胚种类数映射（机台编码 -> 最大胎胚种类数）
+     * @param forceKeepHistory        是否强制保留历史任务
+     * @param context                 排程上下文
      * @return 均衡分配结果
      */
     public BalancingResult balanceEmbryosToMachinesWithMachineCapacity(
@@ -228,6 +268,126 @@ public class BalancingService {
             List<MpCxCapacityConfiguration> availableMachines,
             Map<String, Set<String>> machineHistoryMap,
             Map<String, Integer> machineMaxLhMap,
+            Map<String, Integer> machineMaxEmbryoTypesMap,
+            boolean forceKeepHistory,
+            ScheduleContextDTO context) {
+
+        // Step 1: 获取均衡阈值配置
+        int typeDiffThreshold = getTypeDiffThreshold(context);
+        int loadDiffThreshold = getLoadDiffThreshold(context);
+
+        log.info("均衡分配参数：种类差额阈值={}, 负荷差额阈值={}",
+                typeDiffThreshold, loadDiffThreshold);
+
+        // Step 2: 计算总需求（所有胎胚的硫化机台数之和）
+        int totalDemand = tasks.stream()
+                .mapToInt(t -> t.getVulcanizeMachineCount() != null ? t.getVulcanizeMachineCount() : 0)
+                .sum();
+
+        // Step 3: 计算总产能（每台机台的最大硫化机数之和，不再简单相乘）
+        int totalCapacity = 0;
+        for (MpCxCapacityConfiguration config : availableMachines) {
+            Integer maxLh = machineMaxLhMap.get(config.getCxMachineCode());
+            totalCapacity += (maxLh != null ? maxLh : 10);
+        }
+
+        log.info("均衡分配计算：总需求（硫化机台数）={}, 总产能（各机台最大硫化机数之和）={}, 机台数={}",
+                totalDemand, totalCapacity, availableMachines.size());
+
+        // Step 4: 按硫化机台数从大到小排序胎胚
+        List<CoreScheduleAlgorithmService.DailyEmbryoTask> sortedTasks = tasks.stream()
+                .sorted((a, b) -> {
+                    int countA = a.getVulcanizeMachineCount() != null ? a.getVulcanizeMachineCount() : 0;
+                    int countB = b.getVulcanizeMachineCount() != null ? b.getVulcanizeMachineCount() : 0;
+                    return Integer.compare(countB, countA);
+                })
+                .collect(Collectors.toList());
+
+        // Step 5: 初始化机台状态（每台机台使用自己的最大硫化机数和最大胎胚种类数）
+        List<MachineState> machineStates = new ArrayList<>();
+        for (MpCxCapacityConfiguration config : availableMachines) {
+            MachineState state = new MachineState();
+            state.setMachineCode(config.getCxMachineCode());
+
+            // 从映射中获取该机台的最大硫化机数
+            Integer maxLh = machineMaxLhMap.get(config.getCxMachineCode());
+            state.setMaxCapacity(maxLh != null ? maxLh : 10);
+
+            // 从映射中获取该机台的最大胎胚种类数
+            Integer maxTypes = machineMaxEmbryoTypesMap.get(config.getCxMachineCode());
+            state.setMaxTypes(maxTypes != null ? maxTypes : 4);
+
+            state.setCurrentLoad(0);
+            state.setCurrentTypes(0);
+            state.setAssignedEmbryos(new ArrayList<>());
+
+            Set<String> historyEmbryos = machineHistoryMap.get(config.getCxMachineCode());
+            state.setHistoryEmbryos(historyEmbryos != null ? historyEmbryos : new HashSet<>());
+
+            machineStates.add(state);
+        }
+
+        // Step 6: 如果强制保留历史任务，先进行保底预留
+        if (forceKeepHistory) {
+            reservedHistoryTasks(sortedTasks, machineStates, context);
+        }
+
+        // Step 7: DFS + 剪枝搜索最优方案
+        DfsSearchResult searchResult = new DfsSearchResult();
+        searchResult.bestScore = Integer.MAX_VALUE;
+        searchResult.bestAssignments = null;
+        searchResult.searchCount = 0;
+        searchResult.pruneCount = 0;
+
+        List<CoreScheduleAlgorithmService.DailyEmbryoTask> remainingTasks = getRemainingTasks(sortedTasks);
+        dfsAssign(remainingTasks, 0, machineStates, forceKeepHistory,
+                typeDiffThreshold, loadDiffThreshold, searchResult);
+
+        log.info("DFS搜索统计：总搜索次数={}, 剪枝次数={}, 最优分数={}",
+                searchResult.searchCount, searchResult.pruneCount, searchResult.bestScore);
+
+        // Step 8: 构建结果
+        BalancingResult result;
+        if (searchResult.bestAssignments != null) {
+            result = convertDfsResultToBalancingResult(searchResult.bestAssignments, machineStates, sortedTasks);
+            log.info("找到满足均衡条件的最优方案");
+        } else {
+            log.warn("未找到满足均衡条件的方案，使用贪心算法作为兜底");
+            result = greedyAssignFallback(sortedTasks, machineStates, forceKeepHistory,
+                    typeDiffThreshold, loadDiffThreshold);
+        }
+
+        logAllocationResult(result, machineStates);
+        return result;
+    }
+
+    // ==================== 向后兼容方法 ====================
+
+    /**
+     * 均衡分配胎胚到机台（向后兼容，统一 maxEmbryoTypes）
+     *
+     * @deprecated 请使用 {@link #balanceEmbryosToMachinesWithMachineCapacity} 方法
+     */
+    @Deprecated
+    public BalancingResult balanceEmbryosToMachinesWithMachineCapacity(
+            List<CoreScheduleAlgorithmService.DailyEmbryoTask> tasks,
+            List<MpCxCapacityConfiguration> availableMachines,
+            Map<String, Set<String>> machineHistoryMap,
+            Map<String, Integer> machineMaxLhMap,
+            int maxEmbryoTypes,
+            boolean forceKeepHistory,
+            ScheduleContextDTO context) {
+
+        // 构建统一的机台最大胎胚种类数映射（向后兼容）
+        Map<String, Integer> machineMaxEmbryoTypesMap = new HashMap<>();
+        for (MpCxCapacityConfiguration config : availableMachines) {
+            machineMaxEmbryoTypesMap.put(config.getCxMachineCode(), maxEmbryoTypes);
+        }
+
+        return balanceEmbryosToMachinesWithMachineCapacity(
+                tasks, availableMachines, machineHistoryMap,
+                machineMaxLhMap, machineMaxEmbryoTypesMap, forceKeepHistory, context);
+    }
             int maxEmbryoTypes,
             boolean forceKeepHistory,
             ScheduleContextDTO context) {

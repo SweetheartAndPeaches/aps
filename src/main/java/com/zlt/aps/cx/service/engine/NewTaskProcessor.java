@@ -159,9 +159,11 @@ public class NewTaskProcessor {
                 allTasksForStructure.add(task);
             }
 
-            // 构建机台最大硫化机数映射
+            // 构建机台最大硫化机数映射（根据每台机台的机型+结构获取）
             Map<String, Integer> machineMaxLhMap = buildMachineMaxLhMap(structureMachines, structureName, context);
-            int maxEmbryoTypes = getMaxEmbryoTypes(structureName, context);
+
+            // 构建机台最大胎胚种类数映射（根据每台机台的机型+结构获取）
+            Map<String, Integer> machineMaxEmbryoTypesMap = buildMachineMaxEmbryoTypesMap(structureMachines, structureName, context);
 
             // 使用 BalancingService 均衡分配
             BalancingService.BalancingResult balancingResult = balancingService.balanceEmbryosToMachinesWithMachineCapacity(
@@ -169,7 +171,7 @@ public class NewTaskProcessor {
                     convertToConfigs(structureMachines),
                     machineHistoryMap,
                     machineMaxLhMap,
-                    maxEmbryoTypes,
+                    machineMaxEmbryoTypesMap,
                     true,  // 强制保留历史任务
                     context);
 
@@ -265,18 +267,45 @@ public class NewTaskProcessor {
     }
 
     /**
-     * 获取结构的最大胎胚种类数
+     * 构建机台最大胎胚种类数映射
+     *
+     * <p>根据每台机台的机型 + 结构，从 MdmStructureLhRatio 获取对应的最大胎胚种类数
      */
-    private int getMaxEmbryoTypes(String structureName, ScheduleContextDTO context) {
+    private Map<String, Integer> buildMachineMaxEmbryoTypesMap(
+            List<MdmMoldingMachine> machines,
+            String structureName,
+            ScheduleContextDTO context) {
+
+        Map<String, Integer> result = new HashMap<>();
+
+        // 构建 机型_结构 -> 最大胎胚种类数 映射
+        Map<String, Integer> typeStructureMap = new HashMap<>();
         List<MdmStructureLhRatio> ratios = context.getStructureLhRatios();
         if (ratios != null) {
             for (MdmStructureLhRatio ratio : ratios) {
-                if (structureName.equals(ratio.getStructureName()) && ratio.getMaxEmbryoQty() != null) {
-                    return ratio.getMaxEmbryoQty();
+                String key = ratio.getCxMachineTypeCode() + "_" + ratio.getStructureName();
+                if (ratio.getMaxEmbryoQty() != null) {
+                    typeStructureMap.put(key, ratio.getMaxEmbryoQty());
                 }
             }
         }
-        return context.getMaxTypesPerMachine() != null ? context.getMaxTypesPerMachine() : DEFAULT_MAX_TYPES_PER_MACHINE;
+
+        for (MdmMoldingMachine machine : machines) {
+            String machineCode = machine.getCxMachineCode();
+            String machineType = machine.getCxMachineTypeCode();
+
+            String key = machineType + "_" + structureName;
+            Integer maxTypes = typeStructureMap.get(key);
+
+            // 如果找不到，使用默认值
+            if (maxTypes == null) {
+                maxTypes = context.getMaxTypesPerMachine() != null ? context.getMaxTypesPerMachine() : DEFAULT_MAX_TYPES_PER_MACHINE;
+            }
+
+            result.put(machineCode, maxTypes);
+        }
+
+        return result;
     }
 
     /**
