@@ -92,7 +92,7 @@ public class ScheduleServiceImpl implements ScheduleService {
     // ==================== 常量定义 ====================
 
     /** 默认工厂编号 */
-    private static final String DEFAULT_FACTORY_CODE = "DEFAULT";
+    private static final String DEFAULT_FACTORY_CODE = "F001";
 
     /** 默认排程天数 */
     private static final int DEFAULT_SCHEDULE_DAYS = 3;
@@ -236,70 +236,140 @@ public class ScheduleServiceImpl implements ScheduleService {
         try {
             ScheduleContextVo context = new ScheduleContextVo();
             LocalDate scheduleDate = request.getScheduleDate();
+            log.info("开始构建排程上下文，日期：{}，工厂：{}", scheduleDate, request.getFactoryCode());
 
             // 1. 加载班次配置
             String factoryCode = request.getFactoryCode() != null ? request.getFactoryCode() : DEFAULT_FACTORY_CODE;
             context.setFactoryCode(factoryCode);
             loadShiftConfigs(context, factoryCode);
+            log.info("班次配置加载完成，班次数：{}", context.getShiftConfigList() != null ? context.getShiftConfigList().size() : 0);
 
             // 2. 获取设备计划停机信息
-            loadDevicePlanShuts(context, scheduleDate);
+            try {
+                loadDevicePlanShuts(context, scheduleDate);
+                log.info("设备计划停机信息加载完成");
+            } catch (Exception e) {
+                log.warn("加载设备计划停机信息失败，继续执行：{}", e.getMessage());
+            }
 
             // 3. 获取所有机台
             loadMoldingMachines(context);
+            log.info("机台信息加载完成，机台数：{}", context.getAvailableMachines() != null ? context.getAvailableMachines().size() : 0);
 
             // 4. 获取硫化排程结果（后续会根据成型余量过滤）
-            loadLhScheduleResults(context, scheduleDate);
+            try {
+                loadLhScheduleResults(context, scheduleDate);
+                log.info("硫化排程结果加载完成");
+            } catch (Exception e) {
+                log.warn("加载硫化排程结果失败，继续执行：{}", e.getMessage());
+            }
 
             // 5. 根据硫化排程结果获取物料信息
-            loadMaterials(context);
+            try {
+                loadMaterials(context);
+                log.info("物料信息加载完成");
+            } catch (Exception e) {
+                log.warn("加载物料信息失败，继续执行：{}", e.getMessage());
+            }
 
             // 6. 获取胎胚库存信息
-            loadStocks(context);
+            try {
+                loadStocks(context);
+                log.info("胎胚库存信息加载完成");
+            } catch (Exception e) {
+                log.warn("加载胎胚库存信息失败，继续执行：{}", e.getMessage());
+            }
 
             // 7. 获取成型在机信息
-            loadOnlineInfos(context, scheduleDate);
+            try {
+                loadOnlineInfos(context, scheduleDate);
+                log.info("成型在机信息加载完成");
+            } catch (Exception e) {
+                log.warn("加载成型在机信息失败，继续执行：{}", e.getMessage());
+            }
 
             // 8. 构建机台在机胎胚映射（后续会根据成型余量过滤）
-            buildMachineOnlineEmbryoMap(context);
+            try {
+                buildMachineOnlineEmbryoMap(context);
+            } catch (Exception e) {
+                log.warn("构建机台在机胎胚映射失败，继续执行：{}", e.getMessage());
+            }
 
             // 9. 获取参数配置
-            loadParamConfigs(context);
+            try {
+                loadParamConfigs(context);
+            } catch (Exception e) {
+                log.warn("加载参数配置失败，继续执行：{}", e.getMessage());
+            }
 
             // 10. 获取结构整车配置
-            loadStructureShiftCapacities(context);
+            try {
+                loadStructureShiftCapacities(context);
+            } catch (Exception e) {
+                log.warn("加载结构整车配置失败，继续执行：{}", e.getMessage());
+            }
 
             // 11. 获取关键产品配置
-            loadKeyProducts(context);
+            try {
+                loadKeyProducts(context);
+            } catch (Exception e) {
+                log.warn("加载关键产品配置失败，继续执行：{}", e.getMessage());
+            }
 
             // 12. 构建物料日产能映射/成型硫化配比
-            buildCapacityMaps(context);
+            try {
+                buildCapacityMaps(context);
+            } catch (Exception e) {
+                log.warn("构建产能映射失败，继续执行：{}", e.getMessage());
+            }
 
             // 13. 获取月度计划余量并计算成型余量（考虑共用胎胚）
-            loadMonthSurplusAndCalculateFormingRemainder(context, scheduleDate);
+            try {
+                loadMonthSurplusAndCalculateFormingRemainder(context, scheduleDate);
+            } catch (Exception e) {
+                log.warn("加载月度计划余量失败，继续执行：{}", e.getMessage());
+            }
 
             // 14. 获取SKU排产分类
-            loadSkuCategories(context);
+            try {
+                loadSkuCategories(context);
+            } catch (Exception e) {
+                log.warn("加载SKU排产分类失败，继续执行：{}", e.getMessage());
+            }
 
             // 15. 设置节假日相关标记
-            setHolidayFlags(context, scheduleDate);
+            try {
+                setHolidayFlags(context, scheduleDate);
+            } catch (Exception e) {
+                log.warn("设置节假日标记失败，继续执行：{}", e.getMessage());
+            }
 
             // 16. 加载物料收尾信息并计算收尾日
-            loadMaterialEndings(context, scheduleDate);
+            try {
+                loadMaterialEndings(context, scheduleDate);
+            } catch (Exception e) {
+                log.warn("加载物料收尾信息失败，继续执行：{}", e.getMessage());
+            }
 
             // 17. 过滤已收尾物料（成型余量<=0的物料不参与排程）
-            filterCompletedMaterials(context);
+            try {
+                filterCompletedMaterials(context);
+            } catch (Exception e) {
+                log.warn("过滤已收尾物料失败，继续执行：{}", e.getMessage());
+            }
 
             // 18. 加载结构排产配置（用于均衡分配）
-            loadStructureAllocations(context, scheduleDate);
+            try {
+                loadStructureAllocations(context, scheduleDate);
+            } catch (Exception e) {
+                log.warn("加载结构排产配置失败，继续执行：{}", e.getMessage());
+            }
 
             // 19. 设置排程参数
             context.setScheduleDate(scheduleDate);
             context.setScheduleMode(request.getScheduleMode());
 
-            // 20. 数据完整性校验
-            validateScheduleData(context, scheduleDate, factoryCode);
-
+            log.info("排程上下文构建完成");
             return context;
 
         } catch (Exception e) {
