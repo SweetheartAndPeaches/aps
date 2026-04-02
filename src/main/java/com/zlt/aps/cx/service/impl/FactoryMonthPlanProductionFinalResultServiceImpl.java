@@ -33,7 +33,7 @@ import java.util.stream.Collectors;
 public class FactoryMonthPlanProductionFinalResultServiceImpl extends ServiceImpl<FactoryMonthPlanProductionFinalResultMapper, FactoryMonthPlanProductionFinalResult>
         implements FactoryMonthPlanProductionFinalResultService {
 
-    private static final Logger logger = LoggerFactory.getLogger(FactoryMonthPlanProductionFinalResultServiceImpl.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(FactoryMonthPlanProductionFinalResultServiceImpl.class);
 
     @Autowired
     private FactoryMonthPlanProductionFinalResultMapper factoryMonthPlanProductionFinalResultMapper;
@@ -113,7 +113,7 @@ public class FactoryMonthPlanProductionFinalResultServiceImpl extends ServiceImp
             result.setUpdateTime(new Date());
             factoryMonthPlanProductionFinalResultMapper.updateById(result);
         }
-        logger.info("发布月计划成功，年月: {}, 版本: {}, 数量: {}", yearMonth, productionVersion, results.size());
+        LOGGER.info("发布月计划成功，年月: {}, 版本: {}, 数量: {}", yearMonth, productionVersion, results.size());
         return true;
     }
 
@@ -130,12 +130,12 @@ public class FactoryMonthPlanProductionFinalResultServiceImpl extends ServiceImp
     @Override
     @Transactional(rollbackFor = Exception.class)
     public List<LhScheduleResult> splitToDailyPlan(Integer yearMonth, Integer day) {
-        logger.info("开始拆分月计划到日硫化排程，年月: {}, 日期: {}", yearMonth, day);
+        LOGGER.info("开始拆分月计划到日硫化排程，年月: {}, 日期: {}", yearMonth, day);
 
         // 1. 查询当天有排产的月计划
         List<FactoryMonthPlanProductionFinalResult> results = factoryMonthPlanProductionFinalResultMapper.selectWithPlanOnDay(yearMonth, day);
         if (results == null || results.isEmpty()) {
-            logger.info("未找到月计划数据，年月: {}, 日期: {}", yearMonth, day);
+            LOGGER.info("未找到月计划数据，年月: {}, 日期: {}", yearMonth, day);
             return Collections.emptyList();
         }
 
@@ -170,14 +170,14 @@ public class FactoryMonthPlanProductionFinalResultServiceImpl extends ServiceImp
             lhScheduleResultMapper.insert(plan);
         }
 
-        logger.info("月计划拆分完成，生成日硫化排程数量: {}", dailyPlans.size());
+        LOGGER.info("月计划拆分完成，生成日硫化排程数量: {}", dailyPlans.size());
         return dailyPlans;
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public ScheduleGenerateResult generateScheduleFromMonthPlan(LocalDate scheduleDate) {
-        logger.info("========== 开始从月计划生成排程，日期: {} ==========", scheduleDate);
+        LOGGER.info("========== 开始从月计划生成排程，日期: {} ==========", scheduleDate);
 
         ScheduleGenerateResult result = new ScheduleGenerateResult();
         result.setScheduleDate(scheduleDate);
@@ -212,10 +212,10 @@ public class FactoryMonthPlanProductionFinalResultServiceImpl extends ServiceImp
             result.setSuccess(true);
             result.setMessage("排程生成成功，共生成 " + scheduleResults.size() + " 条排程记录");
 
-            logger.info("========== 从月计划生成排程完成 ==========");
+            LOGGER.info("========== 从月计划生成排程完成 ==========");
 
         } catch (Exception e) {
-            logger.error("从月计划生成排程失败", e);
+            LOGGER.error("从月计划生成排程失败", e);
             result.setSuccess(false);
             result.setMessage("排程生成失败: " + e.getMessage());
         }
@@ -226,7 +226,7 @@ public class FactoryMonthPlanProductionFinalResultServiceImpl extends ServiceImp
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean syncScheduleResult(LocalDate scheduleDate) {
-        logger.info("开始同步排程结果到月计划，日期: {}", scheduleDate);
+        LOGGER.info("开始同步排程结果到月计划，日期: {}", scheduleDate);
 
         int yearMonth = Integer.parseInt(scheduleDate.format(DateTimeFormatter.ofPattern("yyyyMM")));
         int day = scheduleDate.getDayOfMonth();
@@ -237,7 +237,7 @@ public class FactoryMonthPlanProductionFinalResultServiceImpl extends ServiceImp
                         .eq(CxScheduleDetail::getScheduleDate, scheduleDate));
 
         if (details == null || details.isEmpty()) {
-            logger.info("未找到排程明细数据");
+            LOGGER.info("未找到排程明细数据");
             return true;
         }
 
@@ -283,7 +283,7 @@ public class FactoryMonthPlanProductionFinalResultServiceImpl extends ServiceImp
             }
         }
 
-        logger.info("同步排程结果完成，更新月计划数量: {}", results.size());
+        LOGGER.info("同步排程结果完成，更新月计划数量: {}", results.size());
         return true;
     }
 
