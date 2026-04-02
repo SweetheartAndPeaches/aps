@@ -2,7 +2,6 @@ package com.zlt.aps.cx.service.impl.validation;
 
 import com.zlt.aps.cx.dto.ScheduleContextDTO;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
-import com.zlt.aps.cx.service.impl.ScheduleDataValidationResult;
 import com.zlt.aps.mp.api.domain.entity.MdmMaterialInfo;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
