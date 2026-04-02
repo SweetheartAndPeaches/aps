@@ -34,17 +34,29 @@ public class DatabaseInitializer implements CommandLineRunner {
         // ==================== 一、基础配置表 ====================
         createShiftConfigTable();
         createAlertConfigTable();
+        createParamConfigTable();
+        createHolidayConfigTable();
+        createKeyProductTable();
 
         // ==================== 二、核心业务表 ====================
         createMachineTable();
+        createMdmMoldingMachineTable();
         createMaterialTable();
+        createMdmMaterialInfoTable();
         createStockTable();
         createScheduleMainTable();
         createScheduleDetailTable();
+        createScheduleResultTable();
 
         // ==================== 三、计划与任务表 ====================
         createLhScheduleResultTable();
         createDailyEmbryoTaskTable();
+        createMdmMachineOnlineInfoTable();
+        createMdmMachineFixedTable();
+        createMdmWorkCalendarTable();
+        createMdmStructureLhRatioTable();
+        createMdmMonthSurplusTable();
+        createMdmSkuScheduleCategoryTable();
 
         // ==================== 三之一、月度计划表 ====================
         createFactoryMonthPlanProductionFinalResultTable();
@@ -54,6 +66,15 @@ public class DatabaseInitializer implements CommandLineRunner {
         createScheduleIntermediateTable();
         createShiftBalanceAdjustTable();
         createConstraintCheckRecordTable();
+        createMachineStructureCapacityTable();
+        createStructureAllocationTable();
+        createStructurePriorityTable();
+        createStructureTripConfigTable();
+        createDevicePlanShutTable();
+        createMaterialEndingTable();
+        createMaterialExceptionTable();
+        createOperatorLeaveTable();
+        createTreadParkingConfigTable();
 
         // ==================== 五、特殊场景表 ====================
         createPrecisionPlanTable();
@@ -70,9 +91,15 @@ public class DatabaseInitializer implements CommandLineRunner {
         initShiftConfigData();
         initAlertConfigData();
         initMachineData();
+        initMdmMoldingMachineData();
         initMaterialData();
+        initMdmMaterialInfoData();
         initStockData();
         initLhScheduleResultData();
+        initMdmStructureLhRatioData();
+        initMdmMachineOnlineInfoData();
+        initKeyProductData();
+        initStructureAllocationData();
 
         System.out.println("========================================");
         System.out.println("  MySQL数据库初始化完成!");
@@ -798,5 +825,455 @@ public class DatabaseInitializer implements CommandLineRunner {
                 "('LH2024010010', DATE_ADD(CURDATE(), INTERVAL 1 DAY), 'MAT004', '275/80R22.5', 200, 'PENDING', 4, 'MONTH_PLAN'), " +
                 "('LH2024010011', DATE_ADD(CURDATE(), INTERVAL 1 DAY), 'MAT005', '315/80R22.5', 100, 'PENDING', 5, 'MONTH_PLAN'), " +
                 "('LH2024010012', DATE_ADD(CURDATE(), INTERVAL 1 DAY), 'MAT006', '385/65R22.5', 150, 'PENDING', 6, 'MONTH_PLAN')");
+    }
+
+    // ==================== 新增表创建方法 ====================
+
+    /**
+     * 创建成型机档案表 (主数据)
+     */
+    private void createMdmMoldingMachineTable() {
+        jdbcTemplate.execute("DROP TABLE IF EXISTS T_MDM_MOLDING_MACHINE");
+        jdbcTemplate.execute("CREATE TABLE T_MDM_MOLDING_MACHINE (" +
+                "ID BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', " +
+                "FACTORY_CODE VARCHAR(50) COMMENT '工厂编号', " +
+                "CX_MACHINE_CODE VARCHAR(50) NOT NULL UNIQUE COMMENT '成型机编码', " +
+                "CX_MACHINE_BRAND_CODE VARCHAR(50) COMMENT '成型机类型', " +
+                "CX_MACHINE_TYPE_CODE VARCHAR(50) COMMENT '机型', " +
+                "ROLL_OVER_TYPE VARCHAR(50) COMMENT '反包方式', " +
+                "IS_ZERO_RACK VARCHAR(10) COMMENT '是否有零度供料架', " +
+                "LH_MACHINE_MAX_QTY INT COMMENT '硫化机上限', " +
+                "MAX_DAY_CAPACITY INT COMMENT '设备最大日产量', " +
+                "LINE_NUMBER INT COMMENT '产线编号', " +
+                "IS_ACTIVE INT DEFAULT 1 COMMENT '是否启用', " +
+                "REMARK VARCHAR(500) COMMENT '备注', " +
+                "CREATE_BY VARCHAR(50) COMMENT '创建人', " +
+                "CREATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间', " +
+                "UPDATE_BY VARCHAR(50) COMMENT '更新人', " +
+                "UPDATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'" +
+                ") COMMENT='成型机档案表'");
+    }
+
+    /**
+     * 创建物料主数据表
+     */
+    private void createMdmMaterialInfoTable() {
+        jdbcTemplate.execute("DROP TABLE IF EXISTS T_MDM_MATERIAL_INFO");
+        jdbcTemplate.execute("CREATE TABLE T_MDM_MATERIAL_INFO (" +
+                "ID BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', " +
+                "MATERIAL_CODE VARCHAR(50) NOT NULL UNIQUE COMMENT '物料编码', " +
+                "MATERIAL_NAME VARCHAR(200) COMMENT '物料名称', " +
+                "SPECIFICATION VARCHAR(100) COMMENT '规格型号', " +
+                "STRUCTURE_NAME VARCHAR(100) COMMENT '产品结构', " +
+                "MAIN_PATTERN VARCHAR(100) COMMENT '主花纹', " +
+                "PATTERN VARCHAR(100) COMMENT '花纹', " +
+                "EMBRYO_CODE VARCHAR(50) COMMENT '胎胚代码', " +
+                "SPEC_DESC VARCHAR(200) COMMENT '规格描述', " +
+                "LH_TIME INT COMMENT '硫化时长(秒)', " +
+                "MATERIAL_GROUP_CODE VARCHAR(50) COMMENT '物料分组编码', " +
+                "IS_ACTIVE INT DEFAULT 1 COMMENT '是否启用', " +
+                "CREATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间', " +
+                "UPDATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'" +
+                ") COMMENT='物料主数据表'");
+    }
+
+    /**
+     * 创建成型机在机信息表
+     */
+    private void createMdmMachineOnlineInfoTable() {
+        jdbcTemplate.execute("DROP TABLE IF EXISTS T_MDM_CX_MACHINE_ONLINE_INFO");
+        jdbcTemplate.execute("CREATE TABLE T_MDM_CX_MACHINE_ONLINE_INFO (" +
+                "ID BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', " +
+                "CX_MACHINE_CODE VARCHAR(50) NOT NULL COMMENT '成型机编码', " +
+                "MATERIAL_CODE VARCHAR(50) COMMENT '在机物料编码', " +
+                "STRUCTURE_NAME VARCHAR(100) COMMENT '在机结构', " +
+                "ONLINE_DATE DATE COMMENT '上机日期', " +
+                "ONLINE_SHIFT VARCHAR(20) COMMENT '上机班次', " +
+                "PLAN_END_DATE DATE COMMENT '计划结束日期', " +
+                "STATUS VARCHAR(20) DEFAULT 'ONLINE' COMMENT '状态', " +
+                "IS_ACTIVE INT DEFAULT 1 COMMENT '是否有效', " +
+                "CREATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间', " +
+                "UPDATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'" +
+                ") COMMENT='成型机在机信息表'");
+    }
+
+    /**
+     * 创建成型机固定规格表
+     */
+    private void createMdmMachineFixedTable() {
+        jdbcTemplate.execute("DROP TABLE IF EXISTS T_MDM_CX_MACHINE_FIXED");
+        jdbcTemplate.execute("CREATE TABLE T_MDM_CX_MACHINE_FIXED (" +
+                "ID BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', " +
+                "CX_MACHINE_CODE VARCHAR(50) NOT NULL COMMENT '成型机编码', " +
+                "STRUCTURE_NAME VARCHAR(100) COMMENT '固定结构', " +
+                "FIXED_ORDER INT COMMENT '固定顺序', " +
+                "IS_ACTIVE INT DEFAULT 1 COMMENT '是否启用', " +
+                "CREATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'" +
+                ") COMMENT='成型机固定规格表'");
+    }
+
+    /**
+     * 创建工作日历表
+     */
+    private void createMdmWorkCalendarTable() {
+        jdbcTemplate.execute("DROP TABLE IF EXISTS T_MDM_WORK_CALENDAR");
+        jdbcTemplate.execute("CREATE TABLE T_MDM_WORK_CALENDAR (" +
+                "ID BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', " +
+                "CALENDAR_DATE DATE NOT NULL COMMENT '日历日期', " +
+                "FACTORY_CODE VARCHAR(50) COMMENT '工厂编码', " +
+                "IS_WORK_DAY INT DEFAULT 1 COMMENT '是否工作日', " +
+                "DAY_TYPE VARCHAR(20) COMMENT '日期类型', " +
+                "REMARK VARCHAR(200) COMMENT '备注', " +
+                "CREATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'" +
+                ") COMMENT='工作日历表'");
+    }
+
+    /**
+     * 创建结构硫化机比例表
+     */
+    private void createMdmStructureLhRatioTable() {
+        jdbcTemplate.execute("DROP TABLE IF EXISTS T_MDM_STRUCTURE_LH_RATIO");
+        jdbcTemplate.execute("CREATE TABLE T_MDM_STRUCTURE_LH_RATIO (" +
+                "ID BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', " +
+                "STRUCTURE_NAME VARCHAR(100) NOT NULL COMMENT '产品结构', " +
+                "CX_MACHINE_TYPE VARCHAR(50) COMMENT '成型机机型', " +
+                "MAX_LH_MACHINE_QTY INT COMMENT '最大硫化机数', " +
+                "MAX_EMBRYO_TYPE INT COMMENT '最大胎胚种类数', " +
+                "TRIP_QTY INT DEFAULT 12 COMMENT '整车条数', " +
+                "IS_ACTIVE INT DEFAULT 1 COMMENT '是否启用', " +
+                "CREATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间', " +
+                "UPDATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'" +
+                ") COMMENT='结构硫化机比例表'");
+    }
+
+    /**
+     * 创建月度余量表
+     */
+    private void createMdmMonthSurplusTable() {
+        jdbcTemplate.execute("DROP TABLE IF EXISTS t_mdm_month_surplus");
+        jdbcTemplate.execute("CREATE TABLE t_mdm_month_surplus (" +
+                "id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', " +
+                "`year_month` INT COMMENT '年月YYYYMM', " +
+                "material_code VARCHAR(50) COMMENT '物料编码', " +
+                "surplus_qty INT COMMENT '余量', " +
+                "create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'" +
+                ") COMMENT='月度余量表'");
+    }
+
+    /**
+     * 创建SKU排程分类表
+     */
+    private void createMdmSkuScheduleCategoryTable() {
+        jdbcTemplate.execute("DROP TABLE IF EXISTS t_mdm_sku_schedule_category");
+        jdbcTemplate.execute("CREATE TABLE t_mdm_sku_schedule_category (" +
+                "id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', " +
+                "material_code VARCHAR(50) COMMENT '物料编码', " +
+                "schedule_type VARCHAR(20) COMMENT '排程类型', " +
+                "category_name VARCHAR(100) COMMENT '分类名称', " +
+                "is_active INT DEFAULT 1 COMMENT '是否启用', " +
+                "create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'" +
+                ") COMMENT='SKU排程分类表'");
+    }
+
+    /**
+     * 创建排程结果表
+     */
+    private void createScheduleResultTable() {
+        jdbcTemplate.execute("DROP TABLE IF EXISTS T_CX_SCHEDULE_RESULT");
+        jdbcTemplate.execute("CREATE TABLE T_CX_SCHEDULE_RESULT (" +
+                "ID BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', " +
+                "CX_BATCH_NO VARCHAR(50) COMMENT '成型批次号', " +
+                "SCHEDULE_DATE DATE COMMENT '排程日期', " +
+                "CX_MACHINE_CODE VARCHAR(50) COMMENT '成型机台编号', " +
+                "CX_MACHINE_NAME VARCHAR(100) COMMENT '成型机台名称', " +
+                "EMBRYO_CODE VARCHAR(50) COMMENT '胎胚代码', " +
+                "STRUCTURE_NAME VARCHAR(100) COMMENT '产品结构', " +
+                "SPEC_DESC VARCHAR(200) COMMENT '规格描述', " +
+                "PRODUCT_NUM DECIMAL(10,2) COMMENT '胎胚总计划量', " +
+                "TOTAL_STOCK DECIMAL(10,2) COMMENT '胎胚库存', " +
+                "PRODUCTION_STATUS VARCHAR(20) COMMENT '生产状态', " +
+                "IS_RELEASE VARCHAR(10) COMMENT '是否发布', " +
+                "DATA_SOURCE VARCHAR(20) COMMENT '数据来源', " +
+                "CLASS1_PLAN_QTY DECIMAL(10,2) COMMENT '一班计划数', " +
+                "CLASS2_PLAN_QTY DECIMAL(10,2) COMMENT '二班计划数', " +
+                "CLASS3_PLAN_QTY DECIMAL(10,2) COMMENT '三班计划数', " +
+                "CLASS4_PLAN_QTY DECIMAL(10,2) COMMENT '四班计划数', " +
+                "CLASS5_PLAN_QTY DECIMAL(10,2) COMMENT '五班计划数', " +
+                "CLASS6_PLAN_QTY DECIMAL(10,2) COMMENT '六班计划数', " +
+                "CLASS7_PLAN_QTY DECIMAL(10,2) COMMENT '七班计划数', " +
+                "CLASS8_PLAN_QTY DECIMAL(10,2) COMMENT '八班计划数', " +
+                "CLASS1_FINISH_QTY DECIMAL(10,2) COMMENT '一班完成量', " +
+                "CLASS2_FINISH_QTY DECIMAL(10,2) COMMENT '二班完成量', " +
+                "CLASS3_FINISH_QTY DECIMAL(10,2) COMMENT '三班完成量', " +
+                "CLASS4_FINISH_QTY DECIMAL(10,2) COMMENT '四班完成量', " +
+                "CLASS5_FINISH_QTY DECIMAL(10,2) COMMENT '五班完成量', " +
+                "CLASS6_FINISH_QTY DECIMAL(10,2) COMMENT '六班完成量', " +
+                "CLASS7_FINISH_QTY DECIMAL(10,2) COMMENT '七班完成量', " +
+                "CLASS8_FINISH_QTY DECIMAL(10,2) COMMENT '八班完成量', " +
+                "CREATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间', " +
+                "UPDATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'" +
+                ") COMMENT='排程结果表'");
+    }
+
+    /**
+     * 创建机台结构产能表
+     */
+    private void createMachineStructureCapacityTable() {
+        jdbcTemplate.execute("DROP TABLE IF EXISTS T_CX_MACHINE_STRUCTURE_CAPACITY");
+        jdbcTemplate.execute("CREATE TABLE T_CX_MACHINE_STRUCTURE_CAPACITY (" +
+                "ID BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', " +
+                "CX_MACHINE_CODE VARCHAR(50) NOT NULL COMMENT '成型机编码', " +
+                "STRUCTURE_CODE VARCHAR(100) COMMENT '结构编码', " +
+                "STRUCTURE_NAME VARCHAR(100) COMMENT '结构名称', " +
+                "HOUR_CAPACITY DECIMAL(10,2) COMMENT '小时产能', " +
+                "DAY_CAPACITY INT COMMENT '日产能', " +
+                "IS_ACTIVE INT DEFAULT 1 COMMENT '是否启用', " +
+                "CREATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'" +
+                ") COMMENT='机台结构产能表'");
+    }
+
+    /**
+     * 创建结构分配表
+     */
+    private void createStructureAllocationTable() {
+        jdbcTemplate.execute("DROP TABLE IF EXISTS T_MP_STRUCTURE_ALLOCATION");
+        jdbcTemplate.execute("CREATE TABLE T_MP_STRUCTURE_ALLOCATION (" +
+                "ID BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', " +
+                "YEAR INT COMMENT '年份', " +
+                "MONTH INT COMMENT '月份', " +
+                "STRUCTURE_NAME VARCHAR(100) COMMENT '产品结构', " +
+                "CX_MACHINE_CODE VARCHAR(50) COMMENT '成型机编码', " +
+                "DAY_CAPACITY INT COMMENT '日产能', " +
+                "IS_ACTIVE INT DEFAULT 1 COMMENT '是否启用', " +
+                "CREATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'" +
+                ") COMMENT='结构分配表'");
+    }
+
+    /**
+     * 创建结构优先级表
+     */
+    private void createStructurePriorityTable() {
+        jdbcTemplate.execute("DROP TABLE IF EXISTS T_CX_STRUCTURE_PRIORITY");
+        jdbcTemplate.execute("CREATE TABLE T_CX_STRUCTURE_PRIORITY (" +
+                "ID BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', " +
+                "STRUCTURE_NAME VARCHAR(100) COMMENT '结构名称', " +
+                "PRIORITY INT COMMENT '优先级', " +
+                "IS_ACTIVE INT DEFAULT 1 COMMENT '是否启用', " +
+                "CREATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'" +
+                ") COMMENT='结构优先级表'");
+    }
+
+    /**
+     * 创建结构车次配置表
+     */
+    private void createStructureTripConfigTable() {
+        jdbcTemplate.execute("DROP TABLE IF EXISTS T_CX_STRUCTURE_TRIP_CONFIG");
+        jdbcTemplate.execute("CREATE TABLE T_CX_STRUCTURE_TRIP_CONFIG (" +
+                "ID BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', " +
+                "STRUCTURE_CODE VARCHAR(100) COMMENT '结构编码', " +
+                "STRUCTURE_NAME VARCHAR(100) COMMENT '结构名称', " +
+                "SHIFT_CODE VARCHAR(20) COMMENT '班次编码', " +
+                "TRIP_QTY INT COMMENT '整车条数', " +
+                "IS_ACTIVE INT DEFAULT 1 COMMENT '是否启用', " +
+                "CREATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'" +
+                ") COMMENT='结构车次配置表'");
+    }
+
+    /**
+     * 创建设备计划停机表
+     */
+    private void createDevicePlanShutTable() {
+        jdbcTemplate.execute("DROP TABLE IF EXISTS T_MDM_DEVICE_PLAN_SHUT");
+        jdbcTemplate.execute("CREATE TABLE T_MDM_DEVICE_PLAN_SHUT (" +
+                "ID BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', " +
+                "DEVICE_CODE VARCHAR(50) COMMENT '设备编码', " +
+                "DEVICE_NAME VARCHAR(100) COMMENT '设备名称', " +
+                "SHUT_START_TIME DATETIME COMMENT '停机开始时间', " +
+                "SHUT_END_TIME DATETIME COMMENT '停机结束时间', " +
+                "SHUT_REASON VARCHAR(500) COMMENT '停机原因', " +
+                "SHUT_TYPE VARCHAR(20) COMMENT '停机类型', " +
+                "IS_ACTIVE INT DEFAULT 1 COMMENT '是否有效', " +
+                "CREATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'" +
+                ") COMMENT='设备计划停机表'");
+    }
+
+    /**
+     * 创建物料收尾表
+     */
+    private void createMaterialEndingTable() {
+        jdbcTemplate.execute("DROP TABLE IF EXISTS T_CX_MATERIAL_ENDING");
+        jdbcTemplate.execute("CREATE TABLE T_CX_MATERIAL_ENDING (" +
+                "ID BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', " +
+                "MATERIAL_CODE VARCHAR(50) COMMENT '物料编码', " +
+                "STRUCTURE_NAME VARCHAR(100) COMMENT '结构名称', " +
+                "ENDING_DATE DATE COMMENT '收尾日期', " +
+                "ENDING_QTY INT COMMENT '收尾数量', " +
+                "IS_ACTIVE INT DEFAULT 1 COMMENT '是否有效', " +
+                "CREATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'" +
+                ") COMMENT='物料收尾表'");
+    }
+
+    /**
+     * 创建物料异常表
+     */
+    private void createMaterialExceptionTable() {
+        jdbcTemplate.execute("DROP TABLE IF EXISTS cx_material_exception");
+        jdbcTemplate.execute("CREATE TABLE cx_material_exception (" +
+                "id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', " +
+                "material_code VARCHAR(50) COMMENT '物料编码', " +
+                "exception_type VARCHAR(50) COMMENT '异常类型', " +
+                "exception_desc VARCHAR(500) COMMENT '异常描述', " +
+                "status VARCHAR(20) COMMENT '状态', " +
+                "create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'" +
+                ") COMMENT='物料异常表'");
+    }
+
+    /**
+     * 创建操作员请假表
+     */
+    private void createOperatorLeaveTable() {
+        jdbcTemplate.execute("DROP TABLE IF EXISTS cx_operator_leave");
+        jdbcTemplate.execute("CREATE TABLE cx_operator_leave (" +
+                "id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', " +
+                "machine_code VARCHAR(50) COMMENT '机台编码', " +
+                "operator_name VARCHAR(50) COMMENT '操作员姓名', " +
+                "start_date DATE COMMENT '请假开始日期', " +
+                "end_date DATE COMMENT '请假结束日期', " +
+                "approval_status VARCHAR(20) COMMENT '审批状态', " +
+                "create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'" +
+                ") COMMENT='操作员请假表'");
+    }
+
+    /**
+     * 创建胎面停放配置表
+     */
+    private void createTreadParkingConfigTable() {
+        jdbcTemplate.execute("DROP TABLE IF EXISTS cx_tread_parking_config");
+        jdbcTemplate.execute("CREATE TABLE cx_tread_parking_config (" +
+                "id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', " +
+                "structure_code VARCHAR(100) COMMENT '结构编码', " +
+                "parking_time INT COMMENT '停放时间(分钟)', " +
+                "is_enabled INT DEFAULT 1 COMMENT '是否启用', " +
+                "create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'" +
+                ") COMMENT='胎面停放配置表'");
+    }
+
+    /**
+     * 创建参数配置表
+     */
+    private void createParamConfigTable() {
+        jdbcTemplate.execute("DROP TABLE IF EXISTS T_CX_PARAM_CONFIG");
+        jdbcTemplate.execute("CREATE TABLE T_CX_PARAM_CONFIG (" +
+                "ID BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', " +
+                "PARAM_CODE VARCHAR(50) NOT NULL UNIQUE COMMENT '参数编码', " +
+                "PARAM_NAME VARCHAR(100) COMMENT '参数名称', " +
+                "PARAM_VALUE VARCHAR(500) COMMENT '参数值', " +
+                "PARAM_TYPE VARCHAR(20) COMMENT '参数类型', " +
+                "DESCRIPTION VARCHAR(500) COMMENT '参数说明', " +
+                "IS_ACTIVE INT DEFAULT 1 COMMENT '是否启用', " +
+                "CREATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'" +
+                ") COMMENT='参数配置表'");
+    }
+
+    /**
+     * 创建节假日配置表
+     */
+    private void createHolidayConfigTable() {
+        jdbcTemplate.execute("DROP TABLE IF EXISTS cx_holiday_config");
+        jdbcTemplate.execute("CREATE TABLE cx_holiday_config (" +
+                "id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', " +
+                "holiday_date DATE COMMENT '节假日日期', " +
+                "holiday_name VARCHAR(100) COMMENT '节假日名称', " +
+                "holiday_type VARCHAR(20) COMMENT '节假日类型', " +
+                "is_work_day INT DEFAULT 0 COMMENT '是否工作日', " +
+                "create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'" +
+                ") COMMENT='节假日配置表'");
+    }
+
+    /**
+     * 创建关键产品表
+     */
+    private void createKeyProductTable() {
+        jdbcTemplate.execute("DROP TABLE IF EXISTS T_CX_KEY_PRODUCT");
+        jdbcTemplate.execute("CREATE TABLE T_CX_KEY_PRODUCT (" +
+                "ID BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', " +
+                "EMBRYO_CODE VARCHAR(50) COMMENT '胎胚代码', " +
+                "STRUCTURE_NAME VARCHAR(100) COMMENT '结构名称', " +
+                "PRIORITY INT COMMENT '优先级', " +
+                "IS_ACTIVE INT DEFAULT 1 COMMENT '是否启用', " +
+                "CREATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'" +
+                ") COMMENT='关键产品表'");
+    }
+
+    // ==================== 新增初始化数据方法 ====================
+
+    /**
+     * 初始化成型机档案数据
+     */
+    private void initMdmMoldingMachineData() {
+        jdbcTemplate.execute("INSERT INTO T_MDM_MOLDING_MACHINE (CX_MACHINE_CODE, CX_MACHINE_BRAND_CODE, CX_MACHINE_TYPE_CODE, ROLL_OVER_TYPE, IS_ZERO_RACK, LH_MACHINE_MAX_QTY, MAX_DAY_CAPACITY, LINE_NUMBER, IS_ACTIVE) VALUES " +
+                "('GM01', '软控', '三鼓', 'A型', '1', 4, 120, 1, 1), " +
+                "('GM02', '软控', '三鼓', 'A型', '1', 4, 120, 1, 1), " +
+                "('GM03', '软控', '三鼓', 'A型', '0', 4, 120, 2, 1), " +
+                "('GM04', '赛象', '三鼓', 'B型', '1', 4, 120, 2, 1), " +
+                "('GM05', '赛象', '三鼓', 'B型', '0', 4, 120, 3, 1)");
+    }
+
+    /**
+     * 初始化物料主数据
+     */
+    private void initMdmMaterialInfoData() {
+        jdbcTemplate.execute("INSERT INTO T_MDM_MATERIAL_INFO (MATERIAL_CODE, MATERIAL_NAME, STRUCTURE_NAME, MAIN_PATTERN, PATTERN, EMBRYO_CODE, LH_TIME, IS_ACTIVE) VALUES " +
+                "('MAT001', '12R22.5-18PR-JA511', '12R22.5', 'JA511', 'JA511', 'MAT001', 750, 1), " +
+                "('MAT002', '11R22.5-16PR-JA511', '11R22.5', 'JA511', 'JA511', 'MAT002', 708, 1), " +
+                "('MAT003', '295/80R22.5-18PR-JA511', '295/80R22.5', 'JA511', 'JA511', 'MAT003', 792, 1), " +
+                "('MAT004', '275/80R22.5-16PR-JA511', '275/80R22.5', 'JA511', 'JA511', 'MAT004', 690, 1), " +
+                "('MAT005', '315/80R22.5-18PR-JA511', '315/80R22.5', 'JA511', 'JA511', 'MAT005', 840, 1), " +
+                "('MAT006', '385/65R22.5-20PR-JA511', '385/65R22.5', 'JA511', 'JA511', 'MAT006', 930, 1)");
+    }
+
+    /**
+     * 初始化结构硫化机比例数据
+     */
+    private void initMdmStructureLhRatioData() {
+        jdbcTemplate.execute("INSERT INTO T_MDM_STRUCTURE_LH_RATIO (STRUCTURE_NAME, CX_MACHINE_TYPE, MAX_LH_MACHINE_QTY, MAX_EMBRYO_TYPE, TRIP_QTY, IS_ACTIVE) VALUES " +
+                "('12R22.5', '三鼓', 4, 4, 12, 1), " +
+                "('11R22.5', '三鼓', 4, 4, 12, 1), " +
+                "('295/80R22.5', '三鼓', 4, 4, 12, 1), " +
+                "('275/80R22.5', '三鼓', 4, 4, 12, 1), " +
+                "('315/80R22.5', '三鼓', 4, 4, 12, 1), " +
+                "('385/65R22.5', '三鼓', 4, 4, 12, 1)");
+    }
+
+    /**
+     * 初始化在机信息数据
+     */
+    private void initMdmMachineOnlineInfoData() {
+        jdbcTemplate.execute("INSERT INTO T_MDM_CX_MACHINE_ONLINE_INFO (CX_MACHINE_CODE, MATERIAL_CODE, STRUCTURE_NAME, ONLINE_DATE, STATUS, IS_ACTIVE) VALUES " +
+                "('GM01', 'MAT001', '12R22.5', CURDATE(), 'ONLINE', 1), " +
+                "('GM02', 'MAT002', '11R22.5', CURDATE(), 'ONLINE', 1), " +
+                "('GM03', 'MAT003', '295/80R22.5', CURDATE(), 'ONLINE', 1)");
+    }
+
+    /**
+     * 初始化关键产品数据
+     */
+    private void initKeyProductData() {
+        jdbcTemplate.execute("INSERT INTO T_CX_KEY_PRODUCT (EMBRYO_CODE, STRUCTURE_NAME, PRIORITY, IS_ACTIVE) VALUES " +
+                "('MAT001', '12R22.5', 1, 1), " +
+                "('MAT002', '11R22.5', 2, 1), " +
+                "('MAT005', '315/80R22.5', 3, 1)");
+    }
+
+    /**
+     * 初始化结构分配数据
+     */
+    private void initStructureAllocationData() {
+        jdbcTemplate.execute("INSERT INTO T_MP_STRUCTURE_ALLOCATION (YEAR, MONTH, STRUCTURE_NAME, CX_MACHINE_CODE, DAY_CAPACITY, IS_ACTIVE) VALUES " +
+                "(YEAR(CURDATE()), MONTH(CURDATE()), '12R22.5', 'GM01', 120, 1), " +
+                "(YEAR(CURDATE()), MONTH(CURDATE()), '11R22.5', 'GM02', 120, 1), " +
+                "(YEAR(CURDATE()), MONTH(CURDATE()), '295/80R22.5', 'GM03', 120, 1), " +
+                "(YEAR(CURDATE()), MONTH(CURDATE()), '275/80R22.5', 'GM04', 120, 1), " +
+                "(YEAR(CURDATE()), MONTH(CURDATE()), '315/80R22.5', 'GM05', 120, 1)");
     }
 }
