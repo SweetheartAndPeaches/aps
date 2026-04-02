@@ -1,0 +1,89 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+根据Excel文件生成APS测试数据
+"""
+import pandas as pd
+import numpy as np
+
+file_path = 'assets/TBR成型计划硫化计划2024年07月07日(4).xls'
+
+# 读取数据
+df_lh = pd.read_excel(file_path, sheet_name='硫化计划', header=None)
+df_month = pd.read_excel(file_path, sheet_name='月计划', header=None)
+df_cx = pd.read_excel(file_path, sheet_name='成型计划', header=None)
+
+# 生成SQL语句
+sql_statements = []
+
+# 1. 成型机台数据 (基于Excel中的机台模式)
+sql_statements.append("-- ========== 成型机台数据 ==========")
+forming_machines = ['GM01', 'GM02', 'GM03', 'GM04', 'GM05', 'GM06', 'GM07', 'GM08']
+for i, machine in enumerate(forming_machines, 1):
+    sql = f"""INSERT INTO T_MDM_MOLDING_MACHINE (CX_MACHINE_CODE, CX_MACHINE_BRAND_CODE, CX_MACHINE_TYPE_CODE, ROLL_OVER_TYPE, IS_ZERO_RACK, LH_MACHINE_MAX_QTY, MAX_DAY_CAPACITY, LINE_NUMBER, IS_ACTIVE) VALUES ('{machine}', '软控', '三鼓', 'A型', 1, 4, 120, {(i-1)//3 + 1}, 1);"""
+    sql_statements.append(sql)
+
+# 2. 硫化机台数据
+sql_statements.append("\n-- ========== 硫化机台数据 ==========")
+vulcanizing_machines = []
+for i in range(7, 80):
+    row = df_lh.iloc[i]
+    machine = row[4]
+    if pd.notna(machine) and isinstance(machine, str) and machine not in vulcanizing_machines:
+        vulcanizing_machines.append(machine)
+        sql = f"""INSERT INTO T_LH_SCHEDULE_RESULT (LH_MACHINE_CODE, MATERIAL_CODE, MATERIAL_DESC, STRUCTURE_NAME, DAILY_PLAN_QTY, SCHEDULE_DATE, CLASS1_PLAN_QTY, CLASS2_PLAN_QTY, CLASS3_PLAN_QTY, EMBRYO_STOCK) VALUES ('{machine}', '{row[5]}', '{row[6]}', '{row[6].split()[0] if pd.notna(row[6]) else ''}', {row[9] if pd.notna(row[9]) else 0}, '2025-01-15', {row[9] if pd.notna(row[9]) else 0}, 0, 0, {row[8] if pd.notna(row[8]) else 0});"""
+        sql_statements.append(sql)
+
+# 3. 物料主数据
+sql_statements.append("\n-- ========== 物料主数据 ==========")
+materials = {}
+for i in range(7, 50):
+    row = df_lh.iloc[i]
+    material_code = row[5]
+    material_desc = row[6]
+    if pd.notna(material_code) and material_code not in materials:
+        materials[material_code] = material_desc
+        # 解析规格
+        desc_parts = str(material_desc).split() if pd.notna(material_desc) else ['', '']
+        spec = desc_parts[0] if len(desc_parts) > 0 else ''
+        pattern = desc_parts[1] if len(desc_parts) > 1 else ''
+        sql = f"""INSERT INTO T_MDM_MATERIAL_INFO (MATERIAL_CODE, MATERIAL_NAME, MATERIAL_DESC, PRODUCT_STRUCTURE, MAIN_PATTERN, PATTERN, IS_MAIN_PRODUCT, VULCANIZE_TIME_MINUTES, EMBRYO_CODE) VALUES ('{material_code}', '{material_desc}', '{material_desc}', '{spec}', '{pattern}', '{pattern}', 1, 13, '{material_code}');"""
+        sql_statements.append(sql)
+
+# 4. 胎胚库存数据
+sql_statements.append("\n-- ========== 胎胚库存数据 ==========")
+for i in range(7, 50):
+    row = df_lh.iloc[i]
+    material_code = row[5]
+    embryo_stock = row[8] if pd.notna(row[8]) else 0
+    if pd.notna(material_code):
+        sql = f"""INSERT INTO T_CX_STOCK (STOCK_DATE, EMBRYO_CODE, STOCK_NUM, OVER_TIME_STOCK, MODIFY_NUM, BAD_NUM, IS_ENDING_SKU) VALUES ('2025-01-15', '{material_code}', {int(embryo_stock)}, 0, 0, 0, 0);"""
+        sql_statements.append(sql)
+
+# 5. 月计划数据
+sql_statements.append("\n-- ========== 月计划数据 ==========")
+for i in range(1, len(df_month)):
+    row = df_month.iloc[i]
+    material_code = row[0]
+    material_desc = row[1]
+    total_qty = row[2]
+    rubber_type = row[3]
+    if pd.notna(material_code):
+        sql = f"""INSERT INTO T_FACTORY_MONTH_PLAN_PRODUCTION_FINAL_RESULT (MATERIAL_CODE, MATERIAL_DESC, PLAN_QTY, RUBBER_TYPE, PLAN_MONTH, PLAN_YEAR) VALUES ('{material_code}', '{material_desc}', {total_qty}, '{rubber_type}', '2025-01', 2025);"""
+        sql_statements.append(sql)
+
+# 6. 结构硫化配比数据
+sql_statements.append("\n-- ========== 结构硫化配比数据 ==========")
+structures = set()
+for i in range(7, 50):
+    row = df_lh.iloc[i]
+    material_desc = row[6]
+    if pd.notna(material_desc):
+        spec = str(material_desc).split()[0] if len(str(material_desc).split()) > 0 else ''
+        if spec and spec not in structures:
+            structures.add(spec)
+            sql = f"""INSERT INTO T_MDM_STRUCTURE_LH_RATIO (STRUCTURE_NAME, CX_MACHINE_TYPE, MAX_LH_MACHINE_QTY, MAX_EMBRYO_TYPE, TRIP_QTY, IS_ACTIVE) VALUES ('{spec}', '三鼓', 4, 4, 12, 1);"""
+            sql_statements.append(sql)
+
+# 输出所有SQL
+print('\n'.join(sql_statements))

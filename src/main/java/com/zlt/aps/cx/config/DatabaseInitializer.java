@@ -100,6 +100,7 @@ public class DatabaseInitializer implements CommandLineRunner {
         initMdmMachineOnlineInfoData();
         initKeyProductData();
         initStructureAllocationData();
+        initWorkCalendarData();
 
         System.out.println("========================================");
         System.out.println("  MySQL数据库初始化完成!");
@@ -316,6 +317,7 @@ public class DatabaseInitializer implements CommandLineRunner {
         jdbcTemplate.execute("DROP TABLE IF EXISTS T_LH_SCHEDULE_RESULT");
         jdbcTemplate.execute("CREATE TABLE T_LH_SCHEDULE_RESULT (" +
                 "ID BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', " +
+                "FACTORY_CODE VARCHAR(50) COMMENT '工厂编号', " +
                 "BATCH_NO VARCHAR(50) COMMENT '批次号', " +
                 "ORDER_NO VARCHAR(50) COMMENT '工单号', " +
                 "LH_MACHINE_CODE VARCHAR(50) COMMENT '硫化机台编号', " +
@@ -356,16 +358,36 @@ public class DatabaseInitializer implements CommandLineRunner {
                 "CLASS4_FINISH_QTY INT COMMENT '4班完成量', " +
                 "IS_DELIVERY VARCHAR(10) COMMENT '是否交期', " +
                 "IS_RELEASE VARCHAR(10) COMMENT '是否发布', " +
+                "PUBLISH_SUCCESS_COUNT DECIMAL(10,2) COMMENT '发布成功计数', " +
+                "NEWEST_PUBLISH_TIME DATETIME COMMENT '最新发布时间', " +
                 "DATA_SOURCE VARCHAR(20) COMMENT '数据来源', " +
                 "MOULD_QTY INT COMMENT '使用模数', " +
+                "SINGLE_MOULD_SHIFT_QTY INT COMMENT '单班硫化量', " +
+                "MOULD_INFO VARCHAR(500) COMMENT '模具信息', " +
                 "MOULD_METHOD VARCHAR(20) COMMENT '硫化方式', " +
+                "CONSTRUCTION_STAGE VARCHAR(50) COMMENT '施工阶段', " +
+                "EMBRYO_NO VARCHAR(50) COMMENT '制造示方书号', " +
+                "TEXT_NO VARCHAR(50) COMMENT '文字示方书号', " +
+                "LH_NO VARCHAR(50) COMMENT '硫化示方书号', " +
+                "MONTH_PLAN_VERSION VARCHAR(50) COMMENT '月计划版本', " +
                 "MACHINE_ORDER INT COMMENT '机台排序号', " +
                 "IS_TRIAL VARCHAR(10) COMMENT '是否试制量试', " +
+                "REAL_SCHEDULE_DATE DATE COMMENT '实际排程日期', " +
+                "IS_FIRST VARCHAR(10) COMMENT '是否首排', " +
                 "MOULD_SURPLUS_QTY INT COMMENT '硫化余量', " +
                 "IS_END VARCHAR(10) COMMENT '是否收尾', " +
+                "PRODUCTION_VERSION VARCHAR(50) COMMENT '排产版本', " +
+                "MOULD_CODE VARCHAR(50) COMMENT '模具号', " +
+                "IS_SPLIT VARCHAR(10) COMMENT '是否拆分', " +
+                "SCHEDULE_ORDER VARCHAR(50) COMMENT '排程顺序', " +
+                "SCHEDULE_TYPE VARCHAR(20) COMMENT '排程类型', " +
+                "IS_CHANGE_MOULD VARCHAR(10) COMMENT '是否换模', " +
+                "TOTAL_DAILY_PLAN_QTY INT COMMENT '总计划数量', " +
+                "CREATE_BY VARCHAR(50) COMMENT '创建人', " +
                 "CREATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间', " +
+                "UPDATE_BY VARCHAR(50) COMMENT '更新人', " +
                 "UPDATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间', " +
-                "CREATE_BY VARCHAR(50) COMMENT '创建人'" +
+                "REMARK VARCHAR(500) COMMENT '备注'" +
                 ") COMMENT='硫化排程结果表'");
     }
 
@@ -836,19 +858,19 @@ public class DatabaseInitializer implements CommandLineRunner {
      */
     private void initLhScheduleResultData() {
         // 硫化排程日期：当天和第二天，方便测试
-        jdbcTemplate.execute("INSERT INTO T_LH_SCHEDULE_RESULT (BATCH_NO, SCHEDULE_DATE, MATERIAL_CODE, STRUCTURE_NAME, DAILY_PLAN_QTY, PRODUCTION_STATUS, MACHINE_ORDER, DATA_SOURCE) VALUES " +
-                "('LH2024010001', CURDATE(), 'MAT001', '12R22.5', 240, 'PENDING', 1, 'MONTH_PLAN'), " +
-                "('LH2024010002', CURDATE(), 'MAT002', '11R22.5', 180, 'PENDING', 2, 'MONTH_PLAN'), " +
-                "('LH2024010003', CURDATE(), 'MAT003', '295/80R22.5', 120, 'PENDING', 3, 'MONTH_PLAN'), " +
-                "('LH2024010004', CURDATE(), 'MAT004', '275/80R22.5', 200, 'PENDING', 4, 'MONTH_PLAN'), " +
-                "('LH2024010005', CURDATE(), 'MAT005', '315/80R22.5', 100, 'PENDING', 5, 'MONTH_PLAN'), " +
-                "('LH2024010006', CURDATE(), 'MAT006', '385/65R22.5', 150, 'PENDING', 6, 'MONTH_PLAN'), " +
-                "('LH2024010007', DATE_ADD(CURDATE(), INTERVAL 1 DAY), 'MAT001', '12R22.5', 240, 'PENDING', 1, 'MONTH_PLAN'), " +
-                "('LH2024010008', DATE_ADD(CURDATE(), INTERVAL 1 DAY), 'MAT002', '11R22.5', 180, 'PENDING', 2, 'MONTH_PLAN'), " +
-                "('LH2024010009', DATE_ADD(CURDATE(), INTERVAL 1 DAY), 'MAT003', '295/80R22.5', 120, 'PENDING', 3, 'MONTH_PLAN'), " +
-                "('LH2024010010', DATE_ADD(CURDATE(), INTERVAL 1 DAY), 'MAT004', '275/80R22.5', 200, 'PENDING', 4, 'MONTH_PLAN'), " +
-                "('LH2024010011', DATE_ADD(CURDATE(), INTERVAL 1 DAY), 'MAT005', '315/80R22.5', 100, 'PENDING', 5, 'MONTH_PLAN'), " +
-                "('LH2024010012', DATE_ADD(CURDATE(), INTERVAL 1 DAY), 'MAT006', '385/65R22.5', 150, 'PENDING', 6, 'MONTH_PLAN')");
+        jdbcTemplate.execute("INSERT INTO T_LH_SCHEDULE_RESULT (FACTORY_CODE, BATCH_NO, SCHEDULE_DATE, MATERIAL_CODE, EMBRYO_CODE, MATERIAL_DESC, STRUCTURE_NAME, DAILY_PLAN_QTY, PRODUCTION_STATUS, MACHINE_ORDER, DATA_SOURCE, LH_TIME, MOULD_QTY, MOULD_SURPLUS_QTY) VALUES " +
+                "('F001', 'LH2024010001', CURDATE(), 'MAT001', 'MAT001', '12R22.5-18PR-JA511', '12R22.5', 240, 'PENDING', 1, 'MONTH_PLAN', 750, 2, 500), " +
+                "('F001', 'LH2024010002', CURDATE(), 'MAT002', 'MAT002', '11R22.5-16PR-JA511', '11R22.5', 180, 'PENDING', 2, 'MONTH_PLAN', 708, 2, 300), " +
+                "('F001', 'LH2024010003', CURDATE(), 'MAT003', 'MAT003', '295/80R22.5-18PR-JA511', '295/80R22.5', 120, 'PENDING', 3, 'MONTH_PLAN', 792, 2, 400), " +
+                "('F001', 'LH2024010004', CURDATE(), 'MAT004', 'MAT004', '275/80R22.5-16PR-JA511', '275/80R22.5', 200, 'PENDING', 4, 'MONTH_PLAN', 690, 2, 350), " +
+                "('F001', 'LH2024010005', CURDATE(), 'MAT005', 'MAT005', '315/80R22.5-18PR-JA511', '315/80R22.5', 100, 'PENDING', 5, 'MONTH_PLAN', 840, 2, 200), " +
+                "('F001', 'LH2024010006', CURDATE(), 'MAT006', 'MAT006', '385/65R22.5-20PR-JA511', '385/65R22.5', 150, 'PENDING', 6, 'MONTH_PLAN', 930, 2, 250), " +
+                "('F001', 'LH2024010007', DATE_ADD(CURDATE(), INTERVAL 1 DAY), 'MAT001', 'MAT001', '12R22.5-18PR-JA511', '12R22.5', 240, 'PENDING', 1, 'MONTH_PLAN', 750, 2, 480), " +
+                "('F001', 'LH2024010008', DATE_ADD(CURDATE(), INTERVAL 1 DAY), 'MAT002', 'MAT002', '11R22.5-16PR-JA511', '11R22.5', 180, 'PENDING', 2, 'MONTH_PLAN', 708, 2, 280), " +
+                "('F001', 'LH2024010009', DATE_ADD(CURDATE(), INTERVAL 1 DAY), 'MAT003', 'MAT003', '295/80R22.5-18PR-JA511', '295/80R22.5', 120, 'PENDING', 3, 'MONTH_PLAN', 792, 2, 380), " +
+                "('F001', 'LH2024010010', DATE_ADD(CURDATE(), INTERVAL 1 DAY), 'MAT004', 'MAT004', '275/80R22.5-16PR-JA511', '275/80R22.5', 200, 'PENDING', 4, 'MONTH_PLAN', 690, 2, 330), " +
+                "('F001', 'LH2024010011', DATE_ADD(CURDATE(), INTERVAL 1 DAY), 'MAT005', 'MAT005', '315/80R22.5-18PR-JA511', '315/80R22.5', 100, 'PENDING', 5, 'MONTH_PLAN', 840, 2, 180), " +
+                "('F001', 'LH2024010012', DATE_ADD(CURDATE(), INTERVAL 1 DAY), 'MAT006', 'MAT006', '385/65R22.5-20PR-JA511', '385/65R22.5', 150, 'PENDING', 6, 'MONTH_PLAN', 930, 2, 230)");
     }
 
     // ==================== 新增表创建方法 ====================
@@ -943,12 +965,24 @@ public class DatabaseInitializer implements CommandLineRunner {
         jdbcTemplate.execute("DROP TABLE IF EXISTS T_MDM_WORK_CALENDAR");
         jdbcTemplate.execute("CREATE TABLE T_MDM_WORK_CALENDAR (" +
                 "ID BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', " +
-                "CALENDAR_DATE DATE NOT NULL COMMENT '日历日期', " +
+                "PROC_CODE VARCHAR(50) COMMENT '工序编码', " +
+                "YEAR INT COMMENT '年份', " +
+                "MONTH INT COMMENT '月份', " +
+                "DAY INT COMMENT '日期', " +
+                "PRODUCTION_DATE DATE COMMENT '生产日期', " +
                 "FACTORY_CODE VARCHAR(50) COMMENT '工厂编码', " +
+                "ONE_SHIFT_FLAG VARCHAR(1) COMMENT '一班开停产标志，0-停,1-开', " +
+                "TWO_SHIFT_FLAG VARCHAR(1) COMMENT '二班开停产标志，0-停,1-开', " +
+                "THREE_SHIFT_FLAG VARCHAR(1) COMMENT '三班开停产标志，0-停,1-开', " +
+                "DAY_FLAG VARCHAR(1) COMMENT '日期开停产标志，0-停,1-开', " +
+                "RATE INT COMMENT '比例', " +
                 "IS_WORK_DAY INT DEFAULT 1 COMMENT '是否工作日', " +
                 "DAY_TYPE VARCHAR(20) COMMENT '日期类型', " +
-                "REMARK VARCHAR(200) COMMENT '备注', " +
-                "CREATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'" +
+                "CREATE_BY VARCHAR(50) COMMENT '创建人', " +
+                "CREATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间', " +
+                "UPDATE_BY VARCHAR(50) COMMENT '更新人', " +
+                "UPDATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间', " +
+                "REMARK VARCHAR(200) COMMENT '备注'" +
                 ") COMMENT='工作日历表'");
     }
 
@@ -990,12 +1024,17 @@ public class DatabaseInitializer implements CommandLineRunner {
     private void createMdmSkuScheduleCategoryTable() {
         jdbcTemplate.execute("DROP TABLE IF EXISTS t_mdm_sku_schedule_category");
         jdbcTemplate.execute("CREATE TABLE t_mdm_sku_schedule_category (" +
-                "id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', " +
-                "material_code VARCHAR(50) COMMENT '物料编码', " +
-                "schedule_type VARCHAR(20) COMMENT '排程类型', " +
-                "category_name VARCHAR(100) COMMENT '分类名称', " +
-                "is_active INT DEFAULT 1 COMMENT '是否启用', " +
-                "create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'" +
+                "ID BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', " +
+                "FACTORY_CODE VARCHAR(50) COMMENT '工厂编号', " +
+                "MATERIAL_CODE VARCHAR(50) COMMENT '物料编码', " +
+                "SCHEDULE_TYPE VARCHAR(20) COMMENT '排程类型', " +
+                "GENRATE_DATE TIMESTAMP COMMENT '生成日期', " +
+                "REMARK VARCHAR(500) COMMENT '备注', " +
+                "IS_DELETE INT DEFAULT 0 COMMENT '是否删除：0-未删除 1-已删除', " +
+                "CREATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间', " +
+                "UPDATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间', " +
+                "CREATE_BY VARCHAR(50) COMMENT '创建人', " +
+                "UPDATE_BY VARCHAR(50) COMMENT '更新人'" +
                 ") COMMENT='SKU排程分类表'");
     }
 
@@ -1132,12 +1171,26 @@ public class DatabaseInitializer implements CommandLineRunner {
         jdbcTemplate.execute("DROP TABLE IF EXISTS T_CX_MATERIAL_ENDING");
         jdbcTemplate.execute("CREATE TABLE T_CX_MATERIAL_ENDING (" +
                 "ID BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', " +
+                "FACTORY_CODE VARCHAR(50) COMMENT '工厂编码', " +
                 "MATERIAL_CODE VARCHAR(50) COMMENT '物料编码', " +
+                "MATERIAL_DESC VARCHAR(200) COMMENT '物料描述', " +
                 "STRUCTURE_NAME VARCHAR(100) COMMENT '结构名称', " +
-                "ENDING_DATE DATE COMMENT '收尾日期', " +
-                "ENDING_QTY INT COMMENT '收尾数量', " +
-                "IS_ACTIVE INT DEFAULT 1 COMMENT '是否有效', " +
-                "CREATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'" +
+                "VULCANIZING_REMAINDER INT COMMENT '硫化余量（条）', " +
+                "EMBRYO_STOCK INT COMMENT '胎胚库存（条）', " +
+                "FORMING_REMAINDER INT COMMENT '成型余量', " +
+                "DAILY_LH_CAPACITY INT COMMENT '日硫化产能', " +
+                "DAILY_FORMING_CAPACITY INT COMMENT '日成型产能', " +
+                "ESTIMATED_ENDING_DAYS DECIMAL(10,2) COMMENT '预计收尾天数', " +
+                "PLANNED_ENDING_DATE DATE COMMENT '计划收尾日期', " +
+                "IS_URGENT_ENDING INT DEFAULT 0 COMMENT '是否紧急收尾', " +
+                "IS_NEAR_ENDING INT DEFAULT 0 COMMENT '是否10天内收尾', " +
+                "DELAY_QUANTITY INT COMMENT '延误量', " +
+                "DISTRIBUTED_QUANTITY INT COMMENT '平摊量', " +
+                "NEED_MONTH_PLAN_ADJUST INT DEFAULT 0 COMMENT '是否需要调整月计划', " +
+                "STAT_DATE DATE COMMENT '统计日期', " +
+                "CREATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间', " +
+                "UPDATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间', " +
+                "REMARK VARCHAR(500) COMMENT '备注'" +
                 ") COMMENT='物料收尾表'");
     }
 
@@ -1302,6 +1355,22 @@ public class DatabaseInitializer implements CommandLineRunner {
                 "(YEAR(CURDATE()), MONTH(CURDATE()), '11R22.5', 'GM02', 120, 1), " +
                 "(YEAR(CURDATE()), MONTH(CURDATE()), '295/80R22.5', 'GM03', 120, 1), " +
                 "(YEAR(CURDATE()), MONTH(CURDATE()), '275/80R22.5', 'GM04', 120, 1), " +
-                "(YEAR(CURDATE()), MONTH(CURDATE()), '315/80R22.5', 'GM05', 120, 1)");
+                "(YEAR(CURDATE()), MONTH(CURDATE()), '315/80R22.5', 'GM05', 120, 1), " +
+                "(YEAR(CURDATE()), MONTH(CURDATE()), '385/65R22.5', 'GM05', 120, 1)");
+    }
+
+    /**
+     * 初始化工作日历数据
+     */
+    private void initWorkCalendarData() {
+        // 添加未来7天的工作日历数据
+        jdbcTemplate.execute("INSERT INTO T_MDM_WORK_CALENDAR (PROC_CODE, YEAR, MONTH, DAY, PRODUCTION_DATE, FACTORY_CODE, ONE_SHIFT_FLAG, TWO_SHIFT_FLAG, THREE_SHIFT_FLAG, DAY_FLAG, RATE, CREATE_BY) VALUES " +
+                "('CX', YEAR(CURDATE()), MONTH(CURDATE()), DAY(CURDATE()), CURDATE(), 'F001', '1', '1', '1', '1', 100, 'SYSTEM'), " +
+                "('CX', YEAR(DATE_ADD(CURDATE(), INTERVAL 1 DAY)), MONTH(DATE_ADD(CURDATE(), INTERVAL 1 DAY)), DAY(DATE_ADD(CURDATE(), INTERVAL 1 DAY)), DATE_ADD(CURDATE(), INTERVAL 1 DAY), 'F001', '1', '1', '1', '1', 100, 'SYSTEM'), " +
+                "('CX', YEAR(DATE_ADD(CURDATE(), INTERVAL 2 DAY)), MONTH(DATE_ADD(CURDATE(), INTERVAL 2 DAY)), DAY(DATE_ADD(CURDATE(), INTERVAL 2 DAY)), DATE_ADD(CURDATE(), INTERVAL 2 DAY), 'F001', '1', '1', '1', '1', 100, 'SYSTEM'), " +
+                "('CX', YEAR(DATE_ADD(CURDATE(), INTERVAL 3 DAY)), MONTH(DATE_ADD(CURDATE(), INTERVAL 3 DAY)), DAY(DATE_ADD(CURDATE(), INTERVAL 3 DAY)), DATE_ADD(CURDATE(), INTERVAL 3 DAY), 'F001', '1', '1', '1', '1', 100, 'SYSTEM'), " +
+                "('CX', YEAR(DATE_ADD(CURDATE(), INTERVAL 4 DAY)), MONTH(DATE_ADD(CURDATE(), INTERVAL 4 DAY)), DAY(DATE_ADD(CURDATE(), INTERVAL 4 DAY)), DATE_ADD(CURDATE(), INTERVAL 4 DAY), 'F001', '1', '1', '1', '1', 100, 'SYSTEM'), " +
+                "('CX', YEAR(DATE_ADD(CURDATE(), INTERVAL 5 DAY)), MONTH(DATE_ADD(CURDATE(), INTERVAL 5 DAY)), DAY(DATE_ADD(CURDATE(), INTERVAL 5 DAY)), DATE_ADD(CURDATE(), INTERVAL 5 DAY), 'F001', '1', '1', '1', '1', 100, 'SYSTEM'), " +
+                "('CX', YEAR(DATE_ADD(CURDATE(), INTERVAL 6 DAY)), MONTH(DATE_ADD(CURDATE(), INTERVAL 6 DAY)), DAY(DATE_ADD(CURDATE(), INTERVAL 6 DAY)), DATE_ADD(CURDATE(), INTERVAL 6 DAY), 'F001', '1', '1', '1', '1', 100, 'SYSTEM')");
     }
 }
