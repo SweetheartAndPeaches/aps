@@ -115,16 +115,26 @@ public class DatabaseInitializer implements CommandLineRunner {
      * 创建班次配置表
      */
     private void createShiftConfigTable() {
-        jdbcTemplate.execute("DROP TABLE IF EXISTS t_cx_shift_config");
-        jdbcTemplate.execute("CREATE TABLE t_cx_shift_config (" +
-                "id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', " +
-                "shift_code VARCHAR(20) NOT NULL UNIQUE COMMENT '班次编码', " +
-                "shift_name VARCHAR(50) NOT NULL COMMENT '班次名称', " +
-                "start_time TIME NOT NULL COMMENT '开始时间', " +
-                "end_time TIME NOT NULL COMMENT '结束时间', " +
-                "sort_order INT DEFAULT 0 COMMENT '排序', " +
-                "is_active SMALLINT DEFAULT 1 COMMENT '是否启用', " +
-                "create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'" +
+        jdbcTemplate.execute("DROP TABLE IF EXISTS T_CX_SHIFT_CONFIG");
+        jdbcTemplate.execute("CREATE TABLE T_CX_SHIFT_CONFIG (" +
+                "ID BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', " +
+                "SHIFT_CODE VARCHAR(20) NOT NULL COMMENT '班次编码', " +
+                "SHIFT_NAME VARCHAR(50) NOT NULL COMMENT '班次名称', " +
+                "SHIFT_ORDER INT DEFAULT 0 COMMENT '班次序号', " +
+                "START_TIME VARCHAR(20) NOT NULL COMMENT '开始时间', " +
+                "END_TIME VARCHAR(20) NOT NULL COMMENT '结束时间', " +
+                "SHIFT_HOURS INT DEFAULT 8 COMMENT '班次时长(小时)', " +
+                "IS_CROSS_DAY SMALLINT DEFAULT 0 COMMENT '是否跨天', " +
+                "SCHEDULE_DAY INT DEFAULT 1 COMMENT '排程天数(1-第一天,2-第二天,3-第三天)', " +
+                "DAY_SHIFT_ORDER INT DEFAULT 1 COMMENT '当天班次序号', " +
+                "CLASS_FIELD VARCHAR(20) COMMENT '对应结果表字段', " +
+                "FACTORY_CODE VARCHAR(20) DEFAULT 'F001' COMMENT '工厂编号', " +
+                "IS_ACTIVE SMALLINT DEFAULT 1 COMMENT '是否启用', " +
+                "REMARK VARCHAR(500) COMMENT '备注', " +
+                "CREATE_BY VARCHAR(50) COMMENT '创建人', " +
+                "CREATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间', " +
+                "UPDATE_BY VARCHAR(50) COMMENT '更新人', " +
+                "UPDATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'" +
                 ") COMMENT='班次配置表'");
     }
 
@@ -745,12 +755,26 @@ public class DatabaseInitializer implements CommandLineRunner {
 
     /**
      * 初始化班次配置数据
+     * 每天三个班次：夜班、早班、中班，比例1:2:1
      */
     private void initShiftConfigData() {
-        jdbcTemplate.execute("INSERT INTO t_cx_shift_config (shift_code, shift_name, start_time, end_time, sort_order) VALUES " +
-                "('NIGHT', '夜班', '00:00:00', '07:59:59', 1), " +
-                "('DAY', '早班', '08:00:00', '15:59:59', 2), " +
-                "('AFTERNOON', '中班', '16:00:00', '23:59:59', 3)");
+        // 第一天班次配置
+        jdbcTemplate.execute("INSERT INTO T_CX_SHIFT_CONFIG (SHIFT_CODE, SHIFT_NAME, SHIFT_ORDER, START_TIME, END_TIME, SHIFT_HOURS, IS_CROSS_DAY, SCHEDULE_DAY, DAY_SHIFT_ORDER, CLASS_FIELD, FACTORY_CODE, IS_ACTIVE) VALUES " +
+                "('NIGHT_D1', '夜班', 1, '00:00:00', '07:59:59', 8, 0, 1, 1, 'CLASS1', 'F001', 1), " +
+                "('DAY_D1', '早班', 2, '08:00:00', '15:59:59', 8, 0, 1, 2, 'CLASS2', 'F001', 1), " +
+                "('AFTERNOON_D1', '中班', 3, '16:00:00', '23:59:59', 8, 0, 1, 3, 'CLASS3', 'F001', 1)");
+        
+        // 第二天班次配置
+        jdbcTemplate.execute("INSERT INTO T_CX_SHIFT_CONFIG (SHIFT_CODE, SHIFT_NAME, SHIFT_ORDER, START_TIME, END_TIME, SHIFT_HOURS, IS_CROSS_DAY, SCHEDULE_DAY, DAY_SHIFT_ORDER, CLASS_FIELD, FACTORY_CODE, IS_ACTIVE) VALUES " +
+                "('NIGHT_D2', '夜班', 1, '00:00:00', '07:59:59', 8, 0, 2, 1, 'CLASS4', 'F001', 1), " +
+                "('DAY_D2', '早班', 2, '08:00:00', '15:59:59', 8, 0, 2, 2, 'CLASS5', 'F001', 1), " +
+                "('AFTERNOON_D2', '中班', 3, '16:00:00', '23:59:59', 8, 0, 2, 3, 'CLASS6', 'F001', 1)");
+        
+        // 第三天班次配置
+        jdbcTemplate.execute("INSERT INTO T_CX_SHIFT_CONFIG (SHIFT_CODE, SHIFT_NAME, SHIFT_ORDER, START_TIME, END_TIME, SHIFT_HOURS, IS_CROSS_DAY, SCHEDULE_DAY, DAY_SHIFT_ORDER, CLASS_FIELD, FACTORY_CODE, IS_ACTIVE) VALUES " +
+                "('NIGHT_D3', '夜班', 1, '00:00:00', '07:59:59', 8, 0, 3, 1, 'CLASS7', 'F001', 1), " +
+                "('DAY_D3', '早班', 2, '08:00:00', '15:59:59', 8, 0, 3, 2, 'CLASS8', 'F001', 1), " +
+                "('AFTERNOON_D3', '中班', 3, '16:00:00', '23:59:59', 8, 0, 3, 3, 'CLASS1', 'F001', 1)");
     }
 
     /**
@@ -1086,14 +1110,18 @@ public class DatabaseInitializer implements CommandLineRunner {
         jdbcTemplate.execute("DROP TABLE IF EXISTS T_MDM_DEVICE_PLAN_SHUT");
         jdbcTemplate.execute("CREATE TABLE T_MDM_DEVICE_PLAN_SHUT (" +
                 "ID BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', " +
-                "DEVICE_CODE VARCHAR(50) COMMENT '设备编码', " +
-                "DEVICE_NAME VARCHAR(100) COMMENT '设备名称', " +
-                "SHUT_START_TIME DATETIME COMMENT '停机开始时间', " +
-                "SHUT_END_TIME DATETIME COMMENT '停机结束时间', " +
-                "SHUT_REASON VARCHAR(500) COMMENT '停机原因', " +
-                "SHUT_TYPE VARCHAR(20) COMMENT '停机类型', " +
+                "FACTORY_CODE VARCHAR(50) COMMENT '工厂编号', " +
+                "MACHINE_TYPE VARCHAR(50) COMMENT '机台类型', " +
+                "MACHINE_CODE VARCHAR(50) COMMENT '机台编号', " +
+                "MACHINE_STOP_TYPE VARCHAR(50) COMMENT '停机类型', " +
+                "BEGIN_DATE DATETIME COMMENT '开始日期', " +
+                "END_DATE DATETIME COMMENT '结束日期', " +
+                "REMARK VARCHAR(500) COMMENT '备注', " +
                 "IS_ACTIVE INT DEFAULT 1 COMMENT '是否有效', " +
-                "CREATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'" +
+                "CREATE_BY VARCHAR(50) COMMENT '创建人', " +
+                "CREATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间', " +
+                "UPDATE_BY VARCHAR(50) COMMENT '更新人', " +
+                "UPDATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'" +
                 ") COMMENT='设备计划停机表'");
     }
 
