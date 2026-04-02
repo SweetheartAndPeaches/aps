@@ -14,6 +14,11 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public abstract class BaseValidationStrategy implements ValidationStrategy {
 
+    // 引用内部类简化代码
+    protected static final ScheduleDataValidationResult.ValidationLevel ERROR = ScheduleDataValidationResult.ValidationLevel.ERROR;
+    protected static final ScheduleDataValidationResult.ValidationLevel WARN = ScheduleDataValidationResult.ValidationLevel.WARN;
+    protected static final ScheduleDataValidationResult.ValidationLevel INFO = ScheduleDataValidationResult.ValidationLevel.INFO;
+
     /**
      * 获取校验项枚举
      */
@@ -33,29 +38,29 @@ public abstract class BaseValidationStrategy implements ValidationStrategy {
      * 添加错误级校验
      */
     protected void addError(ScheduleDataValidationResult result, String message, String suggestion) {
-        addDetail(result, ValidationLevel.ERROR, message, suggestion);
+        addDetail(result, ERROR, message, suggestion);
     }
 
     /**
      * 添加警告级校验
      */
     protected void addWarn(ScheduleDataValidationResult result, String message, String suggestion) {
-        addDetail(result, ValidationLevel.WARN, message, suggestion);
+        addDetail(result, WARN, message, suggestion);
     }
 
     /**
      * 添加信息级校验
      */
     protected void addInfo(ScheduleDataValidationResult result, String message, String suggestion) {
-        addDetail(result, ValidationLevel.INFO, message, suggestion);
+        addDetail(result, INFO, message, suggestion);
     }
 
     /**
      * 添加校验详情
      */
-    protected void addDetail(ScheduleDataValidationResult result, ValidationLevel level, 
+    protected void addDetail(ScheduleDataValidationResult result, ScheduleDataValidationResult.ValidationLevel level, 
                             String message, String suggestion) {
-        ValidationDetail detail = new ValidationDetail();
+        ScheduleDataValidationResult.ValidationDetail detail = new ScheduleDataValidationResult.ValidationDetail();
         detail.setLevel(level);
         detail.setDataItem(getDataItemName());
         detail.setMessage(message);

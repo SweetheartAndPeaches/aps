@@ -260,8 +260,8 @@ public class CxScheduleResultServiceImpl extends ServiceImpl<CxScheduleResultMap
     /**
      * 转换明细为DTO
      */
-    private ScheduleResultVo.ScheduleDetailDTO convertDetailToDTO(CxScheduleDetail detail) {
-        ScheduleResultVo.ScheduleDetailDTO dto = new ScheduleResultVo.ScheduleDetailDTO();
+    private ScheduleResultVo.ScheduleDetailVo convertDetailToDTO(CxScheduleDetail detail) {
+        ScheduleResultVo.ScheduleDetailVo dto = new ScheduleResultVo.ScheduleDetailVo();
         BeanUtils.copyProperties(detail, dto);
         return dto;
     }
