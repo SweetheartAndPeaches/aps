@@ -1,6 +1,6 @@
 package com.zlt.aps.cx.service.engine;
 
-import com.zlt.aps.cx.dto.ScheduleContextDTO;
+import com.zlt.aps.cx.vo.ScheduleContextVo;
 import com.zlt.aps.cx.entity.MpCxCapacityConfiguration;
 import com.zlt.aps.cx.entity.config.CxShiftConfig;
 import com.zlt.aps.mp.api.domain.entity.MdmCxMachineFixed;
@@ -64,7 +64,7 @@ public class TrialTaskProcessor {
      */
     public List<CoreScheduleAlgorithmService.MachineAllocationResult> processTrialTasks(
             List<CoreScheduleAlgorithmService.DailyEmbryoTask> trialTasks,
-            ScheduleContextDTO context,
+            ScheduleContextVo context,
             LocalDate scheduleDate,
             List<CxShiftConfig> dayShifts,
             List<MdmMoldingMachine> availableMachines) {
@@ -185,7 +185,7 @@ public class TrialTaskProcessor {
     /**
      * 获取月计划优先级
      */
-    private int getMonthPlanPriority(String materialCode, ScheduleContextDTO context) {
+    private int getMonthPlanPriority(String materialCode, ScheduleContextVo context) {
         // TODO: 从月计划配置获取优先级
         return 999;
     }
@@ -207,7 +207,7 @@ public class TrialTaskProcessor {
             String assignedMachineCode,
             List<MdmMoldingMachine> availableMachines,
             Map<String, List<CoreScheduleAlgorithmService.DailyEmbryoTask>> machineTaskMap,
-            ScheduleContextDTO context) {
+            ScheduleContextVo context) {
 
         // 如果已有分配的机台，优先使用
         if (assignedMachineCode != null) {
@@ -264,7 +264,7 @@ public class TrialTaskProcessor {
     /**
      * 检查结构约束
      */
-    private boolean checkStructureConstraint(MdmMoldingMachine machine, String structureName, ScheduleContextDTO context) {
+    private boolean checkStructureConstraint(MdmMoldingMachine machine, String structureName, ScheduleContextVo context) {
         if (structureName == null) {
             return true;
         }
@@ -295,7 +295,7 @@ public class TrialTaskProcessor {
     /**
      * 获取月计划推荐的机台列表
      */
-    private List<String> getRecommendedMachines(String materialCode, ScheduleContextDTO context) {
+    private List<String> getRecommendedMachines(String materialCode, ScheduleContextVo context) {
         // 从结构排产配置获取推荐机台
         List<String> recommendedMachines = new ArrayList<>();
         
@@ -328,7 +328,7 @@ public class TrialTaskProcessor {
             MdmMoldingMachine machine,
             String embryoCode,
             List<String> recommendedMachines,
-            ScheduleContextDTO context) {
+            ScheduleContextVo context) {
 
         int score = 0;
 
@@ -370,7 +370,7 @@ public class TrialTaskProcessor {
      * 创建机台分配结果
      */
     private CoreScheduleAlgorithmService.MachineAllocationResult createMachineAllocation(
-            String machineCode, ScheduleContextDTO context) {
+            String machineCode, ScheduleContextVo context) {
         CoreScheduleAlgorithmService.MachineAllocationResult allocation = new CoreScheduleAlgorithmService.MachineAllocationResult();
         allocation.setMachineCode(machineCode);
         allocation.setTaskAllocations(new ArrayList<>());
@@ -382,7 +382,7 @@ public class TrialTaskProcessor {
     /**
      * 获取机台日产能
      */
-    private int getMachineDailyCapacity(String machineCode, ScheduleContextDTO context) {
+    private int getMachineDailyCapacity(String machineCode, ScheduleContextVo context) {
         if (context.getAvailableMachines() != null) {
             for (MdmMoldingMachine machine : context.getAvailableMachines()) {
                 if (machine.getCxMachineCode().equals(machineCode)) {
@@ -399,7 +399,7 @@ public class TrialTaskProcessor {
     private void allocateTaskToMachine(
             CoreScheduleAlgorithmService.MachineAllocationResult allocation,
             CoreScheduleAlgorithmService.DailyEmbryoTask task,
-            ScheduleContextDTO context) {
+            ScheduleContextVo context) {
 
         int quantity = task.getPlannedProduction() != null && task.getPlannedProduction() > 0 
                 ? task.getPlannedProduction() 

@@ -1,6 +1,6 @@
 package com.zlt.aps.cx.service.engine;
 
-import com.zlt.aps.cx.dto.ScheduleContextDTO;
+import com.zlt.aps.cx.vo.ScheduleContextVo;
 import com.zlt.aps.cx.entity.CxStock;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
 import org.junit.jupiter.api.BeforeEach;
@@ -136,7 +136,7 @@ class ProductionCalculatorTest {
     @Test
     @DisplayName("获取成型余量 - 正常情况")
     void testGetFormingRemainder_Normal() {
-        ScheduleContextDTO context = new ScheduleContextDTO();
+        ScheduleContextVo context = new ScheduleContextVo();
         List<CxStock> stocks = new ArrayList<>();
         
         CxStock stock1 = new CxStock();
@@ -158,7 +158,7 @@ class ProductionCalculatorTest {
     @Test
     @DisplayName("获取成型余量 - 不存在的胎胚")
     void testGetFormingRemainder_NotFound() {
-        ScheduleContextDTO context = new ScheduleContextDTO();
+        ScheduleContextVo context = new ScheduleContextVo();
         List<CxStock> stocks = new ArrayList<>();
         
         CxStock stock = new CxStock();
@@ -174,7 +174,7 @@ class ProductionCalculatorTest {
     @Test
     @DisplayName("获取成型余量 - 空库存")
     void testGetFormingRemainder_EmptyStock() {
-        ScheduleContextDTO context = new ScheduleContextDTO();
+        ScheduleContextVo context = new ScheduleContextVo();
         context.setStocks(new ArrayList<>());
         
         assertEquals(0, calculator.getFormingRemainder("EMB001", context));
@@ -183,7 +183,7 @@ class ProductionCalculatorTest {
     @Test
     @DisplayName("获取成型余量 - null库存")
     void testGetFormingRemainder_NullStock() {
-        ScheduleContextDTO context = new ScheduleContextDTO();
+        ScheduleContextVo context = new ScheduleContextVo();
         context.setStocks(null);
         
         assertEquals(0, calculator.getFormingRemainder("EMB001", context));
@@ -192,7 +192,7 @@ class ProductionCalculatorTest {
     @Test
     @DisplayName("获取成型余量 - 负数库存处理")
     void testGetFormingRemainder_NegativeStock() {
-        ScheduleContextDTO context = new ScheduleContextDTO();
+        ScheduleContextVo context = new ScheduleContextVo();
         List<CxStock> stocks = new ArrayList<>();
         
         CxStock stock = new CxStock();
@@ -209,7 +209,7 @@ class ProductionCalculatorTest {
     @Test
     @DisplayName("获取成型余量 - null库存数量")
     void testGetFormingRemainder_NullQuantity() {
-        ScheduleContextDTO context = new ScheduleContextDTO();
+        ScheduleContextVo context = new ScheduleContextVo();
         List<CxStock> stocks = new ArrayList<>();
         
         CxStock stock = new CxStock();
@@ -227,7 +227,7 @@ class ProductionCalculatorTest {
     @Test
     @DisplayName("获取硫化需求 - 正常情况")
     void testGetVulcanizeDemand_Normal() {
-        ScheduleContextDTO context = new ScheduleContextDTO();
+        ScheduleContextVo context = new ScheduleContextVo();
         List<LhScheduleResult> results = new ArrayList<>();
         
         LhScheduleResult result1 = new LhScheduleResult();
@@ -258,7 +258,7 @@ class ProductionCalculatorTest {
     @Test
     @DisplayName("获取硫化需求 - 空数据")
     void testGetVulcanizeDemand_EmptyData() {
-        ScheduleContextDTO context = new ScheduleContextDTO();
+        ScheduleContextVo context = new ScheduleContextVo();
         context.setLhScheduleResults(new ArrayList<>());
         
         LocalDate scheduleDate = LocalDate.of(2024, 7, 7);
@@ -268,7 +268,7 @@ class ProductionCalculatorTest {
     @Test
     @DisplayName("获取硫化需求 - null数据")
     void testGetVulcanizeDemand_NullData() {
-        ScheduleContextDTO context = new ScheduleContextDTO();
+        ScheduleContextVo context = new ScheduleContextVo();
         context.setLhScheduleResults(null);
         
         LocalDate scheduleDate = LocalDate.of(2024, 7, 7);

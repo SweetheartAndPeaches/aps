@@ -1,6 +1,6 @@
 package com.zlt.aps.cx.service.engine;
 
-import com.zlt.aps.cx.dto.ScheduleContextDTO;
+import com.zlt.aps.cx.vo.ScheduleContextVo;
 import com.zlt.aps.cx.entity.CxPrecisionPlan;
 import com.zlt.aps.cx.entity.CxStock;
 import com.zlt.aps.cx.entity.schedule.CxScheduleDetail;
@@ -36,7 +36,7 @@ public interface CoreScheduleAlgorithmService {
      * @param context 排程上下文
      * @return 排程结果列表
      */
-    List<CxScheduleResult> executeSchedule(ScheduleContextDTO context);
+    List<CxScheduleResult> executeSchedule(ScheduleContextVo context);
 
     /**
      * 第一步：计算日胎胚任务
@@ -47,7 +47,7 @@ public interface CoreScheduleAlgorithmService {
      * @return 日胎胚任务列表
      */
     List<DailyEmbryoTask> calculateDailyEmbryoTasks(
-            ScheduleContextDTO context,
+            ScheduleContextVo context,
             Map<String, Set<String>> machineOnlineEmbryoMap);
 
     /**
@@ -60,7 +60,7 @@ public interface CoreScheduleAlgorithmService {
      */
     List<MachineAllocationResult> allocateTasksToMachines(
             List<DailyEmbryoTask> tasks, 
-            ScheduleContextDTO context);
+            ScheduleContextVo context);
 
     /**
      * 第三步：班次均衡分配
@@ -72,7 +72,7 @@ public interface CoreScheduleAlgorithmService {
      */
     List<ShiftAllocationResult> balanceShiftAllocation(
             List<MachineAllocationResult> allocations,
-            ScheduleContextDTO context);
+            ScheduleContextVo context);
 
     /**
      * 第四步：排生产顺位
@@ -84,7 +84,7 @@ public interface CoreScheduleAlgorithmService {
      */
     List<CxScheduleDetail> calculateSequence(
             List<ShiftAllocationResult> shiftAllocations,
-            ScheduleContextDTO context);
+            ScheduleContextVo context);
 
     // ==================== 辅助算法 ====================
 
@@ -114,7 +114,7 @@ public interface CoreScheduleAlgorithmService {
     BigDecimal calculateDailyDemand(
             MdmMaterialInfo material,
             CxStock stock,
-            ScheduleContextDTO context);
+            ScheduleContextVo context);
 
     /**
      * 检查结构约束
@@ -128,7 +128,7 @@ public interface CoreScheduleAlgorithmService {
     boolean checkStructureConstraint(
             MdmMoldingMachine machine,
             MdmMaterialInfo material,
-            ScheduleContextDTO context);
+            ScheduleContextVo context);
 
     /**
      * 检查机台种类上限
@@ -144,7 +144,7 @@ public interface CoreScheduleAlgorithmService {
             MdmMoldingMachine machine,
             int currentTypes,
             MdmMaterialInfo newMaterial,
-            ScheduleContextDTO context);
+            ScheduleContextVo context);
 
     /**
      * 计算优先级分数
@@ -158,7 +158,7 @@ public interface CoreScheduleAlgorithmService {
     int calculatePriorityScore(
             MdmMaterialInfo material,
             CxStock stock,
-            ScheduleContextDTO context);
+            ScheduleContextVo context);
 
     /**
      * 整车取整

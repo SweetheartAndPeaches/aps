@@ -1,6 +1,6 @@
 package com.zlt.aps.cx.service.engine;
 
-import com.zlt.aps.cx.dto.ScheduleContextDTO;
+import com.zlt.aps.cx.vo.ScheduleContextVo;
 import com.zlt.aps.cx.entity.CxMachineStructureCapacity;
 import com.zlt.aps.cx.entity.CxPrecisionPlan;
 import com.zlt.aps.cx.entity.MdmDevicePlanShut;
@@ -58,7 +58,7 @@ public class ShiftScheduleService {
     public List<CoreScheduleAlgorithmService.ShiftAllocationResult> balanceShiftAllocation(
             List<CoreScheduleAlgorithmService.MachineAllocationResult> allocations,
             List<CxShiftConfig> dayShifts,
-            ScheduleContextDTO context) {
+            ScheduleContextVo context) {
 
         List<CoreScheduleAlgorithmService.ShiftAllocationResult> results = new ArrayList<>();
 
@@ -139,7 +139,7 @@ public class ShiftScheduleService {
             Map<String, Map<String, CxStructureShiftCapacity>> structureCapacityMap,
             Integer maxDailyCapacity,
             String[] shiftCodes,
-            ScheduleContextDTO context) {
+            ScheduleContextVo context) {
 
         Map<String, Integer> shiftTotalQty = new LinkedHashMap<>();
         for (String shiftCode : shiftCodes) {
@@ -194,7 +194,7 @@ public class ShiftScheduleService {
             String structureCode,
             Map<String, CxStructureShiftCapacity> shiftCapacityMap,
             String[] shiftCodes,
-            ScheduleContextDTO context) {
+            ScheduleContextVo context) {
 
         int[] result = new int[shiftCodes.length];
 
@@ -241,7 +241,7 @@ public class ShiftScheduleService {
     /**
      * 按波浪比例分配
      */
-    private int[] calculateWaveAllocation(int taskQty, String[] shiftCodes, ScheduleContextDTO context) {
+    private int[] calculateWaveAllocation(int taskQty, String[] shiftCodes, ScheduleContextVo context) {
         int[] result = new int[shiftCodes.length];
 
         int[] waveRatio = context.getWaveRatio();
@@ -302,7 +302,7 @@ public class ShiftScheduleService {
     /**
      * 从上下文构建结构班产配置映射
      */
-    private Map<String, Map<String, CxStructureShiftCapacity>> buildStructureShiftCapacityMap(ScheduleContextDTO context) {
+    private Map<String, Map<String, CxStructureShiftCapacity>> buildStructureShiftCapacityMap(ScheduleContextVo context) {
         Map<String, Map<String, CxStructureShiftCapacity>> result = new HashMap<>();
 
         List<CxStructureShiftCapacity> capacities = context.getStructureShiftCapacities();
@@ -392,7 +392,7 @@ public class ShiftScheduleService {
     public List<ShiftProductionResult> scheduleTaskToShifts(
             CoreScheduleAlgorithmService.DailyEmbryoTask task,
             String machineCode,
-            ScheduleContextDTO context,
+            ScheduleContextVo context,
             List<CxShiftConfig> dayShifts,
             LocalDate scheduleDate) {
 
@@ -482,7 +482,7 @@ public class ShiftScheduleService {
             String machineCode,
             CxShiftConfig shiftConfig,
             int hourlyCapacity,
-            ScheduleContextDTO context) {
+            ScheduleContextVo context) {
 
         int shiftHours = calculateShiftHours(shiftConfig);
         int baseCapacity = hourlyCapacity * shiftHours;
@@ -519,7 +519,7 @@ public class ShiftScheduleService {
             String machineCode,
             CxShiftConfig shiftConfig,
             int hourlyCapacity,
-            ScheduleContextDTO context) {
+            ScheduleContextVo context) {
 
         if (context.getDevicePlanShuts() == null || context.getDevicePlanShuts().isEmpty()) {
             return 0;
@@ -544,7 +544,7 @@ public class ShiftScheduleService {
             String machineCode,
             CxShiftConfig shiftConfig,
             int hourlyCapacity,
-            ScheduleContextDTO context) {
+            ScheduleContextVo context) {
 
         if (context.getPrecisionPlans() == null || context.getPrecisionPlans().isEmpty()) {
             return 0;
@@ -569,7 +569,7 @@ public class ShiftScheduleService {
             String machineCode,
             CxShiftConfig shiftConfig,
             LocalDate scheduleDate,
-            ScheduleContextDTO context) {
+            ScheduleContextVo context) {
 
         int startHour = shiftConfig.getStartHour() != null ? shiftConfig.getStartHour() : 0;
         int startMinute = shiftConfig.getStartMinute() != null ? shiftConfig.getStartMinute() : 0;
@@ -601,7 +601,7 @@ public class ShiftScheduleService {
     /**
      * 获取机台小时产能
      */
-    private int getMachineHourlyCapacity(String machineCode, String structureName, ScheduleContextDTO context) {
+    private int getMachineHourlyCapacity(String machineCode, String structureName, ScheduleContextVo context) {
         if (context.getMachineStructureCapacities() != null && machineCode != null && structureName != null) {
             for (CxMachineStructureCapacity capacity : context.getMachineStructureCapacities()) {
                 if (machineCode.equals(capacity.getCxMachineCode()) 
@@ -616,7 +616,7 @@ public class ShiftScheduleService {
     /**
      * 获取结构的整车容量
      */
-    private int getTripCapacity(String structureCode, ScheduleContextDTO context) {
+    private int getTripCapacity(String structureCode, ScheduleContextVo context) {
         if (context.getStructureShiftCapacities() != null) {
             for (CxStructureShiftCapacity capacity : context.getStructureShiftCapacities()) {
                 if (capacity.getStructureCode() != null &&
@@ -633,7 +633,7 @@ public class ShiftScheduleService {
     /**
      * 获取机台准备时间（分钟）
      */
-    private int getMachinePrepareMinutes(String machineCode, ScheduleContextDTO context) {
+    private int getMachinePrepareMinutes(String machineCode, ScheduleContextVo context) {
         return 30;
     }
 

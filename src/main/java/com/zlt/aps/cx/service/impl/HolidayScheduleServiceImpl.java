@@ -1,7 +1,7 @@
 package com.zlt.aps.cx.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.zlt.aps.cx.dto.ScheduleContextDTO;
+import com.zlt.aps.cx.vo.ScheduleContextVo;
 import com.zlt.aps.cx.entity.CxStock;
 import com.zlt.aps.mp.api.domain.entity.MdmWorkCalendar;
 import com.zlt.aps.cx.entity.config.CxKeyProduct;
@@ -151,7 +151,7 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
     }
 
     @Override
-    public HolidayScheduleResult handleBeforeHoliday(ScheduleContextDTO context) {
+    public HolidayScheduleResult handleBeforeHoliday(ScheduleContextVo context) {
         HolidayScheduleResult result = new HolidayScheduleResult();
         result.setAdjusted(false);
         result.setAdjustments(new ArrayList<>());
@@ -231,7 +231,7 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
     }
 
     @Override
-    public HolidayScheduleResult handleOpeningDay(ScheduleContextDTO context) {
+    public HolidayScheduleResult handleOpeningDay(ScheduleContextVo context) {
         HolidayScheduleResult result = new HolidayScheduleResult();
         result.setAdjusted(false);
         result.setAdjustments(new ArrayList<>());
@@ -488,7 +488,7 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
     }
 
     @Override
-    public List<CxScheduleResult> adjustHolidaySchedule(LocalDate scheduleDate, List<CxScheduleResult> originalResult, ScheduleContextDTO context) {
+    public List<CxScheduleResult> adjustHolidaySchedule(LocalDate scheduleDate, List<CxScheduleResult> originalResult, ScheduleContextVo context) {
         if (CollectionUtils.isEmpty(originalResult)) {
             return originalResult;
         }

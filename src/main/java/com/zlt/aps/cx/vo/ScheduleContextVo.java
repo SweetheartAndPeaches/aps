@@ -1,4 +1,4 @@
-package com.zlt.aps.cx.dto;
+package com.zlt.aps.cx.vo;
 
 import com.zlt.aps.cx.entity.*;
 import com.zlt.aps.cx.entity.config.CxKeyProduct;
@@ -9,7 +9,6 @@ import com.zlt.aps.cx.entity.config.CxStructureShiftCapacity;
 import com.zlt.aps.mp.api.domain.entity.*;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
-import com.zlt.aps.cx.vo.MonthPlanProductLhCapacityVo;
 import lombok.Data;
 
 import java.time.LocalDate;
@@ -19,13 +18,13 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * 排程上下文DTO
+ * 排程上下文VO
  * 用于承载排程过程中需要的所有数据
  *
  * @author APS Team
  */
 @Data
-public class ScheduleContextDTO {
+public class ScheduleContextVo {
 
     /**
      * 排程日期

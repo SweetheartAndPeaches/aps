@@ -1,4 +1,4 @@
-package com.zlt.aps.cx.dto;
+package com.zlt.aps.cx.vo;
 
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
@@ -11,13 +11,13 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * 排程结果DTO
+ * 排程结果VO
  *
  * @author APS Team
  */
 @Data
 @ApiModel(description = "排程结果响应")
-public class ScheduleResultDTO implements Serializable {
+public class ScheduleResultVo implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
@@ -111,14 +111,14 @@ public class ScheduleResultDTO implements Serializable {
     private BigDecimal class8FinishQty;
 
     @ApiModelProperty(value = "排程明细列表")
-    private List<ScheduleDetailDTO> details;
+    private List<ScheduleDetailVo> details;
 
     /**
-     * 排程明细DTO
+     * 排程明细VO
      */
     @Data
     @ApiModel(value = "排程明细")
-    public static class ScheduleDetailDTO implements Serializable {
+    public static class ScheduleDetailVo implements Serializable {
 
         private static final long serialVersionUID = 1L;
 

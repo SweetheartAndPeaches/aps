@@ -2,8 +2,8 @@ package com.zlt.aps.cx.service;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
-import com.zlt.aps.cx.dto.ScheduleQueryDTO;
-import com.zlt.aps.cx.dto.ScheduleResultDTO;
+import com.zlt.aps.cx.vo.ScheduleQueryVo;
+import com.zlt.aps.cx.vo.ScheduleResultVo;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
 
 import java.time.LocalDate;
@@ -47,7 +47,7 @@ public interface CxScheduleResultService extends IService<CxScheduleResult> {
      * @param queryDTO 查询条件
      * @return 分页结果
      */
-    Page<ScheduleResultDTO> pageList(ScheduleQueryDTO queryDTO);
+    Page<ScheduleResultVo> pageList(ScheduleQueryVo queryDTO);
 
     /**
      * 获取排程详情（含明细）
@@ -55,7 +55,7 @@ public interface CxScheduleResultService extends IService<CxScheduleResult> {
      * @param id 排程ID
      * @return 排程详情
      */
-    ScheduleResultDTO getDetailById(Long id);
+    ScheduleResultVo getDetailById(Long id);
 
     /**
      * 更新生产状态

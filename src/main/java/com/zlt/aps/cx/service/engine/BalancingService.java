@@ -1,6 +1,6 @@
 package com.zlt.aps.cx.service.engine;
 
-import com.zlt.aps.cx.dto.ScheduleContextDTO;
+import com.zlt.aps.cx.vo.ScheduleContextVo;
 import com.zlt.aps.cx.entity.MpCxCapacityConfiguration;
 import com.zlt.aps.cx.entity.config.CxParamConfig;
 import com.zlt.aps.mp.api.domain.entity.MdmMoldingMachine;
@@ -89,7 +89,7 @@ public class BalancingService {
             int maxLhMachines,
             int maxEmbryoTypes,
             boolean forceKeepHistory,
-            ScheduleContextDTO context) {
+            ScheduleContextVo context) {
 
         // 构建统一的机台最大硫化机数映射（向后兼容）
         Map<String, Integer> machineMaxLhMap = new HashMap<>();
@@ -117,7 +117,7 @@ public class BalancingService {
             List<CoreScheduleAlgorithmService.DailyEmbryoTask> tasks,
             List<MdmMoldingMachine> availableMachines,
             String structureName,
-            ScheduleContextDTO context) {
+            ScheduleContextVo context) {
 
         // 转换为配置格式
         List<MpCxCapacityConfiguration> configs = availableMachines.stream()
@@ -159,7 +159,7 @@ public class BalancingService {
     private Map<String, Integer> buildMachineMaxLhMap(
             List<MdmMoldingMachine> machines,
             String structureName,
-            ScheduleContextDTO context) {
+            ScheduleContextVo context) {
 
         Map<String, Integer> result = new HashMap<>();
         List<MdmStructureLhRatio> ratios = context.getStructureLhRatios();
@@ -211,7 +211,7 @@ public class BalancingService {
     private Map<String, Integer> buildMachineMaxEmbryoTypesMap(
             List<MdmMoldingMachine> machines,
             String structureName,
-            ScheduleContextDTO context) {
+            ScheduleContextVo context) {
 
         Map<String, Integer> result = new HashMap<>();
 
@@ -270,7 +270,7 @@ public class BalancingService {
             Map<String, Integer> machineMaxLhMap,
             Map<String, Integer> machineMaxEmbryoTypesMap,
             boolean forceKeepHistory,
-            ScheduleContextDTO context) {
+            ScheduleContextVo context) {
 
         // Step 1: 获取均衡阈值配置
         int typeDiffThreshold = getTypeDiffThreshold(context);
@@ -376,7 +376,7 @@ public class BalancingService {
             Map<String, Integer> machineMaxLhMap,
             int maxEmbryoTypes,
             boolean forceKeepHistory,
-            ScheduleContextDTO context) {
+            ScheduleContextVo context) {
 
         // 构建统一的机台最大胎胚种类数映射（向后兼容）
         Map<String, Integer> machineMaxEmbryoTypesMap = new HashMap<>();
@@ -397,7 +397,7 @@ public class BalancingService {
     private void reservedHistoryTasks(
             List<CoreScheduleAlgorithmService.DailyEmbryoTask> tasks,
             List<MachineState> machineStates,
-            ScheduleContextDTO context) {
+            ScheduleContextVo context) {
         
         log.info("开始保底预留历史任务...");
         
@@ -798,7 +798,7 @@ public class BalancingService {
     /**
      * 获取种类数允许差额配置
      */
-    public int getTypeDiffThreshold(ScheduleContextDTO context) {
+    public int getTypeDiffThreshold(ScheduleContextVo context) {
         if (context.getParamConfigMap() != null) {
             CxParamConfig config = context.getParamConfigMap().get(PARAM_TYPE_DIFF_THRESHOLD);
             if (config != null && config.getParamValue() != null) {
@@ -815,7 +815,7 @@ public class BalancingService {
     /**
      * 获取负荷允许差额配置
      */
-    public int getLoadDiffThreshold(ScheduleContextDTO context) {
+    public int getLoadDiffThreshold(ScheduleContextVo context) {
         if (context.getParamConfigMap() != null) {
             CxParamConfig config = context.getParamConfigMap().get(PARAM_LOAD_DIFF_THRESHOLD);
             if (config != null && config.getParamValue() != null) {
@@ -832,7 +832,7 @@ public class BalancingService {
     /**
      * 获取是否强制保留历史任务配置
      */
-    public boolean getForceKeepHistoryConfig(ScheduleContextDTO context) {
+    public boolean getForceKeepHistoryConfig(ScheduleContextVo context) {
         if (context.getParamConfigMap() != null) {
             CxParamConfig config = context.getParamConfigMap().get(PARAM_FORCE_KEEP_HISTORY);
             if (config != null && config.getParamValue() != null) {

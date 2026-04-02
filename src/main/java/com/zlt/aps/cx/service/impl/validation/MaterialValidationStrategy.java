@@ -1,6 +1,6 @@
 package com.zlt.aps.cx.service.impl.validation;
 
-import com.zlt.aps.cx.dto.ScheduleContextDTO;
+import com.zlt.aps.cx.vo.ScheduleContextVo;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
 import com.zlt.aps.mp.api.domain.entity.MdmMaterialInfo;
 import lombok.extern.slf4j.Slf4j;
@@ -25,7 +25,7 @@ public class MaterialValidationStrategy extends BaseValidationStrategy {
     }
 
     @Override
-    public void validate(ScheduleContextDTO context, LocalDate scheduleDate, String factoryCode,
+    public void validate(ScheduleContextVo context, LocalDate scheduleDate, String factoryCode,
                         ScheduleDataValidationResult result) {
         
         List<LhScheduleResult> lhResults = context.getLhScheduleResults();
