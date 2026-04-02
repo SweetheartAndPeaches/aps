@@ -1,4 +1,4 @@
-package com.zlt.aps.mp.api.domain.entity;
+package com.zlt.aps.cx.entity;
 
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;

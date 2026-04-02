@@ -1,12 +1,12 @@
-package com.zlt.aps.mp.api.mapper;
+package com.zlt.aps.cx.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import com.baomidou.mybatisplus.core.metadata.IPage;
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.zlt.aps.mp.engine.domain.vo.MonthPlanProductLhCapacityVo;
+import com.zlt.aps.cx.vo.MonthPlanProductLhCapacityVo;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
+
+import java.util.List;
 
 /**
  * 工厂月度排产-SKU日硫化产能Mapper接口
@@ -26,6 +26,6 @@ public interface MdmMonthPlanProductLhCapacityMapper extends BaseMapper<Object> 
             "MES_CAPACITY AS mesCapacity, STANDARD_CAPACITY AS standardCapacity, APS_CAPACITY AS apsCapacity, " +
             "VULCANIZATION_TIME AS vulcanizationTime, TYPE AS type " +
             "FROM T_MDM_MONTH_PLAN_PRODUCT_LH WHERE FACTORY_CODE = #{factoryCode}")
-    java.util.List<MonthPlanProductLhCapacityVo> selectByFactoryCode(
+    List<MonthPlanProductLhCapacityVo> selectByFactoryCode(
             @Param("factoryCode") String factoryCode);
 }
