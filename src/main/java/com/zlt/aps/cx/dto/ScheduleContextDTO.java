@@ -7,10 +7,9 @@ import com.zlt.aps.cx.entity.config.CxShiftConfig;
 import com.zlt.aps.cx.entity.config.CxStructurePriority;
 import com.zlt.aps.cx.entity.config.CxStructureShiftCapacity;
 import com.zlt.aps.mp.api.domain.entity.*;
-import com.zlt.aps.mp.api.domain.entity.MpCxCapacityConfiguration;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
-import com.zlt.aps.mp.engine.domain.vo.MonthPlanProductLhCapacityVo;
+import com.zlt.aps.cx.vo.MonthPlanProductLhCapacityVo;
 import lombok.Data;
 
 import java.time.LocalDate;

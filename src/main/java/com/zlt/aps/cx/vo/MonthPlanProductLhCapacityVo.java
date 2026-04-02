@@ -1,4 +1,4 @@
-package com.zlt.aps.mp.engine.domain.vo;
+package com.zlt.aps.cx.vo;
 
 import com.zlt.aps.cx.enums.DayVulcanizationModeEnum;
 import io.swagger.annotations.ApiModel;
