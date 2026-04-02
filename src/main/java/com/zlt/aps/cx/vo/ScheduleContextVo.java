@@ -157,11 +157,6 @@ public class ScheduleContextVo {
     private Map<String, CxAlertConfig> alertConfigMap;
 
     /**
-     * 试制任务列表
-     */
-    private List<CxTrialTask> trialTasks;
-
-    /**
      * 精度计划列表
      */
     private List<CxPrecisionPlan> precisionPlans;
@@ -180,11 +175,6 @@ public class ScheduleContextVo {
      * 胎面停放配置列表
      */
     private List<CxTreadParkingConfig> treadParkingConfigs;
-
-    /**
-     * 结构收尾管理列表（已废弃，请使用 materialEndings）
-     */
-    private List<CxStructureEnding> structureEndings;
 
     /**
      * 物料收尾管理列表（物料维度）
