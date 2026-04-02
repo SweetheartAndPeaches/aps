@@ -1,4 +1,4 @@
-package com.zlt.aps.cx.dto;
+package com.zlt.aps.cx.vo;
 
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
@@ -8,13 +8,13 @@ import java.io.Serializable;
 import java.time.LocalDate;
 
 /**
- * 排程请求DTO
+ * 排程请求VO
  *
  * @author APS Team
  */
 @Data
 @ApiModel(description = "排程请求参数")
-public class ScheduleRequest implements Serializable {
+public class ScheduleRequestVo implements Serializable {
 
     private static final long serialVersionUID = 1L;
 

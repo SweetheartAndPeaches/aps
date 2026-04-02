@@ -1,6 +1,6 @@
 package com.zlt.aps.cx.service.engine;
 
-import com.zlt.aps.cx.dto.ScheduleContextDTO;
+import com.zlt.aps.cx.vo.ScheduleContextVo;
 import com.zlt.aps.cx.entity.CxMachineStructureCapacity;
 import com.zlt.aps.cx.entity.MpCxCapacityConfiguration;
 import com.zlt.aps.cx.entity.config.CxParamConfig;
@@ -60,7 +60,7 @@ public class ContinueTaskProcessor {
      */
     public List<CoreScheduleAlgorithmService.MachineAllocationResult> processContinueTasks(
             List<CoreScheduleAlgorithmService.DailyEmbryoTask> continueTasks,
-            ScheduleContextDTO context,
+            ScheduleContextVo context,
             LocalDate scheduleDate,
             List<CxShiftConfig> dayShifts,
             int day) {
@@ -174,7 +174,7 @@ public class ContinueTaskProcessor {
                         Collectors.toList()));
     }
 
-    private boolean getForceKeepHistoryConfig(ScheduleContextDTO context) {
+    private boolean getForceKeepHistoryConfig(ScheduleContextVo context) {
         if (context.getParamConfigMap() != null) {
             CxParamConfig config = context.getParamConfigMap().get(PARAM_FORCE_KEEP_HISTORY);
             if (config != null && config.getParamValue() != null) {
@@ -184,7 +184,7 @@ public class ContinueTaskProcessor {
         return false;
     }
 
-    private Map<String, Set<String>> buildMachineHistoryMap(ScheduleContextDTO context) {
+    private Map<String, Set<String>> buildMachineHistoryMap(ScheduleContextVo context) {
         Map<String, Set<String>> historyMap = new HashMap<>();
         if (context.getMachineOnlineEmbryoMap() != null) {
             historyMap.putAll(context.getMachineOnlineEmbryoMap());
@@ -193,7 +193,7 @@ public class ContinueTaskProcessor {
     }
 
     private List<MpCxCapacityConfiguration> getAvailableMachinesForStructure(
-            String structureName, LocalDate scheduleDate, ScheduleContextDTO context) {
+            String structureName, LocalDate scheduleDate, ScheduleContextVo context) {
         if (context.getStructureAllocationMap() != null) {
             List<MpCxCapacityConfiguration> configs = context.getStructureAllocationMap().get(structureName);
             if (configs != null && !configs.isEmpty()) {
@@ -220,7 +220,7 @@ public class ContinueTaskProcessor {
     private Map<String, Integer> buildMachineMaxLhMap(
             List<MpCxCapacityConfiguration> machineConfigs,
             String structureName,
-            ScheduleContextDTO context) {
+            ScheduleContextVo context) {
 
         Map<String, Integer> result = new HashMap<>();
 
@@ -288,7 +288,7 @@ public class ContinueTaskProcessor {
     private Map<String, Integer> buildMachineMaxEmbryoTypesMap(
             List<MpCxCapacityConfiguration> machineConfigs,
             String structureName,
-            ScheduleContextDTO context) {
+            ScheduleContextVo context) {
 
         Map<String, Integer> result = new HashMap<>();
 
@@ -346,7 +346,7 @@ public class ContinueTaskProcessor {
     // ==================== 原有方法 ====================
 
     private CoreScheduleAlgorithmService.MachineAllocationResult createMachineAllocation(
-            String machineCode, ScheduleContextDTO context) {
+            String machineCode, ScheduleContextVo context) {
         CoreScheduleAlgorithmService.MachineAllocationResult allocation = new CoreScheduleAlgorithmService.MachineAllocationResult();
         allocation.setMachineCode(machineCode);
         allocation.setTaskAllocations(new ArrayList<>());
@@ -355,7 +355,7 @@ public class ContinueTaskProcessor {
         return allocation;
     }
 
-    private int getMachineDailyCapacity(String machineCode, ScheduleContextDTO context) {
+    private int getMachineDailyCapacity(String machineCode, ScheduleContextVo context) {
         if (context.getAvailableMachines() != null) {
             for (MdmMoldingMachine machine : context.getAvailableMachines()) {
                 if (machine.getCxMachineCode().equals(machineCode)) {
@@ -368,7 +368,7 @@ public class ContinueTaskProcessor {
 
     public void allocateEmbryoStock(
             CoreScheduleAlgorithmService.DailyEmbryoTask task,
-            ScheduleContextDTO context,
+            ScheduleContextVo context,
             LocalDate scheduleDate) {
         
         String embryoCode = task.getMaterialCode();
@@ -417,7 +417,7 @@ public class ContinueTaskProcessor {
     
     public void calculatePlannedProduction(
             CoreScheduleAlgorithmService.DailyEmbryoTask task,
-            ScheduleContextDTO context,
+            ScheduleContextVo context,
             LocalDate scheduleDate,
             boolean isOpeningDay) {
         
@@ -460,7 +460,7 @@ public class ContinueTaskProcessor {
     
     public void handleOpeningClosingDay(
             CoreScheduleAlgorithmService.DailyEmbryoTask task,
-            ScheduleContextDTO context,
+            ScheduleContextVo context,
             List<CxShiftConfig> dayShifts,
             boolean isOpeningDay,
             boolean isClosingDay) {
@@ -498,7 +498,7 @@ public class ContinueTaskProcessor {
     
     public void handleEndingRemainder(
             CoreScheduleAlgorithmService.DailyEmbryoTask task,
-            ScheduleContextDTO context,
+            ScheduleContextVo context,
             boolean isOpeningDay) {
         
         if (isOpeningDay) return;
@@ -555,7 +555,7 @@ public class ContinueTaskProcessor {
     
     public int calculateCatchUpQuantity(
             CoreScheduleAlgorithmService.DailyEmbryoTask task,
-            ScheduleContextDTO context,
+            ScheduleContextVo context,
             LocalDate scheduleDate) {
 
         Integer formingRemainder = task.getEndingSurplusQty();
@@ -570,7 +570,7 @@ public class ContinueTaskProcessor {
         return gap > 0 ? gap : 0;
     }
 
-    private int calculatePlannedQuantityToDate(String materialCode, LocalDate startDate, LocalDate endDate, ScheduleContextDTO context) {
+    private int calculatePlannedQuantityToDate(String materialCode, LocalDate startDate, LocalDate endDate, ScheduleContextVo context) {
         return 0; // TODO
     }
 
@@ -581,11 +581,11 @@ public class ContinueTaskProcessor {
                 : quantity / tripCapacity;
     }
 
-    private int getTripCapacity(String structureCode, ScheduleContextDTO context) {
+    private int getTripCapacity(String structureCode, ScheduleContextVo context) {
         return productionCalculator.getTripCapacity(structureCode, context);
     }
 
-    private int getMachineHourlyCapacity(String machineCode, String structureName, ScheduleContextDTO context) {
+    private int getMachineHourlyCapacity(String machineCode, String structureName, ScheduleContextVo context) {
         if (context.getMachineStructureCapacities() != null && machineCode != null && structureName != null) {
             for (CxMachineStructureCapacity capacity : context.getMachineStructureCapacities()) {
                 if (machineCode.equals(capacity.getCxMachineCode()) && structureName.equals(capacity.getStructureCode())) {
@@ -596,14 +596,14 @@ public class ContinueTaskProcessor {
         return context.getMachineHourlyCapacity() != null ? context.getMachineHourlyCapacity() : 50;
     }
 
-    private int getEmbryoStorageLimit(String materialCode, ScheduleContextDTO context) {
+    private int getEmbryoStorageLimit(String materialCode, ScheduleContextVo context) {
         return Integer.MAX_VALUE;
     }
 
     private void allocateTaskToMachine(
             CoreScheduleAlgorithmService.MachineAllocationResult allocation,
             CoreScheduleAlgorithmService.DailyEmbryoTask task,
-            ScheduleContextDTO context) {
+            ScheduleContextVo context) {
 
         int quantity = task.getPlannedProduction() != null && task.getPlannedProduction() > 0 
                 ? task.getPlannedProduction() : task.getDemandQuantity();

@@ -1,6 +1,6 @@
 package com.zlt.aps.cx.service;
 
-import com.zlt.aps.cx.dto.ScheduleContextDTO;
+import com.zlt.aps.cx.vo.ScheduleContextVo;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
 
 import java.math.BigDecimal;
@@ -76,7 +76,7 @@ public interface HolidayScheduleService {
      * @param context 排程上下文
      * @return 处理结果
      */
-    HolidayScheduleResult handleBeforeHoliday(ScheduleContextDTO context);
+    HolidayScheduleResult handleBeforeHoliday(ScheduleContextVo context);
 
     /**
      * 处理开产日排程
@@ -89,7 +89,7 @@ public interface HolidayScheduleService {
      * @param context 排程上下文
      * @return 处理结果
      */
-    HolidayScheduleResult handleOpeningDay(ScheduleContextDTO context);
+    HolidayScheduleResult handleOpeningDay(ScheduleContextVo context);
 
     /**
      * 计算硫化最低需求
@@ -149,7 +149,7 @@ public interface HolidayScheduleService {
      * @param context 排程上下文
      * @return 调整后的排程结果
      */
-    List<CxScheduleResult> adjustHolidaySchedule(LocalDate scheduleDate, List<CxScheduleResult> originalResult, ScheduleContextDTO context);
+    List<CxScheduleResult> adjustHolidaySchedule(LocalDate scheduleDate, List<CxScheduleResult> originalResult, ScheduleContextVo context);
 
     /**
      * 节假日信息

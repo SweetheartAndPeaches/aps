@@ -1,6 +1,6 @@
 package com.zlt.aps.cx.service.engine;
 
-import com.zlt.aps.cx.dto.ScheduleContextDTO;
+import com.zlt.aps.cx.vo.ScheduleContextVo;
 import com.zlt.aps.cx.entity.MpCxCapacityConfiguration;
 import com.zlt.aps.cx.entity.config.CxShiftConfig;
 import com.zlt.aps.cx.entity.config.CxStructurePriority;
@@ -50,7 +50,7 @@ public class NewTaskProcessor {
      */
     public List<CoreScheduleAlgorithmService.MachineAllocationResult> processNewTasks(
             List<CoreScheduleAlgorithmService.DailyEmbryoTask> newTasks,
-            ScheduleContextDTO context,
+            ScheduleContextVo context,
             LocalDate scheduleDate,
             List<CxShiftConfig> dayShifts,
             int day,
@@ -198,7 +198,7 @@ public class NewTaskProcessor {
             String structureName,
             List<MdmMoldingMachine> allMachines,
             LocalDate scheduleDate,
-            ScheduleContextDTO context) {
+            ScheduleContextVo context) {
 
         // 从结构分配配置中获取该结构的机台编码
         Set<String> structureMachineCodes = new HashSet<>();
@@ -232,7 +232,7 @@ public class NewTaskProcessor {
     private Map<String, Integer> buildMachineMaxLhMap(
             List<MdmMoldingMachine> machines,
             String structureName,
-            ScheduleContextDTO context) {
+            ScheduleContextVo context) {
 
         Map<String, Integer> result = new HashMap<>();
 
@@ -274,7 +274,7 @@ public class NewTaskProcessor {
     private Map<String, Integer> buildMachineMaxEmbryoTypesMap(
             List<MdmMoldingMachine> machines,
             String structureName,
-            ScheduleContextDTO context) {
+            ScheduleContextVo context) {
 
         Map<String, Integer> result = new HashMap<>();
 
@@ -327,7 +327,7 @@ public class NewTaskProcessor {
     private List<CoreScheduleAlgorithmService.MachineAllocationResult> buildResultsFromBalancingResult(
             BalancingService.BalancingResult balancingResult,
             List<CoreScheduleAlgorithmService.DailyEmbryoTask> tasks,
-            ScheduleContextDTO context) {
+            ScheduleContextVo context) {
 
         List<CoreScheduleAlgorithmService.MachineAllocationResult> results = new ArrayList<>();
 
@@ -361,7 +361,7 @@ public class NewTaskProcessor {
      */
     public void sortNewTasks(
             List<CoreScheduleAlgorithmService.DailyEmbryoTask> tasks, 
-            ScheduleContextDTO context) {
+            ScheduleContextVo context) {
         tasks.sort((a, b) -> {
             // 1. 按月计划优先级排序
             int priorityA = getMonthPlanPriority(a.getMaterialCode(), context);
@@ -409,7 +409,7 @@ public class NewTaskProcessor {
         });
     }
 
-    private int getMonthPlanPriority(String materialCode, ScheduleContextDTO context) {
+    private int getMonthPlanPriority(String materialCode, ScheduleContextVo context) {
         List<CxStructurePriority> priorities = context.getStructurePriorities();
         if (priorities != null) {
             for (CxStructurePriority priority : priorities) {
@@ -420,7 +420,7 @@ public class NewTaskProcessor {
     }
 
     private CoreScheduleAlgorithmService.MachineAllocationResult createMachineAllocation(
-            String machineCode, ScheduleContextDTO context) {
+            String machineCode, ScheduleContextVo context) {
         CoreScheduleAlgorithmService.MachineAllocationResult allocation = new CoreScheduleAlgorithmService.MachineAllocationResult();
         allocation.setMachineCode(machineCode);
         allocation.setTaskAllocations(new ArrayList<>());
@@ -429,7 +429,7 @@ public class NewTaskProcessor {
         return allocation;
     }
 
-    private int getMachineDailyCapacity(String machineCode, ScheduleContextDTO context) {
+    private int getMachineDailyCapacity(String machineCode, ScheduleContextVo context) {
         if (context.getAvailableMachines() != null) {
             for (MdmMoldingMachine machine : context.getAvailableMachines()) {
                 if (machine.getCxMachineCode().equals(machineCode)) {
@@ -443,7 +443,7 @@ public class NewTaskProcessor {
     private void allocateTaskToMachine(
             CoreScheduleAlgorithmService.MachineAllocationResult allocation,
             CoreScheduleAlgorithmService.DailyEmbryoTask task,
-            ScheduleContextDTO context) {
+            ScheduleContextVo context) {
 
         int quantity = task.getPlannedProduction() != null && task.getPlannedProduction() > 0 
                 ? task.getPlannedProduction() 

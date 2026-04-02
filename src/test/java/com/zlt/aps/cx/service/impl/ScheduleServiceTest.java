@@ -1,7 +1,7 @@
 package com.zlt.aps.cx.service.impl;
 
-import com.zlt.aps.cx.dto.ScheduleContextDTO;
-import com.zlt.aps.cx.dto.ScheduleRequest;
+import com.zlt.aps.cx.vo.ScheduleContextVo;
+import com.zlt.aps.cx.vo.ScheduleRequestVo;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
 import com.zlt.aps.cx.service.ScheduleService;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,8 +25,8 @@ class ScheduleServiceTest {
 
     @Test
     @DisplayName("排程请求 - 参数构建")
-    void testScheduleRequest_Builder() {
-        ScheduleRequest request = new ScheduleRequest();
+    void testScheduleRequestVo_Builder() {
+        ScheduleRequestVo request = new ScheduleRequestVo();
         request.setScheduleDate(LocalDate.of(2024, 7, 7));
         request.setFactoryCode("DEFAULT");
         request.setScheduleMode("NORMAL");
@@ -42,8 +42,8 @@ class ScheduleServiceTest {
 
     @Test
     @DisplayName("排程请求 - 默认值")
-    void testScheduleRequest_DefaultValues() {
-        ScheduleRequest request = new ScheduleRequest();
+    void testScheduleRequestVo_DefaultValues() {
+        ScheduleRequestVo request = new ScheduleRequestVo();
         
         // 验证默认值为null
         assertNull(request.getScheduleDate());

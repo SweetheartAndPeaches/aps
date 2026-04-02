@@ -1,6 +1,6 @@
 package com.zlt.aps.cx.service.engine;
 
-import com.zlt.aps.cx.dto.ScheduleContextDTO;
+import com.zlt.aps.cx.vo.ScheduleContextVo;
 import com.zlt.aps.cx.entity.CxStock;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
 import org.junit.jupiter.api.BeforeEach;
@@ -55,7 +55,7 @@ class CoreCalculationTest {
             // SKU分配库存 = 100/100 * 20 = 20条
             // 日计划量 = (100 - 20) * 1.01 = 80.8 ≈ 81条
             
-            ScheduleContextDTO context = new ScheduleContextDTO();
+            ScheduleContextVo context = new ScheduleContextVo();
             List<LhScheduleResult> results = new ArrayList<>();
             
             LhScheduleResult result = new LhScheduleResult();
@@ -92,7 +92,7 @@ class CoreCalculationTest {
             // SKU1分配库存 = 60/100 * 20 = 12条
             // SKU2分配库存 = 40/100 * 20 = 8条
             
-            ScheduleContextDTO context = new ScheduleContextDTO();
+            ScheduleContextVo context = new ScheduleContextVo();
             List<LhScheduleResult> results = new ArrayList<>();
             
             LhScheduleResult result1 = new LhScheduleResult();
@@ -141,7 +141,7 @@ class CoreCalculationTest {
             // 场景：硫化需求50条，库存60条
             // 日计划量 = max(0, 50 - 60) * 1.01 = 0条
             
-            ScheduleContextDTO context = new ScheduleContextDTO();
+            ScheduleContextVo context = new ScheduleContextVo();
             
             List<LhScheduleResult> results = new ArrayList<>();
             LhScheduleResult result = new LhScheduleResult();
@@ -303,7 +303,7 @@ class CoreCalculationTest {
         @Test
         @DisplayName("成型余量 - 正常计算")
         void testFormingRemainder_Calculation() {
-            ScheduleContextDTO context = new ScheduleContextDTO();
+            ScheduleContextVo context = new ScheduleContextVo();
             
             List<CxStock> stocks = new ArrayList<>();
             CxStock stock = new CxStock();
@@ -318,7 +318,7 @@ class CoreCalculationTest {
         @Test
         @DisplayName("成型余量 - 多胎胚场景")
         void testFormingRemainder_MultipleEmbryos() {
-            ScheduleContextDTO context = new ScheduleContextDTO();
+            ScheduleContextVo context = new ScheduleContextVo();
             
             List<CxStock> stocks = new ArrayList<>();
             
@@ -342,11 +342,11 @@ class CoreCalculationTest {
         @Test
         @DisplayName("成型余量 - 空库存和null处理")
         void testFormingRemainder_EmptyAndNull() {
-            ScheduleContextDTO context1 = new ScheduleContextDTO();
+            ScheduleContextVo context1 = new ScheduleContextVo();
             context1.setStocks(new ArrayList<>());
             assertEquals(0, calculator.getFormingRemainder("EMB001", context1));
             
-            ScheduleContextDTO context2 = new ScheduleContextDTO();
+            ScheduleContextVo context2 = new ScheduleContextVo();
             context2.setStocks(null);
             assertEquals(0, calculator.getFormingRemainder("EMB001", context2));
         }
@@ -361,7 +361,7 @@ class CoreCalculationTest {
         @Test
         @DisplayName("硫化需求 - 单条记录")
         void testVulcanizeDemand_SingleRecord() {
-            ScheduleContextDTO context = new ScheduleContextDTO();
+            ScheduleContextVo context = new ScheduleContextVo();
             
             List<LhScheduleResult> results = new ArrayList<>();
             LhScheduleResult result = new LhScheduleResult();
@@ -376,7 +376,7 @@ class CoreCalculationTest {
         @Test
         @DisplayName("硫化需求 - 多条记录汇总")
         void testVulcanizeDemand_MultipleRecords() {
-            ScheduleContextDTO context = new ScheduleContextDTO();
+            ScheduleContextVo context = new ScheduleContextVo();
             
             List<LhScheduleResult> results = new ArrayList<>();
             
@@ -399,11 +399,11 @@ class CoreCalculationTest {
         @Test
         @DisplayName("硫化需求 - 空数据处理")
         void testVulcanizeDemand_EmptyData() {
-            ScheduleContextDTO context1 = new ScheduleContextDTO();
+            ScheduleContextVo context1 = new ScheduleContextVo();
             context1.setLhScheduleResults(new ArrayList<>());
             assertEquals(0, calculator.getVulcanizeDemand("EMB001", context1, LocalDate.now()));
             
-            ScheduleContextDTO context2 = new ScheduleContextDTO();
+            ScheduleContextVo context2 = new ScheduleContextVo();
             context2.setLhScheduleResults(null);
             assertEquals(0, calculator.getVulcanizeDemand("EMB001", context2, LocalDate.now()));
         }
@@ -426,7 +426,7 @@ class CoreCalculationTest {
             // 5. 整车换算：82条 → 7车（向上取整，84条）
             // 6. 波浪分配：7车分配到3班
             
-            ScheduleContextDTO context = new ScheduleContextDTO();
+            ScheduleContextVo context = new ScheduleContextVo();
             
             // 设置硫化需求
             List<LhScheduleResult> results = new ArrayList<>();

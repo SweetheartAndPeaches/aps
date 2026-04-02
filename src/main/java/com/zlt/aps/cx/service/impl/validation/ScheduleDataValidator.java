@@ -1,6 +1,6 @@
 package com.zlt.aps.cx.service.impl.validation;
 
-import com.zlt.aps.cx.dto.ScheduleContextDTO;
+import com.zlt.aps.cx.vo.ScheduleContextVo;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -73,7 +73,7 @@ public class ScheduleDataValidator {
      * @param factoryCode 工厂编码
      * @return 校验结果
      */
-    public ScheduleDataValidationResult validate(ScheduleContextDTO context,
+    public ScheduleDataValidationResult validate(ScheduleContextVo context,
                                                LocalDate scheduleDate,
                                                String factoryCode) {
         ScheduleDataValidationResult result = new ScheduleDataValidationResult();
@@ -123,7 +123,7 @@ public class ScheduleDataValidator {
      * @param validationItems 需要校验的项
      * @return 校验结果
      */
-    public ScheduleDataValidationResult validate(ScheduleContextDTO context,
+    public ScheduleDataValidationResult validate(ScheduleContextVo context,
                                                LocalDate scheduleDate,
                                                String factoryCode,
                                                ValidationItem... validationItems) {
@@ -199,7 +199,7 @@ public class ScheduleDataValidator {
     /**
      * 快速校验（用于外部调用）
      */
-    public boolean quickValidate(ScheduleContextDTO context, LocalDate scheduleDate, String factoryCode) {
+    public boolean quickValidate(ScheduleContextVo context, LocalDate scheduleDate, String factoryCode) {
         ScheduleDataValidationResult result = validate(context, scheduleDate, factoryCode);
         return result.isPassed();
     }
@@ -207,7 +207,7 @@ public class ScheduleDataValidator {
     /**
      * 获取错误信息摘要
      */
-    public String getErrorSummary(ScheduleContextDTO context, LocalDate scheduleDate, String factoryCode) {
+    public String getErrorSummary(ScheduleContextVo context, LocalDate scheduleDate, String factoryCode) {
         ScheduleDataValidationResult result = validate(context, scheduleDate, factoryCode);
         return result.getDetails().stream()
                 .filter(d -> d.getLevel() == ScheduleDataValidationResult.ValidationLevel.ERROR)

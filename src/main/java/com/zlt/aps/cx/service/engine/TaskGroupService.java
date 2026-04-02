@@ -1,6 +1,6 @@
 package com.zlt.aps.cx.service.engine;
 
-import com.zlt.aps.cx.dto.ScheduleContextDTO;
+import com.zlt.aps.cx.vo.ScheduleContextVo;
 import com.zlt.aps.cx.entity.*;
 import com.zlt.aps.cx.entity.config.CxParamConfig;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
@@ -72,7 +72,7 @@ public class TaskGroupService {
      * @return 任务分组结果
      */
     public TaskGroupResult groupTasks(
-            ScheduleContextDTO context,
+            ScheduleContextVo context,
             Map<String, Set<String>> machineOnlineEmbryoMap,
             LocalDate scheduleDate) {
 
@@ -145,7 +145,7 @@ public class TaskGroupService {
     /**
      * 构建物料映射
      */
-    private Map<String, MdmMaterialInfo> buildMaterialMap(ScheduleContextDTO context) {
+    private Map<String, MdmMaterialInfo> buildMaterialMap(ScheduleContextVo context) {
         Map<String, MdmMaterialInfo> map = new HashMap<>();
         if (context.getMaterials() != null) {
             for (MdmMaterialInfo material : context.getMaterials()) {
@@ -158,7 +158,7 @@ public class TaskGroupService {
     /**
      * 构建库存映射
      */
-    private Map<String, CxStock> buildStockMap(ScheduleContextDTO context) {
+    private Map<String, CxStock> buildStockMap(ScheduleContextVo context) {
         Map<String, CxStock> map = new HashMap<>();
         if (context.getStocks() != null) {
             for (CxStock stock : context.getStocks()) {
@@ -190,7 +190,7 @@ public class TaskGroupService {
             List<LhScheduleResult> lhResults,
             Map<String, MdmMaterialInfo> materialMap,
             Map<String, CxStock> stockMap,
-            ScheduleContextDTO context) {
+            ScheduleContextVo context) {
 
         // 计算硫化需求量
         int totalVulcanizeDemand = lhResults.stream()
@@ -299,7 +299,7 @@ public class TaskGroupService {
             int totalVulcanizeDemand,
             int currentStock,
             String structureName,
-            ScheduleContextDTO context) {
+            ScheduleContextVo context) {
 
         // 简化计算：日需求量 = 硫化需求量
         // 更详细的计算在续作任务处理器中进行
@@ -322,7 +322,7 @@ public class TaskGroupService {
      */
     public void calculateEndingInfo(
             CoreScheduleAlgorithmService.DailyEmbryoTask task,
-            ScheduleContextDTO context,
+            ScheduleContextVo context,
             LocalDate scheduleDate) {
 
         String materialCode = task.getMaterialCode();
@@ -392,7 +392,7 @@ public class TaskGroupService {
     /**
      * 查找物料收尾日
      */
-    private LocalDate findEndingDate(String materialCode, ScheduleContextDTO context) {
+    private LocalDate findEndingDate(String materialCode, ScheduleContextVo context) {
         if (context.getMaterialEndings() != null) {
             for (CxMaterialEnding ending : context.getMaterialEndings()) {
                 if (materialCode.equals(ending.getMaterialCode())) {
@@ -408,7 +408,7 @@ public class TaskGroupService {
      */
     public int calculateTaskPriority(
             CoreScheduleAlgorithmService.DailyEmbryoTask task,
-            ScheduleContextDTO context) {
+            ScheduleContextVo context) {
 
         int score = 0;
 

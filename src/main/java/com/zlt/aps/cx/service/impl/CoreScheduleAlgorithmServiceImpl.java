@@ -1,6 +1,6 @@
 package com.zlt.aps.cx.service.impl;
 
-import com.zlt.aps.cx.dto.ScheduleContextDTO;
+import com.zlt.aps.cx.vo.ScheduleContextVo;
 import com.zlt.aps.cx.entity.CxPrecisionPlan;
 import com.zlt.aps.cx.entity.CxStock;
 import com.zlt.aps.cx.entity.config.CxShiftConfig;
@@ -67,7 +67,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     private static final int DEFAULT_SCHEDULE_DAYS = 3;
 
     @Override
-    public List<CxScheduleResult> executeSchedule(ScheduleContextDTO context) {
+    public List<CxScheduleResult> executeSchedule(ScheduleContextVo context) {
         log.info("开始执行排程算法，日期: {}", context.getScheduleDate());
 
         // 使用 ScheduleServiceImpl.buildScheduleContext 中已加载的班次配置
@@ -147,7 +147,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
      * </ol>
      */
     private List<CxScheduleResult> executeDaySchedule(
-            ScheduleContextDTO context, 
+            ScheduleContextVo context, 
             int day,
             List<CxShiftConfig> dayShifts,
             Map<String, Set<String>> machineOnlineEmbryoMap) {
@@ -266,7 +266,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     /**
      * 判断是否为停产日
      */
-    private boolean isStopProductionDay(ScheduleContextDTO context, LocalDate date) {
+    private boolean isStopProductionDay(ScheduleContextVo context, LocalDate date) {
         MdmWorkCalendar workCalendar = context.getWorkCalendar();
         if (workCalendar != null) {
             // 使用 dayFlag 判断：0-停, 1-开
@@ -289,7 +289,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
      * 构建排程结果
      */
     private List<CxScheduleResult> buildScheduleResults(
-            ScheduleContextDTO context,
+            ScheduleContextVo context,
             List<MachineAllocationResult> allocations,
             List<ShiftAllocationResult> shiftAllocations,
             List<CxShiftConfig> dayShifts) {
@@ -382,7 +382,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
     @Override
     public List<DailyEmbryoTask> calculateDailyEmbryoTasks(
-            ScheduleContextDTO context,
+            ScheduleContextVo context,
             Map<String, Set<String>> machineOnlineEmbryoMap) {
         
         LocalDate scheduleDate = context.getCurrentScheduleDate() != null 
@@ -403,7 +403,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     @Override
     public List<MachineAllocationResult> allocateTasksToMachines(
             List<DailyEmbryoTask> tasks,
-            ScheduleContextDTO context) {
+            ScheduleContextVo context) {
         // 此方法由 processContinueTasks 和 processTrialAndNewTasks 实现
         return new ArrayList<>();
     }
@@ -411,7 +411,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     @Override
     public List<ShiftAllocationResult> balanceShiftAllocation(
             List<MachineAllocationResult> allocations,
-            ScheduleContextDTO context) {
+            ScheduleContextVo context) {
         return shiftScheduleService.balanceShiftAllocation(
                 allocations, context.getCurrentShiftConfigs(), context);
     }
@@ -419,7 +419,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     @Override
     public List<CxScheduleDetail> calculateSequence(
             List<ShiftAllocationResult> shiftAllocations,
-            ScheduleContextDTO context) {
+            ScheduleContextVo context) {
         // TODO: 实现顺位排序
         return new ArrayList<>();
     }
@@ -456,7 +456,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     public BigDecimal calculateDailyDemand(
             MdmMaterialInfo material,
             CxStock stock,
-            ScheduleContextDTO context) {
+            ScheduleContextVo context) {
         // 简化实现
         return BigDecimal.ZERO;
     }
@@ -465,7 +465,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     public boolean checkStructureConstraint(
             MdmMoldingMachine machine,
             MdmMaterialInfo material,
-            ScheduleContextDTO context) {
+            ScheduleContextVo context) {
         // 委托给 NewTaskProcessor
         return true;
     }
@@ -475,7 +475,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             MdmMoldingMachine machine,
             int currentTypes,
             MdmMaterialInfo newMaterial,
-            ScheduleContextDTO context) {
+            ScheduleContextVo context) {
         int maxTypes = context.getMaxTypesPerMachine() != null
                 ? context.getMaxTypesPerMachine()
                 : 4;
@@ -486,7 +486,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     public int calculatePriorityScore(
             MdmMaterialInfo material,
             CxStock stock,
-            ScheduleContextDTO context) {
+            ScheduleContextVo context) {
         // 委托给 TaskGroupService
         return 0;
     }

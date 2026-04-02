@@ -1,6 +1,6 @@
 package com.zlt.aps.cx.service.engine;
 
-import com.zlt.aps.cx.dto.ScheduleContextDTO;
+import com.zlt.aps.cx.vo.ScheduleContextVo;
 import com.zlt.aps.cx.entity.CxStock;
 import com.zlt.aps.cx.entity.MpCxCapacityConfiguration;
 import com.zlt.aps.cx.entity.config.CxShiftConfig;
@@ -96,7 +96,7 @@ public class ProductionCalculator {
     public PlanQuantityResult calculatePlanQuantity(
             String embryoCode,
             String structureName,
-            ScheduleContextDTO context,
+            ScheduleContextVo context,
             LocalDate scheduleDate) {
 
         PlanQuantityResult result = new PlanQuantityResult();
@@ -139,7 +139,7 @@ public class ProductionCalculator {
      *
      * <p>从硫化排程结果中获取该胎胚今日的需求量
      */
-    public int getVulcanizeDemand(String embryoCode, ScheduleContextDTO context, LocalDate scheduleDate) {
+    public int getVulcanizeDemand(String embryoCode, ScheduleContextVo context, LocalDate scheduleDate) {
         List<LhScheduleResult> lhResults = context.getLhScheduleResults();
         if (lhResults == null || lhResults.isEmpty()) {
             return 0;
@@ -164,7 +164,7 @@ public class ProductionCalculator {
      *
      * <p>成型余量 = 该胎胚的当前库存
      */
-    public int getFormingRemainder(String embryoCode, ScheduleContextDTO context) {
+    public int getFormingRemainder(String embryoCode, ScheduleContextVo context) {
         List<CxStock> stocks = context.getStocks();
         if (stocks == null || stocks.isEmpty()) {
             return 0;
@@ -367,7 +367,7 @@ public class ProductionCalculator {
     public PlanQuantityResult calculateClosingDayQuantity(
             String embryoCode,
             String structureName,
-            ScheduleContextDTO context,
+            ScheduleContextVo context,
             LocalDate scheduleDate) {
 
         PlanQuantityResult result = calculatePlanQuantity(embryoCode, structureName, context, scheduleDate);
@@ -416,7 +416,7 @@ public class ProductionCalculator {
             String embryoCode,
             String structureName,
             boolean isKeyProduct,
-            ScheduleContextDTO context,
+            ScheduleContextVo context,
             LocalDate scheduleDate) {
 
         PlanQuantityResult result = calculatePlanQuantity(embryoCode, structureName, context, scheduleDate);
@@ -545,7 +545,7 @@ public class ProductionCalculator {
             String structureName,
             int endingSurplus,
             boolean isMainProduct,
-            ScheduleContextDTO context,
+            ScheduleContextVo context,
             LocalDate scheduleDate) {
 
         // 获取成型余量（库存）
@@ -628,7 +628,7 @@ public class ProductionCalculator {
     public ShutdownHandlingResult handleDeviceShutdown(
             String embryoCode,
             int hourlyCapacity,
-            ScheduleContextDTO context) {
+            ScheduleContextVo context) {
 
         ShutdownHandlingResult result = new ShutdownHandlingResult();
         result.setEmbryoCode(embryoCode);
@@ -667,7 +667,7 @@ public class ProductionCalculator {
     /**
      * 获取整车容量
      */
-    public int getTripCapacity(String structureName, ScheduleContextDTO context) {
+    public int getTripCapacity(String structureName, ScheduleContextVo context) {
         if (context.getStructureShiftCapacities() != null && structureName != null) {
             for (CxStructureShiftCapacity capacity : context.getStructureShiftCapacities()) {
                 if (structureName.equals(capacity.getStructureCode())) {
@@ -685,7 +685,7 @@ public class ProductionCalculator {
     /**
      * 获取损耗率
      */
-    public BigDecimal getLossRate(ScheduleContextDTO context) {
+    public BigDecimal getLossRate(ScheduleContextVo context) {
         return context.getLossRate() != null ? context.getLossRate() : DEFAULT_LOSS_RATE;
     }
 
@@ -717,7 +717,7 @@ public class ProductionCalculator {
     /**
      * 计算机台日产能
      */
-    public int calculateMachineDailyCapacity(MdmMoldingMachine machine, ScheduleContextDTO context) {
+    public int calculateMachineDailyCapacity(MdmMoldingMachine machine, ScheduleContextVo context) {
         if (machine == null) {
             return DEFAULT_DAILY_CAPACITY;
         }
@@ -732,7 +732,7 @@ public class ProductionCalculator {
         return hourlyCapacity * shiftHours;
     }
 
-    public int getMachineHourlyCapacity(MdmMoldingMachine machine, ScheduleContextDTO context) {
+    public int getMachineHourlyCapacity(MdmMoldingMachine machine, ScheduleContextVo context) {
         if (machine == null) {
             return DEFAULT_HOURLY_CAPACITY;
         }
@@ -741,7 +741,7 @@ public class ProductionCalculator {
                 : DEFAULT_HOURLY_CAPACITY;
     }
 
-    private int getShiftHours(ScheduleContextDTO context) {
+    private int getShiftHours(ScheduleContextVo context) {
         if (context.getCurrentShiftConfigs() != null && !context.getCurrentShiftConfigs().isEmpty()) {
             int totalHours = 0;
             for (CxShiftConfig shift : context.getCurrentShiftConfigs()) {
@@ -770,7 +770,7 @@ public class ProductionCalculator {
      * @param context    排程上下文
      * @return 是否关键产品
      */
-    public boolean isKeyProduct(String embryoCode, ScheduleContextDTO context) {
+    public boolean isKeyProduct(String embryoCode, ScheduleContextVo context) {
         Set<String> keyProductCodes = context.getKeyProductCodes();
         if (keyProductCodes != null && embryoCode != null) {
             return keyProductCodes.contains(embryoCode);
@@ -789,7 +789,7 @@ public class ProductionCalculator {
      * @param context      排程上下文
      * @return 是否主销产品
      */
-    public boolean isMainProduct(String materialCode, ScheduleContextDTO context) {
+    public boolean isMainProduct(String materialCode, ScheduleContextVo context) {
         Set<String> mainProductCodes = context.getMainProductCodes();
         if (mainProductCodes != null && materialCode != null) {
             return mainProductCodes.contains(materialCode);
@@ -824,7 +824,7 @@ public class ProductionCalculator {
             String structureName,
             String materialCode,
             Integer trialDemand,
-            ScheduleContextDTO context,
+            ScheduleContextVo context,
             LocalDate scheduleDate) {
 
         return calculateComprehensive(embryoCode, structureName, materialCode,
@@ -865,7 +865,7 @@ public class ProductionCalculator {
             String materialCode,
             Integer trialDemand,
             Integer endingSurplus,
-            ScheduleContextDTO context,
+            ScheduleContextVo context,
             LocalDate scheduleDate) {
 
         // Step 1: 判断是否试制任务
@@ -976,7 +976,7 @@ public class ProductionCalculator {
             String embryoCode,
             int originalPlanQuantity,
             int hourlyCapacity,
-            ScheduleContextDTO context) {
+            ScheduleContextVo context) {
 
         ShutdownHandlingResult shutdownResult = handleDeviceShutdown(embryoCode, hourlyCapacity, context);
 

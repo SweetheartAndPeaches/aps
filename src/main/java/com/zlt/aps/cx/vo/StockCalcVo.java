@@ -1,4 +1,4 @@
-package com.zlt.aps.cx.dto;
+package com.zlt.aps.cx.vo;
 
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
@@ -8,13 +8,13 @@ import java.io.Serializable;
 import java.math.BigDecimal;
 
 /**
- * 库存计算DTO
+ * 库存计算VO
  *
  * @author APS Team
  */
 @Data
 @ApiModel(description = "库存计算参数")
-public class StockCalcDTO implements Serializable {
+public class StockCalcVo implements Serializable {
 
     private static final long serialVersionUID = 1L;
 

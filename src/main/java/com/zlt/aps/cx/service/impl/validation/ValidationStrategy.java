@@ -1,6 +1,6 @@
 package com.zlt.aps.cx.service.impl.validation;
 
-import com.zlt.aps.cx.dto.ScheduleContextDTO;
+import com.zlt.aps.cx.vo.ScheduleContextVo;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
@@ -37,7 +37,7 @@ public interface ValidationStrategy {
      * @param factoryCode 工厂编码
      * @param result 校验结果收集器
      */
-    void validate(ScheduleContextDTO context, LocalDate scheduleDate, String factoryCode, 
+    void validate(ScheduleContextVo context, LocalDate scheduleDate, String factoryCode, 
                   ScheduleDataValidationResult result);
 
     /**

@@ -1,7 +1,7 @@
 package com.zlt.aps.cx.service;
 
-import com.zlt.aps.cx.dto.ScheduleContextDTO;
-import com.zlt.aps.cx.dto.ScheduleRequest;
+import com.zlt.aps.cx.vo.ScheduleContextVo;
+import com.zlt.aps.cx.vo.ScheduleRequestVo;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
 
 import java.time.LocalDate;
@@ -27,7 +27,7 @@ public interface ScheduleService {
      * @param request 排程请求
      * @return 排程结果
      */
-    ScheduleResult executeSchedule(ScheduleRequest request);
+    ScheduleResult executeSchedule(ScheduleRequestVo request);
 
     /**
      * 执行重排程
@@ -35,7 +35,7 @@ public interface ScheduleService {
      * @param request 重排程请求
      * @return 是否成功
      */
-    boolean reSchedule(ScheduleRequest request);
+    boolean reSchedule(ScheduleRequestVo request);
 
     /**
 

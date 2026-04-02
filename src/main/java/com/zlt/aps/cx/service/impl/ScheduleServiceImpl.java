@@ -1,8 +1,8 @@
 package com.zlt.aps.cx.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.zlt.aps.cx.dto.ScheduleContextDTO;
-import com.zlt.aps.cx.dto.ScheduleRequest;
+import com.zlt.aps.cx.vo.ScheduleContextVo;
+import com.zlt.aps.cx.vo.ScheduleRequestVoVo;
 import com.zlt.aps.cx.entity.CxMaterialEnding;
 import com.zlt.aps.cx.entity.CxStock;
 import com.zlt.aps.cx.entity.MdmDevicePlanShut;
@@ -155,7 +155,7 @@ public class ScheduleServiceImpl implements ScheduleService {
     // ==================== 公共方法 ====================
 
     @Override
-    public ScheduleResult executeSchedule(ScheduleRequest request) {
+    public ScheduleResult executeSchedule(ScheduleRequestVo request) {
         ScheduleResult result = new ScheduleResult();
         result.setSuccess(false);
         result.setScheduleDate(request.getScheduleDate());
@@ -164,7 +164,7 @@ public class ScheduleServiceImpl implements ScheduleService {
             log.info("开始执行排程，日期：{}，排程模式：{}", request.getScheduleDate(), request.getScheduleMode());
 
             // 1. 构建排程上下文(流程图S5.1.6初始化)
-            ScheduleContextDTO context = buildScheduleContext(request);
+            ScheduleContextVo context = buildScheduleContext(request);
             if (context == null) {
                 result.setMessage("构建排程上下文失败");
                 return result;
@@ -194,12 +194,12 @@ public class ScheduleServiceImpl implements ScheduleService {
     }
 
     @Override
-    public boolean reSchedule(ScheduleRequest request) {
+    public boolean reSchedule(ScheduleRequestVo request) {
         try {
             log.info("开始执行重排程，日期：{}", request.getScheduleDate());
             
             // 1. 构建排程上下文
-            ScheduleContextDTO context = buildScheduleContext(request);
+            ScheduleContextVo context = buildScheduleContext(request);
 
             // 2. 执行重排程算法
             List<CxScheduleResult> scheduleResults = coreScheduleAlgorithmService.executeSchedule(context);
@@ -232,9 +232,9 @@ public class ScheduleServiceImpl implements ScheduleService {
     /**
      * 构建排程上下文
      */
-    private ScheduleContextDTO buildScheduleContext(ScheduleRequest request) {
+    private ScheduleContextVo buildScheduleContext(ScheduleRequestVo request) {
         try {
-            ScheduleContextDTO context = new ScheduleContextDTO();
+            ScheduleContextVo context = new ScheduleContextVo();
             LocalDate scheduleDate = request.getScheduleDate();
 
             // 1. 加载班次配置
@@ -313,7 +313,7 @@ public class ScheduleServiceImpl implements ScheduleService {
     /**
      * 加载班次配置
      */
-    private void loadShiftConfigs(ScheduleContextDTO context, String factoryCode) {
+    private void loadShiftConfigs(ScheduleContextVo context, String factoryCode) {
         List<CxShiftConfig> allShiftConfigs = shiftConfigMapper.selectList(
                 new LambdaQueryWrapper<CxShiftConfig>()
                         .eq(CxShiftConfig::getFactoryCode, factoryCode)
@@ -337,7 +337,7 @@ public class ScheduleServiceImpl implements ScheduleService {
     /**
      * 加载设备计划停机信息
      */
-    private void loadDevicePlanShuts(ScheduleContextDTO context, LocalDate scheduleDate) {
+    private void loadDevicePlanShuts(ScheduleContextVo context, LocalDate scheduleDate) {
         int scheduleDays = context.getScheduleDays();
         LocalDate endDate = scheduleDate.plusDays(scheduleDays - 1);
 
@@ -350,7 +350,7 @@ public class ScheduleServiceImpl implements ScheduleService {
     /**
      * 加载成型机台
      */
-    private void loadMoldingMachines(ScheduleContextDTO context) {
+    private void loadMoldingMachines(ScheduleContextVo context) {
         List<MdmMoldingMachine> machines = moldingMachineMapper.selectList(null);
         context.setAvailableMachines(machines);
         log.info("加载成型机台 {} 台", machines.size());
@@ -359,7 +359,7 @@ public class ScheduleServiceImpl implements ScheduleService {
     /**
      * 加载硫化排程结果
      */
-    private void loadLhScheduleResults(ScheduleContextDTO context, LocalDate scheduleDate) {
+    private void loadLhScheduleResults(ScheduleContextVo context, LocalDate scheduleDate) {
         List<LhScheduleResult> lhScheduleResults = lhScheduleResultMapper.selectByDate(scheduleDate);
         context.setLhScheduleResults(lhScheduleResults);
         log.info("加载硫化排程结果 {} 条", lhScheduleResults.size());
@@ -368,7 +368,7 @@ public class ScheduleServiceImpl implements ScheduleService {
     /**
      * 加载物料信息
      */
-    private void loadMaterials(ScheduleContextDTO context) {
+    private void loadMaterials(ScheduleContextVo context) {
         List<LhScheduleResult> lhScheduleResults = context.getLhScheduleResults();
 
         Set<String> embryoCodes = lhScheduleResults.stream()
@@ -392,7 +392,7 @@ public class ScheduleServiceImpl implements ScheduleService {
     /**
      * 加载胎胚库存
      */
-    private void loadStocks(ScheduleContextDTO context) {
+    private void loadStocks(ScheduleContextVo context) {
         List<CxStock> stocks = stockMapper.selectList(
                 new LambdaQueryWrapper<CxStock>()
                         .gt(CxStock::getStockNum, 0));
@@ -403,7 +403,7 @@ public class ScheduleServiceImpl implements ScheduleService {
     /**
      * 加载成型在机信息
      */
-    private void loadOnlineInfos(ScheduleContextDTO context, LocalDate scheduleDate) {
+    private void loadOnlineInfos(ScheduleContextVo context, LocalDate scheduleDate) {
         List<MdmCxMachineOnlineInfo> onlineInfos = onlineInfoMapper.selectByDateRange(
                 scheduleDate, scheduleDate.minusDays(1));
         context.setOnlineInfos(onlineInfos);
@@ -413,7 +413,7 @@ public class ScheduleServiceImpl implements ScheduleService {
     /**
      * 构建机台在机胎胚映射
      */
-    private void buildMachineOnlineEmbryoMap(ScheduleContextDTO context) {
+    private void buildMachineOnlineEmbryoMap(ScheduleContextVo context) {
         Map<String, Set<String>> machineOnlineEmbryoMap = new HashMap<>();
         for (MdmCxMachineOnlineInfo onlineInfo : context.getOnlineInfos()) {
             String cxCode = onlineInfo.getCxCode();
@@ -429,7 +429,7 @@ public class ScheduleServiceImpl implements ScheduleService {
     /**
      * 加载参数配置
      */
-    private void loadParamConfigs(ScheduleContextDTO context) {
+    private void loadParamConfigs(ScheduleContextVo context) {
         List<CxParamConfig> paramConfigs = paramConfigMapper.selectList(null);
         Map<String, CxParamConfig> paramConfigMap = paramConfigs.stream()
                 .collect(Collectors.toMap(CxParamConfig::getParamCode, p -> p, (a, b) -> a));
@@ -446,7 +446,7 @@ public class ScheduleServiceImpl implements ScheduleService {
     /**
      * 加载结构整车配置
      */
-    private void loadStructureShiftCapacities(ScheduleContextDTO context) {
+    private void loadStructureShiftCapacities(ScheduleContextVo context) {
         List<CxStructureShiftCapacity> structureShiftCapacities = structureShiftCapacityMapper.selectList(null);
         context.setStructureShiftCapacities(structureShiftCapacities);
     }
@@ -454,7 +454,7 @@ public class ScheduleServiceImpl implements ScheduleService {
     /**
      * 加载关键产品配置
      */
-    private void loadKeyProducts(ScheduleContextDTO context) {
+    private void loadKeyProducts(ScheduleContextVo context) {
         List<CxKeyProduct> keyProducts = keyProductMapper.selectList(
                 new LambdaQueryWrapper<CxKeyProduct>()
                         .eq(CxKeyProduct::getIsActive, ACTIVE_STATUS));
@@ -473,7 +473,7 @@ public class ScheduleServiceImpl implements ScheduleService {
      * <p>从 T_MP_STRUCTURE_ALLOCATION 表获取每个结构可分配的机台列表
      * <p>用于续作任务的均衡分配
      */
-    private void loadStructureAllocations(ScheduleContextDTO context, LocalDate scheduleDate) {
+    private void loadStructureAllocations(ScheduleContextVo context, LocalDate scheduleDate) {
         int year = scheduleDate.getYear();
         int month = scheduleDate.getMonthValue();
 
@@ -496,7 +496,7 @@ public class ScheduleServiceImpl implements ScheduleService {
     /**
      * 构建产能映射
      */
-    private void buildCapacityMaps(ScheduleContextDTO context) {
+    private void buildCapacityMaps(ScheduleContextVo context) {
         // 物料日硫化最大产能映射
         Map<String, MonthPlanProductLhCapacityVo> materialLhCapacityMap = buildMaterialLhCapacityMap(context);
         context.setMaterialLhCapacityMap(materialLhCapacityMap);
@@ -511,7 +511,7 @@ public class ScheduleServiceImpl implements ScheduleService {
     /**
      * 加载月度计划余量并计算成型余量
      */
-    private void loadMonthSurplusAndCalculateFormingRemainder(ScheduleContextDTO context, LocalDate scheduleDate) {
+    private void loadMonthSurplusAndCalculateFormingRemainder(ScheduleContextVo context, LocalDate scheduleDate) {
         int year = scheduleDate.getYear();
         int month = scheduleDate.getMonthValue();
 
@@ -533,7 +533,7 @@ public class ScheduleServiceImpl implements ScheduleService {
     /**
      * 加载SKU排产分类
      */
-    private void loadSkuCategories(ScheduleContextDTO context) {
+    private void loadSkuCategories(ScheduleContextVo context) {
         List<MdmSkuScheduleCategory> skuCategories = skuScheduleCategoryMapper.selectAllCategories();
         context.setSkuScheduleCategories(skuCategories);
 
@@ -548,7 +548,7 @@ public class ScheduleServiceImpl implements ScheduleService {
     /**
      * 设置节假日相关标记
      */
-    private void setHolidayFlags(ScheduleContextDTO context, LocalDate scheduleDate) {
+    private void setHolidayFlags(ScheduleContextVo context, LocalDate scheduleDate) {
         context.setIsOpeningDay(holidayScheduleService.isStartProductionDay(scheduleDate));
         context.setIsClosingDay(holidayScheduleService.isStopProductionDay(scheduleDate));
         context.setIsBeforeClosingDay(holidayScheduleService.isBeforeHoliday(scheduleDate));
@@ -557,7 +557,7 @@ public class ScheduleServiceImpl implements ScheduleService {
     /**
      * 数据完整性校验
      */
-    private void validateScheduleData(ScheduleContextDTO context, LocalDate scheduleDate, String factoryCode) {
+    private void validateScheduleData(ScheduleContextVo context, LocalDate scheduleDate, String factoryCode) {
         ScheduleDataValidationResult validationResult = scheduleDataValidator.validate(context, scheduleDate, factoryCode);
 
         if (!validationResult.isPassed()) {
@@ -632,7 +632,7 @@ public class ScheduleServiceImpl implements ScheduleService {
      * @param context 排程上下文
      * @return 物料日硫化产能映射
      */
-    private Map<String, MonthPlanProductLhCapacityVo> buildMaterialLhCapacityMap(ScheduleContextDTO context) {
+    private Map<String, MonthPlanProductLhCapacityVo> buildMaterialLhCapacityMap(ScheduleContextVo context) {
         Map<String, MonthPlanProductLhCapacityVo> resultMap = new HashMap<>();
 
         try {
@@ -663,7 +663,7 @@ public class ScheduleServiceImpl implements ScheduleService {
     /**
      * 获取日硫化量计算模式
      */
-    private DayVulcanizationModeEnum getDayVulcanizationMode(ScheduleContextDTO context) {
+    private DayVulcanizationModeEnum getDayVulcanizationMode(ScheduleContextVo context) {
         Map<String, CxParamConfig> paramConfigMap = context.getParamConfigMap();
         if (paramConfigMap == null) {
             return DayVulcanizationModeEnum.STANDARD_CAPACITY;
@@ -913,7 +913,7 @@ public class ScheduleServiceImpl implements ScheduleService {
      * @param context      排程上下文
      * @param scheduleDate 排程日期
      */
-    private void loadMaterialEndings(ScheduleContextDTO context, LocalDate scheduleDate) {
+    private void loadMaterialEndings(ScheduleContextVo context, LocalDate scheduleDate) {
         int year = scheduleDate.getYear();
         int month = scheduleDate.getMonthValue();
         int currentDay = scheduleDate.getDayOfMonth();
@@ -1062,7 +1062,7 @@ public class ScheduleServiceImpl implements ScheduleService {
      *
      * @param context 排程上下文
      */
-    private void filterCompletedMaterials(ScheduleContextDTO context) {
+    private void filterCompletedMaterials(ScheduleContextVo context) {
         // 获取成型余量映射
         Map<String, Integer> formingRemainderMap = context.getFormingRemainderMap();
         if (formingRemainderMap == null || formingRemainderMap.isEmpty()) {

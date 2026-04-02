@@ -4,8 +4,8 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.zlt.aps.cx.dto.ScheduleQueryDTO;
-import com.zlt.aps.cx.dto.ScheduleResultDTO;
+import com.zlt.aps.cx.vo.ScheduleQueryVo;
+import com.zlt.aps.cx.vo.ScheduleResultVo;
 import com.zlt.aps.cx.entity.schedule.CxScheduleDetail;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
 import com.zlt.aps.cx.mapper.CxScheduleResultMapper;
@@ -61,7 +61,7 @@ public class CxScheduleResultServiceImpl extends ServiceImpl<CxScheduleResultMap
     }
 
     @Override
-    public Page<ScheduleResultDTO> pageList(ScheduleQueryDTO queryDTO) {
+    public Page<ScheduleResultVo> pageList(ScheduleQueryVo queryDTO) {
         Page<CxScheduleResult> page = new Page<>(queryDTO.getPageNum(), queryDTO.getPageSize());
         
         LambdaQueryWrapper<CxScheduleResult> wrapper = new LambdaQueryWrapper<>();
@@ -97,7 +97,7 @@ public class CxScheduleResultServiceImpl extends ServiceImpl<CxScheduleResultMap
         Page<CxScheduleResult> resultPage = page(page, wrapper);
         
         // 转换为DTO
-        Page<ScheduleResultDTO> dtoPage = new Page<>(resultPage.getCurrent(), resultPage.getSize(), resultPage.getTotal());
+        Page<ScheduleResultVo> dtoPage = new Page<>(resultPage.getCurrent(), resultPage.getSize(), resultPage.getTotal());
         dtoPage.setRecords(resultPage.getRecords().stream()
                 .map(this::convertToDTO)
                 .collect(Collectors.toList()));
@@ -106,13 +106,13 @@ public class CxScheduleResultServiceImpl extends ServiceImpl<CxScheduleResultMap
     }
 
     @Override
-    public ScheduleResultDTO getDetailById(Long id) {
+    public ScheduleResultVo getDetailById(Long id) {
         CxScheduleResult result = getById(id);
         if (result == null) {
             return null;
         }
         
-        ScheduleResultDTO dto = convertToDTO(result);
+        ScheduleResultVo dto = convertToDTO(result);
         
         // 查询明细
         List<CxScheduleDetail> details = cxScheduleDetailService.listByMainId(id);
@@ -248,8 +248,8 @@ public class CxScheduleResultServiceImpl extends ServiceImpl<CxScheduleResultMap
     /**
      * 转换为DTO
      */
-    private ScheduleResultDTO convertToDTO(CxScheduleResult entity) {
-        ScheduleResultDTO dto = new ScheduleResultDTO();
+    private ScheduleResultVo convertToDTO(CxScheduleResult entity) {
+        ScheduleResultVo dto = new ScheduleResultVo();
         BeanUtils.copyProperties(entity, dto);
         if (entity.getScheduleDate() != null) {
             dto.setScheduleDate(entity.getScheduleDate().toLocalDate());
@@ -260,8 +260,8 @@ public class CxScheduleResultServiceImpl extends ServiceImpl<CxScheduleResultMap
     /**
      * 转换明细为DTO
      */
-    private ScheduleResultDTO.ScheduleDetailDTO convertDetailToDTO(CxScheduleDetail detail) {
-        ScheduleResultDTO.ScheduleDetailDTO dto = new ScheduleResultDTO.ScheduleDetailDTO();
+    private ScheduleResultVo.ScheduleDetailDTO convertDetailToDTO(CxScheduleDetail detail) {
+        ScheduleResultVo.ScheduleDetailDTO dto = new ScheduleResultVo.ScheduleDetailDTO();
         BeanUtils.copyProperties(detail, dto);
         return dto;
     }

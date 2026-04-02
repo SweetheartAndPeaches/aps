@@ -1,6 +1,6 @@
 package com.zlt.aps.cx.service.impl.validation;
 
-import com.zlt.aps.cx.dto.ScheduleContextDTO;
+import com.zlt.aps.cx.vo.ScheduleContextVo;
 import com.zlt.aps.cx.entity.config.CxParamConfig;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -47,7 +47,7 @@ public class ParamConfigValidationStrategy extends BaseValidationStrategy {
     }
 
     @Override
-    public void validate(ScheduleContextDTO context, LocalDate scheduleDate, String factoryCode,
+    public void validate(ScheduleContextVo context, LocalDate scheduleDate, String factoryCode,
                         ScheduleDataValidationResult result) {
         
         Map<String, CxParamConfig> paramConfigMap = context.getParamConfigMap();

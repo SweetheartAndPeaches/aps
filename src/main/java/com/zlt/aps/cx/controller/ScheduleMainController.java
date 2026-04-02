@@ -2,9 +2,9 @@ package com.zlt.aps.cx.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.ruoyi.common.core.web.domain.AjaxResult;
-import com.zlt.aps.cx.dto.ScheduleGenerateDTO;
-import com.zlt.aps.cx.dto.ScheduleQueryDTO;
-import com.zlt.aps.cx.dto.ScheduleResultDTO;
+import com.zlt.aps.cx.vo.ScheduleGenerateVo;
+import com.zlt.aps.cx.vo.ScheduleQueryVo;
+import com.zlt.aps.cx.vo.ScheduleResultVo;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
 import com.zlt.aps.cx.service.CxScheduleResultService;
 import com.zlt.aps.cx.service.ScheduleService;
@@ -37,7 +37,7 @@ public class ScheduleMainController {
 
     @ApiOperation(value = "生成排程", notes = "根据日期和天数生成排程")
     @PostMapping("/generate")
-    public AjaxResult generateSchedule(@RequestBody ScheduleGenerateDTO dto) {
+    public AjaxResult generateSchedule(@RequestBody ScheduleGenerateVo dto) {
         // TODO: 待实现 generateSchedule
         return AjaxResult.success(new ArrayList<>());
     }
@@ -109,7 +109,7 @@ public class ScheduleMainController {
 
     @ApiOperation(value = "分页查询排程", notes = "分页查询排程列表")
     @PostMapping("/page")
-    public AjaxResult pageList(@RequestBody ScheduleQueryDTO queryDTO) {
+    public AjaxResult pageList(@RequestBody ScheduleQueryVo queryDTO) {
         return AjaxResult.success(cxScheduleResultService.pageList(queryDTO));
     }
 
