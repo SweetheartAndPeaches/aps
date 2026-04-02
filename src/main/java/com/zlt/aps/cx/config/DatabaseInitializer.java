@@ -56,6 +56,7 @@ public class DatabaseInitializer implements CommandLineRunner {
         createMdmWorkCalendarTable();
         createMdmStructureLhRatioTable();
         createMdmMonthSurplusTable();
+        createMdmMonthPlanProductLhTable();
         createMdmSkuScheduleCategoryTable();
 
         // ==================== 三之一、月度计划表 ====================
@@ -100,6 +101,8 @@ public class DatabaseInitializer implements CommandLineRunner {
         initMdmMachineOnlineInfoData();
         initKeyProductData();
         initStructureAllocationData();
+        initMdmMonthPlanProductLhData();
+        initMdmMonthSurplusData();
         initWorkCalendarData();
 
         System.out.println("========================================");
@@ -993,14 +996,18 @@ public class DatabaseInitializer implements CommandLineRunner {
         jdbcTemplate.execute("DROP TABLE IF EXISTS T_MDM_STRUCTURE_LH_RATIO");
         jdbcTemplate.execute("CREATE TABLE T_MDM_STRUCTURE_LH_RATIO (" +
                 "ID BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', " +
+                "FACTORY_CODE VARCHAR(50) COMMENT '工厂编号', " +
                 "STRUCTURE_NAME VARCHAR(100) NOT NULL COMMENT '产品结构', " +
-                "CX_MACHINE_TYPE VARCHAR(50) COMMENT '成型机机型', " +
-                "MAX_LH_MACHINE_QTY INT COMMENT '最大硫化机数', " +
-                "MAX_EMBRYO_TYPE INT COMMENT '最大胎胚种类数', " +
+                "CX_MACHINE_TYPE_CODE VARCHAR(50) COMMENT '成型机机型编码', " +
+                "LH_MACHINE_MAX_QTY INT COMMENT '最大硫化机数', " +
+                "MAX_EMBRYO_QTY INT COMMENT '最大胎胚种类数', " +
                 "TRIP_QTY INT DEFAULT 12 COMMENT '整车条数', " +
                 "IS_ACTIVE INT DEFAULT 1 COMMENT '是否启用', " +
+                "CREATE_BY VARCHAR(50) COMMENT '创建人', " +
                 "CREATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间', " +
-                "UPDATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'" +
+                "UPDATE_BY VARCHAR(50) COMMENT '更新人', " +
+                "UPDATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间', " +
+                "REMARK VARCHAR(500) COMMENT '备注'" +
                 ") COMMENT='结构硫化机比例表'");
     }
 
@@ -1010,12 +1017,43 @@ public class DatabaseInitializer implements CommandLineRunner {
     private void createMdmMonthSurplusTable() {
         jdbcTemplate.execute("DROP TABLE IF EXISTS t_mdm_month_surplus");
         jdbcTemplate.execute("CREATE TABLE t_mdm_month_surplus (" +
-                "id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', " +
-                "`year_month` INT COMMENT '年月YYYYMM', " +
-                "material_code VARCHAR(50) COMMENT '物料编码', " +
-                "surplus_qty INT COMMENT '余量', " +
-                "create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'" +
+                "ID BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', " +
+                "FACTORY_CODE VARCHAR(50) COMMENT '工厂编号', " +
+                "PRODUCT_TYPE_CODE VARCHAR(50) COMMENT '产品品类', " +
+                "YEAR DECIMAL(10,0) COMMENT '年份', " +
+                "MONTH DECIMAL(10,0) COMMENT '月份', " +
+                "REQUIRE_VERSION VARCHAR(50) COMMENT '需求版本号', " +
+                "BRAND VARCHAR(50) COMMENT '品牌', " +
+                "STRUCTURE_NAME VARCHAR(100) COMMENT '产品结构', " +
+                "MATERIAL_CODE VARCHAR(50) COMMENT '物料编码', " +
+                "MATERIAL_DESC VARCHAR(200) COMMENT '物料描述', " +
+                "PLAN_SURPLUS_QTY DECIMAL(10,2) COMMENT '计划余量', " +
+                "STOCK_CAPTURE_DATE TIMESTAMP COMMENT '库存抓取日', " +
+                "REMARK VARCHAR(500) COMMENT '备注', " +
+                "IS_DELETE INT DEFAULT 0 COMMENT '是否删除：0-未删除 1-已删除', " +
+                "CREATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间', " +
+                "UPDATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'" +
                 ") COMMENT='月度余量表'");
+    }
+
+    /**
+     * 创建月度计划产品硫化产能表
+     */
+    private void createMdmMonthPlanProductLhTable() {
+        jdbcTemplate.execute("DROP TABLE IF EXISTS T_MDM_MONTH_PLAN_PRODUCT_LH");
+        jdbcTemplate.execute("CREATE TABLE T_MDM_MONTH_PLAN_PRODUCT_LH (" +
+                "ID BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', " +
+                "FACTORY_CODE VARCHAR(50) COMMENT '工厂编号', " +
+                "MATERIAL_CODE VARCHAR(50) COMMENT '物料编码', " +
+                "MATERIAL_DESC VARCHAR(200) COMMENT '物料描述', " +
+                "MES_CAPACITY DECIMAL(10,2) COMMENT 'MES产能', " +
+                "STANDARD_CAPACITY DECIMAL(10,2) COMMENT '标准产能', " +
+                "APS_CAPACITY DECIMAL(10,2) COMMENT 'APS产能', " +
+                "VULCANIZATION_TIME INT COMMENT '硫化时长(秒)', " +
+                "TYPE VARCHAR(50) COMMENT '类型', " +
+                "CREATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间', " +
+                "UPDATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'" +
+                ") COMMENT='月度计划产品硫化产能表'");
     }
 
     /**
@@ -1102,13 +1140,26 @@ public class DatabaseInitializer implements CommandLineRunner {
         jdbcTemplate.execute("DROP TABLE IF EXISTS T_MP_STRUCTURE_ALLOCATION");
         jdbcTemplate.execute("CREATE TABLE T_MP_STRUCTURE_ALLOCATION (" +
                 "ID BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', " +
+                "FACTORY_CODE VARCHAR(50) COMMENT '工厂编码', " +
                 "YEAR INT COMMENT '年份', " +
                 "MONTH INT COMMENT '月份', " +
+                "MONTH_PLAN_VERSION VARCHAR(50) COMMENT '月计划版本', " +
+                "PRODUCTION_VERSION VARCHAR(50) COMMENT '排产版本', " +
+                "PLAN_TYPE VARCHAR(20) COMMENT '计划类型', " +
                 "STRUCTURE_NAME VARCHAR(100) COMMENT '产品结构', " +
+                "NET_QTY BIGINT COMMENT '排产净需求', " +
+                "LOSS_QTY BIGINT COMMENT '排产净需求(含损耗)', " +
                 "CX_MACHINE_CODE VARCHAR(50) COMMENT '成型机编码', " +
+                "BEGIN_DAY INT COMMENT '开始日期', " +
+                "END_DAY INT COMMENT '结束日期', " +
+                "ALLOT_DAYS INT COMMENT '分配天数', " +
                 "DAY_CAPACITY INT COMMENT '日产能', " +
                 "IS_ACTIVE INT DEFAULT 1 COMMENT '是否启用', " +
-                "CREATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'" +
+                "CREATE_BY VARCHAR(50) COMMENT '创建人', " +
+                "CREATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间', " +
+                "UPDATE_BY VARCHAR(50) COMMENT '更新人', " +
+                "UPDATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间', " +
+                "REMARK VARCHAR(500) COMMENT '备注'" +
                 ") COMMENT='结构分配表'");
     }
 
@@ -1317,13 +1368,13 @@ public class DatabaseInitializer implements CommandLineRunner {
      * 初始化结构硫化机比例数据
      */
     private void initMdmStructureLhRatioData() {
-        jdbcTemplate.execute("INSERT INTO T_MDM_STRUCTURE_LH_RATIO (STRUCTURE_NAME, CX_MACHINE_TYPE, MAX_LH_MACHINE_QTY, MAX_EMBRYO_TYPE, TRIP_QTY, IS_ACTIVE) VALUES " +
-                "('12R22.5', '三鼓', 4, 4, 12, 1), " +
-                "('11R22.5', '三鼓', 4, 4, 12, 1), " +
-                "('295/80R22.5', '三鼓', 4, 4, 12, 1), " +
-                "('275/80R22.5', '三鼓', 4, 4, 12, 1), " +
-                "('315/80R22.5', '三鼓', 4, 4, 12, 1), " +
-                "('385/65R22.5', '三鼓', 4, 4, 12, 1)");
+        jdbcTemplate.execute("INSERT INTO T_MDM_STRUCTURE_LH_RATIO (FACTORY_CODE, STRUCTURE_NAME, CX_MACHINE_TYPE_CODE, LH_MACHINE_MAX_QTY, MAX_EMBRYO_QTY, TRIP_QTY, IS_ACTIVE) VALUES " +
+                "('F001', '12R22.5', '三鼓', 4, 4, 12, 1), " +
+                "('F001', '11R22.5', '三鼓', 4, 4, 12, 1), " +
+                "('F001', '295/80R22.5', '三鼓', 4, 4, 12, 1), " +
+                "('F001', '275/80R22.5', '三鼓', 4, 4, 12, 1), " +
+                "('F001', '315/80R22.5', '三鼓', 4, 4, 12, 1), " +
+                "('F001', '385/65R22.5', '三鼓', 4, 4, 12, 1)");
     }
 
     /**
@@ -1348,15 +1399,72 @@ public class DatabaseInitializer implements CommandLineRunner {
 
     /**
      * 初始化结构分配数据
+     * 每个结构可以分配到多台机台
      */
     private void initStructureAllocationData() {
-        jdbcTemplate.execute("INSERT INTO T_MP_STRUCTURE_ALLOCATION (YEAR, MONTH, STRUCTURE_NAME, CX_MACHINE_CODE, DAY_CAPACITY, IS_ACTIVE) VALUES " +
-                "(YEAR(CURDATE()), MONTH(CURDATE()), '12R22.5', 'GM01', 120, 1), " +
-                "(YEAR(CURDATE()), MONTH(CURDATE()), '11R22.5', 'GM02', 120, 1), " +
-                "(YEAR(CURDATE()), MONTH(CURDATE()), '295/80R22.5', 'GM03', 120, 1), " +
-                "(YEAR(CURDATE()), MONTH(CURDATE()), '275/80R22.5', 'GM04', 120, 1), " +
-                "(YEAR(CURDATE()), MONTH(CURDATE()), '315/80R22.5', 'GM05', 120, 1), " +
-                "(YEAR(CURDATE()), MONTH(CURDATE()), '385/65R22.5', 'GM05', 120, 1)");
+        jdbcTemplate.execute("INSERT INTO T_MP_STRUCTURE_ALLOCATION (FACTORY_CODE, YEAR, MONTH, STRUCTURE_NAME, CX_MACHINE_CODE, BEGIN_DAY, END_DAY, DAY_CAPACITY, IS_ACTIVE) VALUES " +
+                // 12R22.5 结构分配到所有机台
+                "('F001', YEAR(CURDATE()), MONTH(CURDATE()), '12R22.5', 'GM01', 1, 31, 120, 1), " +
+                "('F001', YEAR(CURDATE()), MONTH(CURDATE()), '12R22.5', 'GM02', 1, 31, 120, 1), " +
+                "('F001', YEAR(CURDATE()), MONTH(CURDATE()), '12R22.5', 'GM03', 1, 31, 120, 1), " +
+                "('F001', YEAR(CURDATE()), MONTH(CURDATE()), '12R22.5', 'GM04', 1, 31, 120, 1), " +
+                "('F001', YEAR(CURDATE()), MONTH(CURDATE()), '12R22.5', 'GM05', 1, 31, 120, 1), " +
+                // 11R22.5 结构分配到所有机台
+                "('F001', YEAR(CURDATE()), MONTH(CURDATE()), '11R22.5', 'GM01', 1, 31, 120, 1), " +
+                "('F001', YEAR(CURDATE()), MONTH(CURDATE()), '11R22.5', 'GM02', 1, 31, 120, 1), " +
+                "('F001', YEAR(CURDATE()), MONTH(CURDATE()), '11R22.5', 'GM03', 1, 31, 120, 1), " +
+                "('F001', YEAR(CURDATE()), MONTH(CURDATE()), '11R22.5', 'GM04', 1, 31, 120, 1), " +
+                "('F001', YEAR(CURDATE()), MONTH(CURDATE()), '11R22.5', 'GM05', 1, 31, 120, 1), " +
+                // 295/80R22.5 结构
+                "('F001', YEAR(CURDATE()), MONTH(CURDATE()), '295/80R22.5', 'GM01', 1, 31, 120, 1), " +
+                "('F001', YEAR(CURDATE()), MONTH(CURDATE()), '295/80R22.5', 'GM02', 1, 31, 120, 1), " +
+                "('F001', YEAR(CURDATE()), MONTH(CURDATE()), '295/80R22.5', 'GM03', 1, 31, 120, 1), " +
+                "('F001', YEAR(CURDATE()), MONTH(CURDATE()), '295/80R22.5', 'GM04', 1, 31, 120, 1), " +
+                "('F001', YEAR(CURDATE()), MONTH(CURDATE()), '295/80R22.5', 'GM05', 1, 31, 120, 1), " +
+                // 275/80R22.5 结构
+                "('F001', YEAR(CURDATE()), MONTH(CURDATE()), '275/80R22.5', 'GM01', 1, 31, 120, 1), " +
+                "('F001', YEAR(CURDATE()), MONTH(CURDATE()), '275/80R22.5', 'GM02', 1, 31, 120, 1), " +
+                "('F001', YEAR(CURDATE()), MONTH(CURDATE()), '275/80R22.5', 'GM03', 1, 31, 120, 1), " +
+                "('F001', YEAR(CURDATE()), MONTH(CURDATE()), '275/80R22.5', 'GM04', 1, 31, 120, 1), " +
+                "('F001', YEAR(CURDATE()), MONTH(CURDATE()), '275/80R22.5', 'GM05', 1, 31, 120, 1), " +
+                // 315/80R22.5 结构
+                "('F001', YEAR(CURDATE()), MONTH(CURDATE()), '315/80R22.5', 'GM01', 1, 31, 120, 1), " +
+                "('F001', YEAR(CURDATE()), MONTH(CURDATE()), '315/80R22.5', 'GM02', 1, 31, 120, 1), " +
+                "('F001', YEAR(CURDATE()), MONTH(CURDATE()), '315/80R22.5', 'GM03', 1, 31, 120, 1), " +
+                "('F001', YEAR(CURDATE()), MONTH(CURDATE()), '315/80R22.5', 'GM04', 1, 31, 120, 1), " +
+                "('F001', YEAR(CURDATE()), MONTH(CURDATE()), '315/80R22.5', 'GM05', 1, 31, 120, 1), " +
+                // 385/65R22.5 结构
+                "('F001', YEAR(CURDATE()), MONTH(CURDATE()), '385/65R22.5', 'GM01', 1, 31, 120, 1), " +
+                "('F001', YEAR(CURDATE()), MONTH(CURDATE()), '385/65R22.5', 'GM02', 1, 31, 120, 1), " +
+                "('F001', YEAR(CURDATE()), MONTH(CURDATE()), '385/65R22.5', 'GM03', 1, 31, 120, 1), " +
+                "('F001', YEAR(CURDATE()), MONTH(CURDATE()), '385/65R22.5', 'GM04', 1, 31, 120, 1), " +
+                "('F001', YEAR(CURDATE()), MONTH(CURDATE()), '385/65R22.5', 'GM05', 1, 31, 120, 1)");
+    }
+
+    /**
+     * 初始化月度计划产品硫化产能数据
+     */
+    private void initMdmMonthPlanProductLhData() {
+        jdbcTemplate.execute("INSERT INTO T_MDM_MONTH_PLAN_PRODUCT_LH (FACTORY_CODE, MATERIAL_CODE, MATERIAL_DESC, MES_CAPACITY, STANDARD_CAPACITY, APS_CAPACITY, VULCANIZATION_TIME, TYPE) VALUES " +
+                "('F001', 'MAT001', '12R22.5-18PR-JA511', 240, 240, 240, 750, 'NORMAL'), " +
+                "('F001', 'MAT002', '11R22.5-16PR-JA511', 180, 180, 180, 708, 'NORMAL'), " +
+                "('F001', 'MAT003', '295/80R22.5-18PR-JA511', 120, 120, 120, 792, 'NORMAL'), " +
+                "('F001', 'MAT004', '275/80R22.5-16PR-JA511', 200, 200, 200, 690, 'NORMAL'), " +
+                "('F001', 'MAT005', '315/80R22.5-18PR-JA511', 100, 100, 100, 840, 'NORMAL'), " +
+                "('F001', 'MAT006', '385/65R22.5-20PR-JA511', 150, 150, 150, 930, 'NORMAL')");
+    }
+
+    /**
+     * 初始化月度余量数据
+     */
+    private void initMdmMonthSurplusData() {
+        jdbcTemplate.execute("INSERT INTO t_mdm_month_surplus (FACTORY_CODE, PRODUCT_TYPE_CODE, YEAR, MONTH, REQUIRE_VERSION, BRAND, STRUCTURE_NAME, MATERIAL_CODE, MATERIAL_DESC, PLAN_SURPLUS_QTY, IS_DELETE) VALUES " +
+                "('F001', 'TBR', 2026, 4, 'V1.0', 'JA', '12R22.5', 'MAT001', '12R22.5-18PR-JA511', 500, 0), " +
+                "('F001', 'TBR', 2026, 4, 'V1.0', 'JA', '11R22.5', 'MAT002', '11R22.5-16PR-JA511', 300, 0), " +
+                "('F001', 'TBR', 2026, 4, 'V1.0', 'JA', '295/80R22.5', 'MAT003', '295/80R22.5-18PR-JA511', 400, 0), " +
+                "('F001', 'TBR', 2026, 4, 'V1.0', 'JA', '275/80R22.5', 'MAT004', '275/80R22.5-16PR-JA511', 350, 0), " +
+                "('F001', 'TBR', 2026, 4, 'V1.0', 'JA', '315/80R22.5', 'MAT005', '315/80R22.5-18PR-JA511', 200, 0), " +
+                "('F001', 'TBR', 2026, 4, 'V1.0', 'JA', '385/65R22.5', 'MAT006', '385/65R22.5-20PR-JA511', 250, 0)");
     }
 
     /**
