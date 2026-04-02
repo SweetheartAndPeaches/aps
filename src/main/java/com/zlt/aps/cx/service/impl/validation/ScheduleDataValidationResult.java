@@ -1,4 +1,4 @@
-package com.zlt.aps.cx.service.impl;
+package com.zlt.aps.cx.service.impl.validation;
 
 import lombok.Data;
 
