@@ -69,7 +69,7 @@ for i in range(1, len(df_month)):
     total_qty = row[2]
     rubber_type = row[3]
     if pd.notna(material_code):
-        sql = f"""INSERT INTO T_FACTORY_MONTH_PLAN_PRODUCTION_FINAL_RESULT (MATERIAL_CODE, MATERIAL_DESC, PLAN_QTY, RUBBER_TYPE, PLAN_MONTH, PLAN_YEAR) VALUES ('{material_code}', '{material_desc}', {total_qty}, '{rubber_type}', '2025-01', 2025);"""
+        sql = f"""INSERT INTO T_MP_MONTH_PLAN_PROD_FINAL (MATERIAL_CODE, MATERIAL_DESC, PLAN_QTY, RUBBER_TYPE, PLAN_MONTH, PLAN_YEAR) VALUES ('{material_code}', '{material_desc}', {total_qty}, '{rubber_type}', '2025-01', 2025);"""
         sql_statements.append(sql)
 
 # 6. 结构硫化配比数据
