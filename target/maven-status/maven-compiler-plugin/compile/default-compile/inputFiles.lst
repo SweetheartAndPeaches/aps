@@ -60,6 +60,7 @@
 /workspace/projects/src/main/java/com/zlt/aps/cx/mapper/CxMaterialExceptionMapper.java
 /workspace/projects/src/main/java/com/zlt/aps/mp/api/domain/entity/MdmWorkCalendar.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/entity/config/CxShiftConfig.java
+/workspace/projects/src/main/java/com/ruoyi/common/core/utils/poi/ExcelHandlerAdapter.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/entity/CxTreadParkingConfig.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/entity/config/CxKeyProduct.java
 /workspace/projects/src/main/java/com/zlt/aps/mp/api/domain/entity/MdmMonthSurplus.java
@@ -81,6 +82,7 @@
 /workspace/projects/src/main/java/com/zlt/aps/cx/service/impl/validation/ShiftConfigValidationStrategy.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/vo/ScheduleRequestVo.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/mapper/MdmMoldingMachineMapper.java
+/workspace/projects/src/main/java/com/zlt/aps/common/core/annotation/ImportValidated.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/ApsFormingScheduleApplication.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/mapper/MdmMaterialInfoMapper.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/mapper/CxAlertConfigMapper.java
