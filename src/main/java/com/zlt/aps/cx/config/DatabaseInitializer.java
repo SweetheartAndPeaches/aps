@@ -424,8 +424,8 @@ public class DatabaseInitializer implements CommandLineRunner {
      * 数据来源：ERP/MES系统月度生产计划
      */
     private void createFactoryMonthPlanProductionFinalResultTable() {
-        jdbcTemplate.execute("DROP TABLE IF EXISTS T_FACTORY_MONTH_PLAN_PRODUCTION_FINAL_RESULT");
-        jdbcTemplate.execute("CREATE TABLE T_FACTORY_MONTH_PLAN_PRODUCTION_FINAL_RESULT (" +
+        jdbcTemplate.execute("DROP TABLE IF EXISTS T_MP_MONTH_PLAN_PROD_FINAL");
+        jdbcTemplate.execute("CREATE TABLE T_MP_MONTH_PLAN_PROD_FINAL (" +
                 "ID BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', " +
                 "PRODUCTION_NO VARCHAR(50) COMMENT '工单号', " +
                 "FACTORY_CODE VARCHAR(50) COMMENT '工厂编码', " +

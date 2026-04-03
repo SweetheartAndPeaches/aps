@@ -24,7 +24,7 @@ public interface FactoryMonthPlanProductionFinalResultMapper extends BaseMapper<
      * @param yearMonth 年月(YYYYMM)
      * @return 月计划列表
      */
-    @Select("SELECT * FROM T_FACTORY_MONTH_PLAN_PRODUCTION_FINAL_RESULT WHERE YEAR_MONTH = #{yearMonth} ORDER BY PRODUCTION_SEQUENCE, ID")
+    @Select("SELECT * FROM T_MP_MONTH_PLAN_PROD_FINAL WHERE YEAR_MONTH = #{yearMonth} ORDER BY PRODUCTION_SEQUENCE, ID")
     List<FactoryMonthPlanProductionFinalResult> selectByYearMonth(@Param("yearMonth") Integer yearMonth);
 
     /**
@@ -33,7 +33,7 @@ public interface FactoryMonthPlanProductionFinalResultMapper extends BaseMapper<
      * @param month 月份
      * @return 月计划列表
      */
-    @Select("SELECT * FROM T_FACTORY_MONTH_PLAN_PRODUCTION_FINAL_RESULT WHERE YEAR = #{year} AND MONTH = #{month} ORDER BY PRODUCTION_SEQUENCE, ID")
+    @Select("SELECT * FROM T_MP_MONTH_PLAN_PROD_FINAL WHERE YEAR = #{year} AND MONTH = #{month} ORDER BY PRODUCTION_SEQUENCE, ID")
     List<FactoryMonthPlanProductionFinalResult> selectByYearAndMonth(@Param("year") Integer year, @Param("month") Integer month);
 
     /**
@@ -42,7 +42,7 @@ public interface FactoryMonthPlanProductionFinalResultMapper extends BaseMapper<
      * @param yearMonth 年月
      * @return 月计划列表
      */
-    @Select("SELECT * FROM T_FACTORY_MONTH_PLAN_PRODUCTION_FINAL_RESULT WHERE FACTORY_CODE = #{factoryCode} AND YEAR_MONTH = #{yearMonth} ORDER BY PRODUCTION_SEQUENCE, ID")
+    @Select("SELECT * FROM T_MP_MONTH_PLAN_PROD_FINAL WHERE FACTORY_CODE = #{factoryCode} AND YEAR_MONTH = #{yearMonth} ORDER BY PRODUCTION_SEQUENCE, ID")
     List<FactoryMonthPlanProductionFinalResult> selectByFactoryAndYearMonth(@Param("factoryCode") String factoryCode, @Param("yearMonth") Integer yearMonth);
 
     /**
@@ -51,7 +51,7 @@ public interface FactoryMonthPlanProductionFinalResultMapper extends BaseMapper<
      * @param yearMonth 年月
      * @return 月计划
      */
-    @Select("SELECT * FROM T_FACTORY_MONTH_PLAN_PRODUCTION_FINAL_RESULT WHERE MATERIAL_CODE = #{materialCode} AND YEAR_MONTH = #{yearMonth} LIMIT 1")
+    @Select("SELECT * FROM T_MP_MONTH_PLAN_PROD_FINAL WHERE MATERIAL_CODE = #{materialCode} AND YEAR_MONTH = #{yearMonth} LIMIT 1")
     FactoryMonthPlanProductionFinalResult selectByMaterialAndYearMonth(@Param("materialCode") String materialCode, @Param("yearMonth") Integer yearMonth);
 
     /**
@@ -59,7 +59,7 @@ public interface FactoryMonthPlanProductionFinalResultMapper extends BaseMapper<
      * @param productionNo 工单号
      * @return 月计划
      */
-    @Select("SELECT * FROM T_FACTORY_MONTH_PLAN_PRODUCTION_FINAL_RESULT WHERE PRODUCTION_NO = #{productionNo}")
+    @Select("SELECT * FROM T_MP_MONTH_PLAN_PROD_FINAL WHERE PRODUCTION_NO = #{productionNo}")
     FactoryMonthPlanProductionFinalResult selectByProductionNo(@Param("productionNo") String productionNo);
 
     /**
@@ -67,7 +67,7 @@ public interface FactoryMonthPlanProductionFinalResultMapper extends BaseMapper<
      * @param yearMonth 年月
      * @return 已发布的月计划列表
      */
-    @Select("SELECT * FROM T_FACTORY_MONTH_PLAN_PRODUCTION_FINAL_RESULT WHERE YEAR_MONTH = #{yearMonth} AND IS_RELEASE = '1' ORDER BY PRODUCTION_SEQUENCE, ID")
+    @Select("SELECT * FROM T_MP_MONTH_PLAN_PROD_FINAL WHERE YEAR_MONTH = #{yearMonth} AND IS_RELEASE = '1' ORDER BY PRODUCTION_SEQUENCE, ID")
     List<FactoryMonthPlanProductionFinalResult> selectReleasedByYearMonth(@Param("yearMonth") Integer yearMonth);
 
     /**
@@ -76,7 +76,7 @@ public interface FactoryMonthPlanProductionFinalResultMapper extends BaseMapper<
      * @param day 日期(1-31)
      * @return 有排产的月计划列表
      */
-    @Select("SELECT * FROM T_FACTORY_MONTH_PLAN_PRODUCTION_FINAL_RESULT WHERE YEAR_MONTH = #{yearMonth} AND DAY_${day} > 0 ORDER BY PRODUCTION_SEQUENCE, ID")
+    @Select("SELECT * FROM T_MP_MONTH_PLAN_PROD_FINAL WHERE YEAR_MONTH = #{yearMonth} AND DAY_${day} > 0 ORDER BY PRODUCTION_SEQUENCE, ID")
     List<FactoryMonthPlanProductionFinalResult> selectWithPlanOnDay(@Param("yearMonth") Integer yearMonth, @Param("day") Integer day);
 
     /**
@@ -85,7 +85,7 @@ public interface FactoryMonthPlanProductionFinalResultMapper extends BaseMapper<
      * @param productionVersion 排产版本
      * @return 月计划列表
      */
-    @Select("SELECT * FROM T_FACTORY_MONTH_PLAN_PRODUCTION_FINAL_RESULT WHERE YEAR_MONTH = #{yearMonth} AND PRODUCTION_VERSION = #{productionVersion} ORDER BY PRODUCTION_SEQUENCE, ID")
+    @Select("SELECT * FROM T_MP_MONTH_PLAN_PROD_FINAL WHERE YEAR_MONTH = #{yearMonth} AND PRODUCTION_VERSION = #{productionVersion} ORDER BY PRODUCTION_SEQUENCE, ID")
     List<FactoryMonthPlanProductionFinalResult> selectByVersion(@Param("yearMonth") Integer yearMonth, @Param("productionVersion") String productionVersion);
 
     /**
@@ -96,7 +96,7 @@ public interface FactoryMonthPlanProductionFinalResultMapper extends BaseMapper<
      * @return 分页结果
      */
     @Select("<script>" +
-            "SELECT * FROM T_FACTORY_MONTH_PLAN_PRODUCTION_FINAL_RESULT " +
+            "SELECT * FROM T_MP_MONTH_PLAN_PROD_FINAL " +
             "WHERE YEAR_MONTH = #{yearMonth} " +
             "<if test='factoryCode != null and factoryCode != \"\"'>" +
             "AND FACTORY_CODE = #{factoryCode} " +
@@ -112,7 +112,7 @@ public interface FactoryMonthPlanProductionFinalResultMapper extends BaseMapper<
      * @param yearMonth 年月
      * @return 物料编码列表
      */
-    @Select("SELECT DISTINCT MATERIAL_CODE FROM T_FACTORY_MONTH_PLAN_PRODUCTION_FINAL_RESULT WHERE YEAR_MONTH = #{yearMonth} ORDER BY MATERIAL_CODE")
+    @Select("SELECT DISTINCT MATERIAL_CODE FROM T_MP_MONTH_PLAN_PROD_FINAL WHERE YEAR_MONTH = #{yearMonth} ORDER BY MATERIAL_CODE")
     List<String> selectMaterialCodesByYearMonth(@Param("yearMonth") Integer yearMonth);
 
     /**
@@ -120,7 +120,7 @@ public interface FactoryMonthPlanProductionFinalResultMapper extends BaseMapper<
      * @param yearMonth 年月
      * @return 数量
      */
-    @Select("SELECT COUNT(*) FROM T_FACTORY_MONTH_PLAN_PRODUCTION_FINAL_RESULT WHERE YEAR_MONTH = #{yearMonth}")
+    @Select("SELECT COUNT(*) FROM T_MP_MONTH_PLAN_PROD_FINAL WHERE YEAR_MONTH = #{yearMonth}")
     int countByYearMonth(@Param("yearMonth") Integer yearMonth);
 
     /**
@@ -128,7 +128,7 @@ public interface FactoryMonthPlanProductionFinalResultMapper extends BaseMapper<
      * @param yearMonth 年月
      * @return 排产总量
      */
-    @Select("SELECT COALESCE(SUM(TOTAL_QTY), 0) FROM T_FACTORY_MONTH_PLAN_PRODUCTION_FINAL_RESULT WHERE YEAR_MONTH = #{yearMonth}")
+    @Select("SELECT COALESCE(SUM(TOTAL_QTY), 0) FROM T_MP_MONTH_PLAN_PROD_FINAL WHERE YEAR_MONTH = #{yearMonth}")
     Long sumTotalQtyByYearMonth(@Param("yearMonth") Integer yearMonth);
 
     /**
@@ -137,6 +137,6 @@ public interface FactoryMonthPlanProductionFinalResultMapper extends BaseMapper<
      * @param day 日期
      * @return 月计划列表
      */
-    @Select("SELECT * FROM T_FACTORY_MONTH_PLAN_PRODUCTION_FINAL_RESULT WHERE YEAR_MONTH = #{yearMonth} AND DAY_${day} > 0 AND IS_RELEASE = '1' ORDER BY PRODUCTION_SEQUENCE, ID")
+    @Select("SELECT * FROM T_MP_MONTH_PLAN_PROD_FINAL WHERE YEAR_MONTH = #{yearMonth} AND DAY_${day} > 0 AND IS_RELEASE = '1' ORDER BY PRODUCTION_SEQUENCE, ID")
     List<FactoryMonthPlanProductionFinalResult> selectNeedSyncToDaily(@Param("yearMonth") Integer yearMonth, @Param("day") Integer day);
 }

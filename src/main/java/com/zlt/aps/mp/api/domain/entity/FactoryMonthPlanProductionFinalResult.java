@@ -12,7 +12,7 @@ import java.util.Date;
 
 /**
  * 工厂月生产计划-最终排产计划定稿实体类
- * 对应数据库表：T_FACTORY_MONTH_PLAN_PRODUCTION_FINAL_RESULT
+ * 对应数据库表：T_MP_MONTH_PLAN_PROD_FINAL
  * 
  * 数据来源：ERP/MES系统月度生产计划
  * 用途：作为APS日排程的数据输入源
@@ -20,7 +20,7 @@ import java.util.Date;
  * @author APS Team
  */
 @Data
-@TableName(value = "T_FACTORY_MONTH_PLAN_PRODUCTION_FINAL_RESULT", keepGlobalPrefix = false)
+@TableName(value = "T_MP_MONTH_PLAN_PROD_FINAL", keepGlobalPrefix = false)
 @ApiModel(value = "工厂月生产计划-最终排产计划定稿")
 public class FactoryMonthPlanProductionFinalResult implements Serializable {
 
