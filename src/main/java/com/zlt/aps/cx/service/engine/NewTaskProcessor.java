@@ -1,11 +1,11 @@
 package com.zlt.aps.cx.service.engine;
 
 import com.zlt.aps.cx.vo.ScheduleContextVo;
-import com.zlt.aps.mp.api.domain.entity.MpCxCapacityConfiguration;
 import com.zlt.aps.cx.entity.config.CxShiftConfig;
 import com.zlt.aps.cx.entity.config.CxStructurePriority;
 import com.zlt.aps.mp.api.domain.entity.MdmMoldingMachine;
 import com.zlt.aps.mp.api.domain.entity.MdmStructureLhRatio;
+import com.zlt.aps.mp.api.domain.entity.MpCxCapacityConfiguration;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -100,8 +100,10 @@ public class NewTaskProcessor {
             List<MdmMoldingMachine> structureMachines = getMachinesForStructure(
                     structureName, availableMachines, scheduleDate, context);
 
-            // 注意：不再排除已被其他结构使用的机台
-            // 一个机台可以同时处理多个不同结构的胎胚（在胎胚种类数限制内）
+            // 排除已被其他结构使用的机台
+            structureMachines = structureMachines.stream()
+                    .filter(m -> !usedMachineCodes.contains(m.getCxMachineCode()))
+                    .collect(Collectors.toList());
 
             if (structureMachines.isEmpty()) {
                 log.warn("结构 {} 没有可用机台，跳过", structureName);
