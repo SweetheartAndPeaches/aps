@@ -10,7 +10,7 @@ import com.zlt.aps.cx.entity.MpCxCapacityConfiguration;
 import com.zlt.aps.cx.entity.config.CxKeyProduct;
 import com.zlt.aps.cx.entity.config.CxParamConfig;
 import com.zlt.aps.cx.entity.config.CxShiftConfig;
-import com.zlt.aps.cx.entity.config.CxStructureShiftCapacity;
+import com.zlt.aps.mp.api.domain.entity.MdmStructureTreadConfig;
 import com.zlt.aps.cx.entity.schedule.CxScheduleDetail;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
@@ -22,7 +22,7 @@ import com.zlt.aps.cx.mapper.CxScheduleDetailMapper;
 import com.zlt.aps.cx.mapper.CxScheduleResultMapper;
 import com.zlt.aps.cx.mapper.CxShiftConfigMapper;
 import com.zlt.aps.cx.mapper.CxStockMapper;
-import com.zlt.aps.cx.mapper.CxStructureShiftCapacityMapper;
+import com.zlt.aps.cx.mapper.MdmStructureTreadConfigMapper;
 import com.zlt.aps.cx.mapper.FactoryMonthPlanProductionFinalResultMapper;
 import com.zlt.aps.cx.mapper.LhScheduleResultMapper;
 import com.zlt.aps.cx.mapper.MdmCxMachineOnlineInfoMapper;
@@ -143,7 +143,7 @@ public class ScheduleServiceImpl implements ScheduleService {
     private final CxScheduleResultMapper scheduleResultMapper;
     private final CxScheduleDetailMapper scheduleDetailMapper;
     private final CxParamConfigMapper paramConfigMapper;
-    private final CxStructureShiftCapacityMapper structureShiftCapacityMapper;
+    private final MdmStructureTreadConfigMapper structureTreadConfigMapper;
     private final CxKeyProductMapper keyProductMapper;
     private final LhScheduleResultMapper lhScheduleResultMapper;
     private final MdmCxMachineOnlineInfoMapper onlineInfoMapper;
@@ -517,7 +517,7 @@ public class ScheduleServiceImpl implements ScheduleService {
      * 加载结构整车配置
      */
     private void loadStructureShiftCapacities(ScheduleContextVo context) {
-        List<CxStructureShiftCapacity> structureShiftCapacities = structureShiftCapacityMapper.selectList(null);
+        List<MdmStructureTreadConfig> structureShiftCapacities = structureTreadConfigMapper.selectList(null);
         context.setStructureShiftCapacities(structureShiftCapacities);
     }
 
