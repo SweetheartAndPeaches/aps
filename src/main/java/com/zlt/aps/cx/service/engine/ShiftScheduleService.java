@@ -5,8 +5,9 @@ import com.zlt.aps.cx.entity.CxMachineStructureCapacity;
 import com.zlt.aps.cx.entity.CxPrecisionPlan;
 
 import com.zlt.aps.cx.entity.config.CxShiftConfig;
-import com.zlt.aps.mdm.api.domain.entity.MdmDevicePlanShut;
-import com.zlt.aps.mp.api.domain.entity.MdmStructureTreadConfig;
+import com.zlt.aps.mdm.api.domain.entity.MdmStructureTreadConfig;
+import com.zlt.aps.mp.api.domain.entity.MdmDevicePlanShut;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -298,6 +299,20 @@ public class ShiftScheduleService {
         }
 
         return result;
+    }
+
+    /**
+     * 获取结构的整车容量
+     */
+    private int getTripCapacity(String structureCode, Map<String, MdmStructureTreadConfig> shiftCapacityMap) {
+        if (shiftCapacityMap != null) {
+            for (MdmStructureTreadConfig capacity : shiftCapacityMap.values()) {
+                if (capacity.getTreadCount() != null && capacity.getTreadCount() > 0) {
+                    return capacity.getTreadCount();
+                }
+            }
+        }
+        return 12;
     }
 
     /**

@@ -201,7 +201,7 @@ public class TaskGroupService {
         int currentStock = getCurrentStock(lhResults.get(0), stockMap, embryoCode);
 
         // 获取结构名称
-        String structureName = lhResults.get(0).getStructureName();
+        String structureName = materialMap.get(lhResults.get(0).getMaterialCode()).getStructureName();
 
         // 计算日需求量
         int dailyDemand = calculateDailyDemand(totalVulcanizeDemand, currentStock, structureName, context);
