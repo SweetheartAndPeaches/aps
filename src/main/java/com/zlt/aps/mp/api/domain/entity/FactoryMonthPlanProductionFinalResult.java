@@ -1,470 +1,786 @@
 package com.zlt.aps.mp.api.domain.entity;
 
-import com.baomidou.mybatisplus.annotation.*;
+import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableName;
+import com.ruoyi.common.core.annotation.Excel;
+import com.ruoyi.common.core.web.domain.BaseEntity;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
 
-import java.io.Serializable;
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
-import java.util.Date;
 
 /**
- * 工厂月生产计划-最终排产计划定稿实体类
- * 对应数据库表：T_MP_MONTH_PLAN_PROD_FINAL
- * 
- * 数据来源：ERP/MES系统月度生产计划
- * 用途：作为APS日排程的数据输入源
+ * Copyright (c) 2022, All rights reserved。
+ * 文件名称：FactoryMonthPlanProductionFinalResult.java
+ * 描    述：工厂月生产计划-最终排产计划定稿对象 t_mp_month_plan_prod_final
  *
- * @author APS Team
+ * @author zlt
+ * @version 1.0
+ * <p>
+ * 修改记录：
+ * 修改时间：...
+ * 修 改 人：zlt
+ * 修改内容：...
+ * @date 2025-12-23
  */
+
 @Data
-@TableName(value = "T_MP_MONTH_PLAN_PROD_FINAL", keepGlobalPrefix = false)
-@ApiModel(value = "工厂月生产计划-最终排产计划定稿")
-public class FactoryMonthPlanProductionFinalResult implements Serializable {
+@TableName(value = "T_MP_MONTH_PLAN_PROD_FINAL")
+@ApiModel(value = "工厂月生产计划-最终排产计划定稿对象", description = "工厂月生产计划-最终排产计划定稿对象")
+public class FactoryMonthPlanProductionFinalResult extends BaseEntity {
 
     private static final long serialVersionUID = 1L;
 
-    // ==================== 主键与基本信息 ====================
-
-    @ApiModelProperty(value = "主键ID")
-    @TableId(value = "ID", type = IdType.AUTO)
-    private Long id;
-
-    @ApiModelProperty(value = "工单号(MP+年月日+批次号+5位流水)")
-    @TableField("PRODUCTION_NO")
+    /**
+     * 工单号(MP两位年两位月两位日两位批次号5位流水)
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.productionNo")
+    @ApiModelProperty(value = "工单号(MP两位年两位月两位日两位批次号5位流水)", name = "productionNo")
+    @TableField(value = "PRODUCTION_NO")
     private String productionNo;
 
-    @ApiModelProperty(value = "工厂编码")
-    @TableField("FACTORY_CODE")
+    /**
+     * 工厂编码
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.factoryCode", dictType = "biz_factory_name")
+    @ApiModelProperty(value = "工厂编码", name = "factoryCode")
+    @TableField(value = "FACTORY_CODE")
     private String factoryCode;
 
-    @ApiModelProperty(value = "年份")
-    @TableField("YEAR")
+    /**
+     * 年份
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.year")
+    @ApiModelProperty(value = "年份", name = "year")
+    @TableField(value = "YEAR")
     private Integer year;
 
-    @ApiModelProperty(value = "月份")
-    @TableField("MONTH")
+    /**
+     * 月份
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.month")
+    @ApiModelProperty(value = "月份", name = "month")
+    @TableField(value = "MONTH")
     private Integer month;
 
-    @ApiModelProperty(value = "年月(YYYYMM)")
-    @TableField("YEAR_MONTH")
+    /**
+     * 年月:YYYYMM
+     */
+    @ApiModelProperty(value = "年月:YYYYMM", name = "yearMonth")
+    @TableField(value = "`YEAR_MONTH`")
     private Integer yearMonth;
 
-    // ==================== 版本信息 ====================
-
-    @ApiModelProperty(value = "销售生产需求计划版本")
-    @TableField("MONTH_PLAN_VERSION")
+    /**
+     * 销售生产需求计划版本
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.monthPlanVersion")
+    @ApiModelProperty(value = "需求计划版本", name = "monthPlanVersion")
+    @TableField(value = "MONTH_PLAN_VERSION")
     private String monthPlanVersion;
 
-    @ApiModelProperty(value = "最新需求计划版本")
-    @TableField("LAST_MONTH_PLAN_VERSION")
+    /**
+     * 最新需求计划版本
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.lastMonthPlanVersion")
+    @ApiModelProperty(value = "最新需求计划版本", name = "lastMonthPlanVersion")
+    @TableField(value = "LAST_MONTH_PLAN_VERSION")
     private String lastMonthPlanVersion;
 
-    @ApiModelProperty(value = "排产计划版本")
-    @TableField("PRODUCTION_VERSION")
+    /**
+     * 排产计划版本
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.productionVersion")
+    @ApiModelProperty(value = "月度生产计划版本", name = "productionVersion")
+    @TableField(value = "PRODUCTION_VERSION")
     private String productionVersion;
 
-    // ==================== 产品信息 ====================
-
-    @ApiModelProperty(value = "产品品类(TBR全钢/PCR半钢)")
-    @TableField("PRODUCT_TYPE_CODE")
+    /**
+     * 产品品类 数据字典：biz_product_type TBR 全钢 PCR 半钢
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.productTypeCode", dictType = "biz_product_type")
+    @ApiModelProperty(value = "产品品类 数据字典：biz_product_type TBR 全钢 PCR 半钢", name = "productTypeCode")
+    @TableField(value = "PRODUCT_TYPE_CODE")
     private String productTypeCode;
 
-    @ApiModelProperty(value = "物料编码")
-    @TableField("MATERIAL_CODE")
+    /**
+     * 物料编码
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.materialCode")
+    @ApiModelProperty(value = "物料编码", name = "materialCode")
+    @TableField(value = "MATERIAL_CODE")
     private String materialCode;
 
-    @ApiModelProperty(value = "物料描述")
-    @TableField("MATERIAL_DESC")
+    /**
+     * 物料描述
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.materialDesc")
+    @ApiModelProperty(value = "物料描述", name = "materialDesc")
+    @TableField(value = "MATERIAL_DESC")
     private String materialDesc;
 
-    @ApiModelProperty(value = "MES物料编码")
-    @TableField("MES_MATERIAL_CODE")
+    /**
+     * MES物料编码
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.mesMaterialCode")
+    @ApiModelProperty(value = "MES物料编码", name = "mesMaterialCode")
+    @TableField(value = "MES_MATERIAL_CODE")
     private String mesMaterialCode;
 
-    @ApiModelProperty(value = "产品结构")
-    @TableField("STRUCTURE_NAME")
+    /**
+     * 产品结构
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.structureName")
+    @ApiModelProperty(value = "产品结构", name = "structureName")
+    @TableField(value = "STRUCTURE_NAME")
     private String structureName;
 
-    @ApiModelProperty(value = "英寸")
-    @TableField("PRO_SIZE")
+    /**
+     * 英寸
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.proSize")
+    @ApiModelProperty(value = "英寸", name = "proSize")
+    @TableField(value = "PRO_SIZE")
     private String proSize;
 
-    @ApiModelProperty(value = "产品分类")
-    @TableField("PRODUCT_CATEGORY")
+    /**
+     * 产品分类
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.productCategory", dictType = "product_category")
+    @ApiModelProperty(value = "产品分类", name = "productCategory")
+    @TableField(value = "PRODUCT_CATEGORY")
     private String productCategory;
-
-    @ApiModelProperty(value = "产品状态")
-    @TableField("PRODUCT_STATUS")
+    /**
+     * 产品状态
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.productStatus", dictType = "trial_status")
+    @ApiModelProperty(value = "产品状态", name = "productStatus")
+    @TableField(value = "PRODUCT_STATUS")
     private String productStatus;
 
-    @ApiModelProperty(value = "结构类型(01周期结构/02常规结构)")
-    @TableField("STRUCTURE_TYPE")
+    /**
+     * 结构类型 01 周期结构 02 常规结构
+     */
+    @ApiModelProperty(value = "结构类型", name = "structureType")
+    @TableField(value = "STRUCTURE_TYPE")
     private String structureType;
-
-    @ApiModelProperty(value = "排产分类")
-    @TableField("PRODUCTION_TYPE")
+    /**
+     * 排产分类
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.productionType", dictType = "biz_schedule_type")
+    @ApiModelProperty(value = "排产分类", name = "productionType")
+    @TableField(value = "PRODUCTION_TYPE")
     private String productionType;
 
-    // ==================== 胎胚与施工信息 ====================
-
-    @ApiModelProperty(value = "生胎代码")
-    @TableField("EMBRYO_CODE")
+    /**
+     * 生胎代码
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.embryoCode")
+    @ApiModelProperty(value = "生胎代码", name = "embryoCode")
+    @TableField(value = "EMBRYO_CODE")
     private String embryoCode;
 
-    @ApiModelProperty(value = "主物料(胎胚号)")
-    @TableField("MAIN_MATERIAL_DESC")
+    /**
+     * 主物料(胎胚号)
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.mainMaterialDesc")
+    @ApiModelProperty(value = "主物料(胎胚号)", name = "mainMaterialDesc")
+    @TableField(value = "MAIN_MATERIAL_DESC")
     private String mainMaterialDesc;
 
-    @ApiModelProperty(value = "施工阶段(00无工艺/01试制/02量试/03正式)")
-    @TableField("CONSTRUCTION_STAGE")
-    private String constructionStage;
-
-    @ApiModelProperty(value = "是否零度材料")
-    @TableField("IS_ZERO_RACK")
-    private String isZeroRack;
-
-    @ApiModelProperty(value = "制造示方书号")
-    @TableField("EMBRYO_NO")
-    private String embryoNo;
-
-    @ApiModelProperty(value = "文字示方书号")
-    @TableField("TEXT_NO")
-    private String textNo;
-
-    @ApiModelProperty(value = "硫化示方书号")
-    @TableField("LH_NO")
-    private String lhNo;
-
-    // ==================== 产品属性 ====================
-
-    @ApiModelProperty(value = "品牌")
-    @TableField("BRAND")
-    private String brand;
-
-    @ApiModelProperty(value = "规格")
-    @TableField("SPECIFICATIONS")
-    private String specifications;
-
-    @ApiModelProperty(value = "主花纹")
-    @TableField("MAIN_PATTERN")
-    private String mainPattern;
-
-    @ApiModelProperty(value = "花纹")
-    @TableField("PATTERN")
-    private String pattern;
-
-    @ApiModelProperty(value = "型腔数量(同主花纹模具数量)")
-    @TableField("MOULD_CAVITY_QTY")
-    private Integer mouldCavityQty;
-
-    @ApiModelProperty(value = "活块数量(同主花纹物料模具数量)")
-    @TableField("TYPE_BLOCK_QTY")
-    private Integer typeBlockQty;
-
-    @ApiModelProperty(value = "高优先级数量")
-    @TableField("HEIGHT_QTY")
-    private Integer heightQty;
-
-    @ApiModelProperty(value = "月均销量")
-    @TableField("AVERAGE_SALE_QTY")
-    private Integer averageSaleQty;
-
-    @ApiModelProperty(value = "库销比")
-    @TableField("INVENTORY_SALES_RATIO")
-    private BigDecimal inventorySalesRatio;
-
-    // ==================== 产能与机台信息 ====================
-
-    @ApiModelProperty(value = "日硫化量")
-    @TableField("DAY_VULCANIZATION_QTY")
-    private Integer dayVulcanizationQty;
-
-    @ApiModelProperty(value = "成型机台信息(多个逗号分隔)")
-    @TableField("CX_MACHINE_CODE")
-    private String cxMachineCode;
-
-    @ApiModelProperty(value = "模具使用变化信息(如2-4-2)")
-    @TableField("MOULD_CHANGE_INFO")
-    private String mouldChangeInfo;
-
-    @ApiModelProperty(value = "动平衡数量")
-    @TableField("DYNAMIC_BALANCE_QTY")
-    private String dynamicBalanceQty;
-
-    @ApiModelProperty(value = "均匀性数量")
-    @TableField("UNIFORMITY_QTY")
-    private Integer uniformityQty;
-
-    @ApiModelProperty(value = "单条硫化时间(分钟)")
-    @TableField("CURING_TIME")
-    private Integer curingTime;
-
-    // ==================== 需求与排产数量 ====================
-
-    @ApiModelProperty(value = "生产需求计划(净需求)")
-    @TableField("PROD_REQ_PLAN")
-    private Integer prodReqPlan;
-
-    @ApiModelProperty(value = "试制量试计划需求量")
-    @TableField("TRIAL_QTY")
-    private Integer trialQty;
-
-    @ApiModelProperty(value = "高优先级排产数量")
-    @TableField("HEIGHT_PRODUCTION_QTY")
-    private Integer heightProductionQty;
-
-    @ApiModelProperty(value = "实际生产需求(含损耗)")
-    @TableField("FACT_PROD_REQ_QTY")
-    private Integer factProdReqQty;
-
-    @ApiModelProperty(value = "生产实际排产量")
-    @TableField("TOTAL_QTY")
-    private Integer totalQty;
-
-    @ApiModelProperty(value = "中优先级排产数量")
-    @TableField("MID_PRODUCTION_QTY")
-    private Integer midProductionQty;
-
-    @ApiModelProperty(value = "周期排产储备排产数量")
-    @TableField("CYCLE_PRODUCTION_QTY")
-    private Integer cycleProductionQty;
-
-    @ApiModelProperty(value = "常规储备排产数量")
-    @TableField("CONVENTION_PRODUCTION_QTY")
-    private Integer conventionProductionQty;
-
-    @ApiModelProperty(value = "暂缓订单排产数量")
-    @TableField("POSTPONE_PRODUCTION_QTY")
-    private Integer postponeProductionQty;
-
-    @ApiModelProperty(value = "试制量试排产量")
-    @TableField("TRIAL_PRODUCTION_QTY")
-    private Integer trialProductionQty;
-
-    @ApiModelProperty(value = "差异量(未排产数量)")
-    @TableField("DIFFERENCE_QTY")
-    private Integer differenceQty;
-
-    // ==================== 周调整量 ====================
-
-    @ApiModelProperty(value = "第1周调整量")
-    @TableField("ADJUST_QTY1")
-    private Integer adjustQty1;
-
-    @ApiModelProperty(value = "第2周调整量")
-    @TableField("ADJUST_QTY2")
-    private Integer adjustQty2;
-
-    @ApiModelProperty(value = "第3周调整量")
-    @TableField("ADJUST_QTY3")
-    private Integer adjustQty3;
-
-    @ApiModelProperty(value = "第4周调整量")
-    @TableField("ADJUST_QTY4")
-    private Integer adjustQty4;
-
-    @ApiModelProperty(value = "未排产原因")
-    @TableField("REASON")
-    private String reason;
-
-    // ==================== 月度每日排产计划 ====================
-
-    @ApiModelProperty(value = "开始日期(1-31)")
-    @TableField("BEGIN_DAY")
-    private Integer beginDay;
-
-    @ApiModelProperty(value = "结束日期(1-31)")
-    @TableField("END_DAY")
-    private Integer endDay;
-
-    @ApiModelProperty(value = "第1天排产量")
-    @TableField("DAY_1")
-    private Integer day1;
-
-    @ApiModelProperty(value = "第2天排产量")
-    @TableField("DAY_2")
-    private Integer day2;
-
-    @ApiModelProperty(value = "第3天排产量")
-    @TableField("DAY_3")
-    private Integer day3;
-
-    @ApiModelProperty(value = "第4天排产量")
-    @TableField("DAY_4")
-    private Integer day4;
-
-    @ApiModelProperty(value = "第5天排产量")
-    @TableField("DAY_5")
-    private Integer day5;
-
-    @ApiModelProperty(value = "第6天排产量")
-    @TableField("DAY_6")
-    private Integer day6;
-
-    @ApiModelProperty(value = "第7天排产量")
-    @TableField("DAY_7")
-    private Integer day7;
-
-    @ApiModelProperty(value = "第8天排产量")
-    @TableField("DAY_8")
-    private Integer day8;
-
-    @ApiModelProperty(value = "第9天排产量")
-    @TableField("DAY_9")
-    private Integer day9;
-
-    @ApiModelProperty(value = "第10天排产量")
-    @TableField("DAY_10")
-    private Integer day10;
-
-    @ApiModelProperty(value = "第11天排产量")
-    @TableField("DAY_11")
-    private Integer day11;
-
-    @ApiModelProperty(value = "第12天排产量")
-    @TableField("DAY_12")
-    private Integer day12;
-
-    @ApiModelProperty(value = "第13天排产量")
-    @TableField("DAY_13")
-    private Integer day13;
-
-    @ApiModelProperty(value = "第14天排产量")
-    @TableField("DAY_14")
-    private Integer day14;
-
-    @ApiModelProperty(value = "第15天排产量")
-    @TableField("DAY_15")
-    private Integer day15;
-
-    @ApiModelProperty(value = "第16天排产量")
-    @TableField("DAY_16")
-    private Integer day16;
-
-    @ApiModelProperty(value = "第17天排产量")
-    @TableField("DAY_17")
-    private Integer day17;
-
-    @ApiModelProperty(value = "第18天排产量")
-    @TableField("DAY_18")
-    private Integer day18;
-
-    @ApiModelProperty(value = "第19天排产量")
-    @TableField("DAY_19")
-    private Integer day19;
-
-    @ApiModelProperty(value = "第20天排产量")
-    @TableField("DAY_20")
-    private Integer day20;
-
-    @ApiModelProperty(value = "第21天排产量")
-    @TableField("DAY_21")
-    private Integer day21;
-
-    @ApiModelProperty(value = "第22天排产量")
-    @TableField("DAY_22")
-    private Integer day22;
-
-    @ApiModelProperty(value = "第23天排产量")
-    @TableField("DAY_23")
-    private Integer day23;
-
-    @ApiModelProperty(value = "第24天排产量")
-    @TableField("DAY_24")
-    private Integer day24;
-
-    @ApiModelProperty(value = "第25天排产量")
-    @TableField("DAY_25")
-    private Integer day25;
-
-    @ApiModelProperty(value = "第26天排产量")
-    @TableField("DAY_26")
-    private Integer day26;
-
-    @ApiModelProperty(value = "第27天排产量")
-    @TableField("DAY_27")
-    private Integer day27;
-
-    @ApiModelProperty(value = "第28天排产量")
-    @TableField("DAY_28")
-    private Integer day28;
-
-    @ApiModelProperty(value = "第29天排产量")
-    @TableField("DAY_29")
-    private Integer day29;
-
-    @ApiModelProperty(value = "第30天排产量")
-    @TableField("DAY_30")
-    private Integer day30;
-
-    @ApiModelProperty(value = "第31天排产量")
-    @TableField("DAY_31")
-    private Integer day31;
-
-    // ==================== 其他信息 ====================
-
-    @ApiModelProperty(value = "硫化总工时")
-    @TableField("TOTAL_VULCANIZATION_MINUTES")
-    private BigDecimal totalVulcanizationMinutes;
-
-    @ApiModelProperty(value = "显示顺序")
-    @TableField("DISPLAY_SEQ")
-    private Integer displaySeq;
-
-    @ApiModelProperty(value = "发布状态(0未发布/1已发布/2失败/3发布中/4超时/5待发布)")
-    @TableField("IS_RELEASE")
-    private String isRelease;
-
-    @ApiModelProperty(value = "是否EXCEL导入(0否/1是)")
-    @TableField("IS_IMPORT")
-    private String isImport;
-
-    @ApiModelProperty(value = "排产顺序")
-    @TableField("PRODUCTION_SEQUENCE")
-    private Long productionSequence;
-
-    // ==================== 系统字段 ====================
-
-    @ApiModelProperty(value = "创建时间")
-    @TableField(value = "CREATE_TIME", fill = FieldFill.INSERT)
-    private Date createTime;
-
-    @ApiModelProperty(value = "更新时间")
-    @TableField(value = "UPDATE_TIME", fill = FieldFill.INSERT_UPDATE)
-    private Date updateTime;
-
-    @ApiModelProperty(value = "创建人")
-    @TableField("CREATE_BY")
-    private String createBy;
-
-    @ApiModelProperty(value = "更新人")
-    @TableField("UPDATE_BY")
-    private String updateBy;
-
-    @ApiModelProperty(value = "备注")
-    @TableField("REMARK")
-    private String remark;
-
-    // ==================== 业务方法 ====================
 
     /**
-     * 获取日硫化量(双班次)
+     * 施工阶段 00 无工艺 01 试制 02 量试 03 正式
      */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.schedulingType", dictType = "biz_construction_stage")
+    @ApiModelProperty(value = "施工阶段 00 无工艺 01 试制 02 量试 03 正式", name = "constructionStage")
+    @TableField(value = "CONSTRUCTION_STAGE")
+    private String constructionStage;
+    /**
+     * 是否零度材料
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.isZeroRack", dictType = "biz_yes_no")
+    @ApiModelProperty(value = "是否零度材料", name = "isZeroRack")
+    @TableField(value = "IS_ZERO_RACK")
+    private String isZeroRack;
+
+    /**
+     * 制造示方书号
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.embryoNo")
+    @ApiModelProperty(value = "制造示方书号", name = "embryoNo")
+    @TableField(value = "EMBRYO_NO")
+    private String embryoNo;
+
+    /**
+     * 文字示方书号
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.textNo")
+    @ApiModelProperty(value = "文字示方书号", name = "textNo")
+    @TableField(value = "TEXT_NO")
+    private String textNo;
+
+    /**
+     * 硫化示方书号
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.lhNo")
+    @ApiModelProperty(value = "硫化示方书号", name = "lhNo")
+    @TableField(value = "LH_NO")
+    private String lhNo;
+
+    /**
+     * 品牌
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.brand", dictType = "biz_brand_type")
+    @ApiModelProperty(value = "品牌", name = "brand")
+    @TableField(value = "BRAND")
+    private String brand;
+
+    /**
+     * 规格
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.specifications")
+    @ApiModelProperty(value = "规格", name = "specifications")
+    @TableField(value = "SPECIFICATIONS")
+    private String specifications;
+
+    /**
+     * 主花纹
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.mainPattern")
+    @ApiModelProperty(value = "主花纹", name = "mainPattern")
+    @TableField(value = "MAIN_PATTERN")
+    private String mainPattern;
+
+    /**
+     * 花纹
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.pattern")
+    @ApiModelProperty(value = "花纹", name = "pattern")
+    @TableField(value = "PATTERN")
+    private String pattern;
+
+    /**
+     * 型腔数量(同主花纹的模具数量)
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.mouldCavityQty")
+    @ApiModelProperty(value = "型腔数量(同主花纹的模具数量)", name = "mouldCavityQty")
+    @TableField(value = "MOULD_CAVITY_QTY")
+    private Integer mouldCavityQty;
+
+    /**
+     * 活块数量(同主花纹的物料模具数量)
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.typeBlockQty")
+    @ApiModelProperty(value = "活块数量(同主花纹的物料模具数量)", name = "typeBlockQty")
+    @TableField(value = "TYPE_BLOCK_QTY")
+    private Integer typeBlockQty;
+
+    /**
+     * 高优先级数量
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.heightQty")
+    @ApiModelProperty(value = "高优先级数量", name = "heightQty")
+    @TableField(value = "HEIGHT_QTY")
+    private Integer heightQty;
+
+    /**
+     * 月均销量
+     */
+//    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.averageSaleQty")
+    @ApiModelProperty(value = "月均销量", name = "averageSaleQty")
+    @TableField(value = "AVERAGE_SALE_QTY")
+    private Integer averageSaleQty;
+
+    /**
+     * 库销比
+     */
+//    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.inventorySalesRatio")
+    @ApiModelProperty(value = "库销比", name = "inventorySalesRatio")
+    @TableField(value = "INVENTORY_SALES_RATIO")
+    private BigDecimal inventorySalesRatio;
+
+
+
+    /**
+     * 日硫化量
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.dayVulcanizationQty")
+    @ApiModelProperty(value = "日硫化量", name = "dayVulcanizationQty")
+    @TableField(value = "DAY_VULCANIZATION_QTY")
+    private Integer dayVulcanizationQty;
+
+    /**
+     * 成型机台信息 多个以，分隔
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.cxMachineCode")
+    @ApiModelProperty(value = "成型机台信息", name = "cxMachineCode")
+    @TableField(value = "CX_MACHINE_CODE")
+    private String cxMachineCode;
+
+    /**
+     * 模具使用变化信息如2-4-2,或是2-4或是2
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.mouldChangeInfo")
+    @ApiModelProperty(value = "模具使用变化信息", name = "mouldChangeInfo")
+    @TableField(value = "MOULD_CHANGE_INFO")
+    private String mouldChangeInfo;
+
+    /**
+     * 动平衡数量
+     */
+    @ApiModelProperty(value = "动平衡数量", name = "dynamicBalanceQty")
+    @TableField(value = "DYNAMIC_BALANCE_QTY")
+    private String dynamicBalanceQty;
+
+    /**
+     * 均匀性数量
+     */
+    @ApiModelProperty(value = "均匀性数量", name = "uniformityQty")
+    @TableField(value = "UNIFORMITY_QTY")
+    private Integer uniformityQty;
+
+    /**
+     * 是否EXCEL导入（0：默认不是，1：是）
+     */
+//    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.isImport", dictType = "biz_yes_no")
+    @ApiModelProperty(value = "是否EXCEL导入", name = "isImport")
+    @TableField(value = "IS_IMPORT")
+    private String isImport;
+
+    /**
+     * 排产顺序
+     */
+//    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.productionSequence")
+    @ApiModelProperty(value = "排产顺序", name = "productionSequence")
+    @TableField(value = "PRODUCTION_SEQUENCE")
+    private Long productionSequence;
+
+    /**
+     * 单条硫化时间(包含增加间隔)-调整时使用
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.curingTime")
+    @ApiModelProperty(value = "单条硫化时间(包含增加间隔)-调整时使用", name = "curingTime")
+    @TableField(value = "CURING_TIME")
+    private Integer curingTime;
+
+    /**
+     * 生产需求计划
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.prodReqPlan")
+    @ApiModelProperty(value = "净需求", name = "prodReqPlan")
+    @TableField(value = "PROD_REQ_PLAN")
+    private Integer prodReqPlan;
+
+    /**
+     * 试制量试计划需求量
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.trialQty")
+    @ApiModelProperty(value = "试制量试计划需求量", name = "trialQty")
+    @TableField(value = "TRIAL_QTY")
+    private Integer trialQty;
+
+    /**
+     * 高优先级排产数量
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.heightProductionQty")
+    @ApiModelProperty(value = "高优先级排产数量", name = "heightProductionQty")
+    @TableField(value = "HEIGHT_PRODUCTION_QTY")
+    private Integer heightProductionQty;
+
+    /**
+     * 实际生产需求(含损耗)
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.factProdReqQty")
+    @ApiModelProperty(value = "实际生产需求(含损耗)", name = "factProdReqQty")
+    @TableField(value = "FACT_PROD_REQ_QTY")
+    private Integer factProdReqQty;
+
+    /**
+     * 生产实际排产量
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.totalQty")
+    @ApiModelProperty(value = "生产实际排产量", name = "totalQty")
+    @TableField(value = "TOTAL_QTY")
+    private Integer totalQty;
+
+    /**
+     * 中优先级排产数量
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.midProductionQty")
+    @ApiModelProperty(value = "中优先级排产数量", name = "midProductionQty")
+    @TableField(value = "MID_PRODUCTION_QTY")
+    private Integer midProductionQty;
+
+    /**
+     * 周期排产储备排产数量
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.cycleProductionQty")
+    @ApiModelProperty(value = "周期排产储备排产数量", name = "cycleProductionQty")
+    @TableField(value = "CYCLE_PRODUCTION_QTY")
+    private Integer cycleProductionQty;
+
+    /**
+     * 常规储备排产数量
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.conventionProductionQty")
+    @ApiModelProperty(value = "常规储备排产数量", name = "conventionProductionQty")
+    @TableField(value = "CONVENTION_PRODUCTION_QTY")
+    private Integer conventionProductionQty;
+
+    /**
+     * 暂缓订单排产数量
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.postponeProductionQty")
+    @ApiModelProperty(value = "暂缓订单排产数量", name = "postponeProductionQty")
+    @TableField(value = "POSTPONE_PRODUCTION_QTY")
+    private Integer postponeProductionQty;
+
+    /**
+     * 试制量试排产量
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.trialProductionQty")
+    @ApiModelProperty(value = "试制量试排产量", name = "trialProductionQty")
+    @TableField(value = "TRIAL_PRODUCTION_QTY")
+    private Integer trialProductionQty;
+
+    /**
+     * 差异量(未排产数量)
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.differenceQty")
+    @ApiModelProperty(value = "差异量(未排产数量)", name = "differenceQty")
+    @TableField(value = "DIFFERENCE_QTY")
+    private Integer differenceQty;
+
+    /** 第1周调整量 */
+    @ApiModelProperty(value = "第1周调整量", name = "adjustQty1")
+    @TableField(value = "ADJUST_QTY1")
+    private Integer adjustQty1;
+
+    /** 第2周调整量 */
+    @ApiModelProperty(value = "第2周调整量", name = "adjustQty2")
+    @TableField(value = "ADJUST_QTY2")
+    private Integer adjustQty2;
+
+    /** 第3周调整量 */
+    @ApiModelProperty(value = "第3周调整量", name = "adjustQty3")
+    @TableField(value = "ADJUST_QTY3")
+    private Integer adjustQty3;
+
+    /** 第4周调整量 */
+    @ApiModelProperty(value = "第4周调整量", name = "adjustQty4")
+    @TableField(value = "ADJUST_QTY4")
+    private Integer adjustQty4;
+
+    /**
+     * 未排产原因
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.reason")
+    @ApiModelProperty(value = "未排产原因", name = "reason")
+    @TableField(value = "REASON")
+    private String reason;
+
+    /**
+     * 开始日期
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.beginDay")
+    @ApiModelProperty(value = "开始日期", name = "beginDay")
+    @TableField(value = "BEGIN_DAY")
+    private Integer beginDay;
+
+    /**
+     * 结束日期
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.endDay")
+    @ApiModelProperty(value = "结束日期", name = "endDay")
+    @TableField(value = "END_DAY")
+    private Integer endDay;
+
+    /**
+     * DAY_1
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.day1")
+    @ApiModelProperty(value = "DAY_1", name = "day1")
+    @TableField(value = "DAY_1")
+    private Integer day1;
+
+    /**
+     * DAY_2
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.day2")
+    @ApiModelProperty(value = "DAY_2", name = "day2")
+    @TableField(value = "DAY_2")
+    private Integer day2;
+
+    /**
+     * DAY_3
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.day3")
+    @ApiModelProperty(value = "DAY_3", name = "day3")
+    @TableField(value = "DAY_3")
+    private Integer day3;
+
+    /**
+     * DAY_4
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.day4")
+    @ApiModelProperty(value = "DAY_4", name = "day4")
+    @TableField(value = "DAY_4")
+    private Integer day4;
+
+    /**
+     * DAY_5
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.day5")
+    @ApiModelProperty(value = "DAY_5", name = "day5")
+    @TableField(value = "DAY_5")
+    private Integer day5;
+
+    /**
+     * DAY_6
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.day6")
+    @ApiModelProperty(value = "DAY_6", name = "day6")
+    @TableField(value = "DAY_6")
+    private Integer day6;
+
+    /**
+     * DAY_7
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.day7")
+    @ApiModelProperty(value = "DAY_7", name = "day7")
+    @TableField(value = "DAY_7")
+    private Integer day7;
+
+    /**
+     * DAY_8
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.day8")
+    @ApiModelProperty(value = "DAY_8", name = "day8")
+    @TableField(value = "DAY_8")
+    private Integer day8;
+
+    /**
+     * DAY_9
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.day9")
+    @ApiModelProperty(value = "DAY_9", name = "day9")
+    @TableField(value = "DAY_9")
+    private Integer day9;
+
+    /**
+     * DAY_10
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.day10")
+    @ApiModelProperty(value = "DAY_10", name = "day10")
+    @TableField(value = "DAY_10")
+    private Integer day10;
+
+    /**
+     * DAY_11
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.day11")
+    @ApiModelProperty(value = "DAY_11", name = "day11")
+    @TableField(value = "DAY_11")
+    private Integer day11;
+
+    /**
+     * DAY_12
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.day12")
+    @ApiModelProperty(value = "DAY_12", name = "day12")
+    @TableField(value = "DAY_12")
+    private Integer day12;
+
+    /**
+     * DAY_13
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.day13")
+    @ApiModelProperty(value = "DAY_13", name = "day13")
+    @TableField(value = "DAY_13")
+    private Integer day13;
+
+    /**
+     * DAY_14
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.day14")
+    @ApiModelProperty(value = "DAY_14", name = "day14")
+    @TableField(value = "DAY_14")
+    private Integer day14;
+
+    /**
+     * DAY_15
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.day15")
+    @ApiModelProperty(value = "DAY_15", name = "day15")
+    @TableField(value = "DAY_15")
+    private Integer day15;
+
+    /**
+     * DAY_16
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.day16")
+    @ApiModelProperty(value = "DAY_16", name = "day16")
+    @TableField(value = "DAY_16")
+    private Integer day16;
+
+    /**
+     * DAY_17
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.day17")
+    @ApiModelProperty(value = "DAY_17", name = "day17")
+    @TableField(value = "DAY_17")
+    private Integer day17;
+
+    /**
+     * DAY_18
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.day18")
+    @ApiModelProperty(value = "DAY_18", name = "day18")
+    @TableField(value = "DAY_18")
+    private Integer day18;
+
+    /**
+     * DAY_19
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.day19")
+    @ApiModelProperty(value = "DAY_19", name = "day19")
+    @TableField(value = "DAY_19")
+    private Integer day19;
+
+    /**
+     * DAY_20
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.day20")
+    @ApiModelProperty(value = "DAY_20", name = "day20")
+    @TableField(value = "DAY_20")
+    private Integer day20;
+
+    /**
+     * DAY_21
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.day21")
+    @ApiModelProperty(value = "DAY_21", name = "day21")
+    @TableField(value = "DAY_21")
+    private Integer day21;
+
+    /**
+     * DAY_22
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.day22")
+    @ApiModelProperty(value = "DAY_22", name = "day22")
+    @TableField(value = "DAY_22")
+    private Integer day22;
+
+    /**
+     * DAY_23
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.day23")
+    @ApiModelProperty(value = "DAY_23", name = "day23")
+    @TableField(value = "DAY_23")
+    private Integer day23;
+
+    /**
+     * DAY_24
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.day24")
+    @ApiModelProperty(value = "DAY_24", name = "day24")
+    @TableField(value = "DAY_24")
+    private Integer day24;
+
+    /**
+     * DAY_25
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.day25")
+    @ApiModelProperty(value = "DAY_25", name = "day25")
+    @TableField(value = "DAY_25")
+    private Integer day25;
+
+    /**
+     * DAY_26
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.day26")
+    @ApiModelProperty(value = "DAY_26", name = "day26")
+    @TableField(value = "DAY_26")
+    private Integer day26;
+
+    /**
+     * DAY_27
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.day27")
+    @ApiModelProperty(value = "DAY_27", name = "day27")
+    @TableField(value = "DAY_27")
+    private Integer day27;
+
+    /**
+     * DAY_28
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.day28")
+    @ApiModelProperty(value = "DAY_28", name = "day28")
+    @TableField(value = "DAY_28")
+    private Integer day28;
+
+    /**
+     * DAY_29
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.day29")
+    @ApiModelProperty(value = "DAY_29", name = "day29")
+    @TableField(value = "DAY_29")
+    private Integer day29;
+
+    /**
+     * DAY_30
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.day30")
+    @ApiModelProperty(value = "DAY_30", name = "day30")
+    @TableField(value = "DAY_30")
+    private Integer day30;
+
+    /**
+     * DAY_31
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.day31")
+    @ApiModelProperty(value = "DAY_31", name = "day31")
+    @TableField(value = "DAY_31")
+    private Integer day31;
+
+    /**
+     * 硫化总工时
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.totalVulcanizationMinutes")
+    @ApiModelProperty(value = "硫化总工时", name = "totalVulcanizationMinutes")
+    @TableField(value = "TOTAL_VULCANIZATION_MINUTES")
+    private BigDecimal totalVulcanizationMinutes;
+
+    /**
+     * 显示顺序
+     */
+//    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.displaySeq")
+    @ApiModelProperty(value = "显示顺序", name = "displaySeq")
+    @TableField(value = "DISPLAY_SEQ")
+    private Integer displaySeq;
+
+    /**
+     * 发布状态，0--未发布，1--已发布，2-发布失败，3-发布中，4-超时失败，5-待发布。对应数据字典为：IS_RELEASE
+     */
+    @Excel(name = "ui.data.column.FactoryMonthPlanFinalResult.isRelease", dictType = "IS_RELEASE")
+    @ApiModelProperty(value = "发布状态，0--未发布，1--已发布，2-发布失败，3-发布中，4-超时失败，5-待发布。对应数据字典为：IS_RELEASE", name = "isRelease")
+    @TableField(value = "IS_RELEASE")
+    private String isRelease;
+
     public Integer getDayLhQty() {
-        if (this.dayVulcanizationQty == null) {
+        if(null == this.dayVulcanizationQty) {
             return 0;
         }
-        return this.dayVulcanizationQty * 2;
+        return dayVulcanizationQty * 2;
     }
 
     /**
-     * 获取月底计划剩余量key
+     *  月底计划剩余量key
      */
     public String getGroupKey() {
-        return String.format("%s|*|%s", this.factoryCode, this.materialDesc);
+        String keyFormat = "%s|*|%s";
+        return String.format(keyFormat, factoryCode, materialDesc);
     }
 
     /**
@@ -509,58 +825,5 @@ public class FactoryMonthPlanProductionFinalResult implements Serializable {
         }
     }
 
-    /**
-     * 设置指定日期的排产量
-     * @param day 日期(1-31)
-     * @param qty 排产量
-     */
-    public void setDayQty(int day, Integer qty) {
-        switch (day) {
-            case 1: day1 = qty; break;
-            case 2: day2 = qty; break;
-            case 3: day3 = qty; break;
-            case 4: day4 = qty; break;
-            case 5: day5 = qty; break;
-            case 6: day6 = qty; break;
-            case 7: day7 = qty; break;
-            case 8: day8 = qty; break;
-            case 9: day9 = qty; break;
-            case 10: day10 = qty; break;
-            case 11: day11 = qty; break;
-            case 12: day12 = qty; break;
-            case 13: day13 = qty; break;
-            case 14: day14 = qty; break;
-            case 15: day15 = qty; break;
-            case 16: day16 = qty; break;
-            case 17: day17 = qty; break;
-            case 18: day18 = qty; break;
-            case 19: day19 = qty; break;
-            case 20: day20 = qty; break;
-            case 21: day21 = qty; break;
-            case 22: day22 = qty; break;
-            case 23: day23 = qty; break;
-            case 24: day24 = qty; break;
-            case 25: day25 = qty; break;
-            case 26: day26 = qty; break;
-            case 27: day27 = qty; break;
-            case 28: day28 = qty; break;
-            case 29: day29 = qty; break;
-            case 30: day30 = qty; break;
-            case 31: day31 = qty; break;
-        }
-    }
 
-    /**
-     * 计算总排产量
-     */
-    public int calculateTotalQty() {
-        int total = 0;
-        for (int i = 1; i <= 31; i++) {
-            Integer qty = getDayQty(i);
-            if (qty != null && qty > 0) {
-                total += qty;
-            }
-        }
-        return total;
-    }
 }
