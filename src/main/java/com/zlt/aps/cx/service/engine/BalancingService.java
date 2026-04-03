@@ -1,7 +1,7 @@
 package com.zlt.aps.cx.service.engine;
 
 import com.zlt.aps.cx.vo.ScheduleContextVo;
-import com.zlt.aps.cx.entity.MpCxCapacityConfiguration;
+import com.zlt.aps.mp.api.domain.entity.MpCxCapacityConfiguration;
 import com.zlt.aps.cx.entity.config.CxParamConfig;
 import com.zlt.aps.mp.api.domain.entity.MdmMoldingMachine;
 import com.zlt.aps.mp.api.domain.entity.MdmStructureLhRatio;

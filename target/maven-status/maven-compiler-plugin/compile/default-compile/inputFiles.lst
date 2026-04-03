@@ -6,6 +6,7 @@
 /workspace/projects/src/main/java/com/zlt/aps/mp/api/domain/entity/MdmCxMachineOnlineInfo.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/service/DynamicAdjustService.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/service/impl/PrecisionPlanServiceImpl.java
+/workspace/projects/src/main/java/com/zlt/aps/mp/api/domain/entity/MpCxCapacityConfiguration.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/mapper/LhScheduleResultMapper.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/vo/ScheduleQueryVo.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/service/impl/validation/ValidationStrategy.java
@@ -31,7 +32,6 @@
 /workspace/projects/src/main/java/com/zlt/aps/cx/service/engine/CoreScheduleAlgorithmService.java
 /workspace/projects/src/main/java/com/ruoyi/common/core/annotation/Excel.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/vo/ScheduleGenerateVo.java
-/workspace/projects/src/main/java/com/zlt/aps/cx/entity/MpCxCapacityConfiguration.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/service/impl/validation/ParamConfigValidationStrategy.java
 /workspace/projects/src/main/java/com/zlt/aps/mp/api/domain/entity/MdmStructureTreadConfig.java
 /workspace/projects/src/main/java/com/ruoyi/common/core/web/domain/AjaxResult.java

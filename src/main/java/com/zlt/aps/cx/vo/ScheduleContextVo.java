@@ -8,7 +8,7 @@ import com.zlt.aps.cx.entity.CxOperatorLeave;
 import com.zlt.aps.cx.entity.CxPrecisionPlan;
 import com.zlt.aps.cx.entity.CxStock;
 import com.zlt.aps.cx.entity.CxTreadParkingConfig;
-import com.zlt.aps.cx.entity.MpCxCapacityConfiguration;
+import com.zlt.aps.mp.api.domain.entity.MpCxCapacityConfiguration;
 import com.zlt.aps.cx.entity.config.CxKeyProduct;
 import com.zlt.aps.cx.entity.config.CxParamConfig;
 import com.zlt.aps.cx.entity.config.CxShiftConfig;
