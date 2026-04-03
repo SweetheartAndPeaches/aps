@@ -1,21 +1,12 @@
 package com.zlt.aps.cx.vo;
 
-import com.zlt.aps.cx.entity.CxAlertConfig;
-import com.zlt.aps.cx.entity.CxMachineStructureCapacity;
-import com.zlt.aps.cx.entity.CxMaterialEnding;
-import com.zlt.aps.cx.entity.CxMaterialException;
-import com.zlt.aps.cx.entity.CxOperatorLeave;
-import com.zlt.aps.cx.entity.CxPrecisionPlan;
-import com.zlt.aps.cx.entity.CxStock;
-import com.zlt.aps.cx.entity.CxTreadParkingConfig;
-import com.zlt.aps.mp.api.domain.entity.MpCxCapacityConfiguration;
+import com.zlt.aps.cx.entity.*;
 import com.zlt.aps.cx.entity.config.CxKeyProduct;
 import com.zlt.aps.cx.entity.config.CxParamConfig;
 import com.zlt.aps.cx.entity.config.CxShiftConfig;
 import com.zlt.aps.cx.entity.config.CxStructurePriority;
-import com.zlt.aps.mp.api.domain.entity.MdmStructureTreadConfig;
-import com.zlt.aps.mp.api.domain.entity.*;
 import com.zlt.aps.mdm.api.domain.entity.MdmDevicePlanShut;
+import com.zlt.aps.mp.api.domain.entity.*;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
 import lombok.Data;
@@ -171,11 +162,6 @@ public class ScheduleContextVo {
     private List<CxPrecisionPlan> precisionPlans;
 
     /**
-     * 操作工请假列表
-     */
-    private List<CxOperatorLeave> operatorLeaves;
-
-    /**
      * 材料异常列表
      */
     private List<CxMaterialException> materialExceptions;
@@ -198,14 +184,6 @@ public class ScheduleContextVo {
      * Value: 日硫化产能信息
      */
     private Map<String, MonthPlanProductLhCapacityVo> materialLhCapacityMap;
-
-    /**
-     * 硫化机台产能信息映射（物料编码 -> 机台产能列表）
-     * 用于计算成型机台的满算力（支持配比未塞满的情况）
-     * Key: 物料编码
-     * Value: 该物料对应的硫化机台产能信息列表
-     */
-    private Map<String, List<com.zlt.aps.cx.service.impl.LhMachineCapacityInfo>> lhMachineCapacityMap;
 
     /**
      * 结构硫化配比映射（结构编码 -> 配比信息）
