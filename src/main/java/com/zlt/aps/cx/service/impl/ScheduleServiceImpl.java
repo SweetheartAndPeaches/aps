@@ -38,7 +38,7 @@ import com.zlt.aps.cx.service.ScheduleService;
 import com.zlt.aps.cx.service.impl.validation.ScheduleDataValidator;
 import com.zlt.aps.cx.service.impl.validation.ScheduleDataValidationResult;
 import com.zlt.aps.cx.vo.MonthPlanProductLhCapacityVo;
-import com.zlt.aps.mdm.api.domain.entity.MdmStructureTreadConfig;
+import com.zlt.aps.mp.api.domain.entity.MdmStructureTreadConfig;
 import com.zlt.aps.mp.api.domain.entity.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

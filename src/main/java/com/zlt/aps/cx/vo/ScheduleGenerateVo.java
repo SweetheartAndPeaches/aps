@@ -18,6 +18,9 @@ public class ScheduleGenerateVo implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
+    @ApiModelProperty(value = "工厂编码", example = "116")
+    private String factoryCode;
+
     @ApiModelProperty(value = "计划日期", example = "2024-01-01", required = true)
     private LocalDate scheduleDate;
 
