@@ -1,7 +1,7 @@
 package com.zlt.aps.mp.api.domain.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
-import com.zlt.aps.cx.entity.base.ApsBaseEntity;
+import com.zlt.aps.common.core.domain.ApsBaseEntity;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
