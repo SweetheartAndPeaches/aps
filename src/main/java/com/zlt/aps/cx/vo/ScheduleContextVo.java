@@ -1,12 +1,21 @@
 package com.zlt.aps.cx.vo;
 
-import com.zlt.aps.cx.entity.*;
+import com.zlt.aps.cx.entity.CxAlertConfig;
+import com.zlt.aps.cx.entity.CxMachineStructureCapacity;
+import com.zlt.aps.cx.entity.CxMaterialEnding;
+import com.zlt.aps.cx.entity.CxMaterialException;
+import com.zlt.aps.cx.entity.CxOperatorLeave;
+import com.zlt.aps.cx.entity.CxPrecisionPlan;
+import com.zlt.aps.cx.entity.CxStock;
+import com.zlt.aps.cx.entity.CxTreadParkingConfig;
+import com.zlt.aps.cx.entity.MpCxCapacityConfiguration;
 import com.zlt.aps.cx.entity.config.CxKeyProduct;
 import com.zlt.aps.cx.entity.config.CxParamConfig;
 import com.zlt.aps.cx.entity.config.CxShiftConfig;
 import com.zlt.aps.cx.entity.config.CxStructurePriority;
 import com.zlt.aps.mp.api.domain.entity.MdmStructureTreadConfig;
 import com.zlt.aps.mp.api.domain.entity.*;
+import com.zlt.aps.mdm.api.domain.entity.MdmDevicePlanShut;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
 import lombok.Data;

@@ -3,7 +3,7 @@ package com.zlt.aps.cx.service.engine;
 import com.zlt.aps.cx.vo.ScheduleContextVo;
 import com.zlt.aps.cx.entity.CxMachineStructureCapacity;
 import com.zlt.aps.cx.entity.CxPrecisionPlan;
-import com.zlt.aps.cx.entity.MdmDevicePlanShut;
+import com.zlt.aps.mdm.api.domain.entity.MdmDevicePlanShut;
 import com.zlt.aps.cx.entity.config.CxParamConfig;
 import com.zlt.aps.cx.entity.config.CxShiftConfig;
 import com.zlt.aps.mp.api.domain.entity.MdmStructureTreadConfig;

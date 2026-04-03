@@ -5,7 +5,7 @@ import com.zlt.aps.cx.vo.ScheduleContextVo;
 import com.zlt.aps.cx.vo.ScheduleRequestVo;
 import com.zlt.aps.cx.entity.CxMaterialEnding;
 import com.zlt.aps.cx.entity.CxStock;
-import com.zlt.aps.cx.entity.MdmDevicePlanShut;
+import com.zlt.aps.mdm.api.domain.entity.MdmDevicePlanShut;
 import com.zlt.aps.cx.entity.MpCxCapacityConfiguration;
 import com.zlt.aps.cx.entity.config.CxKeyProduct;
 import com.zlt.aps.cx.entity.config.CxParamConfig;

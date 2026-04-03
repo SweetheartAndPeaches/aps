@@ -1,5 +1,6 @@
 /workspace/projects/src/main/java/com/zlt/aps/cx/service/impl/validation/BaseValidationStrategy.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/vo/ScheduleContextVo.java
+/workspace/projects/src/main/java/com/zlt/aps/mdm/api/domain/entity/MdmDevicePlanShut.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/mapper/MdmStructureTreadConfigMapper.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/mapper/CxPrecisionPlanMapper.java
 /workspace/projects/src/main/java/com/zlt/aps/mp/api/domain/entity/MdmCxMachineOnlineInfo.java
@@ -20,7 +21,6 @@
 /workspace/projects/src/main/java/com/zlt/aps/cx/service/impl/TrialScheduleServiceImpl.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/service/CxScheduleResultService.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/mapper/MdmStructureLhRatioMapper.java
-/workspace/projects/src/main/java/com/zlt/aps/cx/entity/MdmDevicePlanShut.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/config/DatabaseInitializer.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/entity/config/CxParamConfig.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/entity/CxMachineStructureCapacity.java
