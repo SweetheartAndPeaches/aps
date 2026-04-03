@@ -4,7 +4,7 @@ import com.zlt.aps.cx.vo.ScheduleContextVo;
 import com.zlt.aps.cx.entity.CxStock;
 import com.zlt.aps.cx.entity.MpCxCapacityConfiguration;
 import com.zlt.aps.cx.entity.config.CxShiftConfig;
-import com.zlt.aps.cx.entity.config.CxStructureShiftCapacity;
+import com.zlt.aps.mp.api.domain.entity.MdmStructureTreadConfig;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
 import com.zlt.aps.mp.api.domain.entity.MdmCxMachineFixed;
 import com.zlt.aps.mp.api.domain.entity.MdmMoldingMachine;
@@ -33,7 +33,7 @@ import java.util.stream.Collectors;
  * <ol>
  *   <li>已知成型机安排的胎胚及对应的硫化任务</li>
  *   <li>计算今天需求 = 硫化任务需求 - 成型余量（库存）</li>
- *   <li>按整车换算（查询 CxStructureShiftCapacity.tripQty）</li>
+ *   <li>按整车换算（查询 MdmStructureTreadConfig.tripQty）</li>
  *   <li>波浪分配到3个班次（相邻班次差距不超过1车）</li>
  * </ol>
  *
@@ -669,7 +669,7 @@ public class ProductionCalculator {
      */
     public int getTripCapacity(String structureName, ScheduleContextVo context) {
         if (context.getStructureShiftCapacities() != null && structureName != null) {
-            for (CxStructureShiftCapacity capacity : context.getStructureShiftCapacities()) {
+            for (MdmStructureTreadConfig capacity : context.getStructureShiftCapacities()) {
                 if (structureName.equals(capacity.getStructureCode())) {
                     if (capacity.getTripQty() != null && capacity.getTripQty() > 0) {
                         return capacity.getTripQty();

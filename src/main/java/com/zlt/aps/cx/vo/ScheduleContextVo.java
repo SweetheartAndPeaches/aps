@@ -5,7 +5,7 @@ import com.zlt.aps.cx.entity.config.CxKeyProduct;
 import com.zlt.aps.cx.entity.config.CxParamConfig;
 import com.zlt.aps.cx.entity.config.CxShiftConfig;
 import com.zlt.aps.cx.entity.config.CxStructurePriority;
-import com.zlt.aps.cx.entity.config.CxStructureShiftCapacity;
+import com.zlt.aps.mp.api.domain.entity.MdmStructureTreadConfig;
 import com.zlt.aps.mp.api.domain.entity.*;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
@@ -128,7 +128,7 @@ public class ScheduleContextVo {
      * 结构班产配置列表（整车条数）
      * 按结构+班次定义的标准产能
      */
-    private List<CxStructureShiftCapacity> structureShiftCapacities;
+    private List<MdmStructureTreadConfig> structureShiftCapacities;
 
     /**
      * 结构优先级配置列表
