@@ -36,7 +36,7 @@ public class ScheduleMainController {
     @Autowired
     private CxScheduleResultService cxScheduleResultService;
 
-    @ApiOperation(value = "生成排程", notes = "根据日期和天数生成排程")
+     @ApiOperation(value = "生成排程", notes = "根据日期和天数生成排程")
     @PostMapping("/generate")
     public AjaxResult generateSchedule(@RequestBody ScheduleGenerateVo dto) {
         if (dto.getScheduleDate() == null) {
@@ -45,27 +45,29 @@ public class ScheduleMainController {
         if (dto.getDays() == null || dto.getDays() < 1) {
             dto.setDays(1);
         }
-        
+
         List<Object> allResults = new ArrayList<>();
         LocalDate currentDate = dto.getScheduleDate();
-        
+
         for (int i = 0; i < dto.getDays(); i++) {
             ScheduleRequestVo request = new ScheduleRequestVo();
             request.setScheduleDate(currentDate);
             request.setOverwrite(dto.getOverwrite() != null ? dto.getOverwrite() : false);
+            request.setFactoryCode(dto.getFactoryCode());
             request.setScheduleType(dto.getScheduleType());
-            
+            request.setScheduleMode(dto.getScheduleType());
+
             ScheduleService.ScheduleResult result = scheduleService.executeSchedule(request);
-            
+
             if (result.isSuccess()) {
                 allResults.add(result);
             } else {
                 return AjaxResult.error("排程失败[" + currentDate + "]: " + result.getMessage());
             }
-            
+
             currentDate = currentDate.plusDays(1);
         }
-        
+
         return AjaxResult.success(allResults);
     }
 
