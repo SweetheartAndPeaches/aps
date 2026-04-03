@@ -781,26 +781,25 @@ public class DatabaseInitializer implements CommandLineRunner {
 
     /**
      * 初始化班次配置数据
-     * 每天三个班次：夜班、早班、中班，比例1:2:1
+     * 班次模式：第一天只有早班和中班，第二、三天有夜班、早班、中班
      */
     private void initShiftConfigData() {
-        // 第一天班次配置
+        // 第一天班次配置 (D1) - 只有早班和中班
         jdbcTemplate.execute("INSERT INTO T_CX_SHIFT_CONFIG (SHIFT_CODE, SHIFT_NAME, SHIFT_ORDER, START_TIME, END_TIME, SHIFT_HOURS, IS_CROSS_DAY, SCHEDULE_DAY, DAY_SHIFT_ORDER, CLASS_FIELD, FACTORY_CODE, IS_ACTIVE) VALUES " +
-                "('NIGHT_D1', '夜班', 1, '00:00:00', '07:59:59', 8, 0, 1, 1, 'CLASS1', 'F001', 1), " +
-                "('DAY_D1', '早班', 2, '08:00:00', '15:59:59', 8, 0, 1, 2, 'CLASS2', 'F001', 1), " +
-                "('AFTERNOON_D1', '中班', 3, '16:00:00', '23:59:59', 8, 0, 1, 3, 'CLASS3', 'F001', 1)");
+                "('DAY_D1', '早班', 1, '06:00:00', '13:59:59', 8, 0, 1, 1, 'CLASS1', 'F001', 1), " +
+                "('AFTERNOON_D1', '中班', 2, '14:00:00', '23:59:59', 10, 0, 1, 2, 'CLASS2', 'F001', 1)");
         
-        // 第二天班次配置
+        // 第二天班次配置 (D2) - 有夜班、早班、中班
         jdbcTemplate.execute("INSERT INTO T_CX_SHIFT_CONFIG (SHIFT_CODE, SHIFT_NAME, SHIFT_ORDER, START_TIME, END_TIME, SHIFT_HOURS, IS_CROSS_DAY, SCHEDULE_DAY, DAY_SHIFT_ORDER, CLASS_FIELD, FACTORY_CODE, IS_ACTIVE) VALUES " +
-                "('NIGHT_D2', '夜班', 1, '00:00:00', '07:59:59', 8, 0, 2, 1, 'CLASS4', 'F001', 1), " +
-                "('DAY_D2', '早班', 2, '08:00:00', '15:59:59', 8, 0, 2, 2, 'CLASS5', 'F001', 1), " +
-                "('AFTERNOON_D2', '中班', 3, '16:00:00', '23:59:59', 8, 0, 2, 3, 'CLASS6', 'F001', 1)");
+                "('NIGHT_D2', '夜班', 1, '00:00:00', '05:59:59', 6, 0, 2, 1, 'CLASS3', 'F001', 1), " +
+                "('DAY_D2', '早班', 2, '06:00:00', '13:59:59', 8, 0, 2, 2, 'CLASS4', 'F001', 1), " +
+                "('AFTERNOON_D2', '中班', 3, '14:00:00', '23:59:59', 10, 0, 2, 3, 'CLASS5', 'F001', 1)");
         
-        // 第三天班次配置
+        // 第三天班次配置 (D3) - 有夜班、早班、中班
         jdbcTemplate.execute("INSERT INTO T_CX_SHIFT_CONFIG (SHIFT_CODE, SHIFT_NAME, SHIFT_ORDER, START_TIME, END_TIME, SHIFT_HOURS, IS_CROSS_DAY, SCHEDULE_DAY, DAY_SHIFT_ORDER, CLASS_FIELD, FACTORY_CODE, IS_ACTIVE) VALUES " +
-                "('NIGHT_D3', '夜班', 1, '00:00:00', '07:59:59', 8, 0, 3, 1, 'CLASS7', 'F001', 1), " +
-                "('DAY_D3', '早班', 2, '08:00:00', '15:59:59', 8, 0, 3, 2, 'CLASS8', 'F001', 1), " +
-                "('AFTERNOON_D3', '中班', 3, '16:00:00', '23:59:59', 8, 0, 3, 3, 'CLASS1', 'F001', 1)");
+                "('NIGHT_D3', '夜班', 1, '00:00:00', '05:59:59', 6, 0, 3, 1, 'CLASS6', 'F001', 1), " +
+                "('DAY_D3', '早班', 2, '06:00:00', '13:59:59', 8, 0, 3, 2, 'CLASS7', 'F001', 1), " +
+                "('AFTERNOON_D3', '中班', 3, '14:00:00', '23:59:59', 10, 0, 3, 3, 'CLASS8', 'F001', 1)");
     }
 
     /**
