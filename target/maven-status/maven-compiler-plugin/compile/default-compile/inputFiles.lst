@@ -98,6 +98,7 @@
 /workspace/projects/src/main/java/com/zlt/aps/cx/mapper/CxScheduleResultMapper.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/service/impl/validation/MaterialValidationStrategy.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/mapper/CxMachineStructureCapacityMapper.java
+/workspace/projects/src/main/java/com/zlt/common/annotation/ImportExcelValidated.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/enums/DayVulcanizationModeEnum.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/entity/CxPrecisionPlan.java
 /workspace/projects/src/main/java/com/zlt/aps/cx/mapper/MdmMonthSurplusMapper.java
