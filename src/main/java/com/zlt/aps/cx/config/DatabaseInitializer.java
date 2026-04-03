@@ -104,6 +104,7 @@ public class DatabaseInitializer implements CommandLineRunner {
         initMdmMonthPlanProductLhData();
         initMdmMonthSurplusData();
         initWorkCalendarData();
+        initOperatorLeaveData();
 
         System.out.println("========================================");
         System.out.println("  MySQL数据库初始化完成!");
@@ -933,16 +934,21 @@ public class DatabaseInitializer implements CommandLineRunner {
         jdbcTemplate.execute("DROP TABLE IF EXISTS T_MDM_CX_MACHINE_ONLINE_INFO");
         jdbcTemplate.execute("CREATE TABLE T_MDM_CX_MACHINE_ONLINE_INFO (" +
                 "ID BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', " +
-                "CX_MACHINE_CODE VARCHAR(50) NOT NULL COMMENT '成型机编码', " +
-                "MATERIAL_CODE VARCHAR(50) COMMENT '在机物料编码', " +
-                "STRUCTURE_NAME VARCHAR(100) COMMENT '在机结构', " +
                 "ONLINE_DATE DATE COMMENT '上机日期', " +
-                "ONLINE_SHIFT VARCHAR(20) COMMENT '上机班次', " +
-                "PLAN_END_DATE DATE COMMENT '计划结束日期', " +
-                "STATUS VARCHAR(20) DEFAULT 'ONLINE' COMMENT '状态', " +
-                "IS_ACTIVE INT DEFAULT 1 COMMENT '是否有效', " +
+                "CX_CODE VARCHAR(50) NOT NULL COMMENT '成型机编码', " +
+                "MATERIAL_CODE VARCHAR(50) COMMENT '物料编码', " +
+                "MES_MATERIAL_CODE VARCHAR(50) COMMENT 'MES物料编码', " +
+                "SPEC_DESC VARCHAR(200) COMMENT '规格描述', " +
+                "EMBRYO_SPEC VARCHAR(200) COMMENT '胎胚规格', " +
+                "DATA_VERSION VARCHAR(100) COMMENT '数据版本', " +
+                "COMPANY_CODE VARCHAR(20) COMMENT '公司编码', " +
+                "FACTORY_CODE VARCHAR(20) COMMENT '工厂编码', " +
+                "IS_DELETE INT DEFAULT 0 COMMENT '是否删除', " +
+                "CREATE_BY VARCHAR(50) COMMENT '创建人', " +
                 "CREATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间', " +
-                "UPDATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'" +
+                "UPDATE_BY VARCHAR(50) COMMENT '更新人', " +
+                "UPDATE_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间', " +
+                "REMARK VARCHAR(500) COMMENT '备注'" +
                 ") COMMENT='成型机在机信息表'");
     }
 
@@ -1268,12 +1274,28 @@ public class DatabaseInitializer implements CommandLineRunner {
         jdbcTemplate.execute("CREATE TABLE cx_operator_leave (" +
                 "id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID', " +
                 "machine_code VARCHAR(50) COMMENT '机台编码', " +
-                "operator_name VARCHAR(50) COMMENT '操作员姓名', " +
+                "employee_code VARCHAR(50) COMMENT '员工编码', " +
+                "employee_name VARCHAR(50) COMMENT '员工姓名', " +
+                "shift_code VARCHAR(20) COMMENT '班次编码', " +
                 "start_date DATE COMMENT '请假开始日期', " +
                 "end_date DATE COMMENT '请假结束日期', " +
+                "leave_type VARCHAR(20) COMMENT '请假类型', " +
+                "affect_capacity INT DEFAULT 0 COMMENT '是否影响产能(0-否,1-是)', " +
                 "approval_status VARCHAR(20) COMMENT '审批状态', " +
-                "create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'" +
-                ") COMMENT='操作员请假表'");
+                "remark VARCHAR(500) COMMENT '备注', " +
+                "create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间', " +
+                "update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'" +
+                ") COMMENT='操作工请假记录表'");
+    }
+
+    /**
+     * 初始化操作工请假测试数据
+     */
+    private void initOperatorLeaveData() {
+        jdbcTemplate.execute("INSERT INTO cx_operator_leave (machine_code, employee_code, employee_name, shift_code, start_date, end_date, leave_type, affect_capacity, approval_status, remark) VALUES " +
+                "('CX001', 'EMP001', '张三', 'NIGHT', '2026-09-05', '2026-09-07', 'ANNUAL', 1, 'APPROVED', '年假'), " +
+                "('CX002', 'EMP002', '李四', 'MORNING', '2026-09-10', '2026-09-12', 'SICK', 0, 'APPROVED', '病假'), " +
+                "('CX003', 'EMP003', '王五', 'AFTERNOON', '2026-09-15', '2026-09-16', 'PERSONAL', 1, 'PENDING', '事假待审批')");
     }
 
     /**
@@ -1379,12 +1401,98 @@ public class DatabaseInitializer implements CommandLineRunner {
 
     /**
      * 初始化在机信息数据
+     * 测试数据日期: 2026年9月
      */
     private void initMdmMachineOnlineInfoData() {
-        jdbcTemplate.execute("INSERT INTO T_MDM_CX_MACHINE_ONLINE_INFO (CX_MACHINE_CODE, MATERIAL_CODE, STRUCTURE_NAME, ONLINE_DATE, STATUS, IS_ACTIVE) VALUES " +
-                "('GM01', 'MAT001', '12R22.5', CURDATE(), 'ONLINE', 1), " +
-                "('GM02', 'MAT002', '11R22.5', CURDATE(), 'ONLINE', 1), " +
-                "('GM03', 'MAT003', '295/80R22.5', CURDATE(), 'ONLINE', 1)");
+        // 清空表
+        jdbcTemplate.execute("TRUNCATE TABLE T_MDM_CX_MACHINE_ONLINE_INFO");
+        
+        // 批量插入测试数据 - 2026年9月
+        String[][] onlineData = {
+            // H1505
+            {"H1505", "2351000053", "215101523", "385/55R22.5 160K 20PR JT560 BL4EJY"},
+            {"H1505", "2351000795", "215104811", "385/55R22.5 160K 20PR JW593 BL4EJY"},
+            // H1504
+            {"H1504", "2351000579", "215101878", "385/65R22.5 164K 24PR JT560 BL4EJY"},
+            {"H1504", "2351000563", "215101877", "385/65R22.5 164K 24PR JY598 BL4EJY"},
+            // H1503
+            {"H1503", "2351000407", "215102615", "255/70R22.5 140/137M 16PR JF518 BL4EJY"},
+            {"H1503", "2351000407", "215102615", "255/70R22.5 140/137M 16PR JF518 BL4EJY"},
+            // H1502
+            {"H1502", "2351000412", "215101880", "385/65R22.5 164K 24PR BT180 BL4EBL"},
+            {"H1502", "2351000563", "215101877", "385/65R22.5 164K 24PR JY598 BL4EJY"},
+            // H1501
+            {"H1501", "2351000459", "215102626", "295/80R22.5 152/149M 18PR JF518 BL4EJY"},
+            {"H1501", "2351000459", "215102626", "295/80R22.5 152/149M 18PR JF518 BL4EJY"},
+            {"H1501", "2351000505", "215101325", "295/80R22.5 152/149L 18PR JD575 BL4EJY"},
+            // H1405
+            {"H1405", "2351000525", "215101734", "11R24.5 149/146L 16PR JF568 BL4HJY"},
+            {"H1405", "2351000179", "215101731", "11R24.5 149/146L 16PR JD571 BL4HJY"},
+            // H1404
+            {"H1404", "2351000529", "215103396", "315/60R22.5 154/150L 18PR BF188 BL4EBL"},
+            // H1403
+            {"H1403", "2351000473", "215103491", "275/80R22.5 149/146L 18PR EDR51 BL4HEG"},
+            {"H1403", "2351000487", "215101840", "275/80R22.5 146/143L 16PR JF568 BL4HJY"},
+            // H1402
+            {"H1402", "2351000335", "215101743", "245/70R19.5 144/142J 18PR JF518 BL3EJY"},
+            // H1401
+            {"H1401", "2351000443", "215102582", "215/75R17.5 135/133L 16PR JF518 BL3EJY"},
+            // H1305
+            {"H1305", "2351000045", "215103782", "315/80R22.5 161/157K 20PR JA665 BL0HJY"},
+            {"H1305", "2351000040", "215101401", "315/80R22.5 156/153K 20PR JD758 BL0EJY"},
+            // H1304
+            {"H1304", "2351000395", "215101470", "295/80R22.5 152/149M 18PR BD175 BL4EBL"},
+            {"H1304", "2351000484", "215103740", "295/80R22.5 154/149M 18PR UF195 BL4HEU"},
+            // H1303
+            {"H1303", "2351000437", "215102632", "315/70R22.5 156/150L 18PR JF518 BL4EJY"},
+            {"H1303", "2351000437", "215102632", "315/70R22.5 156/150L 18PR JF518 BL4EJY"},
+            // H1302
+            {"H1302", "2351000412", "215101880", "385/65R22.5 164K 24PR BT180 BL4EBL"},
+            {"H1302", "2351000210", "215104050", "385/65R22.5 164K 24PR JW593 BL4EJY"},
+            // H1301
+            {"H1301", "2351000485", "215101335", "315/70R22.5 156/150L 18PR JD575 BL4EJY"},
+            {"H1301", "2351000400", "215102631", "315/70R22.5 156/150L 18PR JD577 BL4EJY"},
+            // H1205
+            {"H1205", "2351000083", "215101838", "385/65R22.5 164K 24PR JY598 BL0EJY"},
+            // H1204
+            {"H1204", "2351000459", "215102626", "295/80R22.5 152/149M 18PR JF518 BL4EJY"},
+            {"H1204", "2351000482", "215103741", "295/80R22.5 154/149L 18PR UD188 BL4HEU"},
+            // H1203
+            {"H1203", "2351000409", "215102830", "315/70R22.5 156/150L 18PR EDR51 BL4EEG"},
+            // H1202
+            {"H1202", "2351000456", "215102568", "295/75R22.5 146/143L 16PR BF188 BL4HBL"},
+            {"H1202", "2351000567", "215101611", "295/75R22.5 146/143L 16PR JD571 BL4HJY"},
+            // H1201
+            {"H1201", "2351000064", "215101729", "11R22.5 146/143L 16PR JD571 BL4HJY"},
+            {"H1201", "2351000064", "215101729", "11R22.5 146/143L 16PR JD571 BL4HJY"},
+            // H1105
+            {"H1105", "2351000459", "215102626", "295/80R22.5 152/149M 18PR JF518 BL4EJY"},
+            {"H1105", "2351000459", "215102626", "295/80R22.5 152/149M 18PR JF518 BL4EJY"},
+            // H1104
+            {"H1104", "2351000301", "215101489", "315/80R22.5 156/150L 18PR JD565 BL4EJY"},
+            {"H1104", "2351000403", "215101814", "315/80R22.5 156/153L 20PR JF518 BL4EJY"},
+            // H1103
+            {"H1103", "2351000305", "215102639", "325/95R24 162/160K 22PR JA526 BT0HJY"},
+            {"H1103", "2351000286", "215102640", "325/95R24 162/160K 22PR JD727 BT0HJY"},
+            // H1102
+            {"H1102", "2351000110", "215103997", "12R22.5 152/149L 18PR BF188 BL0HBL"},
+            {"H1102", "2351000108", "215101166", "12R22.5 152/149K 18PR JA665 BL0HJY"},
+            // H1101
+            {"H1101", "2351000663", "215101837", "385/65R22.5 164K 24PR JT560 BL0EJY"}
+        };
+        
+        // 批量插入数据
+        for (String[] data : onlineData) {
+            jdbcTemplate.update(
+                "INSERT INTO T_MDM_CX_MACHINE_ONLINE_INFO " +
+                "(ONLINE_DATE, CX_CODE, MATERIAL_CODE, MES_MATERIAL_CODE, SPEC_DESC, EMBRYO_SPEC, " +
+                "DATA_VERSION, COMPANY_CODE, FACTORY_CODE, IS_DELETE, CREATE_BY, UPDATE_BY) VALUES " +
+                "('2026-09-01', ?, ?, ?, ?, ?, 'APS_MES_AH01_20260901100530001', '116', '116', 0, 'MES', 'MES')",
+                data[0], data[1], data[2], data[3], data[3]
+            );
+        }
+        
+        System.out.println("  已插入 " + onlineData.length + " 条在机信息测试数据 (2026年9月)");
     }
 
     /**
