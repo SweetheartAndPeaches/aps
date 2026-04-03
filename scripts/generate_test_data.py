@@ -49,7 +49,7 @@ for i in range(7, 80):
             class2 = daily_qty - class1 - class3
             embryo_stock = int(row[8]) if pd.notna(row[8]) else 0
             
-            sql = f"""INSERT INTO T_LH_SCHEDULE_RESULT (FACTORY_CODE, LH_MACHINE_CODE, MATERIAL_CODE, MATERIAL_DESC, STRUCTURE_NAME, DAILY_PLAN_QTY, SCHEDULE_DATE, CLASS1_PLAN_QTY, CLASS2_PLAN_QTY, CLASS3_PLAN_QTY, EMBRYO_STOCK, PRODUCTION_STATUS) VALUES ('{FACTORY_CODE}', '{machine}', '{row[5]}', '{row[6]}', '{row[6].split()[0] if pd.notna(row[6]) else ''}', {daily_qty}, '{date_str}', {class1}, {class2}, {class3}, {embryo_stock}, '0');"""
+            sql = f"""INSERT INTO T_LH_SCHEDULE_RESULT (FACTORY_CODE, LH_MACHINE_CODE, PRODUCT_CODE, SPEC_DESC, SPEC_CODE, DAILY_PLAN_QTY, SCHEDULE_DATE, CLASS1_PLAN_QTY, CLASS2_PLAN_QTY, CLASS3_PLAN_QTY, EMBRYO_STOCK, PRODUCTION_STATUS) VALUES ('{FACTORY_CODE}', '{machine}', '{row[5]}', '{row[6]}', '{row[6].split()[0] if pd.notna(row[6]) else ''}', {daily_qty}, '{date_str}', {class1}, {class2}, {class3}, {embryo_stock}, '0');"""
             sql_statements.append(sql)
             current_date += timedelta(days=1)
 
@@ -66,7 +66,8 @@ for i in range(7, 50):
         desc_parts = str(material_desc).split() if pd.notna(material_desc) else ['', '']
         spec = desc_parts[0] if len(desc_parts) > 0 else ''
         pattern = desc_parts[1] if len(desc_parts) > 1 else ''
-        sql = f"""INSERT INTO T_MDM_MATERIAL_INFO (MATERIAL_CODE, MATERIAL_NAME, MATERIAL_DESC, PRODUCT_STRUCTURE, MAIN_PATTERN, PATTERN, IS_MAIN_PRODUCT, VULCANIZE_TIME_MINUTES, EMBRYO_CODE) VALUES ('{material_code}', '{material_desc}', '{material_desc}', '{spec}', '{pattern}', '{pattern}', 1, 13, '{material_code}');"""
+        # 根据建表语句字段：MATERIAL_CODE, MATERIAL_NAME, SPECIFICATION, STRUCTURE_NAME, MAIN_PATTERN, PATTERN, EMBRYO_CODE, SPEC_DESC, LH_TIME
+        sql = f"""INSERT INTO T_MDM_MATERIAL_INFO (MATERIAL_CODE, MATERIAL_NAME, SPECIFICATION, STRUCTURE_NAME, MAIN_PATTERN, PATTERN, EMBRYO_CODE, SPEC_DESC, LH_TIME) VALUES ('{material_code}', '{material_desc}', '{spec}', '{spec}', '{pattern}', '{pattern}', '{material_code}', '{material_desc}', 13);"""
         sql_statements.append(sql)
 
 # 4. 胎胚库存数据
@@ -101,7 +102,7 @@ for i in range(7, 50):
         spec = str(material_desc).split()[0] if len(str(material_desc).split()) > 0 else ''
         if spec and spec not in structures:
             structures.add(spec)
-            sql = f"""INSERT INTO T_MDM_STRUCTURE_LH_RATIO (STRUCTURE_NAME, CX_MACHINE_TYPE, MAX_LH_MACHINE_QTY, MAX_EMBRYO_TYPE, TRIP_QTY, IS_ACTIVE) VALUES ('{spec}', '三鼓', 4, 4, 12, 1);"""
+            sql = f"""INSERT INTO T_MDM_STRUCTURE_LH_RATIO (STRUCTURE_NAME, CX_MACHINE_TYPE_CODE, LH_MACHINE_MAX_QTY, MAX_EMBRYO_QTY, IS_ACTIVE) VALUES ('{spec}', '三鼓', 4, 4, 1);"""
             sql_statements.append(sql)
 
 # 输出所有SQL
