@@ -224,7 +224,7 @@ public interface CoreScheduleAlgorithmService {
         /** 硫化余量（来自t_mdm_month_surplus.PLAN_SURPLUS_QTY，已由系统计算） */
         private Integer vulcanizeSurplusQty;
         /** 收尾日（月计划的最后排产日期） */
-        private java.time.LocalDate endingDate;
+        private LocalDate endingDate;
         /** 距离收尾日天数 */
         private Integer daysToEnding;
         /** 是否紧急收尾（3天内收尾） */

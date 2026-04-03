@@ -2,19 +2,17 @@ package com.zlt.aps.cx.service.engine;
 
 import com.zlt.aps.cx.vo.ScheduleContextVo;
 import com.zlt.aps.cx.entity.CxMachineStructureCapacity;
-import com.zlt.aps.mp.api.domain.entity.MpCxCapacityConfiguration;
 import com.zlt.aps.cx.entity.config.CxParamConfig;
 import com.zlt.aps.cx.entity.config.CxShiftConfig;
-import com.zlt.aps.mp.api.domain.entity.MdmStructureTreadConfig;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
 import com.zlt.aps.mp.api.domain.entity.MdmMoldingMachine;
 import com.zlt.aps.mp.api.domain.entity.MdmStructureLhRatio;
+import com.zlt.aps.mp.api.domain.entity.MpCxCapacityConfiguration;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
