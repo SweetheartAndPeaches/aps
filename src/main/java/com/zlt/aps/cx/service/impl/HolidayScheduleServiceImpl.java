@@ -19,7 +19,6 @@ import org.springframework.util.CollectionUtils;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.sql.Date;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -70,7 +69,7 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
     public boolean isHoliday(LocalDate date) {
         // 使用工作日历判断是否停产（按工序CX查询）
         // MdmWorkCalendar.dayFlag: 0-停,1-开
-        Date queryDate = Date.valueOf(date);
+        java.sql.Date queryDate = java.sql.Date.valueOf(date);
         MdmWorkCalendar workCalendar = workCalendarMapper.selectOne(
                 new LambdaQueryWrapper<MdmWorkCalendar>()
                         .eq(MdmWorkCalendar::getProcCode, PROC_CODE_CX)
@@ -125,7 +124,7 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
         builder.isBeforeHoliday(isBeforeHoliday(date));
 
         // 使用工作日历获取节假日信息（按工序CX查询）
-        Date queryDate = Date.valueOf(date);
+        java.sql.Date queryDate = java.sql.Date.valueOf(date);
         MdmWorkCalendar workCalendar = workCalendarMapper.selectOne(
                 new LambdaQueryWrapper<MdmWorkCalendar>()
                         .eq(MdmWorkCalendar::getProcCode, PROC_CODE_CX)
@@ -321,8 +320,11 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
             // 找出该胎胚对应的所有硫化任务中最大的specEndTime
             LocalDateTime embryoMaxStopTime = null;
             for (LhScheduleResult result : embryoResults) {
-                LocalDateTime specEndTime = result.getSpecEndTime();
-                if (specEndTime != null) {
+                Date specEndTimeDate = result.getSpecEndTime();
+                if (specEndTimeDate != null) {
+                    LocalDateTime specEndTime = specEndTimeDate.toInstant()
+                            .atZone(java.time.ZoneId.systemDefault())
+                            .toLocalDateTime();
                     if (embryoMaxStopTime == null || specEndTime.isAfter(embryoMaxStopTime)) {
                         embryoMaxStopTime = specEndTime;
                     }
