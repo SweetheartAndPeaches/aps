@@ -2,8 +2,10 @@ package com.zlt.aps.cx.entity.schedule;
 
 import com.baomidou.mybatisplus.annotation.*;
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.ruoyi.common.core.annotation.Excel;
+import com.zlt.aps.common.core.annotation.ImportValidated;
 import com.zlt.aps.common.core.domain.ApsBaseEntity;
-import io.swagger.annotations.ApiModel;
+import com.zlt.common.annotation.ImportExcelValidated;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
@@ -12,6 +14,7 @@ import lombok.EqualsAndHashCode;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Date;
 
 /**
  * 硫化排程结果表
@@ -26,284 +29,565 @@ import java.time.LocalDateTime;
 @ApiModel(value = "硫化排程结果对象", description = "硫化排程结果表")
 public class LhScheduleResult extends ApsBaseEntity {
 
-    private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 2597208202828961196L;
 
-    @ApiModelProperty(value = "主键ID")
-    @TableId(value = "ID", type = IdType.AUTO)
-    private Long id;
+    /**
+     * 分厂编号
+     */
+    @ImportExcelValidated(required = true)
+    @ApiModelProperty(value = "分厂编号", name = "factoryCode")
+    @TableField(value = "FACTORY_CODE")
+    @Excel(name = "ui.data.column.result.factoryCode", sort = 1)
+    private String factoryCode;
 
-    @ApiModelProperty(value = "批次号")
-    @TableField("BATCH_NO")
+    /**
+     * 自动排程批次号信息，每重新生成一次排程结果，批次号就递增。规则：工序+年月日+3位定长自增序号
+     */
+    @ApiModelProperty(value = "自动排程批次号", name = "batchNo")
+    @TableField(value = "BATCH_NO")
     private String batchNo;
 
-    @ApiModelProperty(value = "工单号")
-    @TableField("ORDER_NO")
+    /**
+     * 工单号，自动生成（工序+日期+三位顺序号001,002）
+     */
+    @ApiModelProperty(value = "工单号", name = "orderNo")
+    @TableField(value = "ORDER_NO")
     private String orderNo;
 
-    @ApiModelProperty(value = "硫化机台编号")
-    @TableField("LH_MACHINE_CODE")
-    private String lhMachineCode;
+    /**
+     * 月度计划单号
+     */
+    @ApiModelProperty(value = "月度计划单号", name = "MONTH_PLAN_NO")
+    @TableField(value = "MONTH_PLAN_NO")
+    private String monthPlanNo;
 
-    @ApiModelProperty(value = "左右模")
-    @TableField("LEFT_RIGHT_MOULD")
-    private String leftRightMould;
-
-    @ApiModelProperty(value = "硫化机台名称")
-    @TableField("LH_MACHINE_NAME")
-    private String lhMachineName;
-
-    @ApiModelProperty(value = "物料编号")
-    @TableField("MATERIAL_CODE")
-    private String materialCode;
-
-    @ApiModelProperty(value = "规格代码")
-    @TableField("SPEC_CODE")
-    private String specCode;
-
-    @ApiModelProperty(value = "胎胚代码")
-    @TableField("EMBRYO_CODE")
-    private String embryoCode;
-
-    @ApiModelProperty(value = "产品结构")
-    @TableField("STRUCTURE_NAME")
-    private String structureName;
-
-    @ApiModelProperty(value = "物料描述")
-    @TableField("MATERIAL_DESC")
-    private String materialDesc;
-
-    @ApiModelProperty(value = "主物料")
-    @TableField("MAIN_MATERIAL_DESC")
-    private String mainMaterialDesc;
-
-    @ApiModelProperty(value = "胎胚库存")
-    @TableField("EMBRYO_STOCK")
-    private Integer embryoStock;
-
-    @ApiModelProperty(value = "规格描述")
-    @TableField("SPEC_DESC")
-    private String specDesc;
-
-    @ApiModelProperty(value = "硫化时长(秒)")
-    @TableField("LH_TIME")
-    private Integer lhTime;
-
-    @ApiModelProperty(value = "日计划数量")
-    @TableField("DAILY_PLAN_QTY")
-    private Integer dailyPlanQty;
-
-    @ApiModelProperty(value = "排程日期")
-    @JsonFormat(pattern = "yyyy-MM-dd")
-    @TableField("SCHEDULE_DATE")
-    private LocalDate scheduleDate;
-
-    @ApiModelProperty(value = "规格结束时间")
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
-    @TableField("SPEC_END_TIME")
-    private LocalDateTime specEndTime;
-
-    @ApiModelProperty(value = "生产状态")
-    @TableField("PRODUCTION_STATUS")
-    private String productionStatus;
-
-    // ========== 班次信息 ==========
-    @ApiModelProperty(value = "1班计划量")
-    @TableField("CLASS1_PLAN_QTY")
-    private Integer class1PlanQty;
-
-    @ApiModelProperty(value = "1班开始时间")
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
-    @TableField("CLASS1_START_TIME")
-    private LocalDateTime class1StartTime;
-
-    @ApiModelProperty(value = "1班结束时间")
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
-    @TableField("CLASS1_END_TIME")
-    private LocalDateTime class1EndTime;
-
-    @ApiModelProperty(value = "1班原因分析")
-    @TableField("CLASS1_ANALYSIS")
-    private String class1Analysis;
-
-    @ApiModelProperty(value = "1班完成量")
-    @TableField("CLASS1_FINISH_QTY")
-    private Integer class1FinishQty;
-
-    @ApiModelProperty(value = "2班计划量")
-    @TableField("CLASS2_PLAN_QTY")
-    private Integer class2PlanQty;
-
-    @ApiModelProperty(value = "2班开始时间")
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
-    @TableField("CLASS2_START_TIME")
-    private LocalDateTime class2StartTime;
-
-    @ApiModelProperty(value = "2班结束时间")
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
-    @TableField("CLASS2_END_TIME")
-    private LocalDateTime class2EndTime;
-
-    @ApiModelProperty(value = "2班原因分析")
-    @TableField("CLASS2_ANALYSIS")
-    private String class2Analysis;
-
-    @ApiModelProperty(value = "2班完成量")
-    @TableField("CLASS2_FINISH_QTY")
-    private Integer class2FinishQty;
-
-    @ApiModelProperty(value = "3班计划量")
-    @TableField("CLASS3_PLAN_QTY")
-    private Integer class3PlanQty;
-
-    @ApiModelProperty(value = "3班开始时间")
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
-    @TableField("CLASS3_START_TIME")
-    private LocalDateTime class3StartTime;
-
-    @ApiModelProperty(value = "3班结束时间")
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
-    @TableField("CLASS3_END_TIME")
-    private LocalDateTime class3EndTime;
-
-    @ApiModelProperty(value = "3班原因分析")
-    @TableField("CLASS3_ANALYSIS")
-    private String class3Analysis;
-
-    @ApiModelProperty(value = "3班完成量")
-    @TableField("CLASS3_FINISH_QTY")
-    private Integer class3FinishQty;
-
-    @ApiModelProperty(value = "4班计划量")
-    @TableField("CLASS4_PLAN_QTY")
-    private Integer class4PlanQty;
-
-    @ApiModelProperty(value = "4班开始时间")
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
-    @TableField("CLASS4_START_TIME")
-    private LocalDateTime class4StartTime;
-
-    @ApiModelProperty(value = "4班结束时间")
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
-    @TableField("CLASS4_END_TIME")
-    private LocalDateTime class4EndTime;
-
-    @ApiModelProperty(value = "4班原因分析")
-    @TableField("CLASS4_ANALYSIS")
-    private String class4Analysis;
-
-    @ApiModelProperty(value = "4班完成量")
-    @TableField("CLASS4_FINISH_QTY")
-    private Integer class4FinishQty;
-
-    // 其他班次省略...与上面类似结构
-
-    @ApiModelProperty(value = "是否交期")
-    @TableField("IS_DELIVERY")
-    private String isDelivery;
-
-    @ApiModelProperty(value = "是否发布")
-    @TableField("IS_RELEASE")
-    private String isRelease;
-
-    @ApiModelProperty(value = "发布成功计数")
-    @TableField("PUBLISH_SUCCESS_COUNT")
-    private BigDecimal publishSuccessCount;
-
-    @ApiModelProperty(value = "最新发布时间")
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
-    @TableField("NEWEST_PUBLISH_TIME")
-    private LocalDateTime newestPublishTime;
-
-    @ApiModelProperty(value = "数据来源")
-    @TableField("DATA_SOURCE")
-    private String dataSource;
-
-    @ApiModelProperty(value = "使用模数")
-    @TableField("MOULD_QTY")
-    private Integer mouldQty;
-
-    @ApiModelProperty(value = "单班硫化量")
-    @TableField("SINGLE_MOULD_SHIFT_QTY")
-    private Integer singleMouldShiftQty;
-
-    @ApiModelProperty(value = "模具信息")
-    @TableField("MOULD_INFO")
-    private String mouldInfo;
-
-    @ApiModelProperty(value = "硫化方式")
-    @TableField("MOULD_METHOD")
-    private String mouldMethod;
-
-    @ApiModelProperty(value = "施工阶段")
-    @TableField("CONSTRUCTION_STAGE")
-    private String constructionStage;
-
-    @ApiModelProperty(value = "制造示方书号")
-    @TableField("EMBRYO_NO")
-    private String embryoNo;
-
-    @ApiModelProperty(value = "文字示方书号")
-    @TableField("TEXT_NO")
-    private String textNo;
-
-    @ApiModelProperty(value = "硫化示方书号")
-    @TableField("LH_NO")
-    private String lhNo;
-
-    @ApiModelProperty(value = "月计划版本")
-    @TableField("MONTH_PLAN_VERSION")
+    /**
+     * 月度计划版本号
+     */
+    @ApiModelProperty(value = "月度计划版本号", name = "MONTH_PLAN_VERSION")
+    @TableField(value = "MONTH_PLAN_VERSION")
     private String monthPlanVersion;
 
-    @ApiModelProperty(value = "机台排序号")
-    @TableField("MACHINE_ORDER")
+    /**
+     * 硫化机台编号
+     */
+    @ImportExcelValidated(required = true)
+    @ApiModelProperty(value = "硫化机台编号", name = "lhMachineCode")
+    @TableField(value = "LH_MACHINE_CODE")
+    @ImportValidated(required = true, maxLength = 20)
+    @Excel(name = "ui.data.column.scheduleResult.lhMachineCode", sort = 2)
+    private String lhMachineCode;
+
+    /**
+     * 规格描述信息
+     */
+    @ApiModelProperty(value = "规格描述信息", name = "specDesc")
+    @TableField(value = "SPEC_DESC")
+    @Excel(name = "ui.data.column.scheduleResult.specDesc", sort = 3)
+    private String specDesc;
+
+    /**
+     * 存储当前左右模情况，如果非单模单规格的则可为空，单模单规格则存储对应的模信息，如：存储内容，L/R、L1/R1
+     */
+    @ApiModelProperty(value = "左右模", name = "leftRightMold")
+    @TableField(value = "LEFT_RIGHT_MOLD")
+    @Excel(name = "ui.data.column.scheduleResult.leftRightMold", sort = 40)
+    private String leftRightMold;
+
+    /**
+     * 硫化机台名称
+     */
+    @ApiModelProperty(value = "硫化机台名称", name = "lhMachineName")
+    @TableField(value = "LH_MACHINE_NAME")
+    private String lhMachineName;
+
+    /**
+     * 物料编号
+     */
+    @ApiModelProperty(value = "物料编号", name = "productCode")
+    @TableField(value = "PRODUCT_CODE")
+    @Excel(name = "ui.data.column.result.productCode", sort = 50)
+    private String productCode;
+
+    /**
+     * 规格代码
+     */
+    @ImportExcelValidated(required = true)
+    @ApiModelProperty(value = "规格代码", name = "specCode")
+    @TableField(value = "SPEC_CODE")
+    @ImportValidated(maxLength = 66)
+    @Excel(name = "ui.data.column.scheduleResult.specCode", sort = 5)
+    private String specCode;
+
+    /**
+     * 胎胚代码
+     */
+    @ApiModelProperty(value = "胎胚代码", name = "embryoCode")
+    @TableField(value = "EMBRYO_CODE")
+    @Excel(name = "ui.data.column.scheduleResult.embryoCode", sort = 7)
+    private String embryoCode;
+
+    /**
+     * 胎胚库存
+     */
+    @ApiModelProperty(value = "胎胚库存", name = "embryoStock")
+    @TableField(value = "EMBRYO_STOCK")
+    @Excel(name = "ui.data.column.scheduleResult.embryoStock", cellType = Excel.ColumnType.NUMERIC, sort = 52)
+    private Integer embryoStock;
+
+    /**
+     * 硫化时长
+     */
+    @ApiModelProperty(value = "硫化时长", name = "lhTime")
+    @TableField(value = "LH_TIME")
+    @Excel(name = "ui.data.column.scheduleResult.lhTime", cellType = Excel.ColumnType.NUMERIC, sort = 53)
+    private BigDecimal lhTime;
+
+    /**
+     * 月度计划日需求量
+     */
+    @ApiModelProperty(value = "月度计划日需求量", name = "dailyPlanQty")
+    @TableField(value = "DAILY_PLAN_QTY")
+    @Excel(name = "ui.data.column.scheduleResult.dailyPlanQty", cellType = Excel.ColumnType.NUMERIC, sort = 40)
+    private Integer dailyPlanQty;
+
+    /**
+     * 月度计划模数
+     */
+    @ApiModelProperty(value = "月度计划模数")
+    @TableField(value = "MP_MOLD_QTY")
+    private Integer mpMoldQty;
+
+    /**
+     * 使用模数
+     */
+    @ApiModelProperty(value = "使用模数")
+    @TableField(value = "MOLD_QTY")
+    private Integer moldQty;
+
+    /**
+     * 排程日期
+     */
+    @JsonFormat(pattern = "yyyy-MM-dd")
+    @ApiModelProperty(value = "排程日期", name = "scheduleDate")
+    @TableField(value = "SCHEDULE_DATE")
+    private Date scheduleDate;
+
+    /**
+     * 排程日期
+     */
+    @JsonFormat(pattern = "yyyy-MM-dd")
+    @ApiModelProperty(value = "实际排程日期", name = "realScheduleDate")
+    @TableField(value = "REAL_SCHEDULE_DATE")
+    private Date realScheduleDate;
+
+    /**
+     * 规格结束时间
+     */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @ApiModelProperty(value = "规格结束时间", name = "specEndTime")
+    @TableField(value = "SPEC_END_TIME")
+    private Date specEndTime;
+
+    /**
+     * T日规格结束时间
+     */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @ApiModelProperty(value = "T日规格结束时间", name = "tDaySpecEndTime")
+    @TableField(value = "TDAY_SPEC_END_TIME")
+    private Date tDaySpecEndTime;
+
+    /**
+     * 生产状态:0-未生产；1-生产中；2-生产完成
+     */
+    @ApiModelProperty(value = "生产状态", name = "productionStatus")
+    @TableField(value = "PRODUCTION_STATUS")
+    private String productionStatus;
+
+    /**
+     * 一班计划量
+     */
+    @ApiModelProperty(value = "一班计划量", name = "class1PlanQty")
+    @TableField(value = "CLASS1_PLAN_QTY")
+    @Excel(name = "ui.data.column.lhScheduleResult.class1PlanQty", cellType = Excel.ColumnType.NUMERIC, sort = 11)
+    private Integer class1PlanQty;
+
+    /**
+     * 一班计划开始时间
+     */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @ApiModelProperty(value = "一班计划开始时间", name = "class1StartTime")
+    @TableField(value = "CLASS1_START_TIME")
+    private Date class1StartTime;
+
+    /**
+     * 一班计划结束时间
+     */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @ApiModelProperty(value = "一班计划结束时间", name = "class1EndTime")
+    @TableField(value = "CLASS1_END_TIME")
+    private Date class1EndTime;
+
+    /**
+     * 一班原因分析
+     */
+    @ApiModelProperty(value = "一班原因分析", name = "class1Analysis")
+    @TableField(value = "CLASS1_ANALYSIS")
+    @ImportValidated(maxLength = 66)
+    @Excel(name = "ui.data.column.lhScheduleResult.class1Analysis", sort = 15)
+    private String class1Analysis;
+
+    /**
+     * 一班完成量
+     */
+    @ApiModelProperty(value = "一班完成量", name = "class1FinishQty")
+    @TableField(value = "CLASS1_FINISH_QTY")
+    @Excel(name = "ui.data.column.lhScheduleResult.class1FinishQty", cellType = Excel.ColumnType.NUMERIC, sort = 13)
+    private Integer class1FinishQty;
+
+    /**
+     * 二班计划量
+     */
+    @ApiModelProperty(value = "二班计划量", name = "class2PlanQty")
+    @TableField(value = "CLASS2_PLAN_QTY")
+    @Excel(name = "ui.data.column.lhScheduleResult.class2PlanQty", cellType = Excel.ColumnType.NUMERIC, sort = 12)
+    private Integer class2PlanQty;
+
+    /**
+     * 二班计划开始时间
+     */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @ApiModelProperty(value = "二班计划开始时间", name = "class2StartTime")
+    @TableField(value = "CLASS2_START_TIME")
+    private Date class2StartTime;
+
+    /**
+     * 二班计划结束时间
+     */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @ApiModelProperty(value = "二班计划结束时间", name = "class2EndTime")
+    @TableField(value = "CLASS2_END_TIME")
+    private Date class2EndTime;
+
+    /**
+     * 二班原因分析
+     */
+    @ApiModelProperty(value = "二班原因分析", name = "class2Analysis")
+    @TableField(value = "CLASS2_ANALYSIS")
+    @ImportValidated(maxLength = 66)
+    @Excel(name = "ui.data.column.lhScheduleResult.class2Analysis", sort = 16)
+    private String class2Analysis;
+
+    /**
+     * 二班完成量
+     */
+    @ApiModelProperty(value = "二班完成量", name = "class2FinishQty")
+    @TableField(value = "CLASS2_FINISH_QTY")
+    @Excel(name = "ui.data.column.lhScheduleResult.class2FinishQty", cellType = Excel.ColumnType.NUMERIC, sort = 14)
+    private Integer class2FinishQty;
+
+    /**
+     * 三班计划量
+     */
+    @ApiModelProperty(value = "三班计划量", name = "class3PlanQty")
+    @TableField(value = "CLASS3_PLAN_QTY")
+    @Excel(name = "ui.data.column.lhScheduleResult.class3PlanQty", cellType = Excel.ColumnType.NUMERIC, sort = 17)
+    private Integer class3PlanQty;
+
+    /**
+     * 三班计划开始时间
+     */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @ApiModelProperty(value = "三班计划开始时间", name = "class3StartTime")
+    @TableField(value = "CLASS3_START_TIME")
+    private Date class3StartTime;
+
+    /**
+     * 三班计划结束时间
+     */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @ApiModelProperty(value = "三班计划结束时间", name = "class3EndTime")
+    @TableField(value = "CLASS3_END_TIME")
+    private Date class3EndTime;
+
+    /**
+     * 三班原因分析
+     */
+    @ApiModelProperty(value = "三班原因分析", name = "class3Analysis")
+    @TableField(value = "CLASS3_ANALYSIS")
+    @Excel(name = "ui.data.column.lhScheduleResult.class3Analysis", sort = 19)
+    private String class3Analysis;
+
+    /**
+     * 三班完成量
+     */
+    @ApiModelProperty(value = "三班完成量", name = "class3FinishQty")
+    @TableField(value = "CLASS3_FINISH_QTY")
+    @Excel(name = "ui.data.column.lhScheduleResult.class3FinishQty", cellType = Excel.ColumnType.NUMERIC, sort = 18)
+    private Integer class3FinishQty;
+
+    /**
+     * 次日一班计划量
+     */
+    @ApiModelProperty(value = "次日一班计划量", name = "class4PlanQty")
+    @TableField(value = "CLASS4_PLAN_QTY")
+    @Excel(name = "ui.data.column.lhScheduleResult.class4PlanQty", cellType = Excel.ColumnType.NUMERIC, sort = 21)
+    private Integer class4PlanQty;
+
+    /**
+     * 次日一班计划开始时间
+     */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @ApiModelProperty(value = "次日一班计划开始时间", name = "class4StartTime")
+    @TableField(value = "CLASS4_START_TIME")
+    private Date class4StartTime;
+
+    /**
+     * 次日一班计划结束时间
+     */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @ApiModelProperty(value = "次日一班计划结束时间", name = "class4EndTime")
+    @TableField(value = "CLASS4_END_TIME")
+    private Date class4EndTime;
+
+    /**
+     * 次日一班原因分析
+     */
+    @ApiModelProperty(value = "次日一班原因分析", name = "class4Analysis")
+    @TableField(value = "CLASS4_ANALYSIS")
+    @Excel(name = "ui.data.column.lhScheduleResult.class4Analysis", sort = 23)
+    private String class4Analysis;
+
+    /**
+     * 次日一班完成量
+     */
+    @ApiModelProperty(value = "次日一班完成量", name = "class4FinishQty")
+    @TableField(value = "CLASS4_FINISH_QTY")
+    @Excel(name = "ui.data.column.lhScheduleResult.class4FinishQty", cellType = Excel.ColumnType.NUMERIC, sort = 22)
+    private Integer class4FinishQty;
+
+    /**
+     * 次日二班计划量
+     */
+    @ApiModelProperty(value = "次日二班计划量", name = "class5PlanQty")
+    @TableField(value = "CLASS5_PLAN_QTY")
+    @Excel(name = "ui.data.column.lhScheduleResult.class5PlanQty", cellType = Excel.ColumnType.NUMERIC, sort = 24)
+    private Integer class5PlanQty;
+
+    /**
+     * 次日二班计划开始时间
+     */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @ApiModelProperty(value = "次日二班计划开始时间", name = "class5StartTime")
+    @TableField(value = "CLASS5_START_TIME")
+    private Date class5StartTime;
+
+    /**
+     * 次日二班计划结束时间
+     */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @ApiModelProperty(value = "次日二班计划结束时间", name = "class5EndTime")
+    @TableField(value = "CLASS5_END_TIME")
+    private Date class5EndTime;
+
+    /**
+     * 次日二班原因分析
+     */
+    @ApiModelProperty(value = "次日二班原因分析", name = "class5Analysis")
+    @TableField(value = "CLASS5_ANALYSIS")
+    @Excel(name = "ui.data.column.lhScheduleResult.class5Analysis", sort = 26)
+    private String class5Analysis;
+
+    /**
+     * 次日二班完成量
+     */
+    @ApiModelProperty(value = "次日二班完成量", name = "class5FinishQty")
+    @TableField(value = "CLASS5_FINISH_QTY")
+    @Excel(name = "ui.data.column.lhScheduleResult.class5FinishQty", cellType = Excel.ColumnType.NUMERIC, sort = 25)
+    private Integer class5FinishQty;
+
+    /**
+     * 次日三班计划量
+     */
+    @ApiModelProperty(value = "次日三班计划量", name = "class6PlanQty")
+    @TableField(value = "CLASS6_PLAN_QTY")
+    @Excel(name = "ui.data.column.lhScheduleResult.class6PlanQty", cellType = Excel.ColumnType.NUMERIC, sort = 27)
+    private Integer class6PlanQty;
+
+    /**
+     * 次日三班计划开始时间
+     */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @ApiModelProperty(value = "次日三班计划开始时间", name = "class6StartTime")
+    @TableField(value = "CLASS6_START_TIME")
+    private Date class6StartTime;
+
+    /**
+     * 次日三班计划结束时间
+     */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @ApiModelProperty(value = "次日三班计划结束时间", name = "class6EndTime")
+    @TableField(value = "CLASS6_END_TIME")
+    private Date class6EndTime;
+
+    /**
+     * 次日三班原因分析
+     */
+    @ApiModelProperty(value = "次日三班原因分析", name = "class6Analysis")
+    @TableField(value = "CLASS6_ANALYSIS")
+    @Excel(name = "ui.data.column.lhScheduleResult.class6Analysis", sort = 29)
+    private String class6Analysis;
+
+    /**
+     * 次日三班完成量
+     */
+    @ApiModelProperty(value = "次日三班完成量", name = "class6FinishQty")
+    @TableField(value = "CLASS6_FINISH_QTY")
+    @Excel(name = "ui.data.column.lhScheduleResult.class6FinishQty", cellType = Excel.ColumnType.NUMERIC, sort = 28)
+    private Integer class6FinishQty;
+
+    /**
+     * 是否交期，0--否，1--是
+     */
+    @ApiModelProperty(value = "是否交期")
+    @TableField(value = "IS_DELIVERY")
+    @Excel(name = "ui.data.column.lhScheduleResult.isDelivery", dictType = "IS_HAVE", sort = 31)
+    private String isDelivery;
+
+    /**
+     * 交期需要数量
+     */
+    @ApiModelProperty(value = "交期需要数量")
+    @TableField(exist = false)
+    private Integer deliveryNum;
+
+    /**
+     * 是否发布，0--未发布，1--已发布。对应数据字典为：IS_RELEASE
+     */
+    @ApiModelProperty(value = "是否发布", name = "isRelease")
+    @TableField(value = "IS_RELEASE")
+    private String isRelease;
+
+    /**
+     * 发布成功计数器，每次发布成功进行累加。如果大于1发，发布状态只能到待发布
+     */
+    @ApiModelProperty(value = "发布成功计数器", name = "publishSuccessCount")
+    @TableField(value = "PUBLISH_SUCCESS_COUNT")
+    private Integer publishSuccessCount;
+
+    /**
+     * 保留最新的一次发布成功时间
+     */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @ApiModelProperty(value = "发布成功时间", name = "newestPublishTime")
+    @TableField(value = "NEWEST_PUBLISH_TIME")
+    private Date newestPublishTime;
+
+    /**
+     * 数据来源：0&gt;自动排程；1&gt;插单；2：导入。插单数据可以进行计划调整
+     */
+    @ApiModelProperty(value = "数据来源", name = "dataSource")
+    @TableField(value = "DATA_SOURCE")
+    private String dataSource;
+
+    @ApiModelProperty(value = "单班产能", name = "singleMoldShiftLhQty")
+    @TableField(value = "SINGLE_MOLD_SHIFT_QTY")
+    private Integer singleMoldShiftLhQty;
+
+    /**
+     * 模具信息
+     */
+    @ApiModelProperty(value = "模具信息", name = "moldInfo")
+    @TableField(value = "MOLD_INFO")
+    private String moldInfo;
+
+    /**
+     * BOM版本
+     */
+    @ApiModelProperty(value = "BOM版本", name = "bomVersion")
+    @TableField(value = "BOM_VERSION")
+    private String bomVersion;
+
+    /**
+     * 成型法
+     */
+    @ApiModelProperty(value = "成型法", name = "mouldMethod")
+    @TableField(value = "MOULD_METHOD")
+    private String mouldMethod;
+
+    /**
+     * 成型排程使用的虚字段,存合并任务后IDS
+     */
+    @ApiModelProperty(value = "合并任务的IDS")
+    @TableField(exist = false)
+    private String mergeIds;
+
+    /**
+     * 是否变更机台
+     */
+    @TableField(exist = false)
+    private String changeMachine;
+
+    /**
+     * 是否更改一班计划
+     */
+    @TableField(exist = false)
+    private String changeClass1Plan;
+
+    /**
+     * 是否更改二班计划
+     */
+    @TableField(exist = false)
+    private String changeClass2Plan;
+
+    /**
+     * 是否更改三班计划
+     */
+    @TableField(exist = false)
+    private String changeClass3Plan;
+
+    /**
+     * 是否更改四班计划
+     */
+    @TableField(exist = false)
+    private String changeClass4Plan;
+
+    /**
+     * 是否更改五班计划
+     */
+    @TableField(exist = false)
+    private String changeClass5Plan;
+
+    /**
+     * 是否更改六班计划
+     */
+    @TableField(exist = false)
+    private String changeClass6Plan;
+
+    @ApiModelProperty("排程记录id数组")
+    @TableField(exist = false)
+    private Long[] ids;
+
+    @ApiModelProperty("机台顺序")
+    @TableField(value = "MACHINE_ORDER")
     private Integer machineOrder;
 
-    @ApiModelProperty(value = "是否试制量试")
-    @TableField("IS_TRIAL")
+    @ApiModelProperty(value = "是否试产试制")
+    @TableField(value = "IS_TRIAL")
     private String isTrial;
 
-    @ApiModelProperty(value = "实际排程日期")
-    @JsonFormat(pattern = "yyyy-MM-dd")
-    @TableField("REAL_SCHEDULE_DATE")
-    private LocalDate realScheduleDate;
-
     @ApiModelProperty(value = "是否首排")
-    @TableField("IS_FIRST")
+    @TableField(value = "IS_FIRST")
     private String isFirst;
+    /**
+     * 导出合并标志
+     */
+    @TableField(exist = false)
+    private String exportCombineFlag;
 
-    @ApiModelProperty(value = "硫化余量")
-    @TableField("MOULD_SURPLUS_QTY")
-    private Integer mouldSurplusQty;
-
-    @ApiModelProperty(value = "是否收尾")
-    @TableField("IS_END")
-    private String isEnd;
-
-    @ApiModelProperty(value = "排产版本")
-    @TableField("PRODUCTION_VERSION")
-    private String productionVersion;
-
-    @ApiModelProperty(value = "模具号")
-    @TableField("MOULD_CODE")
-    private String mouldCode;
-
-    @ApiModelProperty(value = "是否拆分")
-    @TableField("IS_SPLIT")
-    private String isSplit;
-
-    @ApiModelProperty(value = "排程顺序")
-    @TableField("SCHEDULE_ORDER")
-    private String scheduleOrder;
-
-    @ApiModelProperty(value = "排程类型")
-    @TableField("SCHEDULE_TYPE")
-    private String scheduleType;
-
-    @ApiModelProperty(value = "是否换模")
-    @TableField("IS_CHANGE_MOULD")
-    private String isChangeMould;
-
-    @ApiModelProperty(value = "总计划数量")
-    @TableField("TOTAL_DAILY_PLAN_QTY")
-    private Integer totalDailyPlanQty;
+    /**
+     * 总完成率
+     */
+    @TableField(exist = false)
+    private Double finishRate;
 }
