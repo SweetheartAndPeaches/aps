@@ -9,8 +9,7 @@ import com.ruoyi.common.core.web.domain.BaseEntity;
 /**
  * 结构整车配置实体
  * 
- * 定义每个结构的整车条数
- * 整车条数按结构不同而不同，可能是12条、18条等
+ * 定义每个结构的整车胎面条数配置
  *
  * @author APS Team
  */
@@ -19,26 +18,23 @@ import com.ruoyi.common.core.web.domain.BaseEntity;
 @ApiModel(value = "结构整车配置")
 public class MdmStructureTreadConfig extends BaseEntity {
 
-    @ApiModelProperty(value = "结构编码")
-    @TableField("STRUCTURE_CODE")
+    @ApiModelProperty(value = "结构")
+    @TableField(value = "STRUCTURE_CODE")
     private String structureCode;
 
-    @ApiModelProperty(value = "班次编码")
-    @TableField("SHIFT_CODE")
-    private String shiftCode;
+    @ApiModelProperty(value = "整车胎面条数")
+    @TableField(value = "TREAD_COUNT")
+    private Integer treadCount;
 
-    @ApiModelProperty(value = "整车条数（该结构每车的条数，可能是12、18等）")
-    @TableField("TRIP_QTY")
-    private Integer tripQty;
+    @ApiModelProperty(value = "版本号")
+    @TableField(value = "DATA_VERSION")
+    private String dataVersion;
 
-    /**
-     * 获取标准产能（条）
-     * 标准产能 = 整车条数 × 1车
-     */
-    public Integer getStandardCapacity() {
-        if (this.tripQty != null) {
-            return this.tripQty;
-        }
-        return 12; // 默认12条
-    }
+    @ApiModelProperty(value = "分公司编码")
+    @TableField(value = "COMPANY_CODE")
+    private String companyCode;
+
+    @ApiModelProperty(value = "厂别")
+    @TableField(value = "FACTORY_CODE")
+    private String factoryCode;
 }

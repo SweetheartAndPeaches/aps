@@ -2,10 +2,10 @@
 /workspace/projects/src/test/java/com/zlt/aps/cx/entity/config/CxShiftConfigTest.java
 /workspace/projects/src/test/java/com/zlt/aps/cx/entity/CxStockTest.java
 /workspace/projects/src/test/java/com/zlt/aps/cx/service/engine/TrialScheduleTest.java
-/workspace/projects/src/test/java/com/zlt/aps/cx/service/engine/HolidayScheduleTest.java
-/workspace/projects/src/test/java/com/zlt/aps/cx/service/engine/PrecisionScheduleTest.java
 /workspace/projects/src/test/java/com/zlt/aps/cx/service/impl/ScheduleServiceTest.java
-/workspace/projects/src/test/java/com/zlt/aps/cx/service/engine/DynamicAdjustmentTest.java
+/workspace/projects/src/test/java/com/zlt/aps/cx/service/engine/PrecisionScheduleTest.java
+/workspace/projects/src/test/java/com/zlt/aps/cx/service/engine/HolidayScheduleTest.java
 /workspace/projects/src/test/java/com/zlt/aps/cx/service/engine/AllTestsSuite.java
+/workspace/projects/src/test/java/com/zlt/aps/cx/service/engine/DynamicAdjustmentTest.java
 /workspace/projects/src/test/java/com/zlt/aps/cx/service/engine/ProductionCalculatorTest.java
 /workspace/projects/src/test/java/com/zlt/aps/cx/service/engine/FinishingScheduleTest.java
