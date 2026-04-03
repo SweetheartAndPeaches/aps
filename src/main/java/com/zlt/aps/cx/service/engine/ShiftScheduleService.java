@@ -5,7 +5,7 @@ import com.zlt.aps.cx.entity.CxMachineStructureCapacity;
 import com.zlt.aps.cx.entity.CxPrecisionPlan;
 
 import com.zlt.aps.cx.entity.config.CxShiftConfig;
-import com.zlt.aps.mp.api.domain.entity.MdmDevicePlanShut;
+import com.zlt.aps.mdm.api.domain.entity.MdmDevicePlanShut;
 import com.zlt.aps.mp.api.domain.entity.MdmStructureTreadConfig;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -70,8 +70,8 @@ public class ShiftScheduleService {
                 .map(CxShiftConfig::getShiftCode)
                 .toArray(String[]::new);
 
-        // 加载结构班产配置
-        Map<String, Map<String, MdmStructureTreadConfig>> structureCapacityMap = buildStructureShiftCapacityMap(context);
+        // 加载结构整车配置
+        Map<String, MdmStructureTreadConfig> structureTreadConfigMap = buildStructureTreadConfigMap(context);
 
         for (CoreScheduleAlgorithmService.MachineAllocationResult allocation : allocations) {
             CoreScheduleAlgorithmService.ShiftAllocationResult shiftResult = new CoreScheduleAlgorithmService.ShiftAllocationResult();
@@ -83,7 +83,7 @@ public class ShiftScheduleService {
             // 按任务结构获取班产整车数，计算波浪分配
             Map<String, Integer> structureWaveAllocation = calculateStructureWaveAllocation(
                     allocation.getTaskAllocations(),
-                    structureCapacityMap,
+                    structureTreadConfigMap,
                     allocation.getDailyCapacity(),
                     shiftCodes,
                     context);
@@ -134,7 +134,7 @@ public class ShiftScheduleService {
      */
     private Map<String, Integer> calculateStructureWaveAllocation(
             List<CoreScheduleAlgorithmService.TaskAllocation> tasks,
-            Map<String, Map<String, MdmStructureTreadConfig>> structureCapacityMap,
+            Map<String, MdmStructureTreadConfig> structureTreadConfigMap,
             Integer maxDailyCapacity,
             String[] shiftCodes,
             ScheduleContextVo context) {
@@ -150,10 +150,11 @@ public class ShiftScheduleService {
             String structureCode = task.getStructureName();
             int taskQty = task.getQuantity();
 
-            Map<String, MdmStructureTreadConfig> shiftCapacityMap = structureCapacityMap.get(structureCode);
+            MdmStructureTreadConfig treadConfig = structureTreadConfigMap.get(structureCode);
 
-            if (shiftCapacityMap != null && !shiftCapacityMap.isEmpty()) {
-                int[] shiftQty = calculateShiftQtyByCapacity(taskQty, structureCode, shiftCapacityMap, shiftCodes, context);
+            if (treadConfig != null && treadConfig.getTreadCount() != null) {
+                int treadCount = treadConfig.getTreadCount();
+                int[] shiftQty = calculateShiftQtyByTreadCount(taskQty, treadCount, shiftCodes, context);
 
                 for (int i = 0; i < shiftCodes.length; i++) {
                     int qty = shiftQty[i];
@@ -185,31 +186,15 @@ public class ShiftScheduleService {
     }
 
     /**
-     * 根据结构班产配置计算各班次分配量
+     * 根据整车胎面条数计算各班次分配量
      */
-    private int[] calculateShiftQtyByCapacity(
+    private int[] calculateShiftQtyByTreadCount(
             int taskQty,
-            String structureCode,
-            Map<String, MdmStructureTreadConfig> shiftCapacityMap,
+            int treadCount,
             String[] shiftCodes,
             ScheduleContextVo context) {
 
         int[] result = new int[shiftCodes.length];
-
-        int totalTripQty = 0;
-        int[] tripQtyPerShift = new int[shiftCodes.length];
-
-        for (int i = 0; i < shiftCodes.length; i++) {
-            MdmStructureTreadConfig capacity = shiftCapacityMap.get(shiftCodes[i]);
-            if (capacity != null && capacity.getTreadCount() != null) {
-                tripQtyPerShift[i] = capacity.getTreadCount();
-                totalTripQty += capacity.getTreadCount();
-            }
-        }
-
-        if (totalTripQty == 0) {
-            return calculateWaveAllocation(taskQty, shiftCodes, context);
-        }
 
         int[] waveRatio = context.getWaveRatio();
         if (waveRatio == null) {
@@ -223,12 +208,9 @@ public class ShiftScheduleService {
             totalRatio += ratio;
         }
 
-        int tripCapacity = getTripCapacity(structureCode, shiftCapacityMap);
-
         for (int i = 0; i < shiftCodes.length; i++) {
             int shiftQty = taskQty * adjustedRatio[i] / totalRatio;
-            shiftQty = Math.min(shiftQty, tripQtyPerShift[i]);
-            shiftQty = roundToTripQty(shiftQty, tripCapacity, "ROUND");
+            shiftQty = roundToTripQty(shiftQty, treadCount, "ROUND");
 
             result[i] = shiftQty;
         }
@@ -298,40 +280,24 @@ public class ShiftScheduleService {
     }
 
     /**
-     * 从上下文构建结构班产配置映射
+     * 从上下文构建结构整车配置映射
      */
-    private Map<String, Map<String, MdmStructureTreadConfig>> buildStructureShiftCapacityMap(ScheduleContextVo context) {
-        Map<String, Map<String, MdmStructureTreadConfig>> result = new HashMap<>();
+    private Map<String, MdmStructureTreadConfig> buildStructureTreadConfigMap(ScheduleContextVo context) {
+        Map<String, MdmStructureTreadConfig> result = new HashMap<>();
 
-        List<MdmStructureTreadConfig> capacities = context.getStructureShiftCapacities();
-        if (capacities == null || capacities.isEmpty()) {
+        List<MdmStructureTreadConfig> configs = context.getStructureShiftCapacities();
+        if (configs == null || configs.isEmpty()) {
             return result;
         }
 
-        for (MdmStructureTreadConfig capacity : capacities) {
-            String structureCode = capacity.getStructureCode();
-            String shiftCode = capacity.getShiftCode();
-            if (structureCode != null && shiftCode != null) {
-                result.computeIfAbsent(structureCode, k -> new HashMap<>())
-                        .put(shiftCode, capacity);
+        for (MdmStructureTreadConfig config : configs) {
+            String structureCode = config.getStructureCode();
+            if (structureCode != null) {
+                result.put(structureCode, config);
             }
         }
 
         return result;
-    }
-
-    /**
-     * 获取结构的整车容量
-     */
-    private int getTripCapacity(String structureCode, Map<String, MdmStructureTreadConfig> shiftCapacityMap) {
-        if (shiftCapacityMap != null) {
-            for (MdmStructureTreadConfig capacity : shiftCapacityMap.values()) {
-                if (capacity.getTreadCount() != null && capacity.getTreadCount() > 0) {
-                    return capacity.getTreadCount();
-                }
-            }
-        }
-        return 12;
     }
 
     /**
