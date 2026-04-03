@@ -786,20 +786,20 @@ public class DatabaseInitializer implements CommandLineRunner {
     private void initShiftConfigData() {
         // 第一天班次配置 (D1) - 只有早班和中班
         jdbcTemplate.execute("INSERT INTO T_CX_SHIFT_CONFIG (SHIFT_CODE, SHIFT_NAME, SHIFT_ORDER, START_TIME, END_TIME, SHIFT_HOURS, IS_CROSS_DAY, SCHEDULE_DAY, DAY_SHIFT_ORDER, CLASS_FIELD, FACTORY_CODE, IS_ACTIVE) VALUES " +
-                "('DAY_D1', '早班', 1, '06:00:00', '13:59:59', 8, 0, 1, 1, 'CLASS1', 'F001', 1), " +
-                "('AFTERNOON_D1', '中班', 2, '14:00:00', '23:59:59', 10, 0, 1, 2, 'CLASS2', 'F001', 1)");
+                "('DAY_D1', '早班', 1, '06:00:00', '13:59:59', 8, 0, 1, 1, 'CLASS1', '116', 1), " +
+                "('AFTERNOON_D1', '中班', 2, '14:00:00', '23:59:59', 10, 0, 1, 2, 'CLASS2', '116', 1)");
         
         // 第二天班次配置 (D2) - 有夜班、早班、中班
         jdbcTemplate.execute("INSERT INTO T_CX_SHIFT_CONFIG (SHIFT_CODE, SHIFT_NAME, SHIFT_ORDER, START_TIME, END_TIME, SHIFT_HOURS, IS_CROSS_DAY, SCHEDULE_DAY, DAY_SHIFT_ORDER, CLASS_FIELD, FACTORY_CODE, IS_ACTIVE) VALUES " +
-                "('NIGHT_D2', '夜班', 1, '00:00:00', '05:59:59', 6, 0, 2, 1, 'CLASS3', 'F001', 1), " +
-                "('DAY_D2', '早班', 2, '06:00:00', '13:59:59', 8, 0, 2, 2, 'CLASS4', 'F001', 1), " +
-                "('AFTERNOON_D2', '中班', 3, '14:00:00', '23:59:59', 10, 0, 2, 3, 'CLASS5', 'F001', 1)");
+                "('NIGHT_D2', '夜班', 1, '00:00:00', '05:59:59', 6, 0, 2, 1, 'CLASS3', '116', 1), " +
+                "('DAY_D2', '早班', 2, '06:00:00', '13:59:59', 8, 0, 2, 2, 'CLASS4', '116', 1), " +
+                "('AFTERNOON_D2', '中班', 3, '14:00:00', '23:59:59', 10, 0, 2, 3, 'CLASS5', '116', 1)");
         
         // 第三天班次配置 (D3) - 有夜班、早班、中班
         jdbcTemplate.execute("INSERT INTO T_CX_SHIFT_CONFIG (SHIFT_CODE, SHIFT_NAME, SHIFT_ORDER, START_TIME, END_TIME, SHIFT_HOURS, IS_CROSS_DAY, SCHEDULE_DAY, DAY_SHIFT_ORDER, CLASS_FIELD, FACTORY_CODE, IS_ACTIVE) VALUES " +
-                "('NIGHT_D3', '夜班', 1, '00:00:00', '05:59:59', 6, 0, 3, 1, 'CLASS6', 'F001', 1), " +
-                "('DAY_D3', '早班', 2, '06:00:00', '13:59:59', 8, 0, 3, 2, 'CLASS7', 'F001', 1), " +
-                "('AFTERNOON_D3', '中班', 3, '14:00:00', '23:59:59', 10, 0, 3, 3, 'CLASS8', 'F001', 1)");
+                "('NIGHT_D3', '夜班', 1, '00:00:00', '05:59:59', 6, 0, 3, 1, 'CLASS6', '116', 1), " +
+                "('DAY_D3', '早班', 2, '06:00:00', '13:59:59', 8, 0, 3, 2, 'CLASS7', '116', 1), " +
+                "('AFTERNOON_D3', '中班', 3, '14:00:00', '23:59:59', 10, 0, 3, 3, 'CLASS8', '116', 1)");
     }
 
     /**
