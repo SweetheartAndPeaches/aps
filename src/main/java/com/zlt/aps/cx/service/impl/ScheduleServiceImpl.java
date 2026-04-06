@@ -1,8 +1,7 @@
 package com.zlt.aps.cx.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.zlt.aps.cx.vo.ScheduleContextVo;
-import com.zlt.aps.cx.vo.ScheduleRequestVo;
+
 import com.zlt.aps.cx.entity.CxMaterialEnding;
 import com.zlt.aps.cx.entity.CxStock;
 import com.zlt.aps.cx.entity.config.CxKeyProduct;
@@ -12,34 +11,18 @@ import com.zlt.aps.cx.entity.schedule.CxScheduleDetail;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
 import com.zlt.aps.cx.enums.DayVulcanizationModeEnum;
-import com.zlt.aps.cx.mapper.CxKeyProductMapper;
-import com.zlt.aps.cx.mapper.CxMaterialEndingMapper;
-import com.zlt.aps.cx.mapper.CxParamConfigMapper;
-import com.zlt.aps.cx.mapper.CxScheduleDetailMapper;
-import com.zlt.aps.cx.mapper.CxScheduleResultMapper;
-import com.zlt.aps.cx.mapper.CxShiftConfigMapper;
-import com.zlt.aps.cx.mapper.CxStockMapper;
-import com.zlt.aps.cx.mapper.MdmStructureTreadConfigMapper;
-import com.zlt.aps.cx.mapper.FactoryMonthPlanProductionFinalResultMapper;
-import com.zlt.aps.cx.mapper.LhScheduleResultMapper;
-import com.zlt.aps.cx.mapper.MdmCxMachineOnlineInfoMapper;
-import com.zlt.aps.cx.mapper.MdmDevicePlanShutMapper;
-import com.zlt.aps.cx.mapper.MdmMaterialInfoMapper;
-import com.zlt.aps.cx.mapper.MdmMoldingMachineMapper;
-import com.zlt.aps.cx.mapper.MdmMonthPlanProductLhCapacityMapper;
-import com.zlt.aps.cx.mapper.MdmMonthSurplusMapper;
-import com.zlt.aps.cx.mapper.MdmSkuScheduleCategoryMapper;
-import com.zlt.aps.cx.mapper.MdmStructureLhRatioMapper;
-import com.zlt.aps.cx.mapper.MpCxCapacityConfigurationMapper;
+import com.zlt.aps.cx.mapper.*;
 import com.zlt.aps.cx.service.ConstraintCheckService;
-import com.zlt.aps.cx.service.engine.CoreScheduleAlgorithmService;
 import com.zlt.aps.cx.service.HolidayScheduleService;
 import com.zlt.aps.cx.service.ScheduleService;
-import com.zlt.aps.cx.service.impl.validation.ScheduleDataValidator;
+import com.zlt.aps.cx.service.engine.CoreScheduleAlgorithmService;
 import com.zlt.aps.cx.service.impl.validation.ScheduleDataValidationResult;
+import com.zlt.aps.cx.service.impl.validation.ScheduleDataValidator;
 import com.zlt.aps.cx.vo.MonthPlanProductLhCapacityVo;
-import com.zlt.aps.mp.api.domain.entity.MdmStructureTreadConfig;
+import com.zlt.aps.cx.vo.ScheduleContextVo;
+import com.zlt.aps.cx.vo.ScheduleRequestVo;
 import com.zlt.aps.mp.api.domain.entity.*;
+import com.zlt.aps.mp.api.domain.entity.MdmDevicePlanShut;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -48,15 +31,7 @@ import org.springframework.util.CollectionUtils;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
