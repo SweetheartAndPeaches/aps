@@ -116,7 +116,7 @@ public class CxStockServiceImpl extends ServiceImpl<CxStockMapper, CxStock> impl
 
         // 预警阈值（可配置）
         BigDecimal lowThreshold = new BigDecimal("4");   // 低于4小时预警
-        BigDecimal highThreshold = new BigDecimal("48"); // 高于48小时预警
+        BigDecimal highThreshold = new BigDecimal("18"); // 高于18小时预警
 
         if (stockHours.compareTo(lowThreshold) < 0) {
             return "LOW";
