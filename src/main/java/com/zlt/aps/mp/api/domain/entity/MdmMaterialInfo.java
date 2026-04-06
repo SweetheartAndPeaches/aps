@@ -19,7 +19,7 @@ import java.math.BigDecimal;
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("mdm_material_info")
+@TableName("T_MDM_MATERIAL_INFO")
 @ApiModel(value = "物料信息对象", description = "物料信息对象")
 public class MdmMaterialInfo extends ApsBaseEntity {
 

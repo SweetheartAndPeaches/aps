@@ -14,7 +14,7 @@ import com.ruoyi.common.core.web.domain.BaseEntity;
  * @author APS Team
  */
 @Data
-@TableName("cx_structure_trip_config")
+@TableName("T_CX_STRUCTURE_TRIP_CONFIG")
 @ApiModel(value = "结构整车配置")
 public class MdmStructureTreadConfig extends BaseEntity {
 

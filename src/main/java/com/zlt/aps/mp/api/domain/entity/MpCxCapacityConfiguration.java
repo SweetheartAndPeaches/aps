@@ -16,7 +16,7 @@ import lombok.EqualsAndHashCode;
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("mp_structure_allocation")
+@TableName("T_MP_STRUCTURE_ALLOCATION")
 @ApiModel(value = "成型产能分配配置(结构)对象", description = "成型产能分配配置(结构)对象")
 public class MpCxCapacityConfiguration extends ApsBaseEntity {
 

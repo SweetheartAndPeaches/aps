@@ -20,7 +20,7 @@ import java.util.Date;
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("mdm_work_calendar")
+@TableName("T_MDM_WORK_CALENDAR")
 @ApiModel(value = "工作日历对象", description = "工作日历对象")
 public class MdmWorkCalendar extends ApsBaseEntity {
 

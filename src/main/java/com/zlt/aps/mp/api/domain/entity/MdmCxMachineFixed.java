@@ -23,7 +23,7 @@ import java.util.stream.Collectors;
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("mdm_cx_machine_fixed")
+@TableName("T_MDM_CX_MACHINE_FIXED")
 @ApiModel(value = "成型固定机台对象", description = "成型固定机台对象")
 public class MdmCxMachineFixed extends ApsBaseEntity {
 
