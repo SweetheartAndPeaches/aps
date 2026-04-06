@@ -1,24 +1,24 @@
 package com.zlt.aps.cx.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.zlt.aps.cx.vo.ScheduleContextVo;
+
 import com.zlt.aps.cx.entity.CxStock;
-import com.zlt.aps.mp.api.domain.entity.MdmWorkCalendar;
 import com.zlt.aps.cx.entity.config.CxKeyProduct;
 import com.zlt.aps.cx.entity.config.CxParamConfig;
 import com.zlt.aps.cx.entity.config.CxShiftConfig;
-import com.zlt.aps.mp.api.domain.entity.MdmMoldingMachine;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
 import com.zlt.aps.cx.mapper.*;
 import com.zlt.aps.cx.service.HolidayScheduleService;
+import com.zlt.aps.cx.vo.ScheduleContextVo;
+import com.zlt.aps.mp.api.domain.entity.MdmWorkCalendar;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
+import java.sql.Date;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -69,7 +69,7 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
     public boolean isHoliday(LocalDate date) {
         // 使用工作日历判断是否停产（按工序CX查询）
         // MdmWorkCalendar.dayFlag: 0-停,1-开
-        java.sql.Date queryDate = java.sql.Date.valueOf(date);
+        Date queryDate = Date.valueOf(date);
         MdmWorkCalendar workCalendar = workCalendarMapper.selectOne(
                 new LambdaQueryWrapper<MdmWorkCalendar>()
                         .eq(MdmWorkCalendar::getProcCode, PROC_CODE_CX)
@@ -124,7 +124,7 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
         builder.isBeforeHoliday(isBeforeHoliday(date));
 
         // 使用工作日历获取节假日信息（按工序CX查询）
-        java.sql.Date queryDate = java.sql.Date.valueOf(date);
+        Date queryDate = Date.valueOf(date);
         MdmWorkCalendar workCalendar = workCalendarMapper.selectOne(
                 new LambdaQueryWrapper<MdmWorkCalendar>()
                         .eq(MdmWorkCalendar::getProcCode, PROC_CODE_CX)
@@ -320,11 +320,11 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
             // 找出该胎胚对应的所有硫化任务中最大的specEndTime
             LocalDateTime embryoMaxStopTime = null;
             for (LhScheduleResult result : embryoResults) {
-                Date specEndTimeDate = result.getSpecEndTime();
-                if (specEndTimeDate != null) {
-                    LocalDateTime specEndTime = specEndTimeDate.toInstant()
-                            .atZone(java.time.ZoneId.systemDefault())
-                            .toLocalDateTime();
+                LocalDateTime specEndTime = result.getSpecEndTime().toInstant()
+                        .atZone(java.time.ZoneId.systemDefault())
+                        .toLocalDateTime();
+
+                if (specEndTime != null) {
                     if (embryoMaxStopTime == null || specEndTime.isAfter(embryoMaxStopTime)) {
                         embryoMaxStopTime = specEndTime;
                     }
@@ -391,12 +391,12 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
 
             // 从硫化排程结果表获取该日期的计划
             List<LhScheduleResult> lhResults = lhScheduleResultMapper.selectByDate(planDate);
-            
+
             if (lhResults != null && !lhResults.isEmpty()) {
                 for (LhScheduleResult result : lhResults) {
                     String embryoCode = result.getEmbryoCode();
                     Integer dailyPlanQty = result.getDailyPlanQty();
-                    
+
                     if (embryoCode != null && dailyPlanQty != null && dailyPlanQty > 0) {
                         // 累加该胎胚在节假日期间的需求
                         minDemand.merge(embryoCode, dailyPlanQty, Integer::sum);
@@ -413,7 +413,7 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
         }
 
         log.info("计算节假日最低需求完成，共 {} 种胎胚", minDemand.size());
-        
+
         return minDemand;
     }
 
@@ -521,9 +521,9 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
                     for (CxScheduleResult result : originalResult) {
                         // 一班=夜班，二班=早班，三班=中班
                         // 成型开产班次默认为早班（二班）
-                        if ("SHIFT_DAY".equals(firstShift) && 
-                            result.getClass2PlanQty() != null && 
-                            result.getClass2PlanQty().compareTo(BigDecimal.ZERO) > 0) {
+                        if ("SHIFT_DAY".equals(firstShift) &&
+                                result.getClass2PlanQty() != null &&
+                                result.getClass2PlanQty().compareTo(BigDecimal.ZERO) > 0) {
                             // 标记早班需要排除关键产品
                             result.setRemark("开产首班(早班) - 不排关键产品");
                         }

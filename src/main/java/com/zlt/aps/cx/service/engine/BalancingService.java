@@ -1,17 +1,14 @@
 package com.zlt.aps.cx.service.engine;
 
-import com.zlt.aps.cx.vo.ScheduleContextVo;
-
 import com.zlt.aps.cx.entity.config.CxParamConfig;
+import com.zlt.aps.cx.vo.ScheduleContextVo;
 import com.zlt.aps.mp.api.domain.entity.MdmMoldingMachine;
 import com.zlt.aps.mp.api.domain.entity.MdmStructureLhRatio;
 import com.zlt.aps.mp.api.domain.entity.MpCxCapacityConfiguration;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.util.CollectionUtils;
 
-import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -617,12 +614,18 @@ public class BalancingService {
             // 优先级1：历史胎胚优先
             boolean aHasHistory = a.getHistoryEmbryos().contains(embryoCode);
             boolean bHasHistory = b.getHistoryEmbryos().contains(embryoCode);
-            if (aHasHistory && !bHasHistory) return -1;
-            if (!aHasHistory && bHasHistory) return 1;
+            if (aHasHistory && !bHasHistory) {
+                return -1;
+            }
+            if (!aHasHistory && bHasHistory) {
+                return 1;
+            }
             
             // 优先级2：负荷少的优先
             int loadCompare = Integer.compare(a.getCurrentLoad(), b.getCurrentLoad());
-            if (loadCompare != 0) return loadCompare;
+            if (loadCompare != 0) {
+                return loadCompare;
+            }
             
             // 优先级3：种类少的优先
             return Integer.compare(a.getCurrentTypes(), b.getCurrentTypes());

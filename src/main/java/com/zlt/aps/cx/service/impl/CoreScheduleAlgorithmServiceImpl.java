@@ -1,18 +1,12 @@
 package com.zlt.aps.cx.service.impl;
 
-import com.zlt.aps.cx.vo.ScheduleContextVo;
-import com.zlt.aps.cx.entity.CxPrecisionPlan;
+
 import com.zlt.aps.cx.entity.CxStock;
 import com.zlt.aps.cx.entity.config.CxShiftConfig;
 import com.zlt.aps.cx.entity.schedule.CxScheduleDetail;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
-// Engine 包 - 核心算法
-import com.zlt.aps.cx.service.engine.ContinueTaskProcessor;
-import com.zlt.aps.cx.service.engine.CoreScheduleAlgorithmService;
-import com.zlt.aps.cx.service.engine.NewTaskProcessor;
-import com.zlt.aps.cx.service.engine.ShiftScheduleService;
-import com.zlt.aps.cx.service.engine.TaskGroupService;
-import com.zlt.aps.cx.service.engine.TrialTaskProcessor;
+import com.zlt.aps.cx.service.engine.*;
+import com.zlt.aps.cx.vo.ScheduleContextVo;
 import com.zlt.aps.mp.api.domain.entity.MdmMaterialInfo;
 import com.zlt.aps.mp.api.domain.entity.MdmMoldingMachine;
 import com.zlt.aps.mp.api.domain.entity.MdmWorkCalendar;
@@ -23,8 +17,6 @@ import org.springframework.util.CollectionUtils;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -86,7 +78,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         int scheduleDays = context.getScheduleDays() != null ? context.getScheduleDays() : DEFAULT_SCHEDULE_DAYS;
 
         List<CxScheduleResult> allResults = new ArrayList<>();
-        
+
         // 记录每天的机台在产状态
         Map<String, Set<String>> dailyMachineOnlineEmbryoMap = null;
 
@@ -147,15 +139,15 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
      * </ol>
      */
     private List<CxScheduleResult> executeDaySchedule(
-            ScheduleContextVo context, 
+            ScheduleContextVo context,
             int day,
             List<CxShiftConfig> dayShifts,
             Map<String, Set<String>> machineOnlineEmbryoMap) {
 
-        LocalDate scheduleDate = context.getCurrentScheduleDate() != null 
-                ? context.getCurrentScheduleDate() 
+        LocalDate scheduleDate = context.getCurrentScheduleDate() != null
+                ? context.getCurrentScheduleDate()
                 : context.getScheduleDate();
-        
+
         log.info("========== 开始执行第 {} 天排程，日期: {} ==========", day, scheduleDate);
 
         // ==================== 第一步：S5.2 任务分组 ====================
@@ -175,7 +167,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         // 获取未被续作任务占用的机台
         List<MdmMoldingMachine> availableMachinesForTrial = getAvailableMachinesForTrial(
                 context.getAvailableMachines(), continueAllocations);
-        
+
         List<MachineAllocationResult> trialAllocations = trialTaskProcessor.processTrialTasks(
                 taskGroup.getTrialTasks(), context, scheduleDate, dayShifts, availableMachinesForTrial);
         log.info("试制任务处理完成，机台分配数: {}", trialAllocations.size());
@@ -183,9 +175,9 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         // ==================== 第四步：S5.3 处理新增任务（合并续作+新增，重新均衡） ====================
         List<MachineAllocationResult> newAllocations = newTaskProcessor.processNewTasks(
                 taskGroup.getNewTasks(),
-                context, 
-                scheduleDate, 
-                dayShifts, 
+                context,
+                scheduleDate,
+                dayShifts,
                 day,
                 continueAllocations);
         log.info("新增任务处理完成，机台分配数: {}", newAllocations.size());
@@ -203,7 +195,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
         // ==================== 第七步：生成排程结果 ====================
         List<CxScheduleResult> results = buildScheduleResults(context, allAllocations, shiftAllocations, dayShifts);
-        
+
         log.info("========== 第 {} 天排程完成，排程结果数: {} ==========\n", day, results.size());
         return results;
     }
@@ -214,17 +206,17 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     private List<MdmMoldingMachine> getAvailableMachinesForTrial(
             List<MdmMoldingMachine> allMachines,
             List<MachineAllocationResult> continueAllocations) {
-        
+
         if (CollectionUtils.isEmpty(allMachines)) {
             return new ArrayList<>();
         }
-        
+
         // 收集已被续作任务占用的机台编码
         Set<String> occupiedMachineCodes = continueAllocations.stream()
                 .map(MachineAllocationResult::getMachineCode)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
-        
+
         // 过滤出未被占用的机台
         return allMachines.stream()
                 .filter(m -> !occupiedMachineCodes.contains(m.getCxMachineCode()))
@@ -276,7 +268,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             }
         }
 
-        if (context.getCurrentScheduleDate() != null 
+        if (context.getCurrentScheduleDate() != null
                 && date.equals(context.getCurrentScheduleDate())
                 && Boolean.TRUE.equals(context.getIsClosingDay())) {
             return true;
@@ -295,8 +287,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             List<CxShiftConfig> dayShifts) {
 
         List<CxScheduleResult> results = new ArrayList<>();
-        LocalDate scheduleDate = context.getCurrentScheduleDate() != null 
-                ? context.getCurrentScheduleDate() 
+        LocalDate scheduleDate = context.getCurrentScheduleDate() != null
+                ? context.getCurrentScheduleDate()
                 : context.getScheduleDate();
 
         Map<String, ShiftAllocationResult> shiftMap = shiftAllocations.stream()
@@ -317,12 +309,12 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             ShiftAllocationResult shiftResult = shiftMap.get(allocation.getMachineCode());
             if (shiftResult != null) {
                 Map<String, Integer> shiftPlanQty = shiftResult.getShiftPlanQty();
-                
+
                 for (CxShiftConfig shiftConfig : dayShifts) {
                     String classField = shiftConfig.getClassField();
                     String shiftCode = shiftConfig.getShiftCode();
                     Integer shiftQty = shiftPlanQty.getOrDefault(shiftCode, 0);
-                    
+
                     setClassFieldValue(result, classField, shiftQty);
                 }
             }
@@ -384,19 +376,19 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     public List<DailyEmbryoTask> calculateDailyEmbryoTasks(
             ScheduleContextVo context,
             Map<String, Set<String>> machineOnlineEmbryoMap) {
-        
-        LocalDate scheduleDate = context.getCurrentScheduleDate() != null 
-                ? context.getCurrentScheduleDate() 
+
+        LocalDate scheduleDate = context.getCurrentScheduleDate() != null
+                ? context.getCurrentScheduleDate()
                 : context.getScheduleDate();
-        
+
         TaskGroupService.TaskGroupResult groupResult = taskGroupService.groupTasks(
                 context, machineOnlineEmbryoMap, scheduleDate);
-        
+
         List<DailyEmbryoTask> allTasks = new ArrayList<>();
         allTasks.addAll(groupResult.getContinueTasks());
         allTasks.addAll(groupResult.getTrialTasks());
         allTasks.addAll(groupResult.getNewTasks());
-        
+
         return allTasks;
     }
 

@@ -1,43 +1,13 @@
 package com.zlt.aps.cx.service.engine;
 
-import com.zlt.aps.cx.vo.ScheduleContextVo;
+
 import com.zlt.aps.cx.entity.CxStock;
 import com.zlt.aps.cx.entity.config.CxShiftConfig;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
-import com.zlt.aps.mp.api.domain.entity.MdmMoldingMachine;
-import com.zlt.aps.mp.api.domain.entity.MdmStructureTreadConfig;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-
-import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.util.*;
-
-/**
- * 计划量计算服务
- * 
- * <p>负责成型排程的计划量计算：
- * <ul>
- *   <li>计算待排产量（硫化需求 - 成型余量）</li>
- *   <li>整车换算</li>
- *   <li>波浪分配到班次</li>
- *   <li>特殊情况处理（开产、停产、试制、停机）</li>
- * </ul>
- *
- * <h3>正常情况计算流程：</h3>
- * <ol>
- *   <li>已知成型机安排的胎胚及对应的硫化任务</li>
- *   <li>计算今天需求 = 硫化任务需求 - 成型余量（库存）</li>
- *   <li>按整车换算（查询 CxStructureShiftCapacity.treadCount）</li>
- *   <li>波浪分配到3个班次（相邻班次差距不超过1车）</lpackage com.zlt.aps.cx.service.engine;
-
 import com.zlt.aps.cx.vo.ScheduleContextVo;
-import com.zlt.aps.cx.entity.CxStock;
-import com.zlt.aps.cx.entity.config.CxShiftConfig;
-import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
-import com.zlt.aps.mp.api.domain.entity.MdmStructureTreadConfig;
+
 import com.zlt.aps.mp.api.domain.entity.MdmMoldingMachine;
+import com.zlt.aps.mp.api.domain.entity.MdmStructureTreadConfig;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

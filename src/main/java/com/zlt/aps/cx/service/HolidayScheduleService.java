@@ -1,7 +1,7 @@
 package com.zlt.aps.cx.service;
 
-import com.zlt.aps.cx.vo.ScheduleContextVo;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
+import com.zlt.aps.cx.vo.ScheduleContextVo;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -11,7 +11,7 @@ import java.util.Map;
 
 /**
  * 节假日处理服务接口
- * 
+ *
  * 实现节假日相关的排程逻辑：
  * - 停产前处理（消耗过剩库存、确定停机时间）
  * - 开产后处理（成型早硫化1班开产、首班不排关键产品）
@@ -65,7 +65,7 @@ public interface HolidayScheduleService {
 
     /**
      * 处理停产前一天排程
-     * 
+     *
      * 核心逻辑：
      * 1. 计算硫化最低需求 = 硫化计划需求 × (1 + 损耗率)
      * 2. 计算过剩库存 = 当前库存 - 最低需求
@@ -80,7 +80,7 @@ public interface HolidayScheduleService {
 
     /**
      * 处理开产日排程
-     * 
+     *
      * 核心逻辑：
      * 1. 成型比硫化早1个班开始生产
      * 2. 成型开产班次（第一个班次）不排关键产品

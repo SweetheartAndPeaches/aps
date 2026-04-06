@@ -1,13 +1,12 @@
 package com.zlt.aps.cx.service.engine;
 
-import com.zlt.aps.cx.vo.ScheduleContextVo;
 import com.zlt.aps.cx.entity.CxMachineStructureCapacity;
 import com.zlt.aps.cx.entity.CxPrecisionPlan;
-
 import com.zlt.aps.cx.entity.config.CxShiftConfig;
-import com.zlt.aps.mp.api.domain.entity.MdmStructureTreadConfig;
-import com.zlt.aps.mp.api.domain.entity.MdmDevicePlanShut;
+import com.zlt.aps.cx.vo.ScheduleContextVo;
 
+import com.zlt.aps.mp.api.domain.entity.MdmDevicePlanShut;
+import com.zlt.aps.mp.api.domain.entity.MdmStructureTreadConfig;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -19,7 +18,7 @@ import java.util.*;
 
 /**
  * 班次排产服务
- * 
+ *
  * <p>负责 S5.3.7 按班次排产：
  * <ul>
  *   <li>将待排产量分配到具体的班次和时间段</li>
@@ -392,7 +391,7 @@ public class ShiftScheduleService {
 
             // 试制任务只能在早班或中班
             if (Boolean.TRUE.equals(task.getIsTrialTask())) {
-                if (!SHIFT_DAY.equals(shiftConfig.getShiftCode()) 
+                if (!SHIFT_DAY.equals(shiftConfig.getShiftCode())
                         && !SHIFT_AFTERNOON.equals(shiftConfig.getShiftCode())) {
                     continue;
                 }
@@ -532,7 +531,7 @@ public class ShiftScheduleService {
         for (CxPrecisionPlan plan : context.getPrecisionPlans()) {
             if (machineCode.equals(plan.getMachineCode())) {
                 if (shiftConfig.getShiftCode().equals(plan.getPlanShift())) {
-                    int precisionHours = plan.getEstimatedHours() != null ? plan.getEstimatedHours() : 4;
+                    int precisionHours = plan.getEstimatedHours() != null ? plan.getEstimatedHours().intValue() : 4;
                     return precisionHours * hourlyCapacity;
                 }
             }
@@ -583,7 +582,7 @@ public class ShiftScheduleService {
     private int getMachineHourlyCapacity(String machineCode, String structureName, ScheduleContextVo context) {
         if (context.getMachineStructureCapacities() != null && machineCode != null && structureName != null) {
             for (CxMachineStructureCapacity capacity : context.getMachineStructureCapacities()) {
-                if (machineCode.equals(capacity.getCxMachineCode()) 
+                if (machineCode.equals(capacity.getCxMachineCode())
                         && structureName.equals(capacity.getStructureCode())) {
                     return capacity.getHourlyCapacity() != null ? capacity.getHourlyCapacity() : 50;
                 }
