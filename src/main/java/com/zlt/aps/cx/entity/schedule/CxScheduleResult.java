@@ -23,7 +23,7 @@ import java.util.List;
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("cx_schedule_result")
+@TableName("T_CX_SCHEDULE_RESULT")
 @ApiModel(value = "成型排程结果对象", description = "成型排程结果表")
 public class CxScheduleResult extends ApsBaseEntity {
 

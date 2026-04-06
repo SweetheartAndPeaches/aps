@@ -20,7 +20,7 @@ import java.time.LocalDateTime;
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("cx_structure_priority")
+@TableName("T_CX_STRUCTURE_PRIORITY")
 @ApiModel(value = "结构优先级配置对象", description = "结构优先级配置表")
 public class CxStructurePriority extends BaseEntity {
 

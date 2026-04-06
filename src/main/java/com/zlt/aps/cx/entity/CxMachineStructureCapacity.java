@@ -25,7 +25,7 @@ import java.time.LocalDateTime;
  * @author APS Team
  */
 @Data
-@TableName("cx_machine_structure_capacity")
+@TableName("T_CX_MACHINE_STRUCTURE_CAPACITY")
 @ApiModel(value = "机台结构产能配置", description = "机台-结构维度的产能配置")
 public class CxMachineStructureCapacity implements Serializable {
 

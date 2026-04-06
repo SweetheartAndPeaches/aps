@@ -14,7 +14,7 @@ import java.time.LocalDateTime;
  * @author APS Team
  */
 @Data
-@TableName("cx_alert_config")
+@TableName("t_cx_alert_config")
 public class CxAlertConfig {
 
     @TableId(type = IdType.AUTO)

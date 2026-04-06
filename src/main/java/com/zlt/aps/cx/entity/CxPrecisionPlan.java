@@ -26,7 +26,7 @@ import java.time.LocalDateTime;
  * @author APS Team
  */
 @Data
-@TableName("cx_precision_plan")
+@TableName("t_cx_precision_plan")
 @ApiModel(value = "成型精度计划", description = "成型机台精度校验计划")
 public class CxPrecisionPlan implements Serializable {
 

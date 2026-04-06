@@ -21,12 +21,12 @@ public interface LhScheduleResultMapper extends BaseMapper<LhScheduleResult> {
     /**
      * 按排程日期查询
      */
-    @Select("SELECT * FROM T_LH_SCHEDULE_RESULT WHERE SCHEDULE_DATE = #{scheduleDate} AND PRODUCTION_STATUS != 'COMPLETED'")
+    @Select("SELECT * FROM t_lh_schedule_result WHERE SCHEDULE_DATE = #{scheduleDate} AND (PRODUCTION_STATUS IS NULL OR PRODUCTION_STATUS != 'COMPLETED')")
     List<LhScheduleResult> selectByDate(@Param("scheduleDate") LocalDate scheduleDate);
 
     /**
      * 查询所有未完成的排程
      */
-    @Select("SELECT * FROM T_LH_SCHEDULE_RESULT WHERE PRODUCTION_STATUS != 'COMPLETED' ORDER BY SCHEDULE_DATE, MACHINE_ORDER")
+    @Select("SELECT * FROM t_lh_schedule_result WHERE PRODUCTION_STATUS IS NULL OR PRODUCTION_STATUS != 'COMPLETED' ORDER BY SCHEDULE_DATE, MACHINE_ORDER")
     List<LhScheduleResult> selectAll();
 }
