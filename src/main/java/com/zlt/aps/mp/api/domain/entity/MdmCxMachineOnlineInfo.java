@@ -19,7 +19,7 @@ import java.time.LocalDateTime;
  * @author APS Team
  */
 @Data
-@TableName("mdm_cx_machine_online_info")
+@TableName("T_MDM_CX_MACHINE_ONLINE_INFO")
 @ApiModel(value = "成型在机信息")
 public class MdmCxMachineOnlineInfo implements Serializable {
 

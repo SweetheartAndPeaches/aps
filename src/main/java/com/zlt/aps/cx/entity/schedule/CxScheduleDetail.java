@@ -22,7 +22,7 @@ import java.time.LocalDateTime;
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("cx_schedule_detail")
+@TableName("t_cx_schedule_detail")
 @ApiModel(value = "排程明细对象", description = "排程明细表（含车次标识）")
 public class CxScheduleDetail extends BaseEntity {
 

@@ -14,7 +14,7 @@ import java.time.LocalDateTime;
  * @author APS Team
  */
 @Data
-@TableName("cx_trial_plan")
+@TableName("t_cx_trial_plan")
 public class CxTrialPlan {
 
     @TableId(type = IdType.AUTO)
