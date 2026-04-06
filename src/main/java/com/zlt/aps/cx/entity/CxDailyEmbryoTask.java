@@ -17,7 +17,7 @@ import java.time.LocalDateTime;
  * @author APS Team
  */
 @Data
-@TableName(value = "T_CX_DAILY_EMBRYO_TASK", keepGlobalPrefix = false)
+@TableName(value = "t_cx_daily_embryo_task", keepGlobalPrefix = false)
 @ApiModel(value = "日胎胚任务")
 public class CxDailyEmbryoTask implements Serializable {
 

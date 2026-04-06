@@ -21,7 +21,7 @@ import java.time.LocalTime;
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("T_CX_SHIFT_CONFIG")
+@TableName("t_cx_shift_config")
 @ApiModel(value = "班次配置对象", description = "班次配置表")
 public class CxShiftConfig extends BaseEntity {
 

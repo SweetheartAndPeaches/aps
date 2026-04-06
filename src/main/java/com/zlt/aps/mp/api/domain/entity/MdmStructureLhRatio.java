@@ -17,7 +17,7 @@ import lombok.EqualsAndHashCode;
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("T_MDM_STRUCTURE_LH_RATIO")
+@TableName("mdm_structure_lh_ratio")
 @ApiModel(value = "成型结构硫化配比对象", description = "成型结构硫化配比对象")
 public class MdmStructureLhRatio extends ApsBaseEntity {
 
