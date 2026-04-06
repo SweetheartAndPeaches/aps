@@ -43,6 +43,7 @@ bin/
 # Editor / IDE
 .vscode/
 .idea/
+*.class
 *.iml
 
 # OS / misc
