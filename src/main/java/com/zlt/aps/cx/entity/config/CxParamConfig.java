@@ -18,7 +18,7 @@ import lombok.EqualsAndHashCode;
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("T_CX_PARAM_CONFIG")
+@TableName("cx_param_config")
 @ApiModel(value = "排程参数配置对象", description = "排程参数配置表")
 public class CxParamConfig extends BaseEntity {
 

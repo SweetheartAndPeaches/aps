@@ -29,7 +29,7 @@ import java.util.Date;
 
 @ApiModel(value = "成型库存信息对象", description = "成型库存信息对象 ")
 @Data
-@TableName(value = "T_CX_STOCK")
+@TableName(value = "t_cx_stock")
 public class CxStock extends BaseEntity {
 
     private static final long serialVersionUID = 1L;

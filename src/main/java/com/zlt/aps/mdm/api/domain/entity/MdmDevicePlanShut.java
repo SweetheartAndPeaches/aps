@@ -19,7 +19,7 @@ import java.util.Date;
  */
 @ApiModel(value = "设备计划停机对象", description = "设备计划停机对象")
 @Data
-@TableName(value = "T_MDM_DEVICE_PLAN_SHUT")
+@TableName(value = "t_mdm_device_plan_shut")
 public class MdmDevicePlanShut extends BaseEntity {
 
     private static final long serialVersionUID = 1L;

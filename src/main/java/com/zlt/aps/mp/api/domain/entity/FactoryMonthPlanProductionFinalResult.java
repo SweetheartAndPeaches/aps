@@ -26,7 +26,7 @@ import java.math.BigDecimal;
  */
 
 @Data
-@TableName(value = "T_MP_MONTH_PLAN_PROD_FINAL")
+@TableName(value = "t_mp_month_plan_prod_final")
 @ApiModel(value = "工厂月生产计划-最终排产计划定稿对象", description = "工厂月生产计划-最终排产计划定稿对象")
 public class FactoryMonthPlanProductionFinalResult extends BaseEntity {
 

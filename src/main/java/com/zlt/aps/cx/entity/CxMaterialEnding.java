@@ -29,7 +29,7 @@ import java.time.LocalDateTime;
  * @author APS Team
  */
 @Data
-@TableName(value = "T_CX_MATERIAL_ENDING", keepGlobalPrefix = false)
+@TableName(value = "t_cx_material_ending", keepGlobalPrefix = false)
 @ApiModel(value = "物料收尾管理")
 public class CxMaterialEnding implements Serializable {
 
