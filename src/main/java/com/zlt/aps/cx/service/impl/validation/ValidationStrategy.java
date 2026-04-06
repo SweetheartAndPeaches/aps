@@ -1,7 +1,6 @@
 package com.zlt.aps.cx.service.impl.validation;
 
 import com.zlt.aps.cx.vo.ScheduleContextVo;
-import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
 

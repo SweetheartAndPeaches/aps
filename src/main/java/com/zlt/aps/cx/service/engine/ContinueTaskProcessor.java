@@ -1,10 +1,10 @@
 package com.zlt.aps.cx.service.engine;
 
-import com.zlt.aps.cx.vo.ScheduleContextVo;
 import com.zlt.aps.cx.entity.CxMachineStructureCapacity;
 import com.zlt.aps.cx.entity.config.CxParamConfig;
 import com.zlt.aps.cx.entity.config.CxShiftConfig;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
+import com.zlt.aps.cx.vo.ScheduleContextVo;
 import com.zlt.aps.mp.api.domain.entity.MdmMoldingMachine;
 import com.zlt.aps.mp.api.domain.entity.MdmStructureLhRatio;
 import com.zlt.aps.mp.api.domain.entity.MpCxCapacityConfiguration;
@@ -499,11 +499,17 @@ public class ContinueTaskProcessor {
             ScheduleContextVo context,
             boolean isOpeningDay) {
         
-        if (isOpeningDay) return;
-        if (!Boolean.TRUE.equals(task.getIsEndingTask()) && !Boolean.TRUE.equals(task.getIsNearEnding())) return;
+        if (isOpeningDay) {
+            return;
+        }
+        if (!Boolean.TRUE.equals(task.getIsEndingTask()) && !Boolean.TRUE.equals(task.getIsNearEnding())) {
+            return;
+        }
         
         Integer endingSurplus = task.getEndingSurplusQty();
-        if (endingSurplus == null || endingSurplus <= 0) return;
+        if (endingSurplus == null || endingSurplus <= 0) {
+            return;
+        }
         
         int plannedProduction = task.getPlannedProduction() != null ? task.getPlannedProduction() : 0;
         int allocatedStock = task.getAllocatedStock() != null ? task.getAllocatedStock() : 0;
@@ -557,10 +563,14 @@ public class ContinueTaskProcessor {
             LocalDate scheduleDate) {
 
         Integer formingRemainder = task.getEndingSurplusQty();
-        if (formingRemainder == null || formingRemainder <= 0) return 0;
+        if (formingRemainder == null || formingRemainder <= 0) {
+            return 0;
+        }
 
         LocalDate endingDate = task.getEndingDate();
-        if (endingDate == null) return 0;
+        if (endingDate == null) {
+            return 0;
+        }
 
         int plannedQty = calculatePlannedQuantityToDate(task.getMaterialCode(), scheduleDate, endingDate, context);
         int gap = formingRemainder - plannedQty;
@@ -573,7 +583,9 @@ public class ContinueTaskProcessor {
     }
 
     private int convertToTrips(int quantity, int tripCapacity, Boolean isMainProduct) {
-        if (quantity <= 0) return 0;
+        if (quantity <= 0) {
+            return 0;
+        }
         return Boolean.TRUE.equals(isMainProduct) 
                 ? (int) Math.ceil((double) quantity / tripCapacity) 
                 : quantity / tripCapacity;

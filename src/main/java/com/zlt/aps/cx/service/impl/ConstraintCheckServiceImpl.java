@@ -1,16 +1,19 @@
 package com.zlt.aps.cx.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.zlt.aps.cx.entity.*;
-import com.zlt.aps.cx.entity.config.CxParamConfig;
-import com.zlt.aps.mp.api.domain.entity.*;
+import com.zlt.aps.cx.entity.CxMachineStructureCapacity;
+import com.zlt.aps.cx.entity.CxStock;
+import com.zlt.aps.cx.entity.CxTreadParkingConfig;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
 import com.zlt.aps.cx.mapper.*;
 import com.zlt.aps.cx.service.ConstraintCheckService;
+import com.zlt.aps.mp.api.domain.entity.MdmCxMachineFixed;
+import com.zlt.aps.mp.api.domain.entity.MdmMaterialInfo;
+import com.zlt.aps.mp.api.domain.entity.MdmMoldingMachine;
+import com.zlt.aps.mp.api.domain.entity.MdmStructureLhRatio;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.util.CollectionUtils;
 
 import java.math.BigDecimal;
 import java.time.DayOfWeek;
@@ -40,14 +43,7 @@ public class ConstraintCheckServiceImpl implements ConstraintCheckService {
     @Autowired
     private CxPrecisionPlanMapper precisionPlanMapper;
 
-    @Autowired
-    private CxOperatorLeaveMapper operatorLeaveMapper;
 
-    @Autowired
-    private CxAlertConfigMapper alertConfigMapper;
-
-    @Autowired
-    private CxParamConfigMapper paramConfigMapper;
 
     @Autowired
     private CxMachineStructureCapacityMapper machineStructureCapacityMapper;
@@ -89,24 +85,6 @@ public class ConstraintCheckServiceImpl implements ConstraintCheckService {
             if (!capacityResult.isPassed()) {
                 violations.addAll(capacityResult.getViolations());
             }
-        }
-
-        // 3. 检查精度计划约束
-        ConstraintCheckResult precisionResult = checkPrecisionPlanConstraint(
-                scheduleResult.getCxMachineCode(),
-                scheduleResult.getScheduleDate(),
-                null);
-        if (!precisionResult.isPassed()) {
-            violations.addAll(precisionResult.getViolations());
-        }
-
-        // 4. 检查操作工请假约束
-        ConstraintCheckResult leaveResult = checkOperatorLeaveConstraint(
-                scheduleResult.getCxMachineCode(),
-                null,
-                scheduleResult.getScheduleDate());
-        if (!leaveResult.isPassed()) {
-            warnings.addAll(leaveResult.getViolations());
         }
 
         // 构建结果
@@ -424,69 +402,6 @@ public class ConstraintCheckServiceImpl implements ConstraintCheckService {
         }
     }
 
-    @Override
-    public ConstraintCheckResult checkPrecisionPlanConstraint(String machineCode, LocalDateTime scheduleDate, String shiftCode) {
-        if (scheduleDate == null) {
-            return ConstraintCheckResult.pass();
-        }
-
-        List<CxPrecisionPlan> plans = precisionPlanMapper.selectList(
-                new LambdaQueryWrapper<CxPrecisionPlan>()
-                        .eq(CxPrecisionPlan::getMachineCode, machineCode)
-                        .eq(CxPrecisionPlan::getPlanDate, scheduleDate.toLocalDate()));
-
-        for (CxPrecisionPlan plan : plans) {
-            if ("PLANNED".equals(plan.getStatus()) || "IN_PROGRESS".equals(plan.getStatus())) {
-                // 检查班次是否在精度时间范围内
-                if (shiftCode != null && plan.getPlanShift() != null) {
-                    if (shiftCode.contains(plan.getPlanShift().toUpperCase()) ||
-                            plan.getPlanShift().toUpperCase().contains(shiftCode)) {
-                        return ConstraintCheckResult.fail(String.format(
-                                "机台 %s 在 %s 有精度计划，不可排产",
-                                machineCode, scheduleDate.toLocalDate()));
-                    }
-                } else {
-                    return ConstraintCheckResult.fail(String.format(
-                            "机台 %s 在 %s 有精度计划，不可排产",
-                            machineCode, scheduleDate.toLocalDate()));
-                }
-            }
-        }
-
-        return ConstraintCheckResult.pass();
-    }
-
-    @Override
-    public ConstraintCheckResult checkOperatorLeaveConstraint(String machineCode, String shiftCode, LocalDateTime scheduleDate) {
-        if (scheduleDate == null) {
-            return ConstraintCheckResult.pass();
-        }
-
-        List<CxOperatorLeave> leaves = operatorLeaveMapper.selectList(
-                new LambdaQueryWrapper<CxOperatorLeave>()
-                        .eq(CxOperatorLeave::getMachineCode, machineCode)
-                        .eq(CxOperatorLeave::getApprovalStatus, "APPROVED")
-                        .le(CxOperatorLeave::getStartDate, scheduleDate.toLocalDate())
-                        .ge(CxOperatorLeave::getEndDate, scheduleDate.toLocalDate()));
-
-        if (!CollectionUtils.isEmpty(leaves)) {
-            List<String> warnings = new ArrayList<>();
-            for (CxOperatorLeave leave : leaves) {
-                // 检查是否影响产能
-                if (leave.getAffectCapacity() != null && leave.getAffectCapacity() == 1) {
-                    warnings.add(String.format("操作工 %s 请假中，产能受影响", leave.getEmployeeName()));
-                }
-            }
-
-            if (!warnings.isEmpty()) {
-                ConstraintCheckResult result = ConstraintCheckResult.pass();
-                result.setWarnings(warnings);
-                return result;
-            }
-        }
-
-        return ConstraintCheckResult.pass();
-    }
 
     @Override
     public ConstraintCheckResult checkEndingConstraint(MdmMaterialInfo material, CxStock stock, BigDecimal remainingQty) {
