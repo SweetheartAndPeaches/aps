@@ -16,7 +16,7 @@ import java.time.LocalDateTime;
  * @author APS Team
  */
 @Data
-@TableName("T_CX_KEY_PRODUCT")
+@TableName("cx_key_product")
 @ApiModel(value = "关键产品配置")
 public class CxKeyProduct implements Serializable {
 

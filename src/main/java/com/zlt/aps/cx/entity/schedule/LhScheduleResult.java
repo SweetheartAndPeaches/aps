@@ -20,7 +20,7 @@ import java.util.Date;
  */
 @ApiModel(value = "硫化排程结果对象", description = "硫化排程结果表实体对象")
 @Data
-@TableName(value = "T_LH_SCHEDULE_RESULT")
+@TableName(value = "t_lh_schedule_result")
 public class LhScheduleResult extends BaseEntity implements Serializable {
 
     private static final long serialVersionUID = 1L;
