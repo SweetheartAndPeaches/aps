@@ -722,11 +722,4 @@ public class LhScheduleResult extends BaseEntity implements Serializable {
     @TableField(value = "TOTAL_DAILY_PLAN_QTY")
     private Integer totalDailyPlanQty;
 
-    /**
-     * 删除标识（0未删除；1已删除）
-     */
-    @Excel(name = "ui.data.column.lhScheduleResult.isDelete")
-    @ApiModelProperty(value = "删除标识（0未删除；1已删除）", name = "isDelete")
-    @TableField(value = "IS_DELETE")
-    private Integer isDelete;
 }

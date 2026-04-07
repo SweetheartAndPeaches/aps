@@ -58,4 +58,11 @@ public class BaseEntity implements Serializable {
     @ApiModelProperty(value = "备注")
     @TableField("REMARK")
     private String remark;
+
+    /**
+     * 删除标识
+     */
+    @ApiModelProperty(value = "删除标识")
+    @TableField("IS_DELETE")
+    private String isDelete;
 }
