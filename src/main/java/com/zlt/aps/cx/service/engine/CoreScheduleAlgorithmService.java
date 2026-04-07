@@ -203,6 +203,8 @@ public interface CoreScheduleAlgorithmService {
         private String trialNo;
         /** 库存可供时长 */
         private BigDecimal stockHours;
+        /** 库存是否高预警（>18小时） */
+        private Boolean isStockHighWarning;
         /** 硫化机台数 */
         private Integer vulcanizeMachineCount;
         /** 硫化模数 */
