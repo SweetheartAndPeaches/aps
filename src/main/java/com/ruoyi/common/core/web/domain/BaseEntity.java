@@ -2,6 +2,7 @@ package com.ruoyi.common.core.web.domain;
 
 import com.baomidou.mybatisplus.annotation.FieldFill;
 import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
@@ -58,4 +59,12 @@ public class BaseEntity implements Serializable {
     @ApiModelProperty(value = "备注")
     @TableField("REMARK")
     private String remark;
+
+    /**
+     * 删除标志：0-未删除 1-已删除
+     */
+    @ApiModelProperty(value = "删除标志：0-未删除 1-已删除")
+    @TableField("IS_DELETE")
+    @TableLogic(value = "0", delval = "1")
+    private Integer isDelete;
 }
