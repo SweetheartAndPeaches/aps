@@ -113,4 +113,12 @@ public class MdmMoldingMachine extends BaseEntity {
     @TableField("IS_ACTIVE")
     private Integer isActive;
 
+    /**
+     * 删除标志：0-未删除 1-已删除
+     */
+    @ApiModelProperty(value = "删除标志：0-未删除 1-已删除")
+    @TableField("IS_DELETE")
+    @TableLogic(value = "0", delval = "1")
+    private String isDelete;
+
 }
