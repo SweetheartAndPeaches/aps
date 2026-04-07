@@ -46,7 +46,7 @@ public class MdmMoldingMachine extends BaseEntity {
     /** 成型机名称 */
     @Excel(name = "ui.data.column.mdmMoldingMachine.cxMachineName", sort = 3)
     @ApiModelProperty(value = "成型机名称", name = "cxMachineName")
-    @TableField(value = "CX_MACHINE_NAME")
+    @TableField(exist = false)
     private String cxMachineName;
 
     /** 成型机类型 */
