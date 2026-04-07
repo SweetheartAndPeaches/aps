@@ -259,16 +259,32 @@ public class TaskGroupService {
         return stock != null ? stock.getEffectiveStock() : 0;
     }
 
+    /** 库存高预警阈值（小时），可配置 */
+    private static final int STOCK_HIGH_HOURS_THRESHOLD = 18;
+
     /**
      * 计算库存时长
+     * 
+     * 公式：胎胚预计库存可供硫化时长 = (胎胚实时库存 + 计划量) / 硫化机数 / 单台模数
+     * 
+     * @param task         胎胚任务
+     * @param lhResults    硫化排程结果
+     * @param currentStock 当前胎胚库存
      */
     private void calculateStockHours(
             CoreScheduleAlgorithmService.DailyEmbryoTask task,
             List<LhScheduleResult> lhResults,
             int currentStock) {
 
-        if (currentStock <= 0) {
+        // 获取计划量（待排产量）
+        int plannedProduction = task.getPlannedProduction() != null ? task.getPlannedProduction() : 0;
+        
+        // 预计库存 = 当前库存 + 计划量
+        int expectedStock = currentStock + plannedProduction;
+
+        if (expectedStock <= 0) {
             task.setStockHours(BigDecimal.ZERO);
+            task.setIsStockHighWarning(false);
             return;
         }
 
@@ -279,17 +295,27 @@ public class TaskGroupService {
         if (vulcanizeMachineCount == null || vulcanizeMachineCount == 0 ||
                 vulcanizeMoldCount == null || vulcanizeMoldCount == 0) {
             task.setStockHours(BigDecimal.ZERO);
+            task.setIsStockHighWarning(false);
             return;
         }
 
-        // 库存时长 = 胎胚库存 / (硫化机数 × 单台模数 × 每小时每模产量)
+        // 库存时长 = (当前库存 + 计划量) / (硫化机数 × 单台模数 × 每小时每模产量)
         BigDecimal hourlyOutput = BigDecimal.valueOf(vulcanizeMachineCount)
                 .multiply(BigDecimal.valueOf(vulcanizeMoldCount))
                 .multiply(BigDecimal.valueOf(0.5)); // 假设每模每小时0.5条
 
-        BigDecimal stockHours = BigDecimal.valueOf(currentStock)
+        BigDecimal stockHours = BigDecimal.valueOf(expectedStock)
                 .divide(hourlyOutput, 2, BigDecimal.ROUND_HALF_UP);
         task.setStockHours(stockHours);
+
+        // 库存预警：超过18小时标记为高库存
+        boolean isHighStock = stockHours.compareTo(BigDecimal.valueOf(STOCK_HIGH_HOURS_THRESHOLD)) > 0;
+        task.setIsStockHighWarning(isHighStock);
+        
+        if (isHighStock) {
+            log.info("胎胚 {} 库存水位过高，预计可供硫化 {} 小时，计划量 {} 条", 
+                    task.getMaterialCode(), stockHours, plannedProduction);
+        }
     }
 
     /**
@@ -441,13 +467,19 @@ public class TaskGroupService {
             score += 500;
         }
 
-        // 库存紧张
+        // 库存紧张（低库存时长 = 高优先级）
         if (task.getStockHours() != null) {
             if (task.getStockHours().compareTo(new BigDecimal("4")) < 0) {
                 score += 800;
             } else if (task.getStockHours().compareTo(new BigDecimal("6")) < 0) {
                 score += 400;
             }
+        }
+
+        // 库存高预警（>18小时 = 低优先级，排后面）
+        if (Boolean.TRUE.equals(task.getIsStockHighWarning())) {
+            score -= 500;
+            log.debug("胎胚 {} 库存水位过高，优先级降低500分", task.getMaterialCode());
         }
 
         // 主销产品
