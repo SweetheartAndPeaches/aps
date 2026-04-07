@@ -1,6 +1,7 @@
 package com.zlt.aps.mp.api.domain.entity;
 
 import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.ruoyi.common.core.annotation.Excel;
 import com.ruoyi.common.core.web.domain.BaseEntity;
@@ -111,5 +112,13 @@ public class MdmMoldingMachine extends BaseEntity {
     @ApiModelProperty(value = "是否启用：0-禁用 1-启用")
     @TableField("IS_ACTIVE")
     private Integer isActive;
+
+    /**
+     * 删除标志：0-未删除 1-已删除
+     */
+    @ApiModelProperty(value = "删除标志：0-未删除 1-已删除")
+    @TableField("IS_DELETE")
+    @TableLogic(value = "0", delval = "1")
+    private String isDelete;
 
 }
