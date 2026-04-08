@@ -70,6 +70,12 @@ public class ScheduleContextVo {
     }
 
     /**
+     * 参数配置映射（按参数编码索引）
+     * 用于校验关键参数是否配置
+     */
+    private Map<String, CxParamConfig> paramConfigMap;
+
+    /**
      * 排程模式：NORMAL-正常排程，RE_SCHEDULE-重排程，STRUCTURE_RE_SCHEDULE-结构重排
      */
     private String scheduleMode;
@@ -167,11 +173,6 @@ public class ScheduleContextVo {
      * 关键产品编码集合（快速查询用）
      */
     private Set<String> keyProductCodes;
-
-    /**
-     * 排程参数配置
-     */
-    private Map<String, CxParamConfig> paramConfigMap;
 
     /**
      * 预警配置

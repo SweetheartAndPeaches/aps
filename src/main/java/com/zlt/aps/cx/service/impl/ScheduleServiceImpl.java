@@ -494,6 +494,12 @@ public class ScheduleServiceImpl implements ScheduleService {
      */
     private void loadParamConfigs(ScheduleContextVo context) {
         List<CxParamConfig> paramConfigs = paramConfigMapper.selectList(null);
+        log.info("加载参数配置，共 {} 条记录", paramConfigs != null ? paramConfigs.size() : 0);
+        if (paramConfigs != null && !paramConfigs.isEmpty()) {
+            for (CxParamConfig config : paramConfigs) {
+                log.debug("参数配置：{} = {}", config.getParamCode(), config.getParamValue());
+            }
+        }
         Map<String, CxParamConfig> paramConfigMap = paramConfigs.stream()
                 .collect(Collectors.toMap(CxParamConfig::getParamCode, p -> p, (a, b) -> a));
         context.setParamConfigMap(paramConfigMap);
