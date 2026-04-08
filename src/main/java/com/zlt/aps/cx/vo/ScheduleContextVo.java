@@ -120,6 +120,13 @@ public class ScheduleContextVo {
     private List<CxStock> stocks;
 
     /**
+     * 物料库存映射（按物料编码分配库存，共用胎胚按需求比例分配）
+     * Key: 物料编码 (materialCode)
+     * Value: 分配给该物料的库存数量
+     */
+    private Map<String, Integer> materialStockMap;
+
+    /**
      * 结构硫化配比列表
      */
     private List<MdmStructureLhRatio> structureLhRatios;

@@ -584,10 +584,12 @@ public class ScheduleServiceImpl implements ScheduleService {
         log.info("加载月度计划余量 {} 条", monthSurplusList.size());
 
         // 计算成型余量映射
-        Map<String, Integer> formingRemainderMap = calculateFormingRemainderMap(
-                context.getMaterials(), monthSurplusMap, context.getStocks());
+        Map<String, Integer> formingRemainderMap = new HashMap<>();
+        Map<String, Integer> materialStockMap = calculateFormingRemainderMap(
+                context.getMaterials(), monthSurplusMap, context.getStocks(), formingRemainderMap);
         context.setFormingRemainderMap(formingRemainderMap);
-        log.info("计算成型余量映射 {} 条", formingRemainderMap.size());
+        context.setMaterialStockMap(materialStockMap);
+        log.info("计算成型余量映射 {} 条，物料库存分配 {} 条", formingRemainderMap.size(), materialStockMap.size());
     }
 
     /**
@@ -779,14 +781,17 @@ public class ScheduleServiceImpl implements ScheduleService {
      * @param materials       物料信息列表
      * @param monthSurplusMap 月度计划硫化余量映射
      * @param stocks          胎胚库存列表
-     * @return 成型余量映射
+     * @param formingRemainderMap 成型余量映射（输出参数）
+     * @return 物料库存映射（按物料编码分配库存）
      */
     private Map<String, Integer> calculateFormingRemainderMap(
             List<MdmMaterialInfo> materials,
             Map<String, MdmMonthSurplus> monthSurplusMap,
-            List<CxStock> stocks) {
+            List<CxStock> stocks,
+            Map<String, Integer> formingRemainderMap) {
 
-        Map<String, Integer> resultMap = new HashMap<>();
+        // 用于返回的物料库存映射
+        Map<String, Integer> materialStockMap = new HashMap<>();
 
         try {
             // Step 1: 构建胎胚→物料列表的映射（支持一个胎胚对应多个物料）
@@ -806,7 +811,7 @@ public class ScheduleServiceImpl implements ScheduleService {
             log.debug("计算物料硫化需求比例 {} 条", materialDemandMap.size());
 
             // Step 4: 按比例分配胎胚库存到物料
-            Map<String, Integer> materialStockMap = allocateStockByMaterialRatio(stocks, embryoToMaterialsMap, materialDemandMap);
+            materialStockMap = allocateStockByMaterialRatio(stocks, embryoToMaterialsMap, materialDemandMap);
             log.debug("按比例分配胎胚库存到物料 {} 条", materialStockMap.size());
 
             // Step 5: 计算成型余量
@@ -819,16 +824,16 @@ public class ScheduleServiceImpl implements ScheduleService {
                 int embryoStock = materialStockMap.getOrDefault(materialCode, 0);
                 int formingRemainder = Math.max(0, vulcanizingRemainder - embryoStock);
 
-                resultMap.put(materialCode, formingRemainder);
+                formingRemainderMap.put(materialCode, formingRemainder);
             }
 
-            log.info("计算成型余量映射完成，共 {} 条", resultMap.size());
+            log.info("计算成型余量映射完成，共 {} 条", formingRemainderMap.size());
 
         } catch (Exception e) {
             log.error("计算成型余量映射失败", e);
         }
 
-        return resultMap;
+        return materialStockMap;
     }
 
     /**
