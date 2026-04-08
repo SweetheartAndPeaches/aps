@@ -396,12 +396,15 @@ public class ScheduleServiceImpl implements ScheduleService {
     }
 
     /**
-     * 加载成型机台
+     * 加载成型机台（只加载启用且未删除的机台）
      */
     private void loadMoldingMachines(ScheduleContextVo context) {
-        List<MdmMoldingMachine> machines = moldingMachineMapper.selectList(null);
+        List<MdmMoldingMachine> machines = moldingMachineMapper.selectList(
+                new LambdaQueryWrapper<MdmMoldingMachine>()
+                        .eq(MdmMoldingMachine::getIsActive, 1)
+                        .eq(MdmMoldingMachine::getIsDelete, "0"));
         context.setAvailableMachines(machines);
-        log.info("加载成型机台 {} 台", machines.size());
+        log.info("加载成型机台 {} 台（已过滤禁用和已删除）", machines.size());
     }
 
     /**
