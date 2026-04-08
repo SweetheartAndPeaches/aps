@@ -78,10 +78,6 @@ public class TaskGroupService {
 
         TaskGroupResult result = new TaskGroupResult();
 
-        // 构建基础映射
-        Map<String, MdmMaterialInfo> materialMap = buildMaterialMap(context);
-        Map<String, CxStock> stockMap = buildStockMap(context);
-
         // 获取硫化排程结果
         List<LhScheduleResult> lhScheduleResults = context.getLhScheduleResults();
         if (lhScheduleResults == null || lhScheduleResults.isEmpty()) {
@@ -89,27 +85,29 @@ public class TaskGroupService {
             return result;
         }
 
-        // 按胎胚编码分组
-        Map<String, List<LhScheduleResult>> embryoTaskMap = lhScheduleResults.stream()
-                .filter(r -> r.getEmbryoCode() != null)
-                .collect(Collectors.groupingBy(LhScheduleResult::getEmbryoCode));
+        // 构建基础映射
+        Map<String, MdmMaterialInfo> materialMap = buildMaterialMap(context);
+        Map<String, CxStock> stockMap = buildStockMap(context);
 
         // 确保机台在产映射非空
         if (machineOnlineEmbryoMap == null) {
             machineOnlineEmbryoMap = new HashMap<>();
         }
 
-        // 遍历每个胎胚任务
-        for (Map.Entry<String, List<LhScheduleResult>> entry : embryoTaskMap.entrySet()) {
-            String embryoCode = entry.getKey();
-            List<LhScheduleResult> lhResults = entry.getValue();
+        // 直接遍历每条硫化记录，为每条记录创建独立的任务
+        for (LhScheduleResult lhResult : lhScheduleResults) {
+            if (lhResult.getEmbryoCode() == null) {
+                continue;
+            }
 
-            // 构建基础任务
-            CoreScheduleAlgorithmService.DailyEmbryoTask task = buildBaseTask(
-                    embryoCode, lhResults, materialMap, stockMap, context);
+            // 为每条硫化记录构建独立任务
+            CoreScheduleAlgorithmService.DailyEmbryoTask task = buildSingleTask(
+                    lhResult, materialMap, stockMap, context);
             if (task == null) {
                 continue;
             }
+
+            String embryoCode = lhResult.getEmbryoCode();
 
             // 判断任务类型
             // 1. 续作任务：当前机台在产的胎胚
@@ -117,8 +115,7 @@ public class TaskGroupService {
             boolean isContinueTask = !continueMachineCodes.isEmpty();
 
             // 2. 试制任务
-            boolean isTrialTask = lhResults.stream()
-                    .anyMatch(r -> "1".equals(r.getIsTrial()));
+            boolean isTrialTask = "1".equals(lhResult.getIsTrial());
 
             // 设置任务属性
             task.setIsContinueTask(isContinueTask);
@@ -180,6 +177,71 @@ public class TaskGroupService {
             }
         }
         return machineCodes;
+    }
+
+    /**
+     * 为单条硫化记录构建任务
+     *
+     * <p>每条硫化记录作为独立任务，不再按胎胚合并
+     */
+    private CoreScheduleAlgorithmService.DailyEmbryoTask buildSingleTask(
+            LhScheduleResult lhResult,
+            Map<String, MdmMaterialInfo> materialMap,
+            Map<String, CxStock> stockMap,
+            ScheduleContextVo context) {
+
+        String embryoCode = lhResult.getEmbryoCode();
+        if (embryoCode == null) {
+            return null;
+        }
+
+        // 获取硫化需求量（单条记录）
+        int vulcanizeDemand = lhResult.getDailyPlanQty() != null ? lhResult.getDailyPlanQty() : 0;
+
+        // 获取当前库存
+        int currentStock = getCurrentStock(lhResult, stockMap, embryoCode);
+
+        // 获取物料信息
+        MdmMaterialInfo material = materialMap.get(embryoCode);
+        String structureName = material != null ? material.getStructureName() : null;
+
+        // 计算日需求量
+        int dailyDemand = calculateDailyDemand(vulcanizeDemand, currentStock, structureName, context);
+
+        // 构建任务
+        CoreScheduleAlgorithmService.DailyEmbryoTask task = new CoreScheduleAlgorithmService.DailyEmbryoTask();
+        task.setMaterialCode(embryoCode);
+        task.setVulcanizeDemand(vulcanizeDemand);
+        task.setCurrentStock(currentStock);
+
+        if (material != null) {
+            task.setMaterialName(material.getMaterialDesc());
+            task.setStructureName(material.getStructureName());
+            // 设置关联的物料编码（用于判断主销产品）
+            task.setRelatedMaterialCode(material.getMaterialCode());
+        } else {
+            task.setMaterialName(embryoCode);
+            task.setStructureName(structureName);
+        }
+
+        task.setDemandQuantity(dailyDemand);
+        task.setAssignedQuantity(0);
+        task.setRemainingQuantity(dailyDemand);
+
+        // 是否主销产品
+        String relatedMaterialCode = task.getRelatedMaterialCode();
+        task.setIsMainProduct(context.getMainProductCodes() != null
+                && relatedMaterialCode != null
+                && context.getMainProductCodes().contains(relatedMaterialCode));
+
+        // 硫化机台数和模数
+        CxStock stock = stockMap.get(embryoCode);
+        if (stock != null) {
+            task.setVulcanizeMachineCount(stock.getVulcanizeMachineCount());
+            task.setVulcanizeMoldCount(stock.getVulcanizeMoldCount());
+        }
+
+        return task;
     }
 
     /**
