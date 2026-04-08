@@ -330,6 +330,16 @@ public class BalancingService {
             reservedHistoryTasks(sortedTasks, machineStates, context);
         }
 
+        // 产能不足检查：如果总产能 < 总需求，直接使用贪心算法
+        int effectiveCapacity = totalCapacity;
+        if (effectiveCapacity < totalDemand) {
+            log.warn("产能不足（产能={}, 需求={}），跳过DFS直接使用贪心算法", effectiveCapacity, totalDemand);
+            BalancingResult result = greedyAssignFallback(sortedTasks, machineStates, forceKeepHistory,
+                    typeDiffThreshold, loadDiffThreshold);
+            logAllocationResult(result, machineStates);
+            return result;
+        }
+
         // Step 7: DFS + 剪枝搜索最优方案
         DfsSearchResult searchResult = new DfsSearchResult();
         searchResult.bestScore = Integer.MAX_VALUE;
@@ -500,6 +510,11 @@ public class BalancingService {
             DfsSearchResult searchResult) {
 
         searchResult.searchCount++;
+
+        // 安全限制：搜索次数超过 100 万次后停止（防止极端情况卡死）
+        if (searchResult.searchCount > 1000000) {
+            return;
+        }
 
         // 终止条件：所有任务已分配
         if (taskIndex >= tasks.size()) {
