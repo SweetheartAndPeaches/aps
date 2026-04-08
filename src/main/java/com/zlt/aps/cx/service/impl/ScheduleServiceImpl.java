@@ -818,28 +818,11 @@ public class ScheduleServiceImpl implements ScheduleService {
         Map<String, Integer> materialStockMap = new HashMap<>();
 
         try {
-            // Step 1: 构建胎胚→物料列表的映射（支持一个胎胚对应多个物料）
-            Map<String, List<String>> embryoToMaterialsMap = buildEmbryoToMaterialsMap(materials);
-            log.debug("构建胎胚→物料列表映射 {} 条", embryoToMaterialsMap.size());
+            // 按硫化任务维度分配库存，共用胎胚按硫化任务需求比例分配
+            materialStockMap = allocateStockByMaterialRatio(stocks, lhScheduleResults, dayShifts);
+            log.debug("按硫化任务维度分配胎胚库存 {} 条", materialStockMap.size());
 
-            // Step 2: 构建物料→胎胚的映射
-            Map<String, String> materialToEmbryoMap = new HashMap<>();
-            for (MdmMaterialInfo material : materials) {
-                if (material.getEmbryoCode() != null && material.getMaterialCode() != null) {
-                    materialToEmbryoMap.put(material.getMaterialCode(), material.getEmbryoCode());
-                }
-            }
-
-            // Step 3: 计算各物料的硫化需求（按硫化任务的班次计划量）
-            Map<String, Integer> materialDemandMap = calculateMaterialDemandByLhResults(
-                    lhScheduleResults, dayShifts, materials);
-            log.debug("计算物料硫化需求（基于硫化任务） {} 条", materialDemandMap.size());
-
-            // Step 4: 按需求比例分配胎胚库存到物料
-            materialStockMap = allocateStockByMaterialRatio(stocks, embryoToMaterialsMap, materialDemandMap);
-            log.debug("按比例分配胎胚库存到物料 {} 条", materialStockMap.size());
-
-            // Step 5: 计算成型余量
+            // 计算成型余量
             for (Map.Entry<String, MdmMonthSurplus> entry : monthSurplusMap.entrySet()) {
                 String materialCode = entry.getKey();
                 MdmMonthSurplus surplus = entry.getValue();
@@ -859,74 +842,6 @@ public class ScheduleServiceImpl implements ScheduleService {
         }
 
         return materialStockMap;
-    }
-
-    /**
-     * 构建胎胚→物料列表的映射（支持一个胎胚对应多个物料）
-     */
-    private Map<String, List<String>> buildEmbryoToMaterialsMap(List<MdmMaterialInfo> materials) {
-        Map<String, List<String>> embryoToMaterialsMap = new HashMap<>();
-        for (MdmMaterialInfo material : materials) {
-            String embryoCode = material.getEmbryoCode();
-            String materialCode = material.getMaterialCode();
-            if (embryoCode != null && materialCode != null) {
-                embryoToMaterialsMap.computeIfAbsent(embryoCode, k -> new ArrayList<>()).add(materialCode);
-            }
-        }
-        return embryoToMaterialsMap;
-    }
-
-    /**
-     * 计算各物料的硫化需求（按硫化任务的班次计划量）
-     *
-     * <p>从硫化排程结果中获取各物料的班次计划量作为需求
-     * 如果某物料没有硫化任务，则使用月计划余量作为需求
-     *
-     * @param lhScheduleResults 硫化排程结果
-     * @param dayShifts        当前天班次配置
-     * @param materials        物料信息列表
-     * @return 物料需求映射
-     */
-    private Map<String, Integer> calculateMaterialDemandByLhResults(
-            List<LhScheduleResult> lhScheduleResults,
-            List<CxShiftConfig> dayShifts,
-            List<MdmMaterialInfo> materials) {
-
-        Map<String, Integer> demandMap = new HashMap<>();
-
-        // 如果硫化结果为空，使用月计划余量作为需求
-        if (lhScheduleResults == null || lhScheduleResults.isEmpty()) {
-            log.debug("硫化排程结果为空，使用月计划余量作为需求");
-            return demandMap;
-        }
-
-        // Step 1: 按物料编码+胎胚编码合并硫化结果，累加班次计划量
-        Map<String, Integer> mergedDemand = new HashMap<>();
-        for (LhScheduleResult lh : lhScheduleResults) {
-            String materialCode = lh.getMaterialCode();
-            if (materialCode == null) {
-                continue;
-            }
-
-            // 获取该硫化记录对应班次的计划量
-            int planQty = getShiftPlanQtyFromLhResult(lh, dayShifts);
-            mergedDemand.merge(materialCode, planQty, Integer::sum);
-        }
-
-        // Step 2: 将合并后的需求设置到结果映射
-        for (Map.Entry<String, Integer> entry : mergedDemand.entrySet()) {
-            demandMap.put(entry.getKey(), entry.getValue());
-        }
-
-        // Step 3: 确保所有物料都有需求值（如果没有硫化任务，使用默认值1）
-        for (MdmMaterialInfo material : materials) {
-            String materialCode = material.getMaterialCode();
-            if (materialCode != null && !demandMap.containsKey(materialCode)) {
-                demandMap.put(materialCode, 1);
-            }
-        }
-
-        return demandMap;
     }
 
     /**
@@ -977,16 +892,15 @@ public class ScheduleServiceImpl implements ScheduleService {
     }
 
     /**
-     * 按比例分配胎胚库存到物料
+     * 按比例分配胎胚库存到硫化任务
      *
-     * <p>当一个胎胚被多个物料共用时，按各物料的硫化需求比例分配库存
-     * <p>例如：胎胚1被物料A和物料B共用，A的需求=300，B的需求=500，库存=800
-     * <p>则A分配: 800 * 300/800 = 300，B分配: 800 * 500/800 = 500
+     * <p>当一个胎胚被多个物料共用时，按各硫化任务的班次计划量需求比例分配库存
+     * <p>最后一条硫化任务用倒扣形式（总库存 - 已分配）
      */
     private Map<String, Integer> allocateStockByMaterialRatio(
             List<CxStock> stocks,
-            Map<String, List<String>> embryoToMaterialsMap,
-            Map<String, Integer> materialDemandMap) {
+            List<LhScheduleResult> lhScheduleResults,
+            List<CxShiftConfig> dayShifts) {
 
         Map<String, Integer> materialStockMap = new HashMap<>();
 
@@ -997,67 +911,86 @@ public class ScheduleServiceImpl implements ScheduleService {
             }
 
             int totalStock = stock.getEffectiveStock();
-            List<String> materialCodes = embryoToMaterialsMap.get(embryoCode);
-
-            if (materialCodes == null || materialCodes.isEmpty()) {
-                // 胎胚没有对应的物料，跳过
-                log.debug("胎胚 {} 没有对应的物料，跳过", embryoCode);
+            if (totalStock <= 0) {
                 continue;
             }
 
-            if (materialCodes.size() == 1) {
-                // 胎胚只对应一个物料，直接分配全部库存
-                String materialCode = materialCodes.get(0);
-                materialStockMap.merge(materialCode, totalStock, Integer::sum);
-                log.debug("胎胚 {} 只对应物料 {}，分配库存 {}", embryoCode, materialCode, totalStock);
-            } else {
-                // 胎胚对应多个物料，按需求比例分配
-                int totalDemand = 0;
-                Map<String, Integer> demands = new HashMap<>();
+            // 找到该胎胚对应的所有硫化任务
+            List<LhScheduleResult> relatedTasks = new ArrayList<>();
+            for (LhScheduleResult lh : lhScheduleResults) {
+                if (embryoCode.equals(lh.getEmbryoCode())) {
+                    relatedTasks.add(lh);
+                }
+            }
 
-                for (String materialCode : materialCodes) {
-                    int demand = materialDemandMap.getOrDefault(materialCode, 1);
-                    demands.put(materialCode, demand);
+            if (relatedTasks.isEmpty()) {
+                // 胎胚没有对应的硫化任务，跳过
+                log.debug("胎胚 {} 没有对应的硫化任务，跳过", embryoCode);
+                continue;
+            }
+
+            if (relatedTasks.size() == 1) {
+                // 胎胚只对应一个硫化任务，直接分配全部库存
+                String materialCode = relatedTasks.get(0).getMaterialCode();
+                materialStockMap.merge(materialCode, totalStock, Integer::sum);
+                log.debug("胎胚 {} 只对应硫化任务 {}，分配库存 {}", embryoCode, materialCode, totalStock);
+            } else {
+                // 胎胚对应多个硫化任务，按硫化任务需求比例分配
+                int totalDemand = 0;
+                List<TaskDemand> taskDemands = new ArrayList<>();
+                for (LhScheduleResult lh : relatedTasks) {
+                    int demand = getShiftPlanQtyFromLhResult(lh, dayShifts);
+                    taskDemands.add(new TaskDemand(lh.getMaterialCode(), demand));
                     totalDemand += demand;
                 }
 
                 if (totalDemand == 0) {
                     // 总需求为0，平均分配
-                    int avgStock = totalStock / materialCodes.size();
-                    for (String materialCode : materialCodes) {
-                        materialStockMap.merge(materialCode, avgStock, Integer::sum);
+                    int avgStock = totalStock / taskDemands.size();
+                    for (TaskDemand td : taskDemands) {
+                        materialStockMap.merge(td.materialCode, avgStock, Integer::sum);
                     }
-                    log.debug("胎胚 {} 对应多个物料但总需求为0，平均分配库存 {}", embryoCode, avgStock);
+                    log.debug("胎胚 {} 对应多个硫化任务但总需求为0，平均分配库存 {}", embryoCode, avgStock);
                 } else {
-                    // 按比例分配
+                    // 按比例分配，最后一条用倒扣
                     int allocatedTotal = 0;
-                    String lastMaterial = null;
 
-                    for (int i = 0; i < materialCodes.size(); i++) {
-                        String materialCode = materialCodes.get(i);
-                        int demand = demands.get(materialCode);
+                    for (int i = 0; i < taskDemands.size(); i++) {
+                        TaskDemand td = taskDemands.get(i);
                         int allocatedStock;
 
-                        if (i == materialCodes.size() - 1) {
-                            // 最后一个物料分配剩余库存，避免四舍五入误差
+                        if (i == taskDemands.size() - 1) {
+                            // 最后一个硫化任务分配剩余库存（倒扣）
                             allocatedStock = totalStock - allocatedTotal;
                         } else {
                             // 按比例分配
-                            allocatedStock = (int) ((double) totalStock * demand / totalDemand);
+                            allocatedStock = (int) ((long) totalStock * td.demand / totalDemand);
                         }
 
-                        materialStockMap.merge(materialCode, allocatedStock, Integer::sum);
+                        materialStockMap.merge(td.materialCode, allocatedStock, Integer::sum);
                         allocatedTotal += allocatedStock;
-                        lastMaterial = materialCode;
 
-                        log.debug("胎胚 {} 共用分配：物料 {} 需求占比 {}/{}，分配库存 {}",
-                                embryoCode, materialCode, demand, totalDemand, allocatedStock);
+                        log.debug("胎胚 {} 共用分配：硫化任务 {} 需求 {}，分配库存 {}",
+                                embryoCode, td.materialCode, td.demand, allocatedStock);
                     }
                 }
             }
         }
 
         return materialStockMap;
+    }
+
+    /**
+     * 硫化任务需求（内部类）
+     */
+    private static class TaskDemand {
+        String materialCode;
+        int demand;
+
+        TaskDemand(String materialCode, int demand) {
+            this.materialCode = materialCode;
+            this.demand = demand;
+        }
     }
 
     /**
