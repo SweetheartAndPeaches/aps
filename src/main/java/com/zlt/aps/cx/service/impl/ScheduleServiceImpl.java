@@ -424,10 +424,11 @@ public class ScheduleServiceImpl implements ScheduleService {
 
         List<MdmMaterialInfo> materials;
         if (!materialCodes.isEmpty()) {
-            // 使用 embryoCode 查询物料信息（一个物料对应一个胎胚）
+            // 使用 embryoCode 查询物料信息（一个物料对应一个胎胚），只查询未删除的数据
             materials = materialInfoMapper.selectList(
                     new LambdaQueryWrapper<MdmMaterialInfo>()
-                            .in(MdmMaterialInfo::getMaterialCode, materialCodes));
+                            .in(MdmMaterialInfo::getMaterialCode, materialCodes)
+                            .eq(MdmMaterialInfo::getIsDelete, "0"));
             log.info("根据硫化排程结果加载物料信息 {} 条，涉及 {} 个外胎", materials.size(), materialCodes.size());
         } else {
             materials = new ArrayList<>();
