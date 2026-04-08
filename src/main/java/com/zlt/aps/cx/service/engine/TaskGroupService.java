@@ -107,11 +107,13 @@ public class TaskGroupService {
                 continue;
             }
 
+            String materialCode = lhResult.getMaterialCode();
             String embryoCode = lhResult.getEmbryoCode();
 
             // 判断任务类型
             // 1. 续作任务：当前机台在产的胎胚
-            List<String> continueMachineCodes = findContinueMachines(embryoCode, machineOnlineEmbryoMap);
+            // 使用物料编码 + 胎胚编码组合键匹配
+            List<String> continueMachineCodes = findContinueMachines(materialCode, embryoCode, machineOnlineEmbryoMap);
             boolean isContinueTask = !continueMachineCodes.isEmpty();
 
             // 2. 试制任务
@@ -167,12 +169,17 @@ public class TaskGroupService {
 
     /**
      * 查找续作机台
+     *
+     * <p>使用物料编码 + 胎胚编码组合键匹配：
+     * - 机台在产: mesMaterialCode + embryoSpec (格式: materialCode|embryoCode)
+     * - 硫化任务: materialCode + embryoCode
      */
-    private List<String> findContinueMachines(String embryoCode, Map<String, Set<String>> machineOnlineEmbryoMap) {
-        //todo 因为这里同胎胚可以被不同硫化任务物料共用，并且不同任务分配的机台不同，这里不能简单的比较在机是那些胎胚就安排
+    private List<String> findContinueMachines(String materialCode, String embryoCode, Map<String, Set<String>> machineOnlineEmbryoMap) {
         List<String> machineCodes = new ArrayList<>();
+        // 组合键格式与机台在产映射一致: materialCode|embryoCode
+        String combinedKey = materialCode + "|" + embryoCode;
         for (Map.Entry<String, Set<String>> entry : machineOnlineEmbryoMap.entrySet()) {
-            if (entry.getValue().contains(embryoCode)) {
+            if (entry.getValue().contains(combinedKey)) {
                 machineCodes.add(entry.getKey());
             }
         }

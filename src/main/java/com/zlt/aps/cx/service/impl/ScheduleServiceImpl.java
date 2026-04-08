@@ -457,14 +457,21 @@ public class ScheduleServiceImpl implements ScheduleService {
 
     /**
      * 构建机台在机胎胚映射
+     *
+     * <p>使用物料编码 + 胎胚编码组合作为唯一键：
+     * - 机台在产: mesMaterialCode + embryoSpec
+     * - 硫化任务: materialCode + embryoCode
      */
     private void buildMachineOnlineEmbryoMap(ScheduleContextVo context) {
         Map<String, Set<String>> machineOnlineEmbryoMap = new HashMap<>();
         for (MdmCxMachineOnlineInfo onlineInfo : context.getOnlineInfos()) {
             String cxCode = onlineInfo.getCxCode();
-            String embryoCode = onlineInfo.getMesMaterialCode();
-            if (cxCode != null && embryoCode != null) {
-                machineOnlineEmbryoMap.computeIfAbsent(cxCode, k -> new HashSet<>()).add(embryoCode);
+            // 组合物料编码和胎胚编码作为唯一键
+            String materialCode = onlineInfo.getMesMaterialCode();
+            String embryoSpec = onlineInfo.getEmbryoSpec();
+            String combinedKey = materialCode + "|" + embryoSpec;
+            if (cxCode != null && combinedKey != null && !combinedKey.equals("|")) {
+                machineOnlineEmbryoMap.computeIfAbsent(cxCode, k -> new HashSet<>()).add(combinedKey);
             }
         }
         context.setMachineOnlineEmbryoMap(machineOnlineEmbryoMap);
@@ -1163,22 +1170,26 @@ public class ScheduleServiceImpl implements ScheduleService {
                 }
             }
 
-            // 构建已收尾的胎胚编码集合
-            Set<String> completedEmbryoCodes = new HashSet<>();
+            // 构建已收尾的组合键集合：物料编码 + 胎胚编码
+            // 用于过滤在机信息
+            Set<String> completedKeys = new HashSet<>();
             for (String materialCode : completedMaterialCodes) {
                 String embryoCode = materialToEmbryoMap.get(materialCode);
-                if (embryoCode != null) {
-                    completedEmbryoCodes.add(embryoCode);
+                if (materialCode != null && embryoCode != null) {
+                    completedKeys.add(materialCode + "|" + embryoCode);
                 }
             }
 
             List<MdmCxMachineOnlineInfo> filteredOnlineInfos = context.getOnlineInfos().stream()
                     .filter(info -> {
-                        String embryoCode = info.getMesMaterialCode();
-                        // 如果胎胚编码在已收尾集合中，则过滤掉
-                        if (embryoCode != null && completedEmbryoCodes.contains(embryoCode)) {
-                            log.debug("过滤在机信息：机台={}，胎胚={}，对应物料已收尾",
-                                    info.getCxCode(), embryoCode);
+                        // 使用物料编码 + 胎胚编码组合键
+                        String materialCode = info.getMesMaterialCode();
+                        String embryoSpec = info.getEmbryoSpec();
+                        String combinedKey = materialCode + "|" + embryoSpec;
+                        // 如果组合键在已收尾集合中，则过滤掉
+                        if (combinedKey != null && !combinedKey.equals("|") && completedKeys.contains(combinedKey)) {
+                            log.debug("过滤在机信息：机台={}，组合键={}，对应物料已收尾",
+                                    info.getCxCode(), combinedKey);
                             return false;
                         }
                         return true;
@@ -1190,13 +1201,16 @@ public class ScheduleServiceImpl implements ScheduleService {
         }
 
         // 3. 重新构建机台在机胎胚映射（使用过滤后的在机信息）
+        // 使用物料编码 + 胎胚编码组合键
         if (context.getOnlineInfos() != null) {
             Map<String, Set<String>> machineOnlineEmbryoMap = new HashMap<>();
             for (MdmCxMachineOnlineInfo onlineInfo : context.getOnlineInfos()) {
                 String cxCode = onlineInfo.getCxCode();
-                String embryoCode = onlineInfo.getMesMaterialCode();
-                if (cxCode != null && embryoCode != null) {
-                    machineOnlineEmbryoMap.computeIfAbsent(cxCode, k -> new HashSet<>()).add(embryoCode);
+                String materialCode = onlineInfo.getMesMaterialCode();
+                String embryoSpec = onlineInfo.getEmbryoSpec();
+                String combinedKey = materialCode + "|" + embryoSpec;
+                if (cxCode != null && combinedKey != null && !combinedKey.equals("|")) {
+                    machineOnlineEmbryoMap.computeIfAbsent(cxCode, k -> new HashSet<>()).add(combinedKey);
                 }
             }
             context.setMachineOnlineEmbryoMap(machineOnlineEmbryoMap);
