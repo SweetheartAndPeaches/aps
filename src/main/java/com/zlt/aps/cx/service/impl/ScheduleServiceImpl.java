@@ -237,9 +237,9 @@ public class ScheduleServiceImpl implements ScheduleService {
                 log.warn("加载物料信息失败，继续执行：{}", e.getMessage());
             }
 
-            // 6. 获取胎胚库存信息
+            // 6. 获取胎胚库存信息（根据排程日期获取早上6点的库存）
             try {
-                loadStocks(context);
+                loadStocks(context, scheduleDate);
                 log.info("胎胚库存信息加载完成");
             } catch (Exception e) {
                 log.warn("加载胎胚库存信息失败，继续执行：{}", e.getMessage());
@@ -436,13 +436,21 @@ public class ScheduleServiceImpl implements ScheduleService {
 
     /**
      * 加载胎胚库存
+     *
+     * <p>根据排程日期获取早上6点那一刻的库存
+     *
+     * @param context       排程上下文
+     * @param scheduleDate  排程日期
      */
-    private void loadStocks(ScheduleContextVo context) {
+    private void loadStocks(ScheduleContextVo context, LocalDate scheduleDate) {
+        // 将 LocalDate 转换为 java.sql.Date 用于数据库查询
+        Date stockDate = Date.from(scheduleDate.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant());
         List<CxStock> stocks = stockMapper.selectList(
                 new LambdaQueryWrapper<CxStock>()
+                        .eq(CxStock::getStockDate, stockDate)
                         .gt(CxStock::getStockNum, 0));
         context.setStocks(stocks);
-        log.info("加载胎胚库存 {} 条", stocks.size());
+        log.info("加载胎胚库存 {} 条 (库存日期: {})", stocks.size(), scheduleDate);
     }
 
     /**
