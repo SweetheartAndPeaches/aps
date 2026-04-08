@@ -116,8 +116,12 @@ public class TaskGroupService {
             List<String> continueMachineCodes = findContinueMachines(materialCode, embryoCode, machineOnlineEmbryoMap);
             boolean isContinueTask = !continueMachineCodes.isEmpty();
 
-            // 2. 试制任务
-            boolean isTrialTask = "1".equals(lhResult.getIsTrial());
+            // 2. 试制任务：根据施工阶段判断
+            // constructionStage: 01-试制, 02-量试, 03-正式
+            // 01-试制 → 试制任务
+            // 02-量试 → 归入新增任务（不是试制任务）
+            String constructionStage = lhResult.getConstructionStage();
+            boolean isTrialTask = "01".equals(constructionStage);
 
             // 设置任务属性
             task.setIsContinueTask(isContinueTask);
