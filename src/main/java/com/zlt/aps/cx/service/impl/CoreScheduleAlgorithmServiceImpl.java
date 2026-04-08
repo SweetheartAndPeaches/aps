@@ -58,6 +58,9 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     /** 默认排程天数 */
     private static final int DEFAULT_SCHEDULE_DAYS = 3;
 
+    /** 排程起始偏移天数：前端传入最后一天，需要往前推2天开始排产 */
+    private static final int SCHEDULE_START_OFFSET_DAYS = 2;
+
     @Override
     public List<CxScheduleResult> executeSchedule(ScheduleContextVo context) {
         log.info("开始执行排程算法，日期: {}", context.getScheduleDate());
@@ -91,7 +94,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             }
 
             // 设置当前天的上下文
-            LocalDate currentScheduleDate = context.getScheduleDate().plusDays(day - 1);
+            // 前端传入的是最后一天（如2026-03-28），需要往前推2天开始排产（如2026-03-26）
+            LocalDate currentScheduleDate = context.getScheduleDate().minusDays(SCHEDULE_START_OFFSET_DAYS).plusDays(day - 1);
             context.setCurrentScheduleDay(day);
             context.setCurrentScheduleDate(currentScheduleDate);
             context.setCurrentShiftConfigs(dayShifts);
