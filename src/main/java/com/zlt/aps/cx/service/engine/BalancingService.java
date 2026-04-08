@@ -501,14 +501,6 @@ public class BalancingService {
 
         searchResult.searchCount++;
 
-        // 防止搜索空间爆炸，限制搜索次数（增加到 500000）
-        if (searchResult.searchCount > 500000) {
-            if (searchResult.searchCount == 500001) {
-                log.warn("DFS搜索次数超过500000次，停止搜索，当前最优分数: {}", searchResult.bestScore);
-            }
-            return;
-        }
-
         // 终止条件：所有任务已分配
         if (taskIndex >= tasks.size()) {
             // 检查是否所有任务都已分配完毕
