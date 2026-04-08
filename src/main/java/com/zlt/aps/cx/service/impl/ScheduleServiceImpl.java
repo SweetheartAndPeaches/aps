@@ -530,8 +530,11 @@ public class ScheduleServiceImpl implements ScheduleService {
      * 加载结构整车配置
      */
     private void loadStructureShiftCapacities(ScheduleContextVo context) {
-        List<MdmStructureTreadConfig> structureShiftCapacities = structureShiftCapacityMapper.selectList(null);
+        List<MdmStructureTreadConfig> structureShiftCapacities = structureShiftCapacityMapper.selectList(
+                new LambdaQueryWrapper<MdmStructureTreadConfig>()
+                        .eq(MdmStructureTreadConfig::getIsDelete, "0"));
         context.setStructureShiftCapacities(structureShiftCapacities);
+        log.info("加载结构班次产能配置 {} 条", structureShiftCapacities.size());
     }
 
     /**
@@ -579,11 +582,13 @@ public class ScheduleServiceImpl implements ScheduleService {
     /**
      * 加载结构整车配置
      *
-     * <p>从 T_CX_STRUCTURE_TRIP_CONFIG 表获取每个结构的整车胎面条数配置
+     * <p>从 t_mdm_structure_tread_config 表获取每个结构的整车胎面条数配置
      * <p>用于按车分配的计算：需要的车数 = 待排产量 / 胎面整车条数
      */
     private void loadStructureTreadConfigs(ScheduleContextVo context) {
-        List<MdmStructureTreadConfig> treadConfigs = structureShiftCapacityMapper.selectList(null);
+        List<MdmStructureTreadConfig> treadConfigs = structureShiftCapacityMapper.selectList(
+                new LambdaQueryWrapper<MdmStructureTreadConfig>()
+                        .eq(MdmStructureTreadConfig::getIsDelete, "0"));
         context.setStructureTreadConfigs(treadConfigs);
 
         // 构建结构-整车条数映射
