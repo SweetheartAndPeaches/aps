@@ -846,27 +846,34 @@ public class BalancingService {
     private void logAllocationResult(BalancingResult result, List<MachineState> machineStates) {
         log.info("均衡分配结果：");
         
+        int maxLoad = 0, minLoad = Integer.MAX_VALUE;
+        int maxTypes = 0, minTypes = Integer.MAX_VALUE;
+        
         for (MachineAssignment assignment : result.getAssignments()) {
             List<String> embryos = assignment.getEmbryoAssignments().stream()
                     .map(e -> e.getEmbryoCode() + "(" + e.getAssignedQty() + ")")
                     .collect(Collectors.toList());
             log.info("  机台 {}: {}", assignment.getMachineCode(), embryos);
+            
+            // 从 result 中计算均衡指标
+            int load = assignment.getEmbryoAssignments().stream()
+                    .mapToInt(EmbryoAssignment::getAssignedQty).sum();
+            int types = (int) assignment.getEmbryoAssignments().stream()
+                    .map(EmbryoAssignment::getEmbryoCode).distinct().count();
+            
+            maxLoad = Math.max(maxLoad, load);
+            minLoad = Math.min(minLoad, load);
+            maxTypes = Math.max(maxTypes, types);
+            minTypes = Math.min(minTypes, types);
         }
         
-        int maxLoad = 0, minLoad = Integer.MAX_VALUE;
-        int maxTypes = 0, minTypes = Integer.MAX_VALUE;
-        
-        for (MachineState state : machineStates) {
-            if (state.getCurrentLoad() > 0) {
-                maxLoad = Math.max(maxLoad, state.getCurrentLoad());
-                minLoad = Math.min(minLoad, state.getCurrentLoad());
-                maxTypes = Math.max(maxTypes, state.getCurrentTypes());
-                minTypes = Math.min(minTypes, state.getCurrentTypes());
-            }
+        // 如果没有分配结果，避免打印错误指标
+        if (minLoad == Integer.MAX_VALUE) {
+            log.info("均衡指标：无有效分配");
+        } else {
+            log.info("均衡指标：负荷差距={}, 种类差距={}", 
+                    maxLoad - minLoad, maxTypes - minTypes);
         }
-        
-        log.info("均衡指标：负荷差距={}, 种类差距={}", 
-                maxLoad - minLoad, maxTypes - minTypes);
     }
 
     // ==================== 配置获取方法 ====================

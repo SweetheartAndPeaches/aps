@@ -43,32 +43,25 @@ public class ScheduleMainController {
             return AjaxResult.error("排程日期不能为空");
         }
         if (dto.getDays() == null || dto.getDays() < 1) {
-            dto.setDays(1);
+            dto.setDays(3);  // 默认排产3天
         }
 
-        List<Object> allResults = new ArrayList<>();
-        LocalDate currentDate = dto.getScheduleDate();
+        // 只需要调用一次executeSchedule，days参数表示排产天数
+        ScheduleRequestVo request = new ScheduleRequestVo();
+        request.setScheduleDate(dto.getScheduleDate());  // 最后一天日期
+        request.setOverwrite(dto.getOverwrite() != null ? dto.getOverwrite() : false);
+        request.setFactoryCode(dto.getFactoryCode());
+        request.setScheduleType(dto.getScheduleType());
+        request.setScheduleMode(dto.getScheduleType());
+        request.setDays(dto.getDays());  // 传递排产天数
 
-        for (int i = 0; i < dto.getDays(); i++) {
-            ScheduleRequestVo request = new ScheduleRequestVo();
-            request.setScheduleDate(currentDate);
-            request.setOverwrite(dto.getOverwrite() != null ? dto.getOverwrite() : false);
-            request.setFactoryCode(dto.getFactoryCode());
-            request.setScheduleType(dto.getScheduleType());
-            request.setScheduleMode(dto.getScheduleType());
+        ScheduleService.ScheduleResult result = scheduleService.executeSchedule(request);
 
-            ScheduleService.ScheduleResult result = scheduleService.executeSchedule(request);
-
-            if (result.isSuccess()) {
-                allResults.add(result);
-            } else {
-                return AjaxResult.error("排程失败[" + currentDate + "]: " + result.getMessage());
-            }
-
-            currentDate = currentDate.plusDays(1);
+        if (result.isSuccess()) {
+            return AjaxResult.success(result);
+        } else {
+            return AjaxResult.error("排程失败[" + dto.getScheduleDate() + "]: " + result.getMessage());
         }
-
-        return AjaxResult.success(allResults);
     }
 
     @ApiOperation(value = "生成单日排程", notes = "生成指定日期的排程")

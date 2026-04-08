@@ -80,11 +80,7 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
             return "0".equals(workCalendar.getDayFlag());
         }
 
-        // 如果工作日历中没有配置，检查是否为周日
-        if (date.getDayOfWeek() == DayOfWeek.SUNDAY) {
-            return true;
-        }
-
+        // 如果工作日历中没有配置，默认为工作日（不再将周日判定为节假日）
         return false;
     }
 

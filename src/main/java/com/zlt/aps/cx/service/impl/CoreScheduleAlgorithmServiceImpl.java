@@ -5,11 +5,13 @@ import com.zlt.aps.cx.entity.CxStock;
 import com.zlt.aps.cx.entity.config.CxShiftConfig;
 import com.zlt.aps.cx.entity.schedule.CxScheduleDetail;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
+import com.zlt.aps.cx.mapper.MdmWorkCalendarMapper;
 import com.zlt.aps.cx.service.engine.*;
 import com.zlt.aps.cx.vo.ScheduleContextVo;
 import com.zlt.aps.mp.api.domain.entity.MdmMaterialInfo;
 import com.zlt.aps.mp.api.domain.entity.MdmMoldingMachine;
 import com.zlt.aps.mp.api.domain.entity.MdmWorkCalendar;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -54,6 +56,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     private final TrialTaskProcessor trialTaskProcessor;
     private final NewTaskProcessor newTaskProcessor;
     private final ShiftScheduleService shiftScheduleService;
+    private final MdmWorkCalendarMapper workCalendarMapper;
 
     /** 默认排程天数 */
     private static final int DEFAULT_SCHEDULE_DAYS = 3;
@@ -262,23 +265,28 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
     /**
      * 判断是否为停产日
+     * 按日期查询工作日历，检查dayFlag字段
      */
     private boolean isStopProductionDay(ScheduleContextVo context, LocalDate date) {
-        MdmWorkCalendar workCalendar = context.getWorkCalendar();
+        // 按日期查询工作日历
+        MdmWorkCalendar workCalendar = workCalendarMapper.selectOne(
+                new LambdaQueryWrapper<MdmWorkCalendar>()
+                        .eq(MdmWorkCalendar::getProcCode, "CX")  // 成型工序编码
+                        .eq(MdmWorkCalendar::getProductionDate, java.sql.Date.valueOf(date)));
+        
         if (workCalendar != null) {
             // 使用 dayFlag 判断：0-停, 1-开
             String dayFlag = workCalendar.getDayFlag();
+            log.info("日期 {} 工作日历查询结果: dayFlag={}, 判定为{}", date, dayFlag, "0".equals(dayFlag) ? "停产日" : "生产日");
             if ("0".equals(dayFlag)) {
                 return true; // 停产日
             }
+        } else {
+            // 工作日历中没有记录，默认为生产日
+            log.info("日期 {} 无工作日历记录，默认为生产日", date);
         }
 
-        if (context.getCurrentScheduleDate() != null
-                && date.equals(context.getCurrentScheduleDate())
-                && Boolean.TRUE.equals(context.getIsClosingDay())) {
-            return true;
-        }
-
+        // 不再使用 isClosingDay 判断，仅依赖工作日历配置
         return false;
     }
 

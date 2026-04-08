@@ -411,9 +411,23 @@ public class ScheduleServiceImpl implements ScheduleService {
      * 加载硫化排程结果
      */
     private void loadLhScheduleResults(ScheduleContextVo context, LocalDate scheduleDate) {
+        log.info("查询硫化排程结果，日期: {}", scheduleDate);
         List<LhScheduleResult> lhScheduleResults = lhScheduleResultMapper.selectByDate(scheduleDate);
+        log.info("硫化排程查询结果: {} 条", lhScheduleResults != null ? lhScheduleResults.size() : 0);
+        
+        if (lhScheduleResults == null || lhScheduleResults.isEmpty()) {
+            // 尝试不带条件查询，看看是否有数据
+            List<LhScheduleResult> allResults = lhScheduleResultMapper.selectAll();
+            log.info("全表查询硫化排程结果: {} 条", allResults != null ? allResults.size() : 0);
+            if (allResults != null && !allResults.isEmpty()) {
+                log.info("硫化数据示例 - 日期: {}, 物料: {}, 胚号: {}", 
+                    allResults.get(0).getScheduleDate(), 
+                    allResults.get(0).getMaterialCode(),
+                    allResults.get(0).getEmbryoCode());
+            }
+        }
+        
         context.setLhScheduleResults(lhScheduleResults);
-        log.info("加载硫化排程结果 {} 条", lhScheduleResults.size());
     }
 
     /**

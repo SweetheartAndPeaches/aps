@@ -32,4 +32,7 @@ public class ScheduleRequestVo implements Serializable {
 
     @ApiModelProperty(value = "排程类型：NORMAL-正常排程，PRECISION-精准排程")
     private String scheduleType;
+
+    @ApiModelProperty(value = "排产天数，默认3天")
+    private Integer days;
 }
