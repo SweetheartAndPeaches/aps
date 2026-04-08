@@ -2,6 +2,7 @@ package com.zlt.aps.cx.service.engine;
 
 import com.zlt.aps.cx.entity.CxMaterialEnding;
 import com.zlt.aps.cx.entity.CxStock;
+import com.zlt.aps.cx.entity.config.CxShiftConfig;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
 import com.zlt.aps.cx.vo.ScheduleContextVo;
 import com.zlt.aps.mp.api.domain.entity.MdmMaterialInfo;
@@ -94,6 +95,9 @@ public class TaskGroupService {
             machineOnlineEmbryoMap = new HashMap<>();
         }
 
+        // 获取当前班次配置
+        List<CxShiftConfig> currentShiftConfigs = context.getCurrentShiftConfigs();
+
         // 直接遍历每条硫化记录，为每条记录创建独立的任务
         for (LhScheduleResult lhResult : lhScheduleResults) {
             if (lhResult.getEmbryoCode() == null) {
@@ -102,7 +106,7 @@ public class TaskGroupService {
 
             // 为每条硫化记录构建独立任务
             CoreScheduleAlgorithmService.DailyEmbryoTask task = buildSingleTask(
-                    lhResult, materialMap, stockMap, context);
+                    lhResult, materialMap, stockMap, context, currentShiftConfigs);
             if (task == null) {
                 continue;
             }
@@ -194,20 +198,27 @@ public class TaskGroupService {
      * 为单条硫化记录构建任务
      *
      * <p>每条硫化记录作为独立任务，不再按胎胚合并
+     *
+     * @param lhResult            硫化记录
+     * @param materialMap         物料映射
+     * @param stockMap             库存映射
+     * @param context              排程上下文
+     * @param currentShiftConfigs  当前班次配置列表
      */
     private CoreScheduleAlgorithmService.DailyEmbryoTask buildSingleTask(
             LhScheduleResult lhResult,
             Map<String, MdmMaterialInfo> materialMap,
             Map<String, CxStock> stockMap,
-            ScheduleContextVo context) {
+            ScheduleContextVo context,
+            List<CxShiftConfig> currentShiftConfigs) {
 
         String embryoCode = lhResult.getEmbryoCode();
         if (embryoCode == null) {
             return null;
         }
 
-        // 获取硫化需求量（单条记录）
-        int vulcanizeDemand = lhResult.getDailyPlanQty() != null ? lhResult.getDailyPlanQty() : 0;
+        // 获取硫化需求量（根据当前班次配置获取对应的CLASS计划量）
+        int vulcanizeDemand = getShiftPlanQty(lhResult, currentShiftConfigs);
 
         // 获取当前库存
         int currentStock = getCurrentStock(lhResult, stockMap, embryoCode);
@@ -253,6 +264,65 @@ public class TaskGroupService {
         }
 
         return task;
+    }
+
+    /**
+     * 根据班次配置获取硫化记录对应班次的计划量
+     *
+     * <p>硫化有8个班次(CLASS1-CLASS8)，成型分3天排程
+     * 根据当前班次配置的 classField 字段获取对应的硫化班次计划量
+     *
+     * @param lhResult            硫化记录
+     * @param currentShiftConfigs 当前班次配置列表
+     * @return 对应班次的硫化计划量
+     */
+    private int getShiftPlanQty(LhScheduleResult lhResult, List<CxShiftConfig> currentShiftConfigs) {
+        if (currentShiftConfigs == null || currentShiftConfigs.isEmpty()) {
+            // 如果没有班次配置，返回日计划量作为兜底
+            return lhResult.getDailyPlanQty() != null ? lhResult.getDailyPlanQty() : 0;
+        }
+
+        // 获取班次配置中的 classField (如 CLASS1, CLASS2, ..., CLASS8)
+        // 格式: CLASS1, CLASS2, ..., CLASS8
+        for (CxShiftConfig shiftConfig : currentShiftConfigs) {
+            String classField = shiftConfig.getClassField();
+            if (classField != null && classField.startsWith("CLASS")) {
+                try {
+                    // 提取班次序号，如 CLASS3 -> 3
+                    int classIndex = Integer.parseInt(classField.substring(5));
+                    Integer planQty = getClassPlanQtyByIndex(lhResult, classIndex);
+                    if (planQty != null && planQty > 0) {
+                        return planQty;
+                    }
+                } catch (NumberFormatException e) {
+                    log.warn("无法解析班次字段: {}", classField);
+                }
+            }
+        }
+
+        // 如果没有找到对应班次的计划量，返回日计划量
+        return lhResult.getDailyPlanQty() != null ? lhResult.getDailyPlanQty() : 0;
+    }
+
+    /**
+     * 根据班次索引获取硫化记录的计划量
+     *
+     * @param lhResult   硫化记录
+     * @param classIndex 班次索引 (1-8)
+     * @return 计划量
+     */
+    private Integer getClassPlanQtyByIndex(LhScheduleResult lhResult, int classIndex) {
+        switch (classIndex) {
+            case 1: return lhResult.getClass1PlanQty();
+            case 2: return lhResult.getClass2PlanQty();
+            case 3: return lhResult.getClass3PlanQty();
+            case 4: return lhResult.getClass4PlanQty();
+            case 5: return lhResult.getClass5PlanQty();
+            case 6: return lhResult.getClass6PlanQty();
+            case 7: return lhResult.getClass7PlanQty();
+            case 8: return lhResult.getClass8PlanQty();
+            default: return null;
+        }
     }
 
     /**
