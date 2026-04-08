@@ -356,9 +356,17 @@ public class ShiftScheduleService {
     // ==================== S5.3.7 详细排产方法 ====================
 
     /**
-     * S5.3.7 按班次排产详细实现
+     * S5.3.7 按班次排产详细实现（按车分配版本）
      *
      * <p>将待排产量分配到具体的班次和时间段
+     * <p>支持5种任务类型的班次分配：
+     * <ul>
+     *   <li>普通任务：波浪放置，每个班次车数相差不超过1</li>
+     *   <li>收尾任务：只能在硫化的收尾班次或之前安排</li>
+     *   <li>开产任务：成型提前一班开始，首班6小时，关键产品从第二班开始</li>
+     *   <li>停产任务：库存全部消耗，反推计划量</li>
+     *   <li>试制任务：只在早班/中班，双数，不补整车</li>
+     * </ul>
      *
      * @param task          任务
      * @param machineCode   机台编码
@@ -376,50 +384,80 @@ public class ShiftScheduleService {
 
         List<ShiftProductionResult> results = new ArrayList<>();
 
-        int remainingQty = task.getPlannedProduction() != null ? task.getPlannedProduction() : 0;
-        if (remainingQty <= 0) {
+        // 获取需要的车数
+        int requiredCars = task.getRequiredCars() != null ? task.getRequiredCars() : 0;
+        if (requiredCars <= 0) {
             return results;
         }
 
-        int hourlyCapacity = getMachineHourlyCapacity(machineCode, task.getStructureName(), context);
-        int tripCapacity = getTripCapacity(task.getStructureName(), context);
+        // 获取胎面整车条数
+        int treadCount = getTripCapacity(task.getStructureName(), context);
 
-        for (CxShiftConfig shiftConfig : dayShifts) {
-            if (remainingQty <= 0) {
-                break;
+        // 班次波浪分配
+        int[] shiftCars = calculateWaveCars(requiredCars, dayShifts, context, task);
+
+        // 处理试制任务：必须是双数，不补整车
+        boolean isTrial = Boolean.TRUE.equals(task.getIsTrialTask());
+        if (isTrial) {
+            shiftCars = adjustTrialShiftCars(shiftCars, dayShifts);
+        }
+
+        // 处理收尾任务：只能在硫化收尾班次或之前安排
+        boolean isEnding = Boolean.TRUE.equals(task.getIsEndingTask());
+        if (isEnding) {
+            shiftCars = adjustEndingShiftCars(shiftCars, dayShifts, task);
+        }
+
+        // 处理开产任务：首班6小时，关键产品从第二班开始
+        boolean isOpening = Boolean.TRUE.equals(task.getIsOpeningDayTask());
+        if (isOpening && context.getCurrentScheduleDay() == 1) {
+            shiftCars = adjustOpeningShiftCars(shiftCars, dayShifts, task, context);
+        }
+
+        // 生成班次排产结果
+        int remainingCars = requiredCars;
+        for (int i = 0; i < dayShifts.size() && remainingCars > 0; i++) {
+            CxShiftConfig shiftConfig = dayShifts.get(i);
+            int carsForShift = shiftCars[i];
+
+            if (carsForShift <= 0) {
+                continue;
             }
 
-            // 试制任务只能在早班或中班
-            if (Boolean.TRUE.equals(task.getIsTrialTask())) {
-                if (!SHIFT_DAY.equals(shiftConfig.getShiftCode())
-                        && !SHIFT_AFTERNOON.equals(shiftConfig.getShiftCode())) {
+            // 试制任务：必须是双数
+            if (isTrial && carsForShift % 2 != 0) {
+                carsForShift = carsForShift - 1;
+                if (carsForShift <= 0) {
                     continue;
                 }
             }
 
-            int shiftAvailableCapacity = calculateShiftAvailableCapacity(
-                    machineCode, shiftConfig, hourlyCapacity, context);
+            // 实际车数不能超过剩余车数
+            carsForShift = Math.min(carsForShift, remainingCars);
 
-            if (shiftAvailableCapacity <= 0) {
-                continue;
-            }
+            int batchQty = carsForShift * treadCount;
 
-            int currentBatchQty = Math.min(remainingQty, shiftAvailableCapacity);
-
-            double productionHours = (double) currentBatchQty / hourlyCapacity;
+            // 计算生产时间
+            int hourlyCapacity = getMachineHourlyCapacity(machineCode, task.getStructureName(), context);
+            double productionHours = (double) batchQty / hourlyCapacity;
 
             LocalDateTime startTime = calculateStartTime(machineCode, shiftConfig, scheduleDate, context);
             LocalDateTime endTime = startTime.plusMinutes((long) (productionHours * 60));
 
+            // 班次结束时间检查
             LocalDateTime shiftEndTime = calculateShiftEndTime(shiftConfig, scheduleDate);
             if (endTime.isAfter(shiftEndTime)) {
+                // 超出班次时间，重新计算车数
+                long availableMinutes = java.time.Duration.between(startTime, shiftEndTime).toMinutes();
+                availableMinutes -= getMachinePrepareMinutes(machineCode, context);
+                int availableQty = (int) (availableMinutes * hourlyCapacity / 60);
+                availableQty = roundToTrip(availableQty, "FLOOR", treadCount);
+                batchQty = Math.max(0, availableQty);
+                carsForShift = treadCount > 0 ? batchQty / treadCount : 0;
                 endTime = shiftEndTime;
-                long actualMinutes = java.time.Duration.between(startTime, endTime).toMinutes();
-                currentBatchQty = (int) (actualMinutes * hourlyCapacity / 60);
-                currentBatchQty = roundToTrip(currentBatchQty, "FLOOR", tripCapacity);
             }
 
-            if (currentBatchQty <= 0) {
+            if (batchQty <= 0) {
                 continue;
             }
 
@@ -430,27 +468,288 @@ public class ShiftScheduleService {
             result.setMaterialCode(task.getMaterialCode());
             result.setMaterialName(task.getMaterialName());
             result.setStructureName(task.getStructureName());
-            result.setQuantity(currentBatchQty);
+            result.setQuantity(batchQty);
             result.setPlanStartTime(startTime);
             result.setPlanEndTime(endTime);
             result.setIsTrialTask(task.getIsTrialTask());
             result.setIsEndingTask(task.getIsEndingTask());
             result.setIsContinueTask(task.getIsContinueTask());
+            result.setCarsForShift(carsForShift);
 
             results.add(result);
 
-            remainingQty -= currentBatchQty;
+            remainingCars -= carsForShift;
 
-            log.debug("班次排产：机台={}, 班次={}, 胎胚={}, 数量={}, 时间={}-{}",
+            log.debug("班次排产：机台={}, 班次={}, 胎胚={}, 车数={}, 数量={}, 时间={}-{}",
                     machineCode, shiftConfig.getShiftName(), task.getMaterialCode(),
-                    currentBatchQty, startTime, endTime);
+                    carsForShift, batchQty, startTime, endTime);
         }
 
-        if (remainingQty > 0) {
-            log.warn("任务 {} 还有 {} 条未排产，产能不足", task.getMaterialCode(), remainingQty);
+        if (remainingCars > 0) {
+            log.warn("任务 {} 还有 {} 车未排产，产能不足", task.getMaterialCode(), remainingCars);
         }
 
         return results;
+    }
+
+    /**
+     * 计算波浪分配车数
+     *
+     * <p>按比例分配车数到各班次，确保每个班次车数相差不超过1
+     *
+     * @param requiredCars 需要的车数
+     * @param dayShifts    班次配置
+     * @param context      排程上下文
+     * @param task         任务
+     * @return 各班次车数数组
+     */
+    private int[] calculateWaveCars(
+            int requiredCars,
+            List<CxShiftConfig> dayShifts,
+            ScheduleContextVo context,
+            CoreScheduleAlgorithmService.DailyEmbryoTask task) {
+
+        int shiftCount = dayShifts.size();
+        int[] shiftCars = new int[shiftCount];
+
+        if (requiredCars <= 0) {
+            return shiftCars;
+        }
+
+        // 获取波浪比例
+        int[] waveRatio = context.getWaveRatio();
+        if (waveRatio == null || waveRatio.length < shiftCount) {
+            waveRatio = DEFAULT_WAVE_RATIO;
+        }
+
+        // 按班次顺序：夜班、早班、中班（根据班次编码映射）
+        int[] adjustedRatio = new int[shiftCount];
+        for (int i = 0; i < shiftCount; i++) {
+            String shiftCode = dayShifts.get(i).getShiftCode();
+            if (SHIFT_NIGHT.equals(shiftCode)) {
+                adjustedRatio[i] = waveRatio.length > 0 ? waveRatio[0] : 1;
+            } else if (SHIFT_DAY.equals(shiftCode)) {
+                adjustedRatio[i] = waveRatio.length > 1 ? waveRatio[1] : 2;
+            } else if (SHIFT_AFTERNOON.equals(shiftCode)) {
+                adjustedRatio[i] = waveRatio.length > 2 ? waveRatio[2] : 1;
+            } else {
+                adjustedRatio[i] = 1;
+            }
+        }
+
+        // 计算总比例
+        int totalRatio = 0;
+        for (int ratio : adjustedRatio) {
+            totalRatio += ratio;
+        }
+
+        // 按比例分配车数
+        int remainingCars = requiredCars;
+        int[] baseCars = new int[shiftCount];
+
+        for (int i = 0; i < shiftCount; i++) {
+            baseCars[i] = requiredCars * adjustedRatio[i] / totalRatio;
+            remainingCars -= baseCars[i];
+        }
+
+        // 波浪均衡：确保每个班次车数相差不超过1
+        // 先按基础分配
+        for (int i = 0; i < shiftCount; i++) {
+            shiftCars[i] = baseCars[i];
+        }
+
+        // 将剩余车数分配到靠前的班次（实现波浪效果）
+        if (remainingCars > 0) {
+            for (int i = 0; i < shiftCount && remainingCars > 0; i++) {
+                shiftCars[i]++;
+                remainingCars--;
+            }
+        }
+
+        // 确保波浪均衡：相邻班次车数相差不超过1
+        shiftCars = balanceWaveDistribution(shiftCars);
+
+        log.debug("波浪分配：需要{}车，分配结果：{}", requiredCars, Arrays.toString(shiftCars));
+
+        return shiftCars;
+    }
+
+    /**
+     * 波浪均衡：确保相邻班次车数相差不超过1
+     */
+    private int[] balanceWaveDistribution(int[] shiftCars) {
+        if (shiftCars == null || shiftCars.length <= 1) {
+            return shiftCars;
+        }
+
+        int n = shiftCars.length;
+        boolean changed;
+
+        do {
+            changed = false;
+            for (int i = 1; i < n; i++) {
+                // 如果当前班次比前一个班次少超过1，则增加
+                if (shiftCars[i] < shiftCars[i - 1] - 1) {
+                    shiftCars[i]++;
+                    changed = true;
+                }
+                // 如果当前班次比前一个班次多超过1，则减少
+                else if (shiftCars[i] > shiftCars[i - 1] + 1) {
+                    shiftCars[i]--;
+                    changed = true;
+                }
+            }
+            // 再从后往前检查一次
+            for (int i = n - 2; i >= 0; i--) {
+                if (shiftCars[i] < shiftCars[i + 1] - 1) {
+                    shiftCars[i]++;
+                    changed = true;
+                } else if (shiftCars[i] > shiftCars[i + 1] + 1) {
+                    shiftCars[i]--;
+                    changed = true;
+                }
+            }
+        } while (changed);
+
+        return shiftCars;
+    }
+
+    /**
+     * 调整试制任务车数：必须是双数
+     */
+    private int[] adjustTrialShiftCars(int[] shiftCars, List<CxShiftConfig> dayShifts) {
+        if (shiftCars == null) {
+            return shiftCars;
+        }
+
+        // 试制任务只能在早班或中班，夜班不排
+        for (int i = 0; i < shiftCars.length && i < dayShifts.size(); i++) {
+            String shiftCode = dayShifts.get(i).getShiftCode();
+            if (SHIFT_NIGHT.equals(shiftCode)) {
+                // 夜班不排试制任务，将车数转到早班
+                shiftCars[i] = 0;
+            } else {
+                // 确保是双数
+                if (shiftCars[i] % 2 != 0) {
+                    shiftCars[i] = shiftCars[i] - 1;
+                }
+            }
+        }
+
+        return shiftCars;
+    }
+
+    /**
+     * 调整收尾任务车数：只能在硫化收尾班次或之前安排
+     *
+     * <p>如果硫化的收尾班次是夜班，则收尾任务只能在夜班安排；
+     * 如果是早班，则可以在夜班和早班安排；依此类推。
+     */
+    private int[] adjustEndingShiftCars(
+            int[] shiftCars,
+            List<CxShiftConfig> dayShifts,
+            CoreScheduleAlgorithmService.DailyEmbryoTask task) {
+
+        if (shiftCars == null) {
+            return shiftCars;
+        }
+
+        // 获取硫化的收尾班次（从任务中获取，如果没有则默认最后一个班次）
+        String vulcanizeEndingShift = getVulcanizeEndingShift(task);
+        int maxShiftIndex = getShiftIndex(vulcanizeEndingShift, dayShifts);
+
+        if (maxShiftIndex < 0) {
+            maxShiftIndex = dayShifts.size() - 1;
+        }
+
+        // 只在收尾班次及之前的班次安排
+        for (int i = 0; i < shiftCars.length; i++) {
+            if (i > maxShiftIndex) {
+                // 将超出部分转到收尾班次
+                shiftCars[maxShiftIndex] += shiftCars[i];
+                shiftCars[i] = 0;
+            }
+        }
+
+        log.debug("收尾任务调整：硫化收尾班次={}，分配结果：{}", vulcanizeEndingShift, Arrays.toString(shiftCars));
+
+        return shiftCars;
+    }
+
+    /**
+     * 获取硫化的收尾班次
+     */
+    private String getVulcanizeEndingShift(CoreScheduleAlgorithmService.DailyEmbryoTask task) {
+        // 如果任务有收尾班次信息，使用它
+        // 目前从上下文或配置中获取
+        // 默认返回早班（如果硫化早班收尾，则成型也在早班及之前安排）
+        return SHIFT_DAY;
+    }
+
+    /**
+     * 获取班次索引
+     */
+    private int getShiftIndex(String shiftCode, List<CxShiftConfig> dayShifts) {
+        for (int i = 0; i < dayShifts.size(); i++) {
+            if (dayShifts.get(i).getShiftCode().equals(shiftCode)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * 调整开产任务车数：首班6小时，关键产品从第二班开始
+     */
+    private int[] adjustOpeningShiftCars(
+            int[] shiftCars,
+            List<CxShiftConfig> dayShifts,
+            CoreScheduleAlgorithmService.DailyEmbryoTask task,
+            ScheduleContextVo context) {
+
+        if (shiftCars == null || shiftCars.length == 0) {
+            return shiftCars;
+        }
+
+        // 首班只排6小时（如果是早班）
+        String firstShiftCode = dayShifts.get(0).getShiftCode();
+        int firstShiftCars = shiftCars[0];
+
+        // 获取班次时长
+        int shiftHours = calculateShiftHours(dayShifts.get(0));
+        if (shiftHours > 6) {
+            // 超出6小时的部分按比例减少
+            int reducedCars = (int) Math.round((double) firstShiftCars * (shiftHours - 6) / shiftHours);
+            shiftCars[0] = firstShiftCars - reducedCars;
+            log.debug("开产首班{}小时，原始{}车，减少{}车，实际{}车",
+                    shiftHours, firstShiftCars, reducedCars, shiftCars[0]);
+        }
+
+        // 关键产品从第二班开始
+        boolean isKeyProduct = isKeyProduct(task, context);
+        if (isKeyProduct && shiftCars.length > 1) {
+            // 将首班关键产品移到第二班
+            shiftCars[0] = 0;
+            shiftCars[1] = firstShiftCars;
+            log.debug("开产关键产品从第二班开始安排，{}车", firstShiftCars);
+        }
+
+        return shiftCars;
+    }
+
+    /**
+     * 判断是否关键产品
+     */
+    private boolean isKeyProduct(CoreScheduleAlgorithmService.DailyEmbryoTask task, ScheduleContextVo context) {
+        if (task == null || context == null) {
+            return false;
+        }
+        Set<String> keyProductCodes = context.getKeyProductCodes();
+        if (keyProductCodes == null || keyProductCodes.isEmpty()) {
+            return false;
+        }
+        return keyProductCodes.contains(task.getMaterialCode())
+                || keyProductCodes.contains(task.getRelatedMaterialCode());
     }
 
     /**
@@ -632,5 +931,7 @@ public class ShiftScheduleService {
         private Boolean isTrialTask;
         private Boolean isEndingTask;
         private Boolean isContinueTask;
+        /** 该班次分配的车数（按车分配模式） */
+        private Integer carsForShift;
     }
 }

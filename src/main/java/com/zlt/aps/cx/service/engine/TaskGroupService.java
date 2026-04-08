@@ -232,6 +232,7 @@ public class TaskGroupService {
 
         // 构建任务
         CoreScheduleAlgorithmService.DailyEmbryoTask task = new CoreScheduleAlgorithmService.DailyEmbryoTask();
+        task.setLhId(lhResult.getLhId());  // 设置硫化任务ID，用于关联库存分配
         task.setMaterialCode(embryoCode);
         task.setVulcanizeDemand(vulcanizeDemand);
         task.setCurrentStock(currentStock);

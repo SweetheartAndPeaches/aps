@@ -13,6 +13,7 @@ import lombok.Data;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -412,5 +413,24 @@ public class ScheduleContextVo {
         private Integer endHour;
         private Integer standardHours;
         private Boolean isActive;
+    }
+
+    // ==================== 辅助方法 ====================
+
+    /**
+     * 获取结构胎面整车条数映射
+     *
+     * @return Map<structureName, treadCount>
+     */
+    public Map<String, Integer> getStructureTreadCountMap() {
+        Map<String, Integer> map = new HashMap<>();
+        if (structureShiftCapacities != null) {
+            for (MdmStructureTreadConfig config : structureShiftCapacities) {
+                if (config.getStructureCode() != null && config.getTreadCount() != null) {
+                    map.put(config.getStructureCode(), config.getTreadCount());
+                }
+            }
+        }
+        return map;
     }
 }
