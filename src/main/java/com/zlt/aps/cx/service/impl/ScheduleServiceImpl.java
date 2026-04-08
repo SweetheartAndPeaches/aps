@@ -932,7 +932,7 @@ public class ScheduleServiceImpl implements ScheduleService {
             if (relatedTasks.size() == 1) {
                 // 胎胚只对应一个硫化任务，直接分配全部库存
                 LhScheduleResult task = relatedTasks.get(0);
-                String taskKey = task.getMaterialCode() + "|" + task.getEmbryoCode();
+                String taskKey = String.valueOf(task.getLhId());
                 materialStockMap.merge(taskKey, totalStock, Integer::sum);
                 log.debug("胎胚 {} 只对应硫化任务 {}，分配库存 {}", embryoCode, taskKey, totalStock);
             } else {
@@ -941,7 +941,7 @@ public class ScheduleServiceImpl implements ScheduleService {
                 List<TaskDemand> taskDemands = new ArrayList<>();
                 for (LhScheduleResult lh : relatedTasks) {
                     int demand = getShiftPlanQtyFromLhResult(lh, dayShifts);
-                    taskDemands.add(new TaskDemand(lh.getMaterialCode(), lh.getEmbryoCode(), demand));
+                    taskDemands.add(new TaskDemand(lh.getLhId(), demand));
                     totalDemand += demand;
                 }
 
@@ -985,11 +985,11 @@ public class ScheduleServiceImpl implements ScheduleService {
      * 硫化任务需求（内部类）
      */
     private static class TaskDemand {
-        String taskKey;    // 硫化任务唯一键：materialCode + "|" + embryoCode
+        String taskKey;    // 硫化任务唯一键：lhId
         int demand;
 
-        TaskDemand(String materialCode, String embryoCode, int demand) {
-            this.taskKey = materialCode + "|" + embryoCode;
+        TaskDemand(Long lhId, int demand) {
+            this.taskKey = String.valueOf(lhId);
             this.demand = demand;
         }
     }
