@@ -369,48 +369,11 @@ public class ContinueTaskProcessor {
             ScheduleContextVo context,
             LocalDate scheduleDate) {
         
-        String embryoCode = task.getMaterialCode();
-        int totalEmbryoStock = task.getCurrentStock() != null ? task.getCurrentStock() : 0;
-        if (totalEmbryoStock <= 0) {
-            task.setAllocatedStock(0);
-            return;
-        }
-        
-        List<LhScheduleResult> lhResults = context.getLhScheduleResults();
-        if (lhResults == null || lhResults.isEmpty()) {
-            task.setAllocatedStock(totalEmbryoStock);
-            return;
-        }
-        
-        List<LhScheduleResult> sameEmbryoResults = lhResults.stream()
-                .filter(r -> embryoCode.equals(r.getEmbryoCode()))
-                .collect(Collectors.toList());
-        
-        if (sameEmbryoResults.isEmpty()) {
-            task.setAllocatedStock(totalEmbryoStock);
-            return;
-        }
-        
-        int totalDailyVulcanize = sameEmbryoResults.stream()
-                .mapToInt(r -> r.getDailyPlanQty() != null ? r.getDailyPlanQty() : 0)
-                .sum();
-        
-        if (totalDailyVulcanize <= 0) {
-            task.setAllocatedStock(totalEmbryoStock);
-            return;
-        }
-        
-        int currentSkuDailyVulcanize = task.getVulcanizeDemand() != null ? task.getVulcanizeDemand() : 0;
-        
-        int allocatedStock;
-        if (sameEmbryoResults.size() == 1) {
-            allocatedStock = totalEmbryoStock;
-        } else {
-            allocatedStock = (int) ((double) currentSkuDailyVulcanize / totalDailyVulcanize * totalEmbryoStock);
-        }
-        
+        // 库存已在 TaskGroupService.buildSingleTask 中按物料需求比例分配好
+        // 这里直接使用已分配的库存
+        int allocatedStock = task.getCurrentStock() != null ? task.getCurrentStock() : 0;
         task.setAllocatedStock(allocatedStock);
-        log.debug("胎胚 {} 库存分配：总库存={}, 分配量={}", embryoCode, totalEmbryoStock, allocatedStock);
+        log.debug("胎胚 {} 库存分配：分配量={}", task.getMaterialCode(), allocatedStock);
     }
     
     public void calculatePlannedProduction(
