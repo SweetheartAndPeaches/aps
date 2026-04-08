@@ -204,7 +204,10 @@ public class ScheduleServiceImpl implements ScheduleService {
         try {
             ScheduleContextVo context = new ScheduleContextVo();
             LocalDate scheduleDate = request.getScheduleDate();
-            log.info("开始构建排程上下文，日期：{}，工厂：{}", scheduleDate, request.getFactoryCode());
+            // 前端传入的是最后一天，排产起始日期需要往前推2天
+            LocalDate scheduleStartDate = scheduleDate.minusDays(2);
+            log.info("开始构建排程上下文，排产起始日期：{}，最后一天：{}，工厂：{}", 
+                    scheduleStartDate, scheduleDate, request.getFactoryCode());
 
             // 1. 加载班次配置
             String factoryCode = request.getFactoryCode() != null ? request.getFactoryCode() : DEFAULT_FACTORY_CODE;
@@ -240,9 +243,9 @@ public class ScheduleServiceImpl implements ScheduleService {
                 log.warn("加载物料信息失败，继续执行：{}", e.getMessage());
             }
 
-            // 6. 获取胎胚库存信息（根据排程日期获取早上6点的库存）
+            // 6. 获取胎胚库存信息（根据排产起始日期获取早上6点的库存）
             try {
-                loadStocks(context, scheduleDate);
+                loadStocks(context, scheduleStartDate);
                 log.info("胎胚库存信息加载完成");
             } catch (Exception e) {
                 log.warn("加载胎胚库存信息失败，继续执行：{}", e.getMessage());
@@ -250,7 +253,7 @@ public class ScheduleServiceImpl implements ScheduleService {
 
             // 7. 获取成型在机信息
             try {
-                loadOnlineInfos(context, scheduleDate);
+                loadOnlineInfos(context, scheduleStartDate);
                 log.info("成型在机信息加载完成");
             } catch (Exception e) {
                 log.warn("加载成型在机信息失败，继续执行：{}", e.getMessage());
