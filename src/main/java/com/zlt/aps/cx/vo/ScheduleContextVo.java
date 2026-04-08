@@ -153,6 +153,17 @@ public class ScheduleContextVo {
     private List<MdmStructureLhRatio> structureLhRatios;
 
     /**
+     * 结构整车配置列表
+     * 用于获取每个结构的整车胎面条数(TREAD_COUNT)
+     */
+    private List<MdmStructureTreadConfig> structureTreadConfigs;
+
+    /**
+     * 结构整车配置映射（快速查询用）
+     * Key: 结构编码 (structureCode)
+     * Value: 整车胎面条数 (treadCount)
+     */
+    private Map<String, Integer> structureTreadCountMap;    /**
      * 结构班产配置列表（整车条数）
      * 按结构+班次定义的标准产能
      */

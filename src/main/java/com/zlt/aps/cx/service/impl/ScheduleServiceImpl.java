@@ -336,7 +336,14 @@ public class ScheduleServiceImpl implements ScheduleService {
                 log.warn("加载结构排产配置失败，继续执行：{}", e.getMessage());
             }
 
-            // 19. 设置排程参数
+            // 19. 加载结构整车配置（用于按车分配计算）
+            try {
+                loadStructureTreadConfigs(context);
+            } catch (Exception e) {
+                log.warn("加载结构整车配置失败，继续执行：{}", e.getMessage());
+            }
+
+            // 20. 设置排程参数
             context.setScheduleDate(scheduleDate);
             context.setScheduleMode(request.getScheduleMode());
 
@@ -564,6 +571,27 @@ public class ScheduleServiceImpl implements ScheduleService {
 
         context.setStructureAllocationMap(structureAllocationMap);
         log.info("加载结构排产配置 {} 条，共 {} 个结构", allocations.size(), structureAllocationMap.size());
+    }
+
+    /**
+     * 加载结构整车配置
+     *
+     * <p>从 T_CX_STRUCTURE_TRIP_CONFIG 表获取每个结构的整车胎面条数配置
+     * <p>用于按车分配的计算：需要的车数 = 待排产量 / 胎面整车条数
+     */
+    private void loadStructureTreadConfigs(ScheduleContextVo context) {
+        List<MdmStructureTreadConfig> treadConfigs = structureShiftCapacityMapper.selectList(null);
+        context.setStructureTreadConfigs(treadConfigs);
+
+        // 构建结构-整车条数映射
+        Map<String, Integer> structureTreadCountMap = new HashMap<>();
+        for (MdmStructureTreadConfig config : treadConfigs) {
+            if (config.getStructureCode() != null && config.getTreadCount() != null) {
+                structureTreadCountMap.put(config.getStructureCode(), config.getTreadCount());
+            }
+        }
+        context.setStructureTreadCountMap(structureTreadCountMap);
+        log.info("加载结构整车配置 {} 条，共 {} 个结构", treadConfigs.size(), structureTreadCountMap.size());
     }
 
     /**
