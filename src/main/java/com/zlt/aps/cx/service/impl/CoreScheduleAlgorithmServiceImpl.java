@@ -151,8 +151,9 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         log.info("========== 开始执行第 {} 天排程，日期: {} ==========", day, scheduleDate);
 
         // ==================== 第一步：S5.2 任务分组 ====================
+        // 传入当前天的班次配置，获取对应班次的硫化计划量
         TaskGroupService.TaskGroupResult taskGroup = taskGroupService.groupTasks(
-                context, machineOnlineEmbryoMap, scheduleDate);
+                context, machineOnlineEmbryoMap, scheduleDate, dayShifts);
         log.info("任务分组完成：续作 {} 个，试制 {} 个，新增 {} 个",
                 taskGroup.getContinueTasks().size(),
                 taskGroup.getTrialTasks().size(),
@@ -375,14 +376,15 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     @Override
     public List<DailyEmbryoTask> calculateDailyEmbryoTasks(
             ScheduleContextVo context,
-            Map<String, Set<String>> machineOnlineEmbryoMap) {
+            Map<String, Set<String>> machineOnlineEmbryoMap,
+            List<CxShiftConfig> dayShifts) {
 
         LocalDate scheduleDate = context.getCurrentScheduleDate() != null
                 ? context.getCurrentScheduleDate()
                 : context.getScheduleDate();
 
         TaskGroupService.TaskGroupResult groupResult = taskGroupService.groupTasks(
-                context, machineOnlineEmbryoMap, scheduleDate);
+                context, machineOnlineEmbryoMap, scheduleDate, dayShifts);
 
         List<DailyEmbryoTask> allTasks = new ArrayList<>();
         allTasks.addAll(groupResult.getContinueTasks());

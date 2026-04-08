@@ -70,12 +70,14 @@ public class TaskGroupService {
      * @param context                   排程上下文
      * @param machineOnlineEmbryoMap    机台在产胎胚映射
      * @param scheduleDate              排程日期
+     * @param dayShifts                当前天的班次配置列表（用于获取对应班次的硫化计划量）
      * @return 任务分组结果
      */
     public TaskGroupResult groupTasks(
             ScheduleContextVo context,
             Map<String, Set<String>> machineOnlineEmbryoMap,
-            LocalDate scheduleDate) {
+            LocalDate scheduleDate,
+            List<CxShiftConfig> dayShifts) {
 
         TaskGroupResult result = new TaskGroupResult();
 
@@ -95,9 +97,6 @@ public class TaskGroupService {
             machineOnlineEmbryoMap = new HashMap<>();
         }
 
-        // 获取当前班次配置
-        List<CxShiftConfig> currentShiftConfigs = context.getCurrentShiftConfigs();
-
         // 直接遍历每条硫化记录，为每条记录创建独立的任务
         for (LhScheduleResult lhResult : lhScheduleResults) {
             if (lhResult.getEmbryoCode() == null) {
@@ -106,7 +105,7 @@ public class TaskGroupService {
 
             // 为每条硫化记录构建独立任务
             CoreScheduleAlgorithmService.DailyEmbryoTask task = buildSingleTask(
-                    lhResult, materialMap, stockMap, context, currentShiftConfigs);
+                    lhResult, materialMap, stockMap, context, dayShifts);
             if (task == null) {
                 continue;
             }

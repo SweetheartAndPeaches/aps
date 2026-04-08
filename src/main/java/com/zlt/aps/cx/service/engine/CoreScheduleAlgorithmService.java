@@ -3,6 +3,7 @@ package com.zlt.aps.cx.service.engine;
 
 import com.zlt.aps.cx.entity.CxPrecisionPlan;
 import com.zlt.aps.cx.entity.CxStock;
+import com.zlt.aps.cx.entity.config.CxShiftConfig;
 import com.zlt.aps.cx.entity.schedule.CxScheduleDetail;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
 import com.zlt.aps.cx.vo.ScheduleContextVo;
@@ -46,11 +47,13 @@ public interface CoreScheduleAlgorithmService {
      *
      * @param context                   排程上下文
      * @param machineOnlineEmbryoMap   机台在产胎胚映射（用于续作判断）
+     * @param dayShifts                当前天的班次配置列表（用于获取对应班次的硫化计划量）
      * @return 日胎胚任务列表
      */
     List<DailyEmbryoTask> calculateDailyEmbryoTasks(
             ScheduleContextVo context,
-            Map<String, Set<String>> machineOnlineEmbryoMap);
+            Map<String, Set<String>> machineOnlineEmbryoMap,
+            List<CxShiftConfig> dayShifts);
 
     /**
      * 第二步：试错分配任务到机台
