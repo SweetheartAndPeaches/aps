@@ -486,9 +486,15 @@ public class BalancingService {
             int typeDiffThreshold,
             int loadDiffThreshold,
             DfsSearchResult searchResult) {
-        
+
         searchResult.searchCount++;
-        
+
+        // 防止搜索空间爆炸，限制搜索次数
+        if (searchResult.searchCount > 100000) {
+            log.warn("DFS搜索次数超过100000次，停止搜索，当前最优分数: {}", searchResult.bestScore);
+            return;
+        }
+
         // 终止条件：所有任务已分配
         if (taskIndex >= tasks.size()) {
             int score = calculateBalancingScore(machineStates);

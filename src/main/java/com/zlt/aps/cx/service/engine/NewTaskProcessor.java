@@ -109,6 +109,7 @@ public class NewTaskProcessor {
                 log.warn("结构 {} 没有可用机台，跳过", structureName);
                 continue;
             }
+            log.info("结构 {} 有 {} 台可用机台", structureName, structureMachines.size());
 
             // 获取续作任务中属于该结构的任务
             List<CoreScheduleAlgorithmService.DailyEmbryoTask> continueTasksForStructure = new ArrayList<>();
@@ -165,6 +166,8 @@ public class NewTaskProcessor {
             // 构建机台最大胎胚种类数映射（根据每台机台的机型+结构获取）
             Map<String, Integer> machineMaxEmbryoTypesMap = buildMachineMaxEmbryoTypesMap(structureMachines, structureName, context);
 
+            log.info("结构 {} 开始均衡分配：{} 个任务，{} 台机台", structureName, allTasksForStructure.size(), structureMachines.size());
+
             // 使用 BalancingService 均衡分配
             BalancingService.BalancingResult balancingResult = balancingService.balanceEmbryosToMachinesWithMachineCapacity(
                     allTasksForStructure,
@@ -174,6 +177,8 @@ public class NewTaskProcessor {
                     machineMaxEmbryoTypesMap,
                     true,  // 强制保留历史任务
                     context);
+
+            log.info("结构 {} 均衡分配完成", structureName);
 
             // 构建分配结果
             List<CoreScheduleAlgorithmService.MachineAllocationResult> structureResults = 
