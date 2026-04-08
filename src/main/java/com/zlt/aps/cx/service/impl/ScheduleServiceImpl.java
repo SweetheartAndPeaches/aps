@@ -583,13 +583,36 @@ public class ScheduleServiceImpl implements ScheduleService {
         context.setMonthSurplusMap(monthSurplusMap);
         log.info("加载月度计划余量 {} 条", monthSurplusList.size());
 
-        // 计算成型余量映射
+        // 获取当前天的班次配置（用于获取硫化任务的班次计划量）
+        List<CxShiftConfig> currentDayShifts = getCurrentDayShifts(context);
+
+        // 计算成型余量映射（按硫化任务的班次计划量分配库存）
         Map<String, Integer> formingRemainderMap = new HashMap<>();
         Map<String, Integer> materialStockMap = calculateFormingRemainderMap(
-                context.getMaterials(), monthSurplusMap, context.getStocks(), formingRemainderMap);
+                context.getMaterials(),
+                monthSurplusMap,
+                context.getStocks(),
+                context.getLhScheduleResults(),
+                currentDayShifts,
+                formingRemainderMap);
         context.setFormingRemainderMap(formingRemainderMap);
         context.setMaterialStockMap(materialStockMap);
         log.info("计算成型余量映射 {} 条，物料库存分配 {} 条", formingRemainderMap.size(), materialStockMap.size());
+    }
+
+    /**
+     * 获取当前排程日期的班次配置
+     */
+    private List<CxShiftConfig> getCurrentDayShifts(ScheduleContextVo context) {
+        LocalDate scheduleDate = context.getScheduleDate();
+        List<CxShiftConfig> allShifts = context.getShiftConfigList();
+        if (allShifts == null || scheduleDate == null) {
+            return new ArrayList<>();
+        }
+        // 获取第1天的班次配置
+        return allShifts.stream()
+                .filter(s -> s.getScheduleDay() != null && s.getScheduleDay() == 1)
+                .collect(Collectors.toList());
     }
 
     /**
@@ -769,18 +792,17 @@ public class ScheduleServiceImpl implements ScheduleService {
     /**
      * 计算成型余量映射
      *
-     * <p>成型余量 = 硫化余量 - 该物料对应的所有胎胚库存
-     *
-     * <p>处理胎胚共用场景：
+     * <p>功能：
      * <ul>
-     *   <li>一个胎胚可能被多个物料共用</li>
-     *   <li>库存按硫化需求比例分配给各物料</li>
-     *   <li>比例来源：硫化排程结果的日计划量</li>
+     *   <li>按硫化任务的班次计划量作为需求比例，分配共用胎胚库存</li>
+     *   <li>最后一条物料用倒扣形式（总库存 - 已分配）</li>
      * </ul>
      *
-     * @param materials       物料信息列表
-     * @param monthSurplusMap 月度计划硫化余量映射
-     * @param stocks          胎胚库存列表
+     * @param materials          物料信息列表
+     * @param monthSurplusMap    月度计划硫化余量映射
+     * @param stocks             胎胚库存列表
+     * @param lhScheduleResults  硫化排程结果（用于获取班次计划量作为需求比例）
+     * @param dayShifts          当前天班次配置
      * @param formingRemainderMap 成型余量映射（输出参数）
      * @return 物料库存映射（按物料编码分配库存）
      */
@@ -788,6 +810,8 @@ public class ScheduleServiceImpl implements ScheduleService {
             List<MdmMaterialInfo> materials,
             Map<String, MdmMonthSurplus> monthSurplusMap,
             List<CxStock> stocks,
+            List<LhScheduleResult> lhScheduleResults,
+            List<CxShiftConfig> dayShifts,
             Map<String, Integer> formingRemainderMap) {
 
         // 用于返回的物料库存映射
@@ -806,11 +830,12 @@ public class ScheduleServiceImpl implements ScheduleService {
                 }
             }
 
-            // Step 3: 计算各物料的硫化需求比例（用于分配共用胎胚库存）
-            Map<String, Integer> materialDemandMap = calculateMaterialDemandRatio(materials, monthSurplusMap);
-            log.debug("计算物料硫化需求比例 {} 条", materialDemandMap.size());
+            // Step 3: 计算各物料的硫化需求（按硫化任务的班次计划量）
+            Map<String, Integer> materialDemandMap = calculateMaterialDemandByLhResults(
+                    lhScheduleResults, dayShifts, materials);
+            log.debug("计算物料硫化需求（基于硫化任务） {} 条", materialDemandMap.size());
 
-            // Step 4: 按比例分配胎胚库存到物料
+            // Step 4: 按需求比例分配胎胚库存到物料
             materialStockMap = allocateStockByMaterialRatio(stocks, embryoToMaterialsMap, materialDemandMap);
             log.debug("按比例分配胎胚库存到物料 {} 条", materialStockMap.size());
 
@@ -852,33 +877,103 @@ public class ScheduleServiceImpl implements ScheduleService {
     }
 
     /**
-     * 计算各物料的硫化需求比例
+     * 计算各物料的硫化需求（按硫化任务的班次计划量）
      *
-     * <p>使用月计划余量作为需求比例的参考值
+     * <p>从硫化排程结果中获取各物料的班次计划量作为需求
+     * 如果某物料没有硫化任务，则使用月计划余量作为需求
+     *
+     * @param lhScheduleResults 硫化排程结果
+     * @param dayShifts        当前天班次配置
+     * @param materials        物料信息列表
+     * @return 物料需求映射
      */
-    private Map<String, Integer> calculateMaterialDemandRatio(
-            List<MdmMaterialInfo> materials,
-            Map<String, MdmMonthSurplus> monthSurplusMap) {
+    private Map<String, Integer> calculateMaterialDemandByLhResults(
+            List<LhScheduleResult> lhScheduleResults,
+            List<CxShiftConfig> dayShifts,
+            List<MdmMaterialInfo> materials) {
 
         Map<String, Integer> demandMap = new HashMap<>();
 
-        for (MdmMaterialInfo material : materials) {
-            String materialCode = material.getMaterialCode();
+        // 如果硫化结果为空，使用月计划余量作为需求
+        if (lhScheduleResults == null || lhScheduleResults.isEmpty()) {
+            log.debug("硫化排程结果为空，使用月计划余量作为需求");
+            return demandMap;
+        }
+
+        // Step 1: 按物料编码+胎胚编码合并硫化结果，累加班次计划量
+        Map<String, Integer> mergedDemand = new HashMap<>();
+        for (LhScheduleResult lh : lhScheduleResults) {
+            String materialCode = lh.getMaterialCode();
             if (materialCode == null) {
                 continue;
             }
 
-            // 优先使用月计划余量作为需求比例
-            MdmMonthSurplus surplus = monthSurplusMap.get(materialCode);
-            if (surplus != null && surplus.getPlanSurplusQty() != null) {
-                demandMap.put(materialCode, surplus.getPlanSurplusQty().intValue());
-            } else {
-                // 默认需求为1，避免除零
+            // 获取该硫化记录对应班次的计划量
+            int planQty = getShiftPlanQtyFromLhResult(lh, dayShifts);
+            mergedDemand.merge(materialCode, planQty, Integer::sum);
+        }
+
+        // Step 2: 将合并后的需求设置到结果映射
+        for (Map.Entry<String, Integer> entry : mergedDemand.entrySet()) {
+            demandMap.put(entry.getKey(), entry.getValue());
+        }
+
+        // Step 3: 确保所有物料都有需求值（如果没有硫化任务，使用默认值1）
+        for (MdmMaterialInfo material : materials) {
+            String materialCode = material.getMaterialCode();
+            if (materialCode != null && !demandMap.containsKey(materialCode)) {
                 demandMap.put(materialCode, 1);
             }
         }
 
         return demandMap;
+    }
+
+    /**
+     * 从硫化记录获取对应班次的计划量
+     *
+     * @param lhResult   硫化记录
+     * @param dayShifts  当前天班次配置
+     * @return 对应班次的硫化计划量
+     */
+    private int getShiftPlanQtyFromLhResult(LhScheduleResult lhResult, List<CxShiftConfig> dayShifts) {
+        if (dayShifts == null || dayShifts.isEmpty()) {
+            return lhResult.getDailyPlanQty() != null ? lhResult.getDailyPlanQty() : 0;
+        }
+
+        for (CxShiftConfig shiftConfig : dayShifts) {
+            String classField = shiftConfig.getClassField();
+            if (classField != null && classField.startsWith("CLASS")) {
+                try {
+                    int classIndex = Integer.parseInt(classField.substring(5));
+                    Integer planQty = getClassPlanQtyByIndex(lhResult, classIndex);
+                    if (planQty != null && planQty > 0) {
+                        return planQty;
+                    }
+                } catch (NumberFormatException e) {
+                    log.warn("无法解析班次字段: {}", classField);
+                }
+            }
+        }
+
+        return lhResult.getDailyPlanQty() != null ? lhResult.getDailyPlanQty() : 0;
+    }
+
+    /**
+     * 根据班次索引获取硫化记录的计划量
+     */
+    private Integer getClassPlanQtyByIndex(LhScheduleResult lhResult, int classIndex) {
+        switch (classIndex) {
+            case 1: return lhResult.getClass1PlanQty();
+            case 2: return lhResult.getClass2PlanQty();
+            case 3: return lhResult.getClass3PlanQty();
+            case 4: return lhResult.getClass4PlanQty();
+            case 5: return lhResult.getClass5PlanQty();
+            case 6: return lhResult.getClass6PlanQty();
+            case 7: return lhResult.getClass7PlanQty();
+            case 8: return lhResult.getClass8PlanQty();
+            default: return null;
+        }
     }
 
     /**
