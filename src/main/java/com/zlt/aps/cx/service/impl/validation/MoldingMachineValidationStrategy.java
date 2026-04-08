@@ -35,9 +35,9 @@ public class MoldingMachineValidationStrategy extends BaseValidationStrategy {
             return;
         }
 
-        // 检查机台状态
+        // 检查机台状态（IS_ACTIVE是整数，1表示启用）
         long activeCount = machines.stream()
-                .filter(m -> "1".equals(m.getIsActive()) || m.getIsActive() == null)
+                .filter(m -> m.getIsActive() != null && m.getIsActive() == 1)
                 .count();
 
         if (activeCount == 0) {
