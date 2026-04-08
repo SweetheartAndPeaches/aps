@@ -97,21 +97,35 @@ public class TaskGroupService {
             machineOnlineEmbryoMap = new HashMap<>();
         }
 
-        // 直接遍历每条硫化记录，为每条记录创建独立的任务
+        // Step 1: 按物料编码+胎胚编码合并硫化记录
+        Map<String, List<LhScheduleResult>> mergedLhResults = new LinkedHashMap<>();
         for (LhScheduleResult lhResult : lhScheduleResults) {
-            if (lhResult.getEmbryoCode() == null) {
+            if (lhResult.getEmbryoCode() == null || lhResult.getMaterialCode() == null) {
+                continue;
+            }
+            // 使用物料编码+"|"+胎胚编码 作为合并键
+            String mergeKey = lhResult.getMaterialCode() + "|" + lhResult.getEmbryoCode();
+            mergedLhResults.computeIfAbsent(mergeKey, k -> new ArrayList<>()).add(lhResult);
+        }
+
+        // Step 2: 遍历合并后的硫化记录，构建任务
+        for (Map.Entry<String, List<LhScheduleResult>> entry : mergedLhResults.entrySet()) {
+            List<LhScheduleResult> mergedList = entry.getValue();
+            if (mergedList.isEmpty()) {
                 continue;
             }
 
-            // 为每条硫化记录构建独立任务
+            // 取第一条记录作为主记录（用于获取基本信息）
+            LhScheduleResult primaryLhResult = mergedList.get(0);
+            String materialCode = primaryLhResult.getMaterialCode();
+            String embryoCode = primaryLhResult.getEmbryoCode();
+
+            // 为合并后的硫化记录构建任务
             CoreScheduleAlgorithmService.DailyEmbryoTask task = buildSingleTask(
-                    lhResult, materialMap, stockMap, context, dayShifts);
+                    mergedList, materialMap, stockMap, context, dayShifts);
             if (task == null) {
                 continue;
             }
-
-            String materialCode = lhResult.getMaterialCode();
-            String embryoCode = lhResult.getEmbryoCode();
 
             // 判断任务类型
             // 1. 续作任务：当前机台在产的胎胚
@@ -123,7 +137,7 @@ public class TaskGroupService {
             // constructionStage: 01-试制, 02-量试, 03-正式
             // 01-试制 → 试制任务
             // 02-量试 → 归入新增任务（不是试制任务）
-            String constructionStage = lhResult.getConstructionStage();
+            String constructionStage = primaryLhResult.getConstructionStage();
             boolean isTrialTask = "01".equals(constructionStage);
 
             // 设置任务属性
@@ -194,31 +208,38 @@ public class TaskGroupService {
     }
 
     /**
-     * 为单条硫化记录构建任务
+     * 为合并后的硫化记录构建任务
      *
-     * <p>每条硫化记录作为独立任务，不再按胎胚合并
+     * <p>按物料编码+胎胚编码合并后，构建单一任务
+     * 硫化需求量 = 所有合并记录的班次计划量之和
      *
-     * @param lhResult            硫化记录
-     * @param materialMap         物料映射
-     * @param stockMap             库存映射
-     * @param context              排程上下文
-     * @param currentShiftConfigs  当前班次配置列表
+     * @param lhResults             合并后的硫化记录列表
+     * @param materialMap           物料映射
+     * @param stockMap              库存映射
+     * @param context               排程上下文
+     * @param currentShiftConfigs   当前班次配置列表
      */
     private CoreScheduleAlgorithmService.DailyEmbryoTask buildSingleTask(
-            LhScheduleResult lhResult,
+            List<LhScheduleResult> lhResults,
             Map<String, MdmMaterialInfo> materialMap,
             Map<String, CxStock> stockMap,
             ScheduleContextVo context,
             List<CxShiftConfig> currentShiftConfigs) {
 
-        String embryoCode = lhResult.getEmbryoCode();
-        String materialCode = lhResult.getMaterialCode();
-        if (embryoCode == null) {
+        if (lhResults == null || lhResults.isEmpty()) {
             return null;
         }
 
-        // 获取硫化需求量（根据当前班次配置获取对应的CLASS计划量）
-        int vulcanizeDemand = getShiftPlanQty(lhResult, currentShiftConfigs);
+        // 取第一条记录获取基本信息
+        LhScheduleResult primaryLhResult = lhResults.get(0);
+        String embryoCode = primaryLhResult.getEmbryoCode();
+        String materialCode = primaryLhResult.getMaterialCode();
+        if (embryoCode == null || materialCode == null) {
+            return null;
+        }
+
+        // 获取硫化需求量 = 所有合并记录的班次计划量之和
+        int vulcanizeDemand = getMergedShiftPlanQty(lhResults, currentShiftConfigs);
 
         // 获取分配给该硫化物料的库存（按物料编码获取，共用胎胚库存已按比例分配）
         int currentStock = getAllocatedStock(context, materialCode);
@@ -302,6 +323,23 @@ public class TaskGroupService {
 
         // 如果没有找到对应班次的计划量，返回日计划量
         return lhResult.getDailyPlanQty() != null ? lhResult.getDailyPlanQty() : 0;
+    }
+
+    /**
+     * 获取合并后硫化记录的班次计划量之和
+     *
+     * <p>累加所有合并记录的班次计划量
+     *
+     * @param lhResults            合并后的硫化记录列表
+     * @param currentShiftConfigs  当前班次配置列表
+     * @return 所有硫化记录的班次计划量之和
+     */
+    private int getMergedShiftPlanQty(List<LhScheduleResult> lhResults, List<CxShiftConfig> currentShiftConfigs) {
+        int totalPlanQty = 0;
+        for (LhScheduleResult lhResult : lhResults) {
+            totalPlanQty += getShiftPlanQty(lhResult, currentShiftConfigs);
+        }
+        return totalPlanQty;
     }
 
     /**
