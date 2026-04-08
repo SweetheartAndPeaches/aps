@@ -158,6 +158,9 @@ public class NewTaskProcessor {
                 int load = (int) Math.ceil((double) demand / DEFAULT_TRIP_CAPACITY);
                 task.setVulcanizeMachineCount(load);
                 allTasksForStructure.add(task);
+
+                log.debug("新增任务：materialCode={}, demand={}, load={} (DEFAULT_TRIP_CAPACITY={})",
+                        task.getMaterialCode(), demand, load, DEFAULT_TRIP_CAPACITY);
             }
 
             // 构建机台最大硫化机数映射（根据每台机台的机型+结构获取）
@@ -166,7 +169,13 @@ public class NewTaskProcessor {
             // 构建机台最大胎胚种类数映射（根据每台机台的机型+结构获取）
             Map<String, Integer> machineMaxEmbryoTypesMap = buildMachineMaxEmbryoTypesMap(structureMachines, structureName, context);
 
-            log.info("结构 {} 开始均衡分配：{} 个任务，{} 台机台", structureName, allTasksForStructure.size(), structureMachines.size());
+            // 统计总需求
+            int totalDemand = allTasksForStructure.stream()
+                    .mapToInt(t -> t.getVulcanizeMachineCount() != null ? t.getVulcanizeMachineCount() : 0)
+                    .sum();
+
+            log.info("结构 {} 开始均衡分配：{} 个任务，{} 台机台，总硫化机台数需求={}",
+                    structureName, allTasksForStructure.size(), structureMachines.size(), totalDemand);
 
             // 使用 BalancingService 均衡分配
             BalancingService.BalancingResult balancingResult = balancingService.balanceEmbryosToMachinesWithMachineCapacity(
