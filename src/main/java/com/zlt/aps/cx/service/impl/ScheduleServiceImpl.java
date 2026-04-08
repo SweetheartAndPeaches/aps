@@ -931,16 +931,17 @@ public class ScheduleServiceImpl implements ScheduleService {
 
             if (relatedTasks.size() == 1) {
                 // 胎胚只对应一个硫化任务，直接分配全部库存
-                String materialCode = relatedTasks.get(0).getMaterialCode();
-                materialStockMap.merge(materialCode, totalStock, Integer::sum);
-                log.debug("胎胚 {} 只对应硫化任务 {}，分配库存 {}", embryoCode, materialCode, totalStock);
+                LhScheduleResult task = relatedTasks.get(0);
+                String taskKey = task.getMaterialCode() + "|" + task.getEmbryoCode();
+                materialStockMap.merge(taskKey, totalStock, Integer::sum);
+                log.debug("胎胚 {} 只对应硫化任务 {}，分配库存 {}", embryoCode, taskKey, totalStock);
             } else {
                 // 胎胚对应多个硫化任务，按硫化任务需求比例分配
                 int totalDemand = 0;
                 List<TaskDemand> taskDemands = new ArrayList<>();
                 for (LhScheduleResult lh : relatedTasks) {
                     int demand = getShiftPlanQtyFromLhResult(lh, dayShifts);
-                    taskDemands.add(new TaskDemand(lh.getMaterialCode(), demand));
+                    taskDemands.add(new TaskDemand(lh.getMaterialCode(), lh.getEmbryoCode(), demand));
                     totalDemand += demand;
                 }
 
@@ -948,7 +949,7 @@ public class ScheduleServiceImpl implements ScheduleService {
                     // 总需求为0，平均分配
                     int avgStock = totalStock / taskDemands.size();
                     for (TaskDemand td : taskDemands) {
-                        materialStockMap.merge(td.materialCode, avgStock, Integer::sum);
+                        materialStockMap.merge(td.taskKey, avgStock, Integer::sum);
                     }
                     log.debug("胎胚 {} 对应多个硫化任务但总需求为0，平均分配库存 {}", embryoCode, avgStock);
                 } else {
@@ -967,11 +968,11 @@ public class ScheduleServiceImpl implements ScheduleService {
                             allocatedStock = (int) ((long) totalStock * td.demand / totalDemand);
                         }
 
-                        materialStockMap.merge(td.materialCode, allocatedStock, Integer::sum);
+                        materialStockMap.merge(td.taskKey, allocatedStock, Integer::sum);
                         allocatedTotal += allocatedStock;
 
                         log.debug("胎胚 {} 共用分配：硫化任务 {} 需求 {}，分配库存 {}",
-                                embryoCode, td.materialCode, td.demand, allocatedStock);
+                                embryoCode, td.taskKey, td.demand, allocatedStock);
                     }
                 }
             }
@@ -984,11 +985,11 @@ public class ScheduleServiceImpl implements ScheduleService {
      * 硫化任务需求（内部类）
      */
     private static class TaskDemand {
-        String materialCode;
+        String taskKey;    // 硫化任务唯一键：materialCode + "|" + embryoCode
         int demand;
 
-        TaskDemand(String materialCode, int demand) {
-            this.materialCode = materialCode;
+        TaskDemand(String materialCode, String embryoCode, int demand) {
+            this.taskKey = materialCode + "|" + embryoCode;
             this.demand = demand;
         }
     }

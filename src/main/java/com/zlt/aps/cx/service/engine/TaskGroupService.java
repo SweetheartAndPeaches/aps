@@ -220,8 +220,8 @@ public class TaskGroupService {
         // 获取硫化需求量（根据当前班次配置获取对应的CLASS计划量）
         int vulcanizeDemand = getShiftPlanQty(lhResult, currentShiftConfigs);
 
-        // 获取分配给该硫化物料的库存（按物料编码获取，共用胎胚库存已按比例分配）
-        int currentStock = getAllocatedStock(context, materialCode);
+        // 获取分配给该硫化任务的库存（按硫化任务维度分配，共用胎胚库存已按比例分配）
+        int currentStock = getAllocatedStock(context, materialCode, embryoCode);
 
         // 获取物料信息
         MdmMaterialInfo material = materialMap.get(embryoCode);
@@ -338,26 +338,28 @@ public class TaskGroupService {
     }
 
     /**
-     * 获取分配给该硫化物料的库存
+     * 获取分配给该硫化任务的库存
      *
-     * <p>共用胎胚的库存已按物料需求比例分配到各物料
-     * 从 context 的 materialStockMap 中获取分配给该物料的库存
+     * <p>库存已按硫化任务维度分配，共用胎胚库存按硫化任务需求比例分配
+     * 使用硫化任务的唯一键 (materialCode + "|" + embryoCode) 获取分配库存
      *
      * @param context     排程上下文
      * @param materialCode 硫化任务的物料编码
-     * @return 分配给该物料的库存数量
+     * @param embryoCode  硫化任务的胎胚编码
+     * @return 分配给该硫化任务的库存数量
      */
-    private int getAllocatedStock(ScheduleContextVo context, String materialCode) {
-        if (materialCode == null) {
+    private int getAllocatedStock(ScheduleContextVo context, String materialCode, String embryoCode) {
+        if (materialCode == null || embryoCode == null) {
             return 0;
         }
         Map<String, Integer> materialStockMap = context.getMaterialStockMap();
         if (materialStockMap == null) {
-            // 如果没有 materialStockMap，尝试从硫化结果的胚胎库存获取
-            log.warn("materialStockMap 为空，无法获取分配给物料 {} 的库存", materialCode);
+            log.warn("materialStockMap 为空，无法获取分配给硫化任务 {}|{} 的库存", materialCode, embryoCode);
             return 0;
         }
-        return materialStockMap.getOrDefault(materialCode, 0);
+        // 使用硫化任务的唯一键获取库存
+        String taskKey = materialCode + "|" + embryoCode;
+        return materialStockMap.getOrDefault(taskKey, 0);
     }
 
     /** 库存高预警阈值（小时），可配置 */
