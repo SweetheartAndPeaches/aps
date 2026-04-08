@@ -562,9 +562,10 @@ public class ScheduleServiceImpl implements ScheduleService {
     private void loadStructureAllocations(ScheduleContextVo context, LocalDate scheduleDate) {
         int year = scheduleDate.getYear();
         int month = scheduleDate.getMonthValue();
+        String factoryCode = context.getFactoryCode() != null ? context.getFactoryCode() : DEFAULT_FACTORY_CODE;
 
-        // 查询当月的结构排产配置
-        List<MpCxCapacityConfiguration> allocations = capacityConfigurationMapper.selectByYearAndMonth(year, month);
+        // 查询当月的结构排产配置（添加is_delete和工厂过滤）
+        List<MpCxCapacityConfiguration> allocations = capacityConfigurationMapper.selectByYearAndMonth(factoryCode, year, month);
         context.setStructureAllocations(allocations);
 
         // 按结构分组
