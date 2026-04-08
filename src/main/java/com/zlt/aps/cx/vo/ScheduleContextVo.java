@@ -56,6 +56,20 @@ public class ScheduleContextVo {
     private List<CxShiftConfig> currentShiftConfigs;
 
     /**
+     * 所有班次配置列表（按排程天数分组）
+     * 用于核心算法按天获取班次配置
+     */
+    private List<CxShiftConfig> shiftConfigList;
+
+    public List<CxShiftConfig> getShiftConfigList() {
+        return shiftConfigList;
+    }
+
+    public void setShiftConfigList(List<CxShiftConfig> shiftConfigList) {
+        this.shiftConfigList = shiftConfigList;
+    }
+
+    /**
      * 排程模式：NORMAL-正常排程，RE_SCHEDULE-重排程，STRUCTURE_RE_SCHEDULE-结构重排
      */
     private String scheduleMode;
@@ -228,12 +242,6 @@ public class ScheduleContextVo {
      * 班次配置
      */
     private Map<String, ShiftInfo> shiftConfigs;
-
-    /**
-     * 班次配置列表（从T_CX_SHIFT_CONFIG加载）
-     * 用于排程时获取班次顺序、产能比例等信息
-     */
-    private List<CxShiftConfig> shiftConfigList;
 
     /**
      * 排产天数

@@ -87,6 +87,14 @@ public class TaskGroupService {
             log.warn("硫化排程结果为空，无法分组任务");
             return result;
         }
+        log.info("任务分组开始：共 {} 条硫化记录", lhScheduleResults.size());
+
+        // 调试：打印前3条记录的详情
+        for (int i = 0; i < Math.min(3, lhScheduleResults.size()); i++) {
+            LhScheduleResult r = lhScheduleResults.get(i);
+            log.debug("硫化记录{}: embryoCode={}, materialCode={}, constructionStage={}",
+                    i, r.getEmbryoCode(), r.getMaterialCode(), r.getConstructionStage());
+        }
 
         // 构建基础映射
         Map<String, MdmMaterialInfo> materialMap = buildMaterialMap(context);
@@ -98,8 +106,11 @@ public class TaskGroupService {
         }
 
         // 直接遍历每条硫化记录，为每条记录创建独立的任务
+        int skippedNullEmbryo = 0;
+        int skippedNullTask = 0;
         for (LhScheduleResult lhResult : lhScheduleResults) {
             if (lhResult.getEmbryoCode() == null) {
+                skippedNullEmbryo++;
                 continue;
             }
 
@@ -107,6 +118,7 @@ public class TaskGroupService {
             CoreScheduleAlgorithmService.DailyEmbryoTask task = buildSingleTask(
                     lhResult, materialMap, stockMap, context, dayShifts);
             if (task == null) {
+                skippedNullTask++;
                 continue;
             }
 
@@ -144,6 +156,10 @@ public class TaskGroupService {
                 result.getNewTasks().add(task);
             }
         }
+
+        log.info("任务分组完成：硫化记录{}条，跳过(embryoCode为null):{}，跳过(task为null):{}，续作:{}，试制:{}，新增:{}",
+                lhScheduleResults.size(), skippedNullEmbryo, skippedNullTask,
+                result.getContinueTasks().size(), result.getTrialTasks().size(), result.getNewTasks().size());
 
         return result;
     }

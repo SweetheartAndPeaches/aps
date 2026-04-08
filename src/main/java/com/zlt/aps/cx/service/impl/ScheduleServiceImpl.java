@@ -57,7 +57,7 @@ public class ScheduleServiceImpl implements ScheduleService {
     // ==================== 常量定义 ====================
 
     /** 默认工厂编号 */
-    private static final String DEFAULT_FACTORY_CODE = "F001";
+    private static final String DEFAULT_FACTORY_CODE = "116";
 
     /** 默认排程天数 */
     private static final int DEFAULT_SCHEDULE_DAYS = 3;
