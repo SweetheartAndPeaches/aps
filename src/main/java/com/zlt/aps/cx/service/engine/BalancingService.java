@@ -353,8 +353,20 @@ public class BalancingService {
         // Step 8: 构建结果
         BalancingResult result;
         if (searchResult.bestAssignments != null) {
-            result = convertDfsResultToBalancingResult(searchResult.bestAssignments, machineStates, sortedTasks);
-            log.info("找到满足均衡条件的最优方案");
+            // 验证解是否完整
+            int totalAssigned = 0;
+            for (Map.Entry<String, List<EmbryoAssignment>> entry : searchResult.bestAssignments.entrySet()) {
+                totalAssigned += entry.getValue().stream().mapToInt(EmbryoAssignment::getAssignedQty).sum();
+            }
+            
+            if (totalAssigned == totalDemand) {
+                result = convertDfsResultToBalancingResult(searchResult.bestAssignments, machineStates, sortedTasks);
+                log.info("找到满足均衡条件的完整方案，已分配 {} 台硫化机", totalAssigned);
+            } else {
+                log.warn("DFS找到的解不完整（已分配 {}/{}），使用贪心算法作为兜底", totalAssigned, totalDemand);
+                result = greedyAssignFallback(sortedTasks, machineStates, forceKeepHistory,
+                        typeDiffThreshold, loadDiffThreshold);
+            }
         } else {
             log.warn("未找到满足均衡条件的方案，使用贪心算法作为兜底");
             result = greedyAssignFallback(sortedTasks, machineStates, forceKeepHistory,
@@ -489,19 +501,31 @@ public class BalancingService {
 
         searchResult.searchCount++;
 
-        // 防止搜索空间爆炸，限制搜索次数
-        if (searchResult.searchCount > 100000) {
-            log.warn("DFS搜索次数超过100000次，停止搜索，当前最优分数: {}", searchResult.bestScore);
+        // 防止搜索空间爆炸，限制搜索次数（增加到 500000）
+        if (searchResult.searchCount > 500000) {
+            if (searchResult.searchCount == 500001) {
+                log.warn("DFS搜索次数超过500000次，停止搜索，当前最优分数: {}", searchResult.bestScore);
+            }
             return;
         }
 
         // 终止条件：所有任务已分配
         if (taskIndex >= tasks.size()) {
-            int score = calculateBalancingScore(machineStates);
+            // 检查是否所有任务都已分配完毕
+            int totalAssigned = machineStates.stream()
+                    .mapToInt(MachineState::getCurrentLoad).sum();
+            int totalRequired = tasks.stream()
+                    .mapToInt(t -> t.getVulcanizeMachineCount() != null ? t.getVulcanizeMachineCount() : 0)
+                    .sum();
             
-            if (score < searchResult.bestScore) {
-                searchResult.bestScore = score;
-                searchResult.bestAssignments = copyAssignments(machineStates);
+            // 只有完整解才更新最优解
+            if (totalAssigned == totalRequired) {
+                int score = calculateBalancingScore(machineStates);
+                
+                if (score < searchResult.bestScore) {
+                    searchResult.bestScore = score;
+                    searchResult.bestAssignments = copyAssignments(machineStates);
+                }
             }
             return;
         }
