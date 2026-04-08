@@ -135,7 +135,10 @@ public class ScheduleServiceImpl implements ScheduleService {
                 return result;
             }
 
-            // 2. 执行核心排程算法(流程图S5.2-S5.5)
+            // 2. 数据完整性校验
+            validateScheduleData(context, request.getScheduleDate(), request.getFactoryCode());
+
+            // 3. 执行核心排程算法(流程图S5.2-S5.5)
             List<CxScheduleResult> scheduleResults = coreScheduleAlgorithmService.executeSchedule(context);
 
             // 3. 保存排程结果

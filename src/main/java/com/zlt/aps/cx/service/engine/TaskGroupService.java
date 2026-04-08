@@ -171,9 +171,16 @@ public class TaskGroupService {
         Map<String, MdmMaterialInfo> map = new HashMap<>();
         if (context.getMaterials() != null) {
             for (MdmMaterialInfo material : context.getMaterials()) {
-                map.put(material.getMaterialCode(), material);
+                // 同时用 MATERIAL_CODE 和 EMBRYO_CODE 作为索引
+                if (material.getMaterialCode() != null) {
+                    map.put(material.getMaterialCode(), material);
+                }
+                if (material.getEmbryoCode() != null) {
+                    map.put(material.getEmbryoCode(), material);
+                }
             }
         }
+        log.debug("物料映射构建完成，共 {} 条物料信息", map.size());
         return map;
     }
 
@@ -230,18 +237,28 @@ public class TaskGroupService {
         String embryoCode = lhResult.getEmbryoCode();
         String materialCode = lhResult.getMaterialCode();
         if (embryoCode == null) {
+            log.warn("buildSingleTask跳过：embryoCode为null，materialCode={}", materialCode);
             return null;
         }
 
         // 获取硫化需求量（根据当前班次配置获取对应的CLASS计划量）
         int vulcanizeDemand = getShiftPlanQty(lhResult, currentShiftConfigs);
 
+        if (vulcanizeDemand <= 0) {
+            log.debug("buildSingleTask跳过：硫化需求为0，embryoCode={}, materialCode={}", embryoCode, materialCode);
+            // 不返回null，因为即使需求为0也可能需要排产（比如补库存）
+        }
+
         // 获取分配给该硫化任务的库存（按硫化任务维度分配，共用胎胚库存已按比例分配）
         int currentStock = getAllocatedStock(context, lhResult.getLhId());
 
         // 获取物料信息
         MdmMaterialInfo material = materialMap.get(embryoCode);
-        String structureName = material != null ? material.getStructureName() : null;
+        if (material == null) {
+            log.debug("buildSingleTask跳过：物料信息为空，embryoCode={}", embryoCode);
+        }
+
+        String structureName = material != null ? material.getStructureName() : lhResult.getStructureName();
 
         // 计算日需求量
         int dailyDemand = calculateDailyDemand(vulcanizeDemand, currentStock, structureName, context);
