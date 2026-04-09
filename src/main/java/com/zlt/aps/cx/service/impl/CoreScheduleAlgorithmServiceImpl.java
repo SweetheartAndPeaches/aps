@@ -58,6 +58,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     private final TrialTaskProcessor trialTaskProcessor;
     private final NewTaskProcessor newTaskProcessor;
     private final ShiftScheduleService shiftScheduleService;
+    private final ProductionCalculator productionCalculator;
     private final MdmWorkCalendarMapper workCalendarMapper;
 
     /** 默认排程天数 */
@@ -206,13 +207,42 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         // 班次分配前检查
         log.info("班次分配前检查: 总分配数={}", allAllocations.size());
 
-        // ==================== 第六步：S5.3.7 班次排产 ====================
-        List<ShiftAllocationResult> shiftAllocations = shiftScheduleService.balanceShiftAllocation(
-                allAllocations, dayShifts, context);
-        log.info("班次排产完成");
+        // ==================== 第六步：S5.3.7 班次排产（按任务分配到班次） ====================
+        List<ShiftScheduleService.ShiftProductionResult> shiftProductionResults = new ArrayList<>();
+        LocalDate scheduleDateForShift = context.getCurrentScheduleDate() != null
+                ? context.getCurrentScheduleDate() : context.getScheduleDate();
+
+        for (MachineAllocationResult allocation : allAllocations) {
+            String machineCode = allocation.getMachineCode();
+            for (TaskAllocation taskAlloc : allocation.getTaskAllocations()) {
+                // 重建 DailyEmbryoTask 传给 scheduleTaskToShifts
+                CoreScheduleAlgorithmService.DailyEmbryoTask task = new CoreScheduleAlgorithmService.DailyEmbryoTask();
+                task.setMaterialCode(taskAlloc.getMaterialCode());
+                task.setMaterialName(taskAlloc.getMaterialName());
+                task.setStructureName(taskAlloc.getStructureName());
+                task.setPlannedProduction(taskAlloc.getQuantity());
+                task.setIsTrialTask(taskAlloc.getIsTrialTask());
+                task.setIsEndingTask(taskAlloc.getIsEndingTask());
+                task.setIsContinueTask(taskAlloc.getIsContinueTask());
+                task.setIsOpeningDayTask(context.getIsOpeningDay());
+                task.setStockHours(taskAlloc.getStockHours());
+                task.setPriority(taskAlloc.getPriority());
+
+                // 计算车数
+                int tripCapacity = productionCalculator.getTripCapacity(taskAlloc.getStructureName(), context);
+                int cars = tripCapacity > 0 ? (int) Math.ceil((double) taskAlloc.getQuantity() / tripCapacity) : 0;
+                task.setRequiredCars(cars);
+
+                List<ShiftScheduleService.ShiftProductionResult> taskShiftResults =
+                        shiftScheduleService.scheduleTaskToShifts(task, machineCode, context, dayShifts, scheduleDateForShift);
+                shiftProductionResults.addAll(taskShiftResults);
+            }
+        }
+        log.info("班次排产完成，共 {} 条班次排产记录", shiftProductionResults.size());
 
         // ==================== 第七步：生成排程结果 ====================
-        List<CxScheduleResult> results = buildScheduleResults(context, allAllocations, shiftAllocations, dayShifts);
+        List<CxScheduleResult> results = buildScheduleResultsFromShiftProduction(
+                context, allAllocations, shiftProductionResults, dayShifts);
 
         log.info("========== 第 {} 天排程完成，排程结果数: {} ==========\n", day, results.size());
         return results;
@@ -307,12 +337,12 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     }
 
     /**
-     * 构建排程结果
+     * 从班次排产结果构建排程结果
      */
-    private List<CxScheduleResult> buildScheduleResults(
+    private List<CxScheduleResult> buildScheduleResultsFromShiftProduction(
             ScheduleContextVo context,
             List<MachineAllocationResult> allocations,
-            List<ShiftAllocationResult> shiftAllocations,
+            List<ShiftScheduleService.ShiftProductionResult> shiftProductionResults,
             List<CxShiftConfig> dayShifts) {
 
         List<CxScheduleResult> results = new ArrayList<>();
@@ -320,17 +350,23 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 ? context.getCurrentScheduleDate()
                 : context.getScheduleDate();
 
-        Map<String, ShiftAllocationResult> shiftMap = shiftAllocations.stream()
-                .collect(Collectors.toMap(ShiftAllocationResult::getMachineCode, s -> s));
+        // 按 机台+班次 分组汇总排产量
+        Map<String, Map<String, Integer>> machineShiftQtyMap = new HashMap<>();
+        for (ShiftScheduleService.ShiftProductionResult spr : shiftProductionResults) {
+            String key = spr.getMachineCode();
+            machineShiftQtyMap.computeIfAbsent(key, k -> new HashMap<>())
+                    .merge(spr.getShiftCode(), spr.getQuantity(), Integer::sum);
+        }
 
         for (MachineAllocationResult allocation : allocations) {
+            String machineCode = allocation.getMachineCode();
             log.info("【结果构建】机台 {} usedCapacity={}, taskCount={}", 
-                    allocation.getMachineCode(), allocation.getUsedCapacity(),
+                    machineCode, allocation.getUsedCapacity(),
                     allocation.getTaskAllocations() != null ? allocation.getTaskAllocations().size() : 0);
             
             CxScheduleResult result = new CxScheduleResult();
             result.setScheduleDate(java.sql.Timestamp.valueOf(scheduleDate.atStartOfDay()));
-            result.setCxMachineCode(allocation.getMachineCode());
+            result.setCxMachineCode(machineCode);
             result.setCxMachineType(allocation.getMachineType());
             result.setProductNum(new BigDecimal(allocation.getUsedCapacity()));
             result.setProductionStatus("0");
@@ -339,20 +375,17 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             result.setCreateTime(new Date());
 
             // 按班次配置映射班次计划量
-            ShiftAllocationResult shiftResult = shiftMap.get(allocation.getMachineCode());
-            if (shiftResult != null) {
-                Map<String, Integer> shiftPlanQty = shiftResult.getShiftPlanQty();
-                log.info("机台 {} 班次计划量映射: {}", allocation.getMachineCode(), shiftPlanQty);
-
+            Map<String, Integer> shiftQtyMap = machineShiftQtyMap.get(machineCode);
+            if (shiftQtyMap != null) {
                 for (CxShiftConfig shiftConfig : dayShifts) {
                     String classField = shiftConfig.getClassField();
                     String shiftCode = shiftConfig.getShiftCode();
-                    Integer shiftQty = shiftPlanQty.getOrDefault(shiftCode, 0);
+                    Integer shiftQty = shiftQtyMap.getOrDefault(shiftCode, 0);
 
                     setClassFieldValue(result, classField, shiftQty);
                 }
             } else {
-                log.warn("机台 {} 未找到班次分配结果", allocation.getMachineCode());
+                log.warn("机台 {} 未找到班次分配结果", machineCode);
             }
 
             // 设置第一个任务的胎胚信息
