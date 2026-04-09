@@ -28,13 +28,6 @@ public class LhScheduleResult extends BaseEntity implements Serializable {
     private static final long serialVersionUID = 1L;
 
     /**
-     * 硫化排程结果ID（主键）
-     */
-    @ApiModelProperty(value = "硫化排程结果ID", name = "lhId")
-    @TableId(value = "LH_ID", type = IdType.AUTO)
-    private Long lhId;
-
-    /**
      * 分厂编号
      */
     @Excel(name = "ui.data.column.lhScheduleResult.factoryCode")

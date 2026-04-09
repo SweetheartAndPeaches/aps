@@ -250,7 +250,7 @@ public class TaskGroupService {
         }
 
         // 获取分配给该硫化任务的库存（按硫化任务维度分配，共用胎胚库存已按比例分配）
-        int currentStock = getAllocatedStock(context, lhResult.getLhId());
+        int currentStock = getAllocatedStock(context, lhResult.getId());
         log.info("硫化任务排量: embryoCode={}, vulcanizeDemand={}, currentStock={}", 
                 embryoCode, vulcanizeDemand, currentStock);
 
@@ -267,7 +267,7 @@ public class TaskGroupService {
 
         // 构建任务
         CoreScheduleAlgorithmService.DailyEmbryoTask task = new CoreScheduleAlgorithmService.DailyEmbryoTask();
-        task.setLhId(lhResult.getLhId());  // 设置硫化任务ID，用于关联库存分配
+        task.setLhId(lhResult.getId());  // 设置硫化任务ID，用于关联库存分配
         task.setMaterialCode(embryoCode);
         task.setVulcanizeDemand(vulcanizeDemand);
         task.setCurrentStock(currentStock);

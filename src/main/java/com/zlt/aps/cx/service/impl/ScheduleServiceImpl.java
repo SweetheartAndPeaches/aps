@@ -1017,7 +1017,7 @@ public class ScheduleServiceImpl implements ScheduleService {
             if (relatedTasks.size() == 1) {
                 // 胎胚只对应一个硫化任务，直接分配全部库存
                 LhScheduleResult task = relatedTasks.get(0);
-                String taskKey = String.valueOf(task.getLhId());
+                String taskKey = String.valueOf(task.getId());
                 materialStockMap.merge(taskKey, totalStock, Integer::sum);
                 log.debug("胎胚 {} 只对应硫化任务 {}，分配库存 {}", embryoCode, taskKey, totalStock);
             } else {
@@ -1026,7 +1026,7 @@ public class ScheduleServiceImpl implements ScheduleService {
                 List<TaskDemand> taskDemands = new ArrayList<>();
                 for (LhScheduleResult lh : relatedTasks) {
                     int demand = getShiftPlanQtyFromLhResult(lh, dayShifts);
-                    taskDemands.add(new TaskDemand(lh.getLhId(), demand));
+                    taskDemands.add(new TaskDemand(lh.getId(), demand));
                     totalDemand += demand;
                 }
 

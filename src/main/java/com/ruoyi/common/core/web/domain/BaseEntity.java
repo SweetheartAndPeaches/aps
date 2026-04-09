@@ -1,7 +1,9 @@
 package com.ruoyi.common.core.web.domain;
 
 import com.baomidou.mybatisplus.annotation.FieldFill;
+import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableId;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
@@ -21,6 +23,13 @@ import java.util.Date;
 public class BaseEntity implements Serializable {
 
     private static final long serialVersionUID = 1L;
+
+    /**
+     * 主键ID（使用表的主键字段如 LH_ID）
+     */
+    @ApiModelProperty(value = "主键ID")
+    @TableId(type = IdType.AUTO)
+    private Long id;
 
     /**
      * 创建人
