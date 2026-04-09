@@ -74,9 +74,9 @@ public class ContinueTaskProcessor {
 
         log.info("========== 开始处理续作任务，共 {} 个任务 ==========", continueTasks.size());
 
-        // Step 1: 按结构分组，并在分组时完成所有任务属性计算
-        Map<String, List<CoreScheduleAlgorithmService.DailyEmbryoTask>> structureTaskMap = 
-                groupTasksByStructure(continueTasks, context, scheduleDate, dayShifts);
+        // Step 1: 按结构分组
+        Map<String, List<CoreScheduleAlgorithmService.DailyEmbryoTask>> structureTaskMap =
+                groupTasksByStructure(continueTasks);
         log.info("按结构分组完成，共 {} 个结构", structureTaskMap.size());
 
         // Step 2: 获取是否强制保留历史任务
@@ -141,40 +141,18 @@ public class ContinueTaskProcessor {
     // ==================== 辅助方法 ====================
 
     /**
-     * 按结构分组，并在分组时完成所有任务属性计算
+     * 按结构分组
      */
     private Map<String, List<CoreScheduleAlgorithmService.DailyEmbryoTask>> groupTasksByStructure(
-            List<CoreScheduleAlgorithmService.DailyEmbryoTask> tasks,
-            ScheduleContextVo context,
-            LocalDate scheduleDate,
-            List<CxShiftConfig> dayShifts) {
-
-        // 计算开产日标识（分组内所有任务共用）
-        boolean isOpeningDay = isOpeningDayByDayFlag(scheduleDate);
+            List<CoreScheduleAlgorithmService.DailyEmbryoTask> tasks) {
 
         // 先分组
-        Map<String, List<CoreScheduleAlgorithmService.DailyEmbryoTask>> result = tasks.stream()
+        return tasks.stream()
                 .filter(t -> t.getStructureName() != null)
                 .collect(Collectors.groupingBy(
                         CoreScheduleAlgorithmService.DailyEmbryoTask::getStructureName,
                         LinkedHashMap::new,
                         Collectors.toList()));
-
-        // 在分组内计算每个任务的全部属性
-        for (List<CoreScheduleAlgorithmService.DailyEmbryoTask> taskList : result.values()) {
-            for (CoreScheduleAlgorithmService.DailyEmbryoTask task : taskList) {
-                // S5.3.1 分配胎胚库存（设置 allocatedStock）
-                allocateEmbryoStock(task, context, scheduleDate);
-                // S5.3.2 计算待排产量（plannedProduction 用于班次排量）
-                calculatePlannedProduction(task, context, scheduleDate, isOpeningDay);
-                // S5.3.3 收尾余量处理
-                handleEndingRemainder(task, context, isOpeningDay);
-                // S5.3.4 开停产特殊处理
-                handleOpeningClosingDay(task, context, dayShifts);
-            }
-        }
-
-        return result;
     }
 
     private boolean getForceKeepHistoryConfig(ScheduleContextVo context) {

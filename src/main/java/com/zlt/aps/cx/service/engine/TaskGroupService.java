@@ -8,6 +8,9 @@ import com.zlt.aps.cx.vo.ScheduleContextVo;
 import com.zlt.aps.cx.vo.MonthPlanProductLhCapacityVo;
 import com.zlt.aps.mp.api.domain.entity.MdmMaterialInfo;
 import com.zlt.aps.mp.api.domain.entity.MdmMonthSurplus;
+import com.zlt.aps.cx.service.engine.ProductionCalculator;
+import com.zlt.aps.cx.service.engine.ScheduleDayTypeHelper;
+import com.zlt.aps.cx.service.impl.CoreScheduleAlgorithmServiceImpl.DayFlagInfo;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -35,6 +38,10 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class TaskGroupService {
+
+    private final ProductionCalculator productionCalculator;
+
+    private final ScheduleDayTypeHelper scheduleDayTypeHelper;
 
     /** 收尾阈值：成型余量低于此值视为紧急收尾 */
     private static final int ENDING_SURPLUS_THRESHOLD = 400;
@@ -99,6 +106,9 @@ public class TaskGroupService {
             machineOnlineEmbryoMap = new HashMap<>();
         }
 
+        // 计算开产日标识（分组内所有任务共用）
+        boolean isOpeningDay = scheduleDayTypeHelper.isOpeningDay(scheduleDate);
+
         // 直接遍历每条硫化记录，为每条记录创建独立的任务
         int skippedNullEmbryo = 0;
         int skippedNullTask = 0;
@@ -142,6 +152,15 @@ public class TaskGroupService {
 
             // 计算收尾相关属性
             calculateEndingInfo(task, context, scheduleDate);
+
+            // S5.3.1 分配胎胚库存
+            allocateEmbryoStock(task, context, scheduleDate);
+            // S5.3.2 计算待排产量
+            calculatePlannedProduction(task, context, scheduleDate, isOpeningDay);
+            // S5.3.3 收尾余量处理
+            handleEndingRemainder(task, context, isOpeningDay);
+            // S5.3.4 开停产特殊处理
+            handleOpeningClosingDay(task, context, dayShifts);
 
             // 分组
             if (isContinueTask) {
@@ -210,6 +229,123 @@ public class TaskGroupService {
             }
         }
         return machineCodes;
+    }
+
+    // ==================== S5.3 任务属性计算 ====================
+
+    /**
+     * S5.3.1 分配胎胚库存
+     */
+    private void allocateEmbryoStock(CoreScheduleAlgorithmService.DailyEmbryoTask task,
+                                     ScheduleContextVo context, LocalDate scheduleDate) {
+        if (task.getCurrentStock() != null && task.getCurrentStock() > 0) {
+            task.setAllocatedStock(task.getCurrentStock());
+        } else {
+            task.setAllocatedStock(0);
+        }
+    }
+
+    /**
+     * S5.3.2 计算待排产量
+     */
+    private void calculatePlannedProduction(CoreScheduleAlgorithmService.DailyEmbryoTask task,
+                                            ScheduleContextVo context,
+                                            LocalDate scheduleDate,
+                                            boolean isOpeningDay) {
+        int plannedProduction;
+        if (task.getIsEndingTask() != null && task.getIsEndingTask()) {
+            // 收尾任务：按胎胚库存计算，剩余库存全部排产
+            plannedProduction = task.getEndingSurplusQty() != null ? task.getEndingSurplusQty() : 0;
+        } else if (task.getRemainingQuantity() != null) {
+            // 正常任务：取月计划剩余量
+            plannedProduction = task.getRemainingQuantity();
+        } else {
+            plannedProduction = 0;
+        }
+
+        // 开产日：如果胎胚库存在合理范围内（≥24小时库存），则减产
+        if (isOpeningDay) {
+            int tripCapacity = getTripCapacity(task.getStructureName(), context);
+            if (plannedProduction > tripCapacity) {
+                plannedProduction -= tripCapacity;
+            }
+        }
+
+        task.setPlannedProduction(plannedProduction);
+
+        // 根据计划量计算硫化机台数（向上取整）
+        int tripCapacity = getTripCapacity(task.getStructureName(), context);
+        int vulcanizeMachineCount = productionCalculator.roundToVehicle(plannedProduction, tripCapacity);
+        task.setVulcanizeMachineCount(vulcanizeMachineCount);
+    }
+
+    /**
+     * S5.3.3 收尾余量处理
+     */
+    private void handleEndingRemainder(CoreScheduleAlgorithmService.DailyEmbryoTask task,
+                                        ScheduleContextVo context,
+                                        boolean isOpeningDay) {
+        if (task.getIsEndingTask() == null || !task.getIsEndingTask()) {
+            return;
+        }
+
+        Integer surplusQty = task.getEndingSurplusQty();
+        if (surplusQty == null || surplusQty <= 0) {
+            return;
+        }
+
+        Integer allocatedStock = task.getAllocatedStock();
+        if (allocatedStock == null) {
+            allocatedStock = 0;
+        }
+
+        // 收尾任务当天可排产量 = min(胎胚库存, 当天计划量)
+        int availableQty = Math.min(allocatedStock, task.getPlannedProduction() != null ? task.getPlannedProduction() : 0);
+
+        if (availableQty > 0) {
+            int tripCapacity = getTripCapacity(task.getStructureName(), context);
+            int cars = productionCalculator.roundToVehicle(availableQty, tripCapacity);
+            task.setPlannedProduction(cars * tripCapacity);
+            task.setEndingSurplusQty(surplusQty - task.getPlannedProduction());
+        }
+    }
+
+    /**
+     * S5.3.4 开停产特殊处理
+     */
+    private void handleOpeningClosingDay(CoreScheduleAlgorithmService.DailyEmbryoTask task,
+                                         ScheduleContextVo context,
+                                         List<CxShiftConfig> dayShifts) {
+        LocalDate scheduleDate = context.getCurrentScheduleDate();
+
+        // 停产日：当天产量设为0
+        if (scheduleDayTypeHelper.isStopDay(scheduleDate)) {
+            task.setPlannedProduction(0);
+            task.setVulcanizeMachineCount(0);
+            return;
+        }
+
+        // 停产标识日：当天产量按胎胚库存取整
+        if (scheduleDayTypeHelper.isStopFlagDay(scheduleDate)) {
+            Integer allocatedStock = task.getAllocatedStock();
+            if (allocatedStock != null && allocatedStock > 0) {
+                int tripCapacity = getTripCapacity(task.getStructureName(), context);
+                int cars = productionCalculator.roundToVehicle(allocatedStock, tripCapacity);
+                int qty = Math.min(cars * tripCapacity, allocatedStock);
+                task.setPlannedProduction(qty);
+                task.setVulcanizeMachineCount(cars);
+            } else {
+                task.setPlannedProduction(0);
+                task.setVulcanizeMachineCount(0);
+            }
+        }
+    }
+
+    /**
+     * 获取班次换胎产能
+     */
+    private int getTripCapacity(String structureName, ScheduleContextVo context) {
+        return productionCalculator.getTripCapacity(structureName, context);
     }
 
     /**
