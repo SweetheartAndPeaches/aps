@@ -358,7 +358,18 @@ public class TaskGroupService {
     }
 
     /**
-     * 获取当前库存
+     * 获取任务可用的当前库存
+     *
+     * <p>优先级：
+     * <ol>
+     *   <li>硫化记录上记录的库存（lhResult.embryoStock）</li>
+     *   <li>CxStock 的有效库存 = stockNum - overTimeStock - badNum + modifyNum</li>
+     * </ol>
+     *
+     * @param lhResult   硫化记录
+     * @param stockMap   embryoCode → CxStock 的映射
+     * @param embryoCode 胎胚编码
+     * @return 当前可用库存数量
      */
     private int getCurrentStock(LhScheduleResult lhResult, Map<String, CxStock> stockMap, String embryoCode) {
         Integer embryoStock = lhResult.getEmbryoStock();
@@ -480,6 +491,15 @@ public class TaskGroupService {
 
     /**
      * 计算日需求量
+     *
+     * <p>简化实现：直接返回硫化需求量（排量）。
+     * 更精细的需求拆分（考虑历史排产量、班次分配等）在续作/新增任务处理器中进行。
+     *
+     * @param totalVulcanizeDemand 硫化总需求（排量）
+     * @param currentStock         当前库存（未使用，为扩展预留）
+     * @param structureName        结构名称（未使用，为扩展预留）
+     * @param context              排程上下文（未使用，为扩展预留）
+     * @return 日需求量
      */
     private int calculateDailyDemand(
             int totalVulcanizeDemand,

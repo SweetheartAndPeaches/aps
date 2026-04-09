@@ -364,6 +364,17 @@ public class ContinueTaskProcessor {
         return 1200;
     }
 
+    /**
+     * 从任务对象中读取已分配的库存，写入任务的 allocatedStock 字段
+     *
+     * <p>materialStockMap 的库存分配在 TaskGroupService.buildSingleTask 中已完成
+     * （按各硫化任务的需求比例预分配）。此处仅读取 task.getCurrentStock() 并同步到
+     * allocatedStock 字段，供后续 calculatePlannedProduction 使用。
+     *
+     * @param task         任务
+     * @param context      排程上下文
+     * @param scheduleDate 排程日期（未使用，为扩展预留）
+     */
     public void allocateEmbryoStock(
             CoreScheduleAlgorithmService.DailyEmbryoTask task,
             ScheduleContextVo context,
@@ -377,16 +388,20 @@ public class ContinueTaskProcessor {
     }
     
     /**
-     * 计算待排产量（按车分配）
+     * 计算任务的计划量（条）和所需车数
      *
-     * <p>计算逻辑：
-     * 1. 获取硫化需求量（vulcanizeDemand）
-     * 2. 获取硫化任务分配的库存（allocatedStock）
-     * 3. 计算需要的计划量 = vulcanizeDemand - 库存
-     * 4. 获取胎面整车条数（treadCount）
-     * 5. 计算需要的车数 = 需要的计划量 / treadCount
+     * <p>计算步骤：
+     * <ol>
+     *   <li>硫化需求量（vulcanizeDemand）= 排量</li>
+     *   <li>库存抵扣 = allocatedStock（由 allocateEmbryoStock 设置）</li>
+     *   <li>待排产量 = max(0, vulcanizeDemand - 库存抵扣)</li>
+     *   <li>所需车数 = ceil(待排产量 / 胎面整车条数)</li>
+     *   <li>若为收尾任务，根据成型余量判断是否收尾（收尾则不限量）</li>
+     * </ol>
      *
-     * <p>如果是收尾任务，需要考虑成型余量判断是否收尾
+     * @param task         任务
+     * @param context      排程上下文
+     * @param scheduleDate 排程日期（未使用）
      */
     public void calculatePlannedProduction(
             CoreScheduleAlgorithmService.DailyEmbryoTask task,
@@ -454,6 +469,23 @@ public class ContinueTaskProcessor {
         return calculatedCars;
     }
     
+    /**
+     * 处理开产日和停产日对任务计划量的影响
+     *
+     * <p>停产日：当天计划量置0，不排产
+     * <p>开产日：
+     * <ul>
+     *   <li>关键产品 → 当天不排产（setOpeningShiftCapacity=0）</li>
+     *   <li>非关键产品 → 计划量取 min(原计划量, 开产班次产能)</li>
+     * </ul>
+     * 开产班次产能 = 机台小时产能 × 6小时（OPENING_SHIFT_HOURS）
+     *
+     * @param task         任务
+     * @param context      排程上下文
+     * @param dayShifts    当天班次配置
+     * @param isOpeningDay 是否开产日
+     * @param isClosingDay 是否停产日
+     */
     public void handleOpeningClosingDay(
             CoreScheduleAlgorithmService.DailyEmbryoTask task,
             ScheduleContextVo context,
@@ -492,6 +524,23 @@ public class ContinueTaskProcessor {
         }
     }
     
+    /**
+     * 处理收尾任务的余量约束
+     *
+     * <p>前提：仅对 isEndingTask=true 或 isNearEnding=true 的任务生效
+     * <p>逻辑：
+     * <ol>
+     *   <li>计算剩余需生产量 = 收尾余量 - 已分配库存</li>
+     *   <li>调用 ProductionCalculator 计算收尾计划量（整车取整 + 非主销产品余量≤2条则舍弃）</li>
+     *   <li>若余量被舍弃 → 计划量=0，标记 abandoned</li>
+     *   <li>若主销产品多做了 → 记录 extraInventory</li>
+     *   <li>若本批完成全部收尾 → 标记 isLastEndingBatch</li>
+     * </ol>
+     *
+     * @param task         任务
+     * @param context      排程上下文
+     * @param isOpeningDay 是否开产日（开产日不触发收尾处理）
+     */
     public void handleEndingRemainder(
             CoreScheduleAlgorithmService.DailyEmbryoTask task,
             ScheduleContextVo context,
@@ -555,6 +604,18 @@ public class ContinueTaskProcessor {
         }
     }
     
+    /**
+     * 计算收尾任务的延误补做量
+     *
+     * <p>收尾任务可能因昨日系统停机等原因导致部分应排量未完成，
+     * 需要今天补做。计算截止到收尾日应累计完成量，与截止昨日实际
+     * 已排量的差值即为补做量。
+     *
+     * @param task         任务
+     * @param context      排程上下文
+     * @param scheduleDate 排程日期
+     * @return 需要补做的量（条），无延误则返回0
+     */
     public int calculateCatchUpQuantity(
             CoreScheduleAlgorithmService.DailyEmbryoTask task,
             ScheduleContextVo context,
