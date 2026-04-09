@@ -64,11 +64,13 @@ public class NewTaskProcessor {
 
         log.info("========== 开始处理新增任务，共 {} 个任务 ==========", newTasks.size());
 
-        // 停产日不排新增任务（根据 dayFlag 判断：最近标识为"停"则停产）
+        // 停产日不排新增任务（停产标识日之后才算停产，停产日当天有量）
         CoreScheduleAlgorithmServiceImpl.DayFlagInfo flagInfo =
                 coreScheduleAlgorithmService.findNearestDayFlag(context.getCurrentScheduleDate());
-        if (flagInfo != null && "0".equals(flagInfo.dayFlag)) {
-            log.info("停产日不排新增任务，dayFlag={}", flagInfo.dayFlag);
+        if (flagInfo != null && "0".equals(flagInfo.dayFlag)
+                && context.getCurrentScheduleDate().isAfter(flagInfo.nearestDate)) {
+            log.info("停产日（已停产）不排新增任务，dayFlag={}, 标识日={}",
+                    flagInfo.dayFlag, flagInfo.nearestDate);
             return existAllocations != null ? existAllocations : new ArrayList<>();
         }
 

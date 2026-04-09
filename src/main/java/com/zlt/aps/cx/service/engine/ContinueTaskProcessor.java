@@ -512,21 +512,17 @@ public class ContinueTaskProcessor {
         }
         
         if ("0".equals(flagInfo.dayFlag)) {
-            // 最近标识是「停」→ 往后都是停产
+            // 最近标识是「停」→ 停产标识日之后都是停产日
+            // 停产标识日当天有量（最后一天生产），只有停产日之后才算停产
             task.setIsClosingDayTask(true);
             
-            if (flagInfo.nearestDate.equals(scheduleDate)) {
-                // 停产是今天：可能有量，但必须满足库存=0的条件
-                // 安排 = 硫化需要的量（不做整车取整，直接取排量）
-                int plannedProduction = task.getPlannedProduction() != null ? task.getPlannedProduction() : 0;
-                task.setPlannedProduction(plannedProduction);
-                log.debug("停产日（今天），直接按硫化需求安排：materialCode={}, 排量={}",
-                        task.getMaterialCode(), plannedProduction);
-            } else {
-                // 停产不是今天（已停产）：无法安排
+            if (scheduleDate.isAfter(flagInfo.nearestDate)) {
+                // 停产日之后：无法安排
                 task.setPlannedProduction(0);
                 log.debug("停产日（已停产），不安排：materialCode={}", task.getMaterialCode());
             }
+            // 停产标识日当天：有量（库存必须为0），直接按硫化需要安排（不做整车取整）
+            // plannedProduction 保持原值不做修改
         } else if ("1".equals(flagInfo.dayFlag)) {
             // 最近标识是「开」→ 正常按硫化计划安排，取整到整车
             task.setIsOpeningDayTask(true);

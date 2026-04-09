@@ -275,17 +275,20 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
     /**
      * 判断是否为停产日
-     * 从当前日期往前找最近一个有 dayFlag 标识的日期，根据该标识判断
+     * 从当前日期往前找最近一个有 dayFlag 标识的日期。
+     * 停产标识的那一天有量，只有停产日之后才算停产。
      */
     private boolean isStopProductionDay(ScheduleContextVo context, LocalDate date) {
         DayFlagInfo flagInfo = findNearestDayFlag(context.getCurrentScheduleDate());
         if (flagInfo == null || flagInfo.dayFlag == null) {
             return false;
         }
-        // 最近的标识是「停」，则该日期及之后都是停产日
+        // 最近的标识是「停」→ 停产标识日之后都是停产日（停产日当天有量，不算停产）
         if ("0".equals(flagInfo.dayFlag)) {
-            log.info("日期 {} 最近 dayFlag={}（停），判定为停产日", date, flagInfo.dayFlag);
-            return true;
+            boolean isStopDay = date.isAfter(flagInfo.nearestDate);
+            log.info("日期 {} 最近 dayFlag={}（停），标识日={}，判定为{}",
+                    date, flagInfo.dayFlag, flagInfo.nearestDate, isStopDay ? "停产日" : "正常");
+            return isStopDay;
         }
         return false;
     }

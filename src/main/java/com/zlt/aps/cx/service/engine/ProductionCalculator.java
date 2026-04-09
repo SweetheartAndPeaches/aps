@@ -856,14 +856,15 @@ public class ProductionCalculator {
             return endingResult;
         }
 
-        // Step 3: 判断是否停产日（根据 dayFlag：最近标识为"停"则停产）
+        // Step 3: 判断是否停产日（根据 dayFlag：停产标识日之后才算停产）
+        // 停产标识的那一天本身有量，只有停产日之后才算停产
         CoreScheduleAlgorithmServiceImpl.DayFlagInfo flagInfo =
                 coreScheduleAlgorithmService.findNearestDayFlag(scheduleDate);
-        if (flagInfo != null && "0".equals(flagInfo.dayFlag)) {
-            // 停产是今天：有量（库存必须为0），安排=硫化需要量，不做整车取整
-            // 停产不是今天：已停产，plannedProduction = 0
+        if (flagInfo != null && "0".equals(flagInfo.dayFlag) && scheduleDate.isAfter(flagInfo.nearestDate)) {
+            // 停产日之后：plannedProduction = 0，使用停产收尾规则
             return calculateClosingDayQuantity(embryoCode, structureName, context, scheduleDate);
         }
+        // 停产标识日当天：有量，正常按硫化计划安排
 
         // Step 4: 判断是否开产日（最近标识为"开"则正常按硫化计划安排，取整到整车）
         // 开产日有量但不多，严格按硫化计划安排，取整到整车
