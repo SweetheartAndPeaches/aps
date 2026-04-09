@@ -497,32 +497,20 @@ public class NewTaskProcessor {
             Integer assignedVulcanizeQty,
             ScheduleContextVo context) {
 
-        // 如果传入了分配的硫化机台数，则转换为排量
-        // 否则使用task的计划排量或需求排量
-        int quantity;
-        if (assignedVulcanizeQty != null && assignedVulcanizeQty > 0) {
-            // 使用分配的硫化机台数作为排量（1台硫化机约等于一个胎胚）
-            quantity = assignedVulcanizeQty;
-        } else {
-            quantity = task.getPlannedProduction() != null && task.getPlannedProduction() > 0 
-                    ? task.getPlannedProduction() 
-                    : task.getDemandQuantity();
-        }
+        // 排量使用任务的 demandQuantity（需求排量），这是根据硫化需求计算出来的
+        // assignedVulcanizeQty 是均衡分配时分配的硫化机台数，仅用于记录
+        int quantity = task.getDemandQuantity() != null ? task.getDemandQuantity() : 0;
 
         // 调试日志：检查排量来源
         System.err.println("[allocateTask] materialCode=" + task.getMaterialCode() 
-                + ", plannedProduction=" + task.getPlannedProduction() 
-                + ", demandQuantity=" + task.getDemandQuantity() 
-                + ", assignedVulcanizeQty=" + assignedVulcanizeQty
-                + ", finalQty=" + quantity);
-        log.error("【DEBUG】任务排量: materialCode={}, plannedProduction={}, demandQuantity={}, assignedVulcanizeQty={}, finalQty={}",
-                task.getMaterialCode(), task.getPlannedProduction(), task.getDemandQuantity(), assignedVulcanizeQty, quantity);
+                + ", demandQuantity=" + quantity 
+                + ", assignedVulcanizeQty=" + assignedVulcanizeQty);
 
         CoreScheduleAlgorithmService.TaskAllocation taskAllocation = new CoreScheduleAlgorithmService.TaskAllocation();
         taskAllocation.setMaterialCode(task.getMaterialCode());
         taskAllocation.setMaterialName(task.getMaterialName());
         taskAllocation.setStructureName(task.getStructureName());
-        taskAllocation.setQuantity(quantity);
+        taskAllocation.setQuantity(quantity);  // 使用 demandQuantity 作为排量
         taskAllocation.setPriority(task.getPriority());
         taskAllocation.setStockHours(task.getStockHours());
         taskAllocation.setIsTrialTask(task.getIsTrialTask());

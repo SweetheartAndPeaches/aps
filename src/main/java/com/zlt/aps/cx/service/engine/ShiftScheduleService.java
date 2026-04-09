@@ -110,6 +110,10 @@ public class ShiftScheduleService {
                 int shiftQty = structureWaveAllocation.getOrDefault(shiftCode, 0);
                 shiftPlanQty.put(shiftCode, shiftQty);
             }
+            
+            // 调试日志
+            log.info("班次分配结果: 机台={}, 总排量={}, 班次计划量={}", 
+                    allocation.getMachineCode(), allocation.getUsedCapacity(), shiftPlanQty);
 
             // 处理特殊情况：开产首班不排关键产品
             if (Boolean.TRUE.equals(context.getIsOpeningDay()) && context.getCurrentScheduleDay() == 1) {
@@ -169,8 +173,10 @@ public class ShiftScheduleService {
 
             MdmStructureTreadConfig treadConfig = structureTreadConfigMap.get(structureCode);
 
-            if (treadConfig != null && treadConfig.getTreadCount() != null) {
+            // 只在花纹数合理（<=排量）时使用花纹配置分配
+            if (treadConfig != null && treadConfig.getTreadCount() != null && treadConfig.getTreadCount() > 0 && treadConfig.getTreadCount() <= taskQty) {
                 int treadCount = treadConfig.getTreadCount();
+                log.info("花纹配置分配: 结构={}, 排量={}, 花纹数={}", structureCode, taskQty, treadCount);
                 int[] shiftQty = calculateShiftQtyByTreadCount(taskQty, treadCount, shiftCodes, context);
 
                 for (int i = 0; i < shiftCodes.length; i++) {
@@ -179,6 +185,7 @@ public class ShiftScheduleService {
                     totalAssigned += qty;
                 }
             } else {
+                log.info("波浪比例分配: 结构={}, 排量={}", structureCode, taskQty);
                 int[] waveQty = calculateWaveAllocation(taskQty, shiftCodes, context);
 
                 for (int i = 0; i < shiftCodes.length; i++) {
@@ -188,8 +195,15 @@ public class ShiftScheduleService {
             }
         }
 
+        // 调试日志：检查班次分配中间结果
+        log.info("【DEBUG】班次分配 - shiftCodes={}, shiftTotalQty={}, totalAssigned={}", 
+                Arrays.toString(shiftCodes), shiftTotalQty, totalAssigned);
+
         // 检查是否超过机台最大产能
         if (maxDailyCapacity != null && totalAssigned > maxDailyCapacity) {
+            log.warn("班次分配超出机台最大产能: 分配量={}, 最大产能={}", 
+                    totalAssigned, maxDailyCapacity);
+            // 按比例缩减
             double ratio = (double) maxDailyCapacity / totalAssigned;
 
             for (String shiftCode : shiftCodes) {
@@ -224,6 +238,8 @@ public class ShiftScheduleService {
         for (int ratio : adjustedRatio) {
             totalRatio += ratio;
         }
+        log.info("【DEBUG】花纹配置分配: taskQty={}, waveRatio={}, adjustedRatio={}, totalRatio={}", 
+                taskQty, Arrays.toString(waveRatio), Arrays.toString(adjustedRatio), totalRatio);
 
         for (int i = 0; i < shiftCodes.length; i++) {
             int shiftQty = taskQty * adjustedRatio[i] / totalRatio;
