@@ -300,8 +300,8 @@ public class TaskGroupService {
             task.setVulcanizeMoldCount(stock.getVulcanizeMoldCount());
         }
 
-        // 计算库存可供硫化时长（按班次动态计算）
-        calculateStockHours(task, lhResult, currentStock, context, currentShiftConfigs);
+        // 计算库存可供硫化时长（基于当前库存，成型产出未知不做班次动态推算）
+        calculateStockHours(task, lhResult, currentStock, context);
 
         return task;
     }
@@ -403,28 +403,26 @@ public class TaskGroupService {
     private static final int STOCK_HIGH_HOURS_THRESHOLD = 18;
 
     /**
-     * 计算库存可供硫化时长（按班次动态计算）
+     * 计算库存可供硫化时长
      *
-     * 核心公式：
+     * 任务分组阶段：成型产出未知（本次排程的结果），无法按班次动态推算
+     * 因此只基于当前库存计算初始的库存可供硫化时长
+     *
+     * 公式：
+     *   日硫化量 → 从 MonthPlanProductLhCapacityVo 获取
      *   单胎单模硫化时长(秒) = 24 × 60 × 60 / 日硫化量
      *   stockHours = 库存 × 单胎单模硫化时长 / 任务的模数 / 3600 (转为小时)
-     *
-     * 班次动态逻辑：
-     *   每个班次开始前的库存 = 上个班的班次开始前库存 + 上个班次成型产出 - 上个班次硫化消耗
-     *   取所有班次中最低的库存可供时长作为最终的 stockHours
      *
      * @param task         胎胚任务
      * @param lhResult     硫化排程结果
      * @param currentStock 当前胎胚库存
      * @param context      排程上下文
-     * @param dayShifts    当日班次配置
      */
     private void calculateStockHours(
             CoreScheduleAlgorithmService.DailyEmbryoTask task,
             LhScheduleResult lhResult,
             int currentStock,
-            ScheduleContextVo context,
-            List<CxShiftConfig> dayShifts) {
+            ScheduleContextVo context) {
 
         // 1. 从 materialLhCapacityMap 获取该物料的日硫化量
         Map<String, MonthPlanProductLhCapacityVo> lhCapacityMap = context.getMaterialLhCapacityMap();
@@ -433,7 +431,6 @@ public class TaskGroupService {
             String materialCode = task.getMaterialCode();
             MonthPlanProductLhCapacityVo capacityVo = lhCapacityMap.get(materialCode);
             if (capacityVo != null) {
-                // 优先使用已计算的日硫化量，其次用标准日硫化量
                 if (capacityVo.getDayVulcanizationQty() != null && capacityVo.getDayVulcanizationQty() > 0) {
                     dailyLhCapacity = capacityVo.getDayVulcanizationQty();
                 } else if (capacityVo.getStandardCapacity() != null && capacityVo.getStandardCapacity() > 0) {
@@ -446,7 +443,6 @@ public class TaskGroupService {
         if (dailyLhCapacity == null || dailyLhCapacity <= 0) {
             if (lhResult != null && lhResult.getLhTime() != null && lhResult.getLhTime() > 0
                     && lhResult.getMouldQty() != null && lhResult.getMouldQty() > 0) {
-                // 日硫化量 = 24*60*60 / 硫化时长(秒) * 模数
                 int lhTimeSeconds = lhResult.getLhTime();
                 int mouldQty = lhResult.getMouldQty();
                 dailyLhCapacity = (24 * 60 * 60 / lhTimeSeconds) * mouldQty;
@@ -471,87 +467,21 @@ public class TaskGroupService {
             taskMoldQty = lhResult != null && lhResult.getMouldQty() != null ? lhResult.getMouldQty() : 1;
         }
 
-        // 4. 按班次动态计算库存可供硫化时长
-        BigDecimal minStockHours = null;
+        // 4. 基于当前库存计算库存可供硫化时长
+        // stockHours = 库存 × 单胎单模硫化时长 / 任务模数 / 3600 (转小时)
+        BigDecimal stockHours = BigDecimal.valueOf(currentStock)
+                .multiply(singleTireMoldSeconds)
+                .divide(BigDecimal.valueOf(taskMoldQty), 2, BigDecimal.ROUND_HALF_UP)
+                .divide(BigDecimal.valueOf(3600), 2, BigDecimal.ROUND_HALF_UP);
 
-        if (dayShifts != null && !dayShifts.isEmpty()) {
-            // 按班次顺序（DAY_SHIFT_ORDER）排序
-            List<CxShiftConfig> sortedShifts = dayShifts.stream()
-                    .filter(s -> s.getDayShiftOrder() != null)
-                    .sorted(Comparator.comparing(CxShiftConfig::getDayShiftOrder))
-                    .collect(Collectors.toList());
-
-            int shiftStartStock = currentStock;
-
-            for (CxShiftConfig shift : sortedShifts) {
-                // 计算本班次开始前的库存可供硫化时长
-                // stockHours = 库存 × 单胎单模硫化时长(秒) / 任务的模数 / 3600 (转小时)
-                BigDecimal shiftStockHours = BigDecimal.valueOf(shiftStartStock)
-                        .multiply(singleTireMoldSeconds)
-                        .divide(BigDecimal.valueOf(taskMoldQty), 2, BigDecimal.ROUND_HALF_UP)
-                        .divide(BigDecimal.valueOf(3600), 2, BigDecimal.ROUND_HALF_UP);
-
-                // 取所有班次中最低的库存可供时长
-                if (minStockHours == null || shiftStockHours.compareTo(minStockHours) < 0) {
-                    minStockHours = shiftStockHours;
-                }
-
-                // 更新库存：本班次开始前库存 + 本班次成型产出 - 本班次硫化消耗
-                int formingOutput = getFormingOutputForShift(task, shift);
-                int vulcanizingConsumption = getVulcanizingConsumptionForShift(lhResult, shift);
-
-                shiftStartStock = shiftStartStock + formingOutput - vulcanizingConsumption;
-            }
-        }
-
-        // 没有班次配置时，用当前库存直接计算
-        if (minStockHours == null) {
-            minStockHours = BigDecimal.valueOf(currentStock)
-                    .multiply(singleTireMoldSeconds)
-                    .divide(BigDecimal.valueOf(taskMoldQty), 2, BigDecimal.ROUND_HALF_UP)
-                    .divide(BigDecimal.valueOf(3600), 2, BigDecimal.ROUND_HALF_UP);
-        }
-
-        task.setStockHours(minStockHours);
+        task.setStockHours(stockHours);
 
         // 库存预警：超过18小时标记为高库存
-        boolean isHighStock = minStockHours.compareTo(BigDecimal.valueOf(STOCK_HIGH_HOURS_THRESHOLD)) > 0;
+        boolean isHighStock = stockHours.compareTo(BigDecimal.valueOf(STOCK_HIGH_HOURS_THRESHOLD)) > 0;
         task.setIsStockHighWarning(isHighStock);
 
-        log.debug("物料 {} stockHours计算: 日硫化量={}, 单胎单模时长={}s, 模数={}, 最低库存时长={}h",
-                task.getMaterialCode(), dailyLhCapacity, singleTireMoldSeconds, taskMoldQty, minStockHours);
-    }
-
-    /**
-     * 获取某班次的成型产出量
-     * 成型产出 = 该任务在该班次的计划产出量
-     */
-    private int getFormingOutputForShift(CoreScheduleAlgorithmService.DailyEmbryoTask task, CxShiftConfig shift) {
-        // 当前排程尚未执行，成型产出为0
-        return 0;
-    }
-
-    /**
-     * 获取某班次的硫化消耗量
-     * 硫化消耗 = 该任务对应硫化需求在该班次的计划消耗量
-     */
-    private int getVulcanizingConsumptionForShift(LhScheduleResult lhResult, CxShiftConfig shift) {
-        if (lhResult == null || shift == null) {
-            return 0;
-        }
-
-        String classField = shift.getClassField();
-        if (classField == null || !classField.startsWith("CLASS")) {
-            return 0;
-        }
-
-        try {
-            int classIndex = Integer.parseInt(classField.substring(5));
-            Integer planQty = getClassPlanQtyByIndex(lhResult, classIndex);
-            return planQty != null ? planQty : 0;
-        } catch (NumberFormatException e) {
-            return 0;
-        }
+        log.debug("物料 {} stockHours计算: 日硫化量={}, 单胎单模时长={}s, 模数={}, 库存={}, 库存可供时长={}h",
+                task.getMaterialCode(), dailyLhCapacity, singleTireMoldSeconds, taskMoldQty, currentStock, stockHours);
     }
 
     /**
