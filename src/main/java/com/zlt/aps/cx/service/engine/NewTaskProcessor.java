@@ -387,7 +387,7 @@ public class NewTaskProcessor {
             for (BalancingService.EmbryoAssignment embryoAssignment : assignment.getEmbryoAssignments()) {
                 CoreScheduleAlgorithmService.DailyEmbryoTask task = embryoAssignment.getTask();
                 if (task != null) {
-                    allocateTaskToMachine(allocation, task, context);
+                    allocateTaskToMachine(allocation, task, embryoAssignment.getAssignedQty(), context);
                 }
             }
 
@@ -487,14 +487,36 @@ public class NewTaskProcessor {
             CoreScheduleAlgorithmService.MachineAllocationResult allocation,
             CoreScheduleAlgorithmService.DailyEmbryoTask task,
             ScheduleContextVo context) {
+        // 默认不指定分配的硫化机台数，使用task的计划排量或需求排量
+        allocateTaskToMachine(allocation, task, null, context);
+    }
 
-        int quantity = task.getPlannedProduction() != null && task.getPlannedProduction() > 0 
-                ? task.getPlannedProduction() 
-                : task.getDemandQuantity();
+    private void allocateTaskToMachine(
+            CoreScheduleAlgorithmService.MachineAllocationResult allocation,
+            CoreScheduleAlgorithmService.DailyEmbryoTask task,
+            Integer assignedVulcanizeQty,
+            ScheduleContextVo context) {
+
+        // 如果传入了分配的硫化机台数，则转换为排量
+        // 否则使用task的计划排量或需求排量
+        int quantity;
+        if (assignedVulcanizeQty != null && assignedVulcanizeQty > 0) {
+            // 使用分配的硫化机台数作为排量（1台硫化机约等于一个胎胚）
+            quantity = assignedVulcanizeQty;
+        } else {
+            quantity = task.getPlannedProduction() != null && task.getPlannedProduction() > 0 
+                    ? task.getPlannedProduction() 
+                    : task.getDemandQuantity();
+        }
 
         // 调试日志：检查排量来源
-        log.info("【DEBUG】任务排量: materialCode={}, plannedProduction={}, demandQuantity={}, finalQty={}",
-                task.getMaterialCode(), task.getPlannedProduction(), task.getDemandQuantity(), quantity);
+        System.err.println("[allocateTask] materialCode=" + task.getMaterialCode() 
+                + ", plannedProduction=" + task.getPlannedProduction() 
+                + ", demandQuantity=" + task.getDemandQuantity() 
+                + ", assignedVulcanizeQty=" + assignedVulcanizeQty
+                + ", finalQty=" + quantity);
+        log.error("【DEBUG】任务排量: materialCode={}, plannedProduction={}, demandQuantity={}, assignedVulcanizeQty={}, finalQty={}",
+                task.getMaterialCode(), task.getPlannedProduction(), task.getDemandQuantity(), assignedVulcanizeQty, quantity);
 
         CoreScheduleAlgorithmService.TaskAllocation taskAllocation = new CoreScheduleAlgorithmService.TaskAllocation();
         taskAllocation.setMaterialCode(task.getMaterialCode());
