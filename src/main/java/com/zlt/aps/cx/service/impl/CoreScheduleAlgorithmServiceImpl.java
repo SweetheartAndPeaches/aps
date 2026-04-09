@@ -86,7 +86,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         // 获取排程天数
         int scheduleDays = context.getScheduleDays() != null ? context.getScheduleDays() : DEFAULT_SCHEDULE_DAYS;
 
-        List<CxScheduleResult> allResults = new ArrayList<>();
+        // 收集每天的排产结果
+        List<DayScheduleResult> dayResults = new ArrayList<>();
 
         // 记录每天的机台在产状态
         Map<String, Set<String>> dailyMachineOnlineEmbryoMap = null;
@@ -100,7 +101,6 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             }
 
             // 设置当前天的上下文
-            // 前端传入的是最后一天（如2026-03-28），需要往前推2天开始排产（如2026-03-26）
             LocalDate currentScheduleDate = context.getScheduleDate().minusDays(SCHEDULE_START_OFFSET_DAYS).plusDays(day - 1);
             context.setCurrentScheduleDay(day);
             context.setCurrentScheduleDate(currentScheduleDate);
@@ -123,37 +123,42 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             }
 
             // 执行该天的排程
-            List<CxScheduleResult> dayResults = executeDaySchedule(
+            DayScheduleResult dayResult = executeDaySchedule(
                     context, day, dayShifts, dailyMachineOnlineEmbryoMap);
-            allResults.addAll(dayResults);
+            dayResults.add(dayResult);
 
             // 更新下一天的机台在产状态
-            dailyMachineOnlineEmbryoMap = updateMachineOnlineStatus(dayResults, dailyMachineOnlineEmbryoMap);
+            dailyMachineOnlineEmbryoMap = updateMachineOnlineStatus(
+                    dayResult.getAllAllocations(), dailyMachineOnlineEmbryoMap);
 
             // 更新库存和硫化余量，供下一天排程使用
             if (day < scheduleDays) {
-                updateContextForNextDay(context, dayResults, dayShifts);
+                updateContextForNextDay(context, dayResult.getAllAllocations(), dayShifts);
             }
         }
 
-        log.info("排程算法执行完成，共 {} 天，总结果数: {}", scheduleDays, allResults.size());
+        // ==================== 合并多天结果：每个机台一条记录，8个班次映射到CLASS1~8 ====================
+        List<CxScheduleResult> allResults = buildFinalScheduleResults(context, dayResults, allShiftConfigs);
+
+        log.info("排程算法执行完成，共 {} 天，总机台数: {}", scheduleDays, allResults.size());
         return allResults;
     }
 
     /**
      * 执行单天排程
      *
-     * <p>排程流程（方案A：合并续作+新增重新均衡）：
+     * <p>排程流程：
      * <ol>
      *   <li>S5.2 任务分组：续作/试制/新增三类</li>
      *   <li>S5.3 处理续作任务</li>
      *   <li>S5.3 处理试制任务（独立处理，特殊约束）</li>
      *   <li>S5.3 处理新增任务（合并续作+新增，重新均衡）</li>
      *   <li>S5.3.7 班次排产</li>
-     *   <li>生成排程结果</li>
      * </ol>
+     *
+     * @return 班次排产结果列表 + 机台分配结果列表
      */
-    private List<CxScheduleResult> executeDaySchedule(
+    private DayScheduleResult executeDaySchedule(
             ScheduleContextVo context,
             int day,
             List<CxShiftConfig> dayShifts,
@@ -240,19 +245,23 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         }
         log.info("班次排产完成，共 {} 条班次排产记录", shiftProductionResults.size());
 
-        // ==================== 第七步：生成排程结果 ====================
-        List<CxScheduleResult> results = buildScheduleResultsFromShiftProduction(
-                context, allAllocations, shiftProductionResults, dayShifts);
+        // 封装当天排产结果
+        DayScheduleResult dayResult = new DayScheduleResult();
+        dayResult.setDay(day);
+        dayResult.setScheduleDate(scheduleDate);
+        dayResult.setAllAllocations(allAllocations);
+        dayResult.setShiftProductionResults(shiftProductionResults);
+        dayResult.setDayShifts(dayShifts);
 
-        log.info("========== 第 {} 天排程完成，排程结果数: {} ==========\n", day, results.size());
-        return results;
+        log.info("========== 第 {} 天排程完成 ==========\n", day);
+        return dayResult;
     }
 
     /**
      * 更新机台在产状态
      */
     private Map<String, Set<String>> updateMachineOnlineStatus(
-            List<CxScheduleResult> dayResults,
+            List<MachineAllocationResult> allocations,
             Map<String, Set<String>> currentMachineOnlineMap) {
 
         Map<String, Set<String>> newMap = new HashMap<>();
@@ -260,19 +269,16 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             newMap.put(entry.getKey(), new HashSet<>(entry.getValue()));
         }
 
-        Map<String, CxScheduleResult> lastResultPerMachine = new LinkedHashMap<>();
-        for (CxScheduleResult result : dayResults) {
-            String machineCode = result.getCxMachineCode();
-            if (machineCode != null) {
-                lastResultPerMachine.put(machineCode, result);
+        for (MachineAllocationResult allocation : allocations) {
+            String machineCode = allocation.getMachineCode();
+            Set<String> embryos = new HashSet<>();
+            for (TaskAllocation taskAlloc : allocation.getTaskAllocations()) {
+                if (taskAlloc.getMaterialCode() != null) {
+                    embryos.add(taskAlloc.getMaterialCode());
+                }
             }
-        }
-
-        for (Map.Entry<String, CxScheduleResult> entry : lastResultPerMachine.entrySet()) {
-            String machineCode = entry.getKey();
-            String embryoCode = entry.getValue().getEmbryoCode();
-            if (embryoCode != null) {
-                newMap.computeIfAbsent(machineCode, k -> new HashSet<>()).add(embryoCode);
+            if (!embryos.isEmpty()) {
+                newMap.put(machineCode, embryos);
             }
         }
 
@@ -337,67 +343,123 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     }
 
     /**
-     * 从班次排产结果构建排程结果
+     * 单天排产结果
      */
-    private List<CxScheduleResult> buildScheduleResultsFromShiftProduction(
+    public static class DayScheduleResult {
+        private int day;
+        private LocalDate scheduleDate;
+        private List<MachineAllocationResult> allAllocations;
+        private List<ShiftScheduleService.ShiftProductionResult> shiftProductionResults;
+        private List<CxShiftConfig> dayShifts;
+
+        public int getDay() { return day; }
+        public void setDay(int day) { this.day = day; }
+        public LocalDate getScheduleDate() { return scheduleDate; }
+        public void setScheduleDate(LocalDate scheduleDate) { this.scheduleDate = scheduleDate; }
+        public List<MachineAllocationResult> getAllAllocations() { return allAllocations; }
+        public void setAllAllocations(List<MachineAllocationResult> allAllocations) { this.allAllocations = allAllocations; }
+        public List<ShiftScheduleService.ShiftProductionResult> getShiftProductionResults() { return shiftProductionResults; }
+        public void setShiftProductionResults(List<ShiftScheduleService.ShiftProductionResult> shiftProductionResults) { this.shiftProductionResults = shiftProductionResults; }
+        public List<CxShiftConfig> getDayShifts() { return dayShifts; }
+        public void setDayShifts(List<CxShiftConfig> dayShifts) { this.dayShifts = dayShifts; }
+    }
+
+    /**
+     * 合并多天排产结果：每个机台一条记录，8个班次排量分别映射到CLASS1~8
+     *
+     * <p>班次映射由 CxShiftConfig.classField 决定，如：
+     * <ul>
+     *   <li>第1天夜班 → CLASS1</li>
+     *   <li>第1天早班 → CLASS2</li>
+     *   <li>第1天中班 → CLASS3</li>
+     *   <li>第2天夜班 → CLASS4</li>
+     *   <li>...</li>
+     * </ul>
+     */
+    private List<CxScheduleResult> buildFinalScheduleResults(
             ScheduleContextVo context,
-            List<MachineAllocationResult> allocations,
-            List<ShiftScheduleService.ShiftProductionResult> shiftProductionResults,
-            List<CxShiftConfig> dayShifts) {
+            List<DayScheduleResult> dayResults,
+            List<CxShiftConfig> allShiftConfigs) {
 
-        List<CxScheduleResult> results = new ArrayList<>();
-        LocalDate scheduleDate = context.getCurrentScheduleDate() != null
-                ? context.getCurrentScheduleDate()
-                : context.getScheduleDate();
-
-        // 按 机台+班次 分组汇总排产量
-        Map<String, Map<String, Integer>> machineShiftQtyMap = new HashMap<>();
-        for (ShiftScheduleService.ShiftProductionResult spr : shiftProductionResults) {
-            String key = spr.getMachineCode();
-            machineShiftQtyMap.computeIfAbsent(key, k -> new HashMap<>())
-                    .merge(spr.getShiftCode(), spr.getQuantity(), Integer::sum);
+        // 构建 shiftCode+scheduleDay → classField 的映射
+        Map<String, String> shiftClassFieldMap = new HashMap<>();
+        for (CxShiftConfig shiftConfig : allShiftConfigs) {
+            String key = shiftConfig.getShiftCode() + "_" + shiftConfig.getScheduleDay();
+            shiftClassFieldMap.put(key, shiftConfig.getClassField());
         }
 
-        for (MachineAllocationResult allocation : allocations) {
-            String machineCode = allocation.getMachineCode();
-            log.info("【结果构建】机台 {} usedCapacity={}, taskCount={}", 
-                    machineCode, allocation.getUsedCapacity(),
-                    allocation.getTaskAllocations() != null ? allocation.getTaskAllocations().size() : 0);
-            
+        // 按机台汇总所有天所有班次的排产量
+        // machineCode → classField → quantity
+        Map<String, Map<String, Integer>> machineClassQtyMap = new LinkedHashMap<>();
+        // machineCode → 总排产量
+        Map<String, Integer> machineTotalQtyMap = new LinkedHashMap<>();
+        // machineCode → (embryoCode, structureName) 取第一条任务的
+        Map<String, String[]> machineEmbryoMap = new LinkedHashMap<>();
+
+        for (DayScheduleResult dayResult : dayResults) {
+            int day = dayResult.getDay();
+            for (ShiftScheduleService.ShiftProductionResult spr : dayResult.getShiftProductionResults()) {
+                String machineCode = spr.getMachineCode();
+                String shiftCode = spr.getShiftCode();
+                String key = shiftCode + "_" + day;
+                String classField = shiftClassFieldMap.get(key);
+
+                if (classField == null) {
+                    log.warn("未找到班次映射: shiftCode={}, day={}", shiftCode, day);
+                    continue;
+                }
+
+                machineClassQtyMap.computeIfAbsent(machineCode, k -> new LinkedHashMap<>())
+                        .merge(classField, spr.getQuantity(), Integer::sum);
+                machineTotalQtyMap.merge(machineCode, spr.getQuantity(), Integer::sum);
+            }
+
+            // 取每个机台第一个任务的胎胚信息
+            for (MachineAllocationResult allocation : dayResult.getAllAllocations()) {
+                String machineCode = allocation.getMachineCode();
+                if (!machineEmbryoMap.containsKey(machineCode)
+                        && allocation.getTaskAllocations() != null
+                        && !allocation.getTaskAllocations().isEmpty()) {
+                    TaskAllocation firstTask = allocation.getTaskAllocations().get(0);
+                    machineEmbryoMap.put(machineCode,
+                            new String[]{firstTask.getMaterialCode(), firstTask.getStructureName()});
+                }
+            }
+        }
+
+        // 构建最终的 CxScheduleResult 列表
+        List<CxScheduleResult> results = new ArrayList<>();
+        LocalDate startDate = context.getScheduleDate();
+
+        for (Map.Entry<String, Map<String, Integer>> entry : machineClassQtyMap.entrySet()) {
+            String machineCode = entry.getKey();
+            Map<String, Integer> classQtyMap = entry.getValue();
+
             CxScheduleResult result = new CxScheduleResult();
-            result.setScheduleDate(java.sql.Timestamp.valueOf(scheduleDate.atStartOfDay()));
+            result.setScheduleDate(java.sql.Timestamp.valueOf(startDate.atStartOfDay()));
             result.setCxMachineCode(machineCode);
-            result.setCxMachineType(allocation.getMachineType());
-            result.setProductNum(new BigDecimal(allocation.getUsedCapacity()));
+            result.setProductNum(new BigDecimal(machineTotalQtyMap.getOrDefault(machineCode, 0)));
             result.setProductionStatus("0");
             result.setIsRelease("0");
             result.setDataSource("0");
             result.setCreateTime(new Date());
 
-            // 按班次配置映射班次计划量
-            Map<String, Integer> shiftQtyMap = machineShiftQtyMap.get(machineCode);
-            if (shiftQtyMap != null) {
-                for (CxShiftConfig shiftConfig : dayShifts) {
-                    String classField = shiftConfig.getClassField();
-                    String shiftCode = shiftConfig.getShiftCode();
-                    Integer shiftQty = shiftQtyMap.getOrDefault(shiftCode, 0);
-
-                    setClassFieldValue(result, classField, shiftQty);
-                }
-            } else {
-                log.warn("机台 {} 未找到班次分配结果", machineCode);
+            // 设置胎胚信息
+            String[] embryoInfo = machineEmbryoMap.get(machineCode);
+            if (embryoInfo != null) {
+                result.setEmbryoCode(embryoInfo[0]);
+                result.setStructureName(embryoInfo[1]);
             }
 
-            // 设置第一个任务的胎胚信息
-            if (!allocation.getTaskAllocations().isEmpty()) {
-                TaskAllocation firstTask = allocation.getTaskAllocations().get(0);
-                result.setEmbryoCode(firstTask.getMaterialCode());
-                result.setStructureName(firstTask.getStructureName());
+            // 映射班次排量到 CLASS1~8
+            for (Map.Entry<String, Integer> classEntry : classQtyMap.entrySet()) {
+                setClassFieldValue(result, classEntry.getKey(), classEntry.getValue());
             }
 
             results.add(result);
         }
 
+        log.info("最终排程结果：共 {} 台机台", results.size());
         return results;
     }
 
@@ -592,7 +654,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
      */
     private void updateContextForNextDay(
             ScheduleContextVo context,
-            List<CxScheduleResult> dayResults,
+            List<MachineAllocationResult> dayAllocations,
             List<CxShiftConfig> dayShifts) {
 
         LocalDate scheduleDate = context.getCurrentScheduleDate();
@@ -600,7 +662,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 context.getCurrentScheduleDay(), scheduleDate);
 
         // 1. 计算当天成型产出（按胎胚编码汇总）
-        Map<String, Integer> formingOutputMap = calculateFormingOutputByEmbryo(dayResults);
+        Map<String, Integer> formingOutputMap = calculateFormingOutputByEmbryo(dayAllocations);
         log.info("成型产出汇总: {}", formingOutputMap);
 
         // 2. 计算当天硫化消耗（按胎胚编码汇总，根据当天班次CLASS字段获取计划量）
@@ -628,19 +690,21 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     /**
      * 计算当天成型产出，按胎胚编码汇总
      *
-     * @param dayResults 当天排程结果
+     * @param dayAllocations 当天机台分配结果
      * @return 胎胚编码 → 成型产出量
      */
-    private Map<String, Integer> calculateFormingOutputByEmbryo(List<CxScheduleResult> dayResults) {
+    private Map<String, Integer> calculateFormingOutputByEmbryo(List<MachineAllocationResult> dayAllocations) {
         Map<String, Integer> outputMap = new HashMap<>();
-        if (dayResults == null) {
+        if (dayAllocations == null) {
             return outputMap;
         }
-        for (CxScheduleResult result : dayResults) {
-            String embryoCode = result.getEmbryoCode();
-            BigDecimal productNum = result.getProductNum();
-            if (embryoCode != null && productNum != null && productNum.intValue() > 0) {
-                outputMap.merge(embryoCode, productNum.intValue(), Integer::sum);
+        for (MachineAllocationResult allocation : dayAllocations) {
+            for (TaskAllocation taskAlloc : allocation.getTaskAllocations()) {
+                String materialCode = taskAlloc.getMaterialCode();
+                Integer qty = taskAlloc.getQuantity();
+                if (materialCode != null && qty != null && qty > 0) {
+                    outputMap.merge(materialCode, qty, Integer::sum);
+                }
             }
         }
         return outputMap;
