@@ -4,8 +4,8 @@ import com.zlt.aps.cx.entity.CxMachineStructureCapacity;
 import com.zlt.aps.cx.entity.config.CxParamConfig;
 import com.zlt.aps.cx.entity.config.CxShiftConfig;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
-import com.zlt.aps.cx.service.impl.CoreScheduleAlgorithmServiceImpl;
-import com.zlt.aps.cx.service.impl.CoreScheduleAlgorithmServiceImpl.DayFlagInfo;
+
+import com.zlt.aps.cx.service.engine.ScheduleDayTypeHelper.DayFlagInfo;
 import com.zlt.aps.cx.vo.ScheduleContextVo;
 import com.zlt.aps.mp.api.domain.entity.MdmMoldingMachine;
 import com.zlt.aps.mp.api.domain.entity.MdmStructureLhRatio;
@@ -44,7 +44,6 @@ public class ContinueTaskProcessor {
 
     private final BalancingService balancingService;
     private final ProductionCalculator productionCalculator;
-    private final CoreScheduleAlgorithmServiceImpl coreScheduleAlgorithmService;
     private final ScheduleDayTypeHelper scheduleDayTypeHelper;
 
     /** 胎胚库容上限比例 */

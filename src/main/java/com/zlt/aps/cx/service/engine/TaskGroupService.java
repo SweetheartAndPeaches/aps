@@ -10,7 +10,7 @@ import com.zlt.aps.mp.api.domain.entity.MdmMaterialInfo;
 import com.zlt.aps.mp.api.domain.entity.MdmMonthSurplus;
 import com.zlt.aps.cx.service.engine.ProductionCalculator;
 import com.zlt.aps.cx.service.engine.ScheduleDayTypeHelper;
-import com.zlt.aps.cx.service.impl.CoreScheduleAlgorithmServiceImpl.DayFlagInfo;
+import com.zlt.aps.cx.service.engine.ScheduleDayTypeHelper.DayFlagInfo;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

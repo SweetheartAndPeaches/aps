@@ -6,7 +6,6 @@ import com.zlt.aps.cx.entity.config.CxShiftConfig;
 import com.zlt.aps.cx.entity.schedule.CxScheduleDetail;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
-import com.zlt.aps.cx.mapper.MdmWorkCalendarMapper;
 import com.zlt.aps.cx.service.engine.*;
 import com.zlt.aps.cx.vo.ScheduleContextVo;
 import com.zlt.aps.mp.api.domain.entity.MdmMaterialInfo;
@@ -16,6 +15,8 @@ import com.zlt.aps.mp.api.domain.entity.MdmWorkCalendar;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 
@@ -53,13 +54,16 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmService {
 
-    private final TaskGroupService taskGroupService;
+    /** taskGroupService 使用 @Lazy 延迟注入，打破循环依赖 */
+    @Autowired
+    @Lazy
+    private TaskGroupService taskGroupService;
     private final ContinueTaskProcessor continueTaskProcessor;
     private final TrialTaskProcessor trialTaskProcessor;
     private final NewTaskProcessor newTaskProcessor;
     private final ShiftScheduleService shiftScheduleService;
     private final ProductionCalculator productionCalculator;
-    private final MdmWorkCalendarMapper workCalendarMapper;
+    private final ScheduleDayTypeHelper scheduleDayTypeHelper;
 
     /** 默认排程天数 */
     private static final int DEFAULT_SCHEDULE_DAYS = 3;
@@ -288,60 +292,11 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
     /**
      * 判断是否为停产日
-     * 从当前日期往前找最近一个有 dayFlag 标识的日期。
-     * 停产标识的那一天有量，只有停产日之后才算停产。
      */
     private boolean isStopProductionDay(ScheduleContextVo context, LocalDate date) {
-        DayFlagInfo flagInfo = findNearestDayFlag(context.getCurrentScheduleDate());
-        if (flagInfo == null || flagInfo.dayFlag == null) {
-            return false;
-        }
-        // 最近的标识是「停」→ 停产标识日之后都是停产日（停产日当天有量，不算停产）
-        if ("0".equals(flagInfo.dayFlag)) {
-            boolean isStopDay = date.isAfter(flagInfo.nearestDate);
-            log.info("日期 {} 最近 dayFlag={}（停），标识日={}，判定为{}",
-                    date, flagInfo.dayFlag, flagInfo.nearestDate, isStopDay ? "停产日" : "正常");
-            return isStopDay;
-        }
-        return false;
+        return scheduleDayTypeHelper.isStopDay(date);
     }
     
-    /**
-     * 从当前排产日期往前找最近一个有 dayFlag 标识的日期
-     *
-     * @param date 当前排产日期
-     * @return 最近标识信息，包含标识日期和标识值（"0"=停，"1"=开）
-     */
-    public DayFlagInfo findNearestDayFlag(LocalDate date) {
-        // 最多往前查 30 天
-        for (int i = 0; i < 30; i++) {
-            LocalDate queryDate = date.minusDays(i);
-            MdmWorkCalendar calendar = workCalendarMapper.selectOne(
-                    new LambdaQueryWrapper<MdmWorkCalendar>()
-                            .eq(MdmWorkCalendar::getProcCode, "CX")
-                            .eq(MdmWorkCalendar::getProductionDate, java.sql.Date.valueOf(queryDate)));
-            if (calendar != null && calendar.getDayFlag() != null) {
-                return new DayFlagInfo(queryDate, calendar.getDayFlag());
-            }
-        }
-        return null;
-    }
-    
-    /**
-     * 最近工作日历标识信息
-     */
-    public class DayFlagInfo {
-        /** 标识日期 */
-        public final LocalDate nearestDate;
-        /** 标识值：0=停，1=开 */
-        public final String dayFlag;
-        
-        public DayFlagInfo(LocalDate nearestDate, String dayFlag) {
-            this.nearestDate = nearestDate;
-            this.dayFlag = dayFlag;
-        }
-    }
-
     /**
      * 单天排产结果
      */

@@ -4,7 +4,6 @@ package com.zlt.aps.cx.service.engine;
 import com.zlt.aps.cx.api.domain.entity.CxStock;
 import com.zlt.aps.cx.entity.config.CxShiftConfig;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
-import com.zlt.aps.cx.service.impl.CoreScheduleAlgorithmServiceImpl;
 import com.zlt.aps.cx.service.engine.ScheduleDayTypeHelper;
 import com.zlt.aps.cx.vo.ScheduleContextVo;
 
@@ -67,7 +66,6 @@ public class ProductionCalculator {
     /** 默认日产能 */
     public static final int DEFAULT_DAILY_CAPACITY = 1200;
 
-    private final CoreScheduleAlgorithmServiceImpl coreScheduleAlgorithmService;
     private final ScheduleDayTypeHelper scheduleDayTypeHelper;
 
 
@@ -877,7 +875,7 @@ public class ProductionCalculator {
 
         // Step 3: 判断是否停产日（根据 dayFlag：停产标识日之后才算停产）
         // 停产标识的那一天本身有量，只有停产日之后才算停产
-        CoreScheduleAlgorithmServiceImpl.DayFlagInfo flagInfo =
+        ScheduleDayTypeHelper.DayFlagInfo flagInfo =
                 scheduleDayTypeHelper.getDayFlagInfo(scheduleDate);
         if (flagInfo != null && "0".equals(flagInfo.dayFlag) && scheduleDate.isAfter(flagInfo.nearestDate)) {
             // 停产日之后：plannedProduction = 0，使用停产收尾规则
