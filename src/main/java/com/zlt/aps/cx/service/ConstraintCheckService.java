@@ -1,7 +1,7 @@
 package com.zlt.aps.cx.service;
 
 
-import com.zlt.aps.cx.entity.CxStock;
+import com.zlt.aps.cx.api.domain.entity.CxStock;
 import com.zlt.aps.cx.entity.CxTreadParkingConfig;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
 import com.zlt.aps.mp.api.domain.entity.MdmMaterialInfo;

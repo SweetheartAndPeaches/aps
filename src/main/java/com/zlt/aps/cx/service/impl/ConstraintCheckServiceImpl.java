@@ -2,7 +2,7 @@ package com.zlt.aps.cx.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.zlt.aps.cx.entity.CxMachineStructureCapacity;
-import com.zlt.aps.cx.entity.CxStock;
+import com.zlt.aps.cx.api.domain.entity.CxStock;
 import com.zlt.aps.cx.entity.CxTreadParkingConfig;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
 import com.zlt.aps.cx.mapper.*;

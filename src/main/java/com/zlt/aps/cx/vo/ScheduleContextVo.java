@@ -1,6 +1,7 @@
 package com.zlt.aps.cx.vo;
 
 import com.zlt.aps.cx.entity.*;
+import com.zlt.aps.cx.api.domain.entity.CxStock;
 import com.zlt.aps.cx.entity.config.CxKeyProduct;
 import com.zlt.aps.cx.entity.config.CxParamConfig;
 import com.zlt.aps.cx.entity.config.CxShiftConfig;
