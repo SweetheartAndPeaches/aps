@@ -165,15 +165,27 @@ public class BalancingService {
         // 构建 机型_结构 -> 最大硫化机数 的映射
         Map<String, Integer> machineTypeStructureMap = new HashMap<>();
         if (ratios != null) {
+            log.info("结构 {} 配比数据共 {} 条", structureName, ratios.size());
+            int matchCount = 0;
             for (MdmStructureLhRatio ratio : ratios) {
                 String key = ratio.getCxMachineTypeCode() + "_" + ratio.getStructureName();
                 if (ratio.getLhMachineMaxQty() != null) {
                     machineTypeStructureMap.put(key, ratio.getLhMachineMaxQty());
+                    // 只记录匹配当前结构的
+                    if (structureName.equals(ratio.getStructureName())) {
+                        log.info("  配比匹配: 机型={}, 结构={}, 硫化机上限={}", 
+                                ratio.getCxMachineTypeCode(), ratio.getStructureName(), ratio.getLhMachineMaxQty());
+                        matchCount++;
+                    }
                 }
             }
+            log.info("结构 {} 找到 {} 条配比配置", structureName, matchCount);
+        } else {
+            log.warn("结构 {} 配比数据为空", structureName);
         }
 
         // 为每台机台获取对应的最大硫化机数
+        int fallbackCount = 0;
         for (MdmMoldingMachine machine : machines) {
             String machineCode = machine.getCxMachineCode();
             String machineType = machine.getCxMachineTypeCode();
@@ -185,14 +197,16 @@ public class BalancingService {
             // 如果找不到，使用机台本身的硫化机上限
             if (maxLh == null) {
                 maxLh = machine.getLhMachineMaxQty() != null ? machine.getLhMachineMaxQty() : 10;
-                log.debug("机台 {} 机型 {} 结构 {} 未找到配比配置，使用机台默认值 {}",
-                        machineCode, machineType, structureName, maxLh);
+                log.info("  机台 {} 机型 {} 未找到配比，使用默认值 {}", machineCode, machineType, maxLh);
+                fallbackCount++;
             }
 
             result.put(machineCode, maxLh);
         }
 
-        log.info("构建机台最大硫化机数映射完成，结构 {}，机台数 {}", structureName, result.size());
+        if (fallbackCount > 0) {
+            log.warn("结构 {} 有 {}/{} 台机台未找到配比配置，使用默认值", structureName, fallbackCount, machines.size());
+        }
         return result;
     }
 

@@ -629,6 +629,8 @@ public class ScheduleServiceImpl implements ScheduleService {
         // 结构硫化配比映射
         Map<String, MdmStructureLhRatio> structureLhRatioMap = buildStructureLhRatioMap();
         context.setStructureLhRatioMap(structureLhRatioMap);
+        // 同时设置列表，供 BalancingService 使用
+        context.setStructureLhRatios(getStructureLhRatios());
         log.info("构建结构硫化配比映射 {} 条", structureLhRatioMap.size());
     }
 
@@ -849,6 +851,18 @@ public class ScheduleServiceImpl implements ScheduleService {
         }
 
         return resultMap;
+    }
+
+    /**
+     * 获取结构硫化配比列表
+     */
+    private List<MdmStructureLhRatio> getStructureLhRatios() {
+        try {
+            return structureLhRatioMapper.selectList(null);
+        } catch (Exception e) {
+            log.error("获取结构硫化配比列表失败", e);
+            return Collections.emptyList();
+        }
     }
 
     // ==================== 私有方法：成型余量计算 ====================
