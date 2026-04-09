@@ -60,21 +60,7 @@ public class ShiftScheduleService {
 
         List<CoreScheduleAlgorithmService.ShiftAllocationResult> results = new ArrayList<>();
 
-        // 调试日志 - 使用ERROR级别确保可见
-        int totalTasks = 0;
-        int totalQty = 0;
-        if (allocations != null) {
-            for (CoreScheduleAlgorithmService.MachineAllocationResult alloc : allocations) {
-                if (alloc.getTaskAllocations() != null) {
-                    totalTasks += alloc.getTaskAllocations().size();
-                    for (CoreScheduleAlgorithmService.TaskAllocation task : alloc.getTaskAllocations()) {
-                        totalQty += task.getQuantity();
-                    }
-                }
-            }
-        }
-        log.error("【DEBUG】班次分配开始，机台分配数: {}, 总任务数: {}, 总排量: {}", 
-                allocations != null ? allocations.size() : 0, totalTasks, totalQty);
+        log.info("班次分配开始，机台分配数: {}", allocations != null ? allocations.size() : 0);
 
         if (dayShifts == null || dayShifts.isEmpty()) {
             log.warn("班次配置为空");
@@ -195,10 +181,6 @@ public class ShiftScheduleService {
             }
         }
 
-        // 调试日志：检查班次分配中间结果
-        log.info("【DEBUG】班次分配 - shiftCodes={}, shiftTotalQty={}, totalAssigned={}", 
-                Arrays.toString(shiftCodes), shiftTotalQty, totalAssigned);
-
         // 检查是否超过机台最大产能
         if (maxDailyCapacity != null && totalAssigned > maxDailyCapacity) {
             log.warn("班次分配超出机台最大产能: 分配量={}, 最大产能={}", 
@@ -238,8 +220,6 @@ public class ShiftScheduleService {
         for (int ratio : adjustedRatio) {
             totalRatio += ratio;
         }
-        log.info("【DEBUG】花纹配置分配: taskQty={}, waveRatio={}, adjustedRatio={}, totalRatio={}", 
-                taskQty, Arrays.toString(waveRatio), Arrays.toString(adjustedRatio), totalRatio);
 
         for (int i = 0; i < shiftCodes.length; i++) {
             int shiftQty = taskQty * adjustedRatio[i] / totalRatio;
