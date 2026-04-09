@@ -163,13 +163,41 @@ public class NewTaskProcessor {
                 }
             }
 
-            // 记录试制机台（用于均衡时标记为已占用，不参与均衡）
-            // 量试任务在均衡后单独分配到试制机台
+            // 记录试制机台及其量试约束
+            // 试制任务本身忽略不计（数量少），不加入 machineHistoryMap
+            // 量试任务（isProductionTrial）当新增任务，需合并到 machineHistoryMap
+            // 区分方式：试制任务由 TrialTaskProcessor 创建，量试任务在 newTasks 中存在同物料
+
+            // 先建立 newTasks 中的物料集合（量试物料）
+            Set<String> volumeTrialMaterials = new HashSet<>();
+            for (CoreScheduleAlgorithmService.DailyEmbryoTask t : tasks) {
+                if (Boolean.TRUE.equals(t.getIsProductionTrial()) && t.getMaterialCode() != null) {
+                    volumeTrialMaterials.add(t.getMaterialCode());
+                }
+            }
+
             if (!CollectionUtils.isEmpty(trialAllocations)) {
                 for (CoreScheduleAlgorithmService.MachineAllocationResult trialAlloc : trialAllocations) {
                     String machineCode = trialAlloc.getMachineCode();
+
+                    Set<String> embryos = new HashSet<>();
+                    if (trialAlloc.getTaskAllocations() != null) {
+                        for (CoreScheduleAlgorithmService.TaskAllocation trialTask : trialAlloc.getTaskAllocations()) {
+                            if (structureName.equals(trialTask.getStructureName())
+                                    && volumeTrialMaterials.contains(trialTask.getMaterialCode())) {
+                                // 量试任务的物料才加入 machineHistoryMap（试制任务忽略不计）
+                                embryos.add(trialTask.getMaterialCode());
+                            }
+                        }
+                    }
+
                     // 试制机台标记为已占用（均衡时不会分配其他任务过去）
                     usedMachineCodes.add(machineCode);
+
+                    // 量试任务的物料加入 machineHistoryMap（试制任务本身忽略不计不加入）
+                    if (!embryos.isEmpty()) {
+                        machineHistoryMap.put(machineCode, embryos);
+                    }
                 }
             }
 
