@@ -52,7 +52,7 @@ public class TaskGroupService {
     public static class TaskGroupResult {
         /** 续作任务：当前机台在产的胎胚 */
         private List<CoreScheduleAlgorithmService.DailyEmbryoTask> continueTasks = new ArrayList<>();
-        /** 试制/量试任务：施工阶段为 01-试制 或 02-量试的任务 */
+        /** 试制任务：试制/量试任务 */
         private List<CoreScheduleAlgorithmService.DailyEmbryoTask> trialTasks = new ArrayList<>();
         /** 新增任务：非续作、非试制的常规任务 */
         private List<CoreScheduleAlgorithmService.DailyEmbryoTask> newTasks = new ArrayList<>();
@@ -64,8 +64,8 @@ public class TaskGroupService {
      * <p>将硫化任务分为三类：
      * <ul>
      *   <li>续作任务：当前机台在产的胎胚，需要继续生产</li>
-     *   <li>试制/量试任务：施工阶段为 01-试制 或 02-量试的任务</li>
-     *   <li>新增任务：非续作、非试制/量试的常规任务</li>
+     *   <li>试制任务：试制/量试任务</li>
+     *   <li>新增任务：非续作、非试制的常规任务</li>
      * </ul>
      *
      * @param context                   排程上下文
@@ -125,9 +125,10 @@ public class TaskGroupService {
             List<String> continueMachineCodes = findContinueMachines(materialCode, embryoCode, machineOnlineEmbryoMap);
             boolean isContinueTask = !continueMachineCodes.isEmpty();
 
-            // 2. 试制/量试任务：根据施工阶段判断
+            // 2. 试制任务：根据施工阶段判断
             // constructionStage: 01-试制, 02-量试, 03-正式
-            // 01-试制、02-量试 → 都归入试制任务列表
+            // 01-试制 → 试制任务
+            // 02-量试 → 量试任务（有独立标识，但归入新增任务处理）
             String constructionStage = lhResult.getConstructionStage();
             boolean isTrialTask = "01".equals(constructionStage);
             boolean isProductionTrial = "02".equals(constructionStage);
@@ -145,15 +146,14 @@ public class TaskGroupService {
             // 分组
             if (isContinueTask) {
                 result.getContinueTasks().add(task);
-            } else if (isTrialTask || isProductionTrial) {
-                // 试制(01) 和量试(02) 都归入试制任务
+            } else if (isTrialTask) {
                 result.getTrialTasks().add(task);
             } else {
                 result.getNewTasks().add(task);
             }
         }
 
-        log.info("任务分组完成：硫化记录{}条，跳过(embryoCode为null):{}，跳过(task为null):{}，续作:{}，试制/量试:{}，新增:{}",
+        log.info("任务分组完成：硫化记录{}条，跳过(embryoCode为null):{}，跳过(task为null):{}，续作:{}，试制:{}，新增:{}",
                 lhScheduleResults.size(), skippedNullEmbryo, skippedNullTask,
                 result.getContinueTasks().size(), result.getTrialTasks().size(), result.getNewTasks().size());
 
