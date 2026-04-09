@@ -179,12 +179,9 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         log.info("续作任务处理完成，机台分配数: {}", continueAllocations.size());
 
         // ==================== 第三步：S5.3 处理试制任务（独立处理） ====================
-        // 获取未被续作任务占用的机台
-        List<MdmMoldingMachine> availableMachinesForTrial = getAvailableMachinesForTrial(
-                context.getAvailableMachines(), continueAllocations);
-
+        // 试制任务可在任意机台上执行（包括续作占用的机台）
         List<MachineAllocationResult> trialAllocations = trialTaskProcessor.processTrialTasks(
-                taskGroup.getTrialTasks(), context, scheduleDate, dayShifts, availableMachinesForTrial);
+                taskGroup.getTrialTasks(), context, scheduleDate, dayShifts, context.getAvailableMachines());
         log.info("试制任务处理完成，机台分配数: {}", trialAllocations.size());
 
         // ==================== 第四步：S5.3 处理新增任务（合并续作+新增，重新均衡） ====================
@@ -218,29 +215,6 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
         log.info("========== 第 {} 天排程完成，排程结果数: {} ==========\n", day, results.size());
         return results;
-    }
-
-    /**
-     * 获取未被续作任务占用的机台列表（用于试制任务）
-     */
-    private List<MdmMoldingMachine> getAvailableMachinesForTrial(
-            List<MdmMoldingMachine> allMachines,
-            List<MachineAllocationResult> continueAllocations) {
-
-        if (CollectionUtils.isEmpty(allMachines)) {
-            return new ArrayList<>();
-        }
-
-        // 收集已被续作任务占用的机台编码
-        Set<String> occupiedMachineCodes = continueAllocations.stream()
-                .map(MachineAllocationResult::getMachineCode)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
-
-        // 过滤出未被占用的机台
-        return allMachines.stream()
-                .filter(m -> !occupiedMachineCodes.contains(m.getCxMachineCode()))
-                .collect(Collectors.toList());
     }
 
     /**
