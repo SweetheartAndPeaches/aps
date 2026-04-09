@@ -407,8 +407,8 @@ public class ContinueTaskProcessor {
             LocalDate scheduleDate,
             boolean isOpeningDay) {
 
-        // 非正常生产日不做常规划排产量计算（开停产日已在 handleOpeningClosingDay 中处理）
-        if (!scheduleDayTypeHelper.isNormalProductionDay(scheduleDate)) {
+        // 停产日已在 handleOpeningClosingDay 中设置 plannedProduction=0，跳过此处
+        if (scheduleDayTypeHelper.isStopDay(scheduleDate)) {
             return;
         }
 
@@ -478,12 +478,12 @@ public class ContinueTaskProcessor {
                 task.setPlannedProduction(0);
                 log.debug("停产日（已停产），不安排：materialCode={}", task.getMaterialCode());
             }
-            // 停产标识日当天：有量（库存必须为0），直接按硫化需要安排（不做整车取整）
-            // plannedProduction 保持原值不做修改
+            // 停产标识日当天：有量，plannedProduction 保持原值
+            // 整车取整由 calculatePlannedProduction 完成
         } else if ("1".equals(flagInfo.dayFlag)) {
             // 最近标识是「开」→ 正常按硫化计划安排，取整到整车
             task.setIsOpeningDayTask(true);
-            // 不需要额外限制计划量，直接按硫化计划的排量安排（已在 calculatePlannedProduction 中计算）
+            // 开产日有量但不多，整车取整由 calculatePlannedProduction 完成
             log.debug("开产日，正常按硫化计划安排：materialCode={}", task.getMaterialCode());
         }
         // 其他情况（dayFlag 未知）按正常处理，不做干预
