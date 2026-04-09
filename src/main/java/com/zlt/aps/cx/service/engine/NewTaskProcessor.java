@@ -196,8 +196,9 @@ public class NewTaskProcessor {
                     CoreScheduleAlgorithmService.TaskAllocation taskAlloc =
                             new CoreScheduleAlgorithmService.TaskAllocation();
                     taskAlloc.setEmbryoCode(task.getMaterialCode());
-                    taskAlloc.setSapCode(task.getRelatedMaterialCode());
-                    taskAlloc.setMaterialName(task.getMaterialName());
+                    taskAlloc.setMaterialCode(task.getRelatedMaterialCode());
+                    taskAlloc.setMaterialDesc(task.getMaterialDesc());
+                    taskAlloc.setMainMaterialDesc(task.getMainMaterialDesc());
                     taskAlloc.setStructureName(task.getStructureName());
                     taskAlloc.setQuantity(task.getPlannedProduction() != null ? task.getPlannedProduction() : 0);
                     taskAlloc.setPriority(task.getPriority());
@@ -239,8 +240,9 @@ public class NewTaskProcessor {
                 CoreScheduleAlgorithmService.TaskAllocation taskAlloc =
                         new CoreScheduleAlgorithmService.TaskAllocation();
                 taskAlloc.setEmbryoCode(fixedTask.getMaterialCode());
-                taskAlloc.setSapCode(fixedTask.getRelatedMaterialCode());
-                taskAlloc.setMaterialName(fixedTask.getMaterialName());
+                taskAlloc.setMaterialCode(fixedTask.getRelatedMaterialCode());
+                taskAlloc.setMaterialDesc(fixedTask.getMaterialDesc());
+                taskAlloc.setMainMaterialDesc(fixedTask.getMainMaterialDesc());
                 taskAlloc.setStructureName(fixedTask.getStructureName());
                 taskAlloc.setQuantity(fixedTask.getPlannedProduction() != null ? fixedTask.getPlannedProduction() : 0);
                 taskAlloc.setPriority(fixedTask.getPriority());

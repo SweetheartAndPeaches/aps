@@ -184,10 +184,12 @@ public interface CoreScheduleAlgorithmService {
     class DailyEmbryoTask {
         /** 胎胚编码（注意：此字段名为 materialCode 但实际存储的是 embryoCode） */
         private String materialCode;
-        /** 物料编码（真正的物料编码，用于判断主销产品） */
+        /** 物料编号（真正的物料编码，用于判断主销产品） */
         private String relatedMaterialCode;
-        /** 物料名称 */
-        private String materialName;
+        /** 物料描述 */
+        private String materialDesc;
+        /** 主物料描述（胎胚描述） */
+        private String mainMaterialDesc;
         /** 结构名称 */
         private String structureName;
         /** 日需求量 */
@@ -311,10 +313,12 @@ public interface CoreScheduleAlgorithmService {
     class TaskAllocation {
         /** 胎胚编码（成型生产的胎胚） */
         private String embryoCode;
-        /** SAP物料编码（成品物料编码，用于关联硫化需求） */
-        private String sapCode;
-        /** 物料名称（兼容旧字段，实际为胎胚名称） */
-        private String materialName;
+        /** 物料编号（成品物料编码，用于关联硫化需求） */
+        private String materialCode;
+        /** 物料描述 */
+        private String materialDesc;
+        /** 主物料描述（胎胚描述） */
+        private String mainMaterialDesc;
         /** 结构名称 */
         private String structureName;
         /** 计划数量 */

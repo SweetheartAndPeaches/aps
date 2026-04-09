@@ -324,8 +324,9 @@ public class TrialTaskProcessor {
         CoreScheduleAlgorithmService.TaskAllocation taskAllocation =
                 new CoreScheduleAlgorithmService.TaskAllocation();
         taskAllocation.setEmbryoCode(task.getMaterialCode());
-        taskAllocation.setSapCode(task.getRelatedMaterialCode());
-        taskAllocation.setMaterialName(task.getMaterialName());
+        taskAllocation.setMaterialCode(task.getRelatedMaterialCode());
+        taskAllocation.setMaterialDesc(task.getMaterialDesc());
+        taskAllocation.setMainMaterialDesc(task.getMainMaterialDesc());
         taskAllocation.setStructureName(task.getStructureName());
         taskAllocation.setQuantity(task.getPlannedProduction());
         taskAllocation.setPriority(task.getPriority());

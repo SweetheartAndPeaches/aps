@@ -228,8 +228,9 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 // 重建 DailyEmbryoTask 传给 scheduleTaskToShifts
                 CoreScheduleAlgorithmService.DailyEmbryoTask task = new CoreScheduleAlgorithmService.DailyEmbryoTask();
                 task.setMaterialCode(taskAlloc.getEmbryoCode());
-                task.setRelatedMaterialCode(taskAlloc.getSapCode());
-                task.setMaterialName(taskAlloc.getMaterialName());
+                task.setRelatedMaterialCode(taskAlloc.getMaterialCode());
+                task.setMaterialDesc(taskAlloc.getMaterialDesc());
+                task.setMainMaterialDesc(taskAlloc.getMainMaterialDesc());
                 task.setStructureName(taskAlloc.getStructureName());
                 task.setPlannedProduction(taskAlloc.getQuantity());
                 task.setIsTrialTask(taskAlloc.getIsTrialTask());
@@ -332,7 +333,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
      * <ul>
      *   <li>machineCode - 成型机台</li>
      *   <li>embryoCode - 胎胚编码（成型生产的半成品）</li>
-     *   <li>sapCode - SAP物料编码（成品物料，对应硫化需求）</li>
+     *   <li>materialCode - 物料编号（成品物料编码，对应硫化需求）</li>
      * </ul>
      * 同一台机台生产同一胎胚，如果对应不同SAP物料，会拆成多条记录。
      *
@@ -358,7 +359,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         }
 
         // ==================== 按 机台+胎胚+SAP物料 三维维度汇总班次排量 ====================
-        // key: machineCode + "|" + embryoCode + "|" + sapCode
+        // key: machineCode + "|" + embryoCode + "|" + materialCode
         // value: classField → quantity
         Map<String, Map<String, Integer>> taskClassQtyMap = new LinkedHashMap<>();
         // key → 总排产量
@@ -373,7 +374,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             for (ShiftScheduleService.ShiftProductionResult spr : dayResult.getShiftProductionResults()) {
                 String machineCode = spr.getMachineCode();
                 String embryoCode = spr.getEmbryoCode();
-                String sapCode = spr.getSapCode() != null ? spr.getSapCode() : "";
+                String materialCode = spr.getMaterialCode() != null ? spr.getMaterialCode() : "";
                 String shiftCode = spr.getShiftCode();
                 String shiftKey = shiftCode + "_" + day;
                 String classField = shiftClassFieldMap.get(shiftKey);
@@ -383,7 +384,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                     continue;
                 }
 
-                String taskKey = machineCode + "|" + embryoCode + "|" + sapCode;
+                String taskKey = machineCode + "|" + embryoCode + "|" + materialCode;
                 taskClassQtyMap.computeIfAbsent(taskKey, k -> new LinkedHashMap<>())
                         .merge(classField, spr.getQuantity(), Integer::sum);
                 taskTotalQtyMap.merge(taskKey, spr.getQuantity(), Integer::sum);
@@ -399,8 +400,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 if (allocation.getTaskAllocations() != null) {
                     for (TaskAllocation taskAlloc : allocation.getTaskAllocations()) {
                         String embryoCode = taskAlloc.getEmbryoCode();
-                        String sapCode = taskAlloc.getSapCode() != null ? taskAlloc.getSapCode() : "";
-                        String taskKey = allocation.getMachineCode() + "|" + embryoCode + "|" + sapCode;
+                        String materialCode = taskAlloc.getMaterialCode() != null ? taskAlloc.getMaterialCode() : "";
+                        String taskKey = allocation.getMachineCode() + "|" + embryoCode + "|" + materialCode;
                         if (taskAlloc.getLhId() != null) {
                             taskLhIdMap.putIfAbsent(taskKey, taskAlloc.getLhId());
                         }
@@ -418,14 +419,14 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             }
         }
 
-        // 物料编码 → MdmMaterialInfo（按 materialCode 即 SAP 物料编码索引）
-        Map<String, MdmMaterialInfo> materialBySapMap = new HashMap<>();
+        // 物料编号 → MdmMaterialInfo（按 materialCode 即物料编号索引）
+        Map<String, MdmMaterialInfo> materialByCodeMap = new HashMap<>();
         // 胎胚编码 → MdmMaterialInfo（按 embryoCode 索引，同一胎胚可能有多个物料取第一个）
         Map<String, MdmMaterialInfo> materialByEmbryoMap = new HashMap<>();
         if (context.getMaterials() != null) {
             for (MdmMaterialInfo material : context.getMaterials()) {
                 if (material.getMaterialCode() != null) {
-                    materialBySapMap.putIfAbsent(material.getMaterialCode(), material);
+                    materialByCodeMap.putIfAbsent(material.getMaterialCode(), material);
                 }
                 if (material.getEmbryoCode() != null) {
                     materialByEmbryoMap.putIfAbsent(material.getEmbryoCode(), material);
@@ -435,15 +436,15 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
         // 硫化任务ID → LhScheduleResult
         Map<Long, LhScheduleResult> lhByIdMap = new HashMap<>();
-        // SAP物料编码 → 对应硫化任务列表
-        Map<String, List<LhScheduleResult>> sapToLhMap = new HashMap<>();
+        // 物料编号 → 对应硫化任务列表
+        Map<String, List<LhScheduleResult>> materialCodeToLhMap = new HashMap<>();
         if (context.getLhScheduleResults() != null) {
             for (LhScheduleResult lh : context.getLhScheduleResults()) {
                 if (lh.getId() != null) {
                     lhByIdMap.put(lh.getId(), lh);
                 }
                 if (lh.getMaterialCode() != null) {
-                    sapToLhMap.computeIfAbsent(lh.getMaterialCode(), k -> new ArrayList<>()).add(lh);
+                    materialCodeToLhMap.computeIfAbsent(lh.getMaterialCode(), k -> new ArrayList<>()).add(lh);
                 }
             }
         }
@@ -459,7 +460,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             String[] parts = taskKey.split("\\|", 3);
             String machineCode = parts[0];
             String embryoCode = parts.length > 1 ? parts[1] : null;
-            String sapCode = parts.length > 2 && !parts[2].isEmpty() ? parts[2] : null;
+            String materialCode = parts.length > 2 && !parts[2].isEmpty() ? parts[2] : null;
             String structureName = taskStructureMap.get(taskKey);
 
             CxScheduleResult result = new CxScheduleResult();
@@ -480,7 +481,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 result.setEmbryoCode(embryoCode);
                 MdmMaterialInfo materialByEmbryo = materialByEmbryoMap.get(embryoCode);
                 if (materialByEmbryo != null) {
-                    result.setEmbryoDesc(materialByEmbryo.getEmbryoDesc());
+                    result.setMainMaterialDesc(materialByEmbryo.getEmbryoDesc());
                     if (materialByEmbryo.getProSize() != null) {
                         try {
                             result.setSpecDimension(new BigDecimal(materialByEmbryo.getProSize()));
@@ -494,16 +495,16 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 }
             }
 
-            // ---- SAP物料信息（从 sapCode 索引获取） ----
-            if (sapCode != null) {
-                result.setSapCode(sapCode);
-                MdmMaterialInfo materialBySap = materialBySapMap.get(sapCode);
-                if (materialBySap != null) {
-                    result.setSpecDesc(materialBySap.getMaterialDesc());
-                    result.setBomDataVersion(materialBySap.getEmbryoNo());
-                    // structureName 优先用 SAP 物料的
-                    if (materialBySap.getStructureName() != null) {
-                        result.setStructureName(materialBySap.getStructureName());
+            // ---- 物料信息（从 materialCode 索引获取） ----
+            if (materialCode != null) {
+                result.setMaterialCode(materialCode);
+                MdmMaterialInfo materialByCode = materialByCodeMap.get(materialCode);
+                if (materialByCode != null) {
+                    result.setMaterialDesc(materialByCode.getMaterialDesc());
+                    result.setBomDataVersion(materialByCode.getEmbryoNo());
+                    // structureName 优先用物料的
+                    if (materialByCode.getStructureName() != null) {
+                        result.setStructureName(materialByCode.getStructureName());
                     }
                 }
             }
@@ -520,14 +521,14 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 }
             }
 
-            // ---- 硫化信息（按 lhId 或 sapCode 查找 LhScheduleResult） ----
+            // ---- 硫化信息（按 lhId 或 materialCode 查找 LhScheduleResult） ----
             LhScheduleResult primaryLh = null;
             if (lhId != null) {
                 primaryLh = lhByIdMap.get(lhId);
             }
-            // 回退：按 sapCode 查找
-            if (primaryLh == null && sapCode != null) {
-                List<LhScheduleResult> relatedLhResults = sapToLhMap.get(sapCode);
+            // 回退：按 materialCode 查找
+            if (primaryLh == null && materialCode != null) {
+                List<LhScheduleResult> relatedLhResults = materialCodeToLhMap.get(materialCode);
                 if (relatedLhResults != null && !relatedLhResults.isEmpty()) {
                     primaryLh = relatedLhResults.get(0);
                 }
@@ -551,8 +552,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 // 硫化余量：从 monthSurplusMap 获取
                 Map<String, MdmMonthSurplus> monthSurplusMap = context.getMonthSurplusMap();
                 if (monthSurplusMap != null) {
-                    // 优先按 SAP物料编码 查找
-                    String surplusKey = sapCode != null ? sapCode : embryoCode;
+                    // 优先按物料编号查找
+                    String surplusKey = materialCode != null ? materialCode : embryoCode;
                     MdmMonthSurplus surplus = monthSurplusMap.get(surplusKey);
                     if (surplus != null && surplus.getPlanSurplusQty() != null) {
                         result.setLhRemainQty(surplus.getPlanSurplusQty());

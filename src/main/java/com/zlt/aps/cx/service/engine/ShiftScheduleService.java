@@ -109,7 +109,7 @@ public class ShiftScheduleService {
                 if (keyProductCodes != null && !keyProductCodes.isEmpty() && dayShifts.size() > 1) {
                     int keyProductQty = 0;
                     for (CoreScheduleAlgorithmService.TaskAllocation task : allocation.getTaskAllocations()) {
-                        if (keyProductCodes.contains(task.getSapCode())) {
+                        if (keyProductCodes.contains(task.getMaterialCode())) {
                             keyProductQty += task.getQuantity();
                         }
                     }
@@ -466,8 +466,9 @@ public class ShiftScheduleService {
             result.setShiftCode(shiftConfig.getShiftCode());
             result.setShiftName(shiftConfig.getShiftName());
             result.setEmbryoCode(task.getMaterialCode());
-            result.setSapCode(task.getRelatedMaterialCode());
-            result.setMaterialName(task.getMaterialName());
+            result.setMaterialCode(task.getRelatedMaterialCode());
+            result.setMaterialDesc(task.getMaterialDesc());
+            result.setMainMaterialDesc(task.getMainMaterialDesc());
             result.setStructureName(task.getStructureName());
             result.setQuantity(batchQty);
             result.setPlanStartTime(startTime);
@@ -925,9 +926,13 @@ public class ShiftScheduleService {
         private String shiftName;
         /** 胎胚编码（成型生产的胎胚） */
         private String embryoCode;
-        /** SAP物料编码（成品物料编码，用于关联硫化需求） */
-        private String sapCode;
-        private String materialName;
+        /** 物料编号（成品物料编码，用于关联硫化需求） */
+        private String materialCode;
+        /** 物料描述 */
+        private String materialDesc;
+        /** 主物料描述（胎胚描述） */
+        private String mainMaterialDesc;
+        /** 结构名称 */
         private String structureName;
         private int quantity;
         private LocalDateTime planStartTime;

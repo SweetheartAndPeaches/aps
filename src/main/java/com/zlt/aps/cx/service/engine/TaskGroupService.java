@@ -405,12 +405,14 @@ public class TaskGroupService {
         task.setCurrentStock(currentStock);
 
         if (material != null) {
-            task.setMaterialName(material.getMaterialDesc());
+            task.setMaterialDesc(material.getMaterialDesc());
+            task.setMainMaterialDesc(material.getEmbryoDesc());
             task.setStructureName(material.getStructureName());
             // 设置关联的物料编码（用于判断主销产品）
             task.setRelatedMaterialCode(material.getMaterialCode());
         } else {
-            task.setMaterialName(embryoCode);
+            task.setMaterialDesc(embryoCode);
+            task.setMainMaterialDesc(embryoCode);
             task.setStructureName(structureName);
         }
 

@@ -2,6 +2,7 @@ package com.zlt.aps.cx.entity.schedule;
 
 import com.baomidou.mybatisplus.annotation.*;
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.ruoyi.common.core.annotation.Excel;
 import com.zlt.aps.common.core.domain.ApsBaseEntity;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
@@ -83,21 +84,32 @@ public class CxScheduleResult extends ApsBaseEntity {
     @TableField("LH_MACHINE_QTY")
     private BigDecimal lhMachineQty;
 
-    @ApiModelProperty(value = "物料编码")
-    @TableField("SAP_CODE")
-    private String sapCode;
+    /**
+     * 物料编号
+     */
+    @Excel(name = "ui.data.column.lhScheduleResult.materialCode")
+    @ApiModelProperty(value = "物料编号", name = "materialCode")
+    @TableField(value = "MATERIAL_CODE")
+    private String materialCode;
 
-    @ApiModelProperty(value = "物料描述")
-    @TableField("SPEC_DESC")
-    private String specDesc;
+   /**
+     * 物料描述
+     */
+    @Excel(name = "ui.data.column.lhScheduleResult.materialDesc")
+    @ApiModelProperty(value = "物料描述", name = "materialDesc")
+    @TableField(value = "MATERIAL_DESC")
+    private String materialDesc;
 
     @ApiModelProperty(value = "胎胚代码")
     @TableField("EMBRYO_CODE")
     private String embryoCode;
-
-    @ApiModelProperty(value = "胎胚描述")
-    @TableField("EMBRYO_DESC")
-    private String embryoDesc;
+   /**
+     * 主物料(胎胚描述)
+     */
+    @Excel(name = "ui.data.column.lhScheduleResult.mainMaterialDesc")
+    @ApiModelProperty(value = "主物料(胎胚描述)", name = "mainMaterialDesc")
+    @TableField(value = "MAIN_MATERIAL_DESC")
+    private String mainMaterialDesc;
 
     @ApiModelProperty(value = "胎胚寸口")
     @TableField("SPEC_DIMENSION")
