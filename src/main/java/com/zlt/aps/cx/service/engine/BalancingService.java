@@ -2,9 +2,9 @@ package com.zlt.aps.cx.service.engine;
 
 import com.zlt.aps.cx.entity.config.CxParamConfig;
 import com.zlt.aps.cx.vo.ScheduleContextVo;
-import com.zlt.aps.mdm.api.domain.entity.MdmMoldingMachine;
-import com.zlt.aps.mdm.api.domain.entity.MdmStructureLhRatio;
-import com.zlt.aps.mdm.api.domain.entity.MpCxCapacityConfiguration;
+import com.zlt.aps.mp.api.domain.entity.MdmMoldingMachine;
+import com.zlt.aps.mp.api.domain.entity.MdmStructureLhRatio;
+import com.zlt.aps.mp.api.domain.entity.MpCxCapacityConfiguration;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

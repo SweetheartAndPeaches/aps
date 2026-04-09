@@ -1,7 +1,7 @@
 package com.zlt.aps.cx.service.impl.validation;
 
 import com.zlt.aps.cx.vo.ScheduleContextVo;
-import com.zlt.aps.mdm.api.domain.entity.MdmMoldingMachine;
+import com.zlt.aps.mp.api.domain.entity.MdmMoldingMachine;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 

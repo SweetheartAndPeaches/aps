@@ -11,7 +11,7 @@ import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
 import com.zlt.aps.cx.mapper.*;
 import com.zlt.aps.cx.service.HolidayScheduleService;
 import com.zlt.aps.cx.vo.ScheduleContextVo;
-import com.zlt.aps.mdm.api.domain.entity.MdmWorkCalendar;
+import com.zlt.aps.mp.api.domain.entity.MdmWorkCalendar;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
