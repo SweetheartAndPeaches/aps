@@ -316,7 +316,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                     allocation.getTaskAllocations() != null ? allocation.getTaskAllocations().size() : 0);
             
             CxScheduleResult result = new CxScheduleResult();
-            result.setScheduleDate(scheduleDate.atStartOfDay());
+            result.setScheduleDate(java.sql.Timestamp.valueOf(scheduleDate.atStartOfDay()));
             result.setCxMachineCode(allocation.getMachineCode());
             result.setCxMachineType(allocation.getMachineType());
             result.setProductNum(new BigDecimal(allocation.getUsedCapacity()));

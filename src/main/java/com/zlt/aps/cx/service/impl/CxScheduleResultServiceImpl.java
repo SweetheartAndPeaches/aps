@@ -252,7 +252,8 @@ public class CxScheduleResultServiceImpl extends ServiceImpl<CxScheduleResultMap
         ScheduleResultVo dto = new ScheduleResultVo();
         BeanUtils.copyProperties(entity, dto);
         if (entity.getScheduleDate() != null) {
-            dto.setScheduleDate(entity.getScheduleDate().toLocalDate());
+            dto.setScheduleDate(entity.getScheduleDate().toInstant()
+                    .atZone(java.time.ZoneId.systemDefault()).toLocalDate());
         }
         return dto;
     }
