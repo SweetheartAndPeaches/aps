@@ -90,13 +90,6 @@ public class TaskGroupService {
         }
         log.info("任务分组开始：共 {} 条硫化记录", lhScheduleResults.size());
 
-        // 调试：打印前3条记录的详情
-        for (int i = 0; i < Math.min(3, lhScheduleResults.size()); i++) {
-            LhScheduleResult r = lhScheduleResults.get(i);
-            log.debug("硫化记录{}: embryoCode={}, materialCode={}, constructionStage={}",
-                    i, r.getEmbryoCode(), r.getMaterialCode(), r.getConstructionStage());
-        }
-
         // 构建基础映射
         Map<String, MdmMaterialInfo> materialMap = buildMaterialMap(context);
         Map<String, CxStock> stockMap = buildStockMap(context);
@@ -294,11 +287,10 @@ public class TaskGroupService {
                 && context.getMainProductCodes().contains(relatedMaterialCode));
 
         // 硫化机台数和模数
-        CxStock stock = stockMap.get(embryoCode);
-        if (stock != null) {
-            task.setVulcanizeMachineCount(stock.getVulcanizeMachineCount());
-            task.setVulcanizeMoldCount(stock.getVulcanizeMoldCount());
-        }
+        // 一条LhScheduleResult = 一台硫化机，机台数直接为1
+        // 模数取硫化任务的 mouldQty
+        task.setVulcanizeMachineCount(1);
+        task.setVulcanizeMoldCount(lhResult.getMouldQty() != null ? lhResult.getMouldQty() : 1);
 
         // 计算库存可供硫化时长（基于当前库存，成型产出未知不做班次动态推算）
         calculateStockHours(task, lhResult, currentStock, context);
