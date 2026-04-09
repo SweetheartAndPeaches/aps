@@ -125,7 +125,6 @@ public class ContinueTaskProcessor {
                     // S5.3.1 分配胎胚库存
                     allocateEmbryoStock(task, context, scheduleDate);
                     
-
                     // S5.3.2 计算待排产量
                     // isOpeningDay: 使用 DayFlagInfo 判断，最近标识为"开"则是开产日
                     boolean isOpeningDay = isOpeningDayByDayFlag(scheduleDate);
@@ -137,17 +136,6 @@ public class ContinueTaskProcessor {
                      // S5.3.4 开停产特殊处理（根据工作日历 dayFlag 判断）
                     handleOpeningClosingDay(task, context, dayShifts);
                     
-                    // S5.3.5 计算延误量和补做
-                    if (Boolean.TRUE.equals(task.getIsNearEnding()) && !isOpeningDay) {
-                        int catchUpQty = calculateCatchUpQuantity(task, context, scheduleDate);
-                        if (catchUpQty > 0) {
-                            int tripCapacity = getTripCapacity(task.getStructureName(), context);
-                            int catchUpTrips = convertToTrips(catchUpQty, tripCapacity, task.getIsMainProduct());
-                            task.setCatchUpQuantity(catchUpTrips * tripCapacity);
-                            task.setPlannedProduction(task.getPlannedProduction() + task.getCatchUpQuantity());
-                        }
-                    }
-
                     // 分配任务到机台
                     if (task.getPlannedProduction() != null && task.getPlannedProduction() > 0) {
                         allocateTaskToMachine(allocation, task, context);
@@ -579,52 +567,7 @@ public class ContinueTaskProcessor {
             task.setShiftAllocation(endingResult.getShiftAllocation());
         }
     }
-    
-    /**
-     * 计算收尾任务的延误补做量
-     *
-     * <p>收尾任务可能因昨日系统停机等原因导致部分应排量未完成，
-     * 需要今天补做。计算截止到收尾日应累计完成量，与截止昨日实际
-     * 已排量的差值即为补做量。
-     *
-     * @param task         任务
-     * @param context      排程上下文
-     * @param scheduleDate 排程日期
-     * @return 需要补做的量（条），无延误则返回0
-     */
-    public int calculateCatchUpQuantity(
-            CoreScheduleAlgorithmService.DailyEmbryoTask task,
-            ScheduleContextVo context,
-            LocalDate scheduleDate) {
 
-        Integer formingRemainder = task.getEndingSurplusQty();
-        if (formingRemainder == null || formingRemainder <= 0) {
-            return 0;
-        }
-
-        LocalDate endingDate = task.getEndingDate();
-        if (endingDate == null) {
-            return 0;
-        }
-
-        int plannedQty = calculatePlannedQuantityToDate(task.getMaterialCode(), scheduleDate, endingDate, context);
-        int gap = formingRemainder - plannedQty;
-        
-        return gap > 0 ? gap : 0;
-    }
-
-    private int calculatePlannedQuantityToDate(String materialCode, LocalDate startDate, LocalDate endDate, ScheduleContextVo context) {
-        return 0; // TODO
-    }
-
-    private int convertToTrips(int quantity, int tripCapacity, Boolean isMainProduct) {
-        if (quantity <= 0) {
-            return 0;
-        }
-        return Boolean.TRUE.equals(isMainProduct) 
-                ? (int) Math.ceil((double) quantity / tripCapacity) 
-                : quantity / tripCapacity;
-    }
 
     private int getTripCapacity(String structureCode, ScheduleContextVo context) {
         return productionCalculator.getTripCapacity(structureCode, context);
