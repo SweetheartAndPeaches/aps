@@ -128,15 +128,17 @@ public class TaskGroupService {
             // 2. 试制任务：根据施工阶段判断
             // constructionStage: 01-试制, 02-量试, 03-正式
             // 01-试制 → 试制任务
-            // 02-量试 → 归入新增任务（不是试制任务）
+            // 02-量试 → 量试任务（有独立标识，但归入新增任务处理）
             String constructionStage = lhResult.getConstructionStage();
             boolean isTrialTask = "01".equals(constructionStage);
+            boolean isProductionTrial = "02".equals(constructionStage);
 
             // 设置任务属性
             task.setIsContinueTask(isContinueTask);
-            task.setContinueMachineCodes(continueMachineCodes);
             task.setIsTrialTask(isTrialTask);
-            task.setIsFirstTask(!isContinueTask && !isTrialTask);
+            task.setIsProductionTrial(isProductionTrial);
+            task.setContinueMachineCodes(continueMachineCodes);
+            task.setIsFirstTask(!isContinueTask && !isTrialTask && !isProductionTrial);
 
             // 计算收尾相关属性
             calculateEndingInfo(task, context, scheduleDate);

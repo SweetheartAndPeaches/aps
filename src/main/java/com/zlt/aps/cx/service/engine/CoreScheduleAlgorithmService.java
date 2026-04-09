@@ -216,6 +216,8 @@ public interface CoreScheduleAlgorithmService {
         private Boolean isFirstTask;
         /** 是否续作任务 */
         private Boolean isContinueTask;
+        /** 是否量试任务（施工阶段为02-量试） */
+        private Boolean isProductionTrial;
         /** 续作机台列表 */
         private List<String> continueMachineCodes;
         /** 硫化需求量（来自硫化排程） */
