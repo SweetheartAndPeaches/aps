@@ -1,7 +1,6 @@
 package com.zlt.aps.cx.service.engine;
 
 import com.zlt.aps.cx.entity.config.CxShiftConfig;
-import com.zlt.aps.cx.entity.config.CxStructurePriority;
 import com.zlt.aps.cx.service.impl.CoreScheduleAlgorithmServiceImpl;
 import com.zlt.aps.cx.service.engine.ScheduleDayTypeHelper;
 import com.zlt.aps.cx.vo.ScheduleContextVo;
@@ -396,66 +395,20 @@ public class NewTaskProcessor {
     }
 
     /**
-     * 排序新增任务
+     * 按任务优先级排序
+     *
+     * <p>与 TrialTaskProcessor 排序逻辑一致：仅按 task.priority 排序（来自月计划）。
      */
     public void sortNewTasks(
-            List<CoreScheduleAlgorithmService.DailyEmbryoTask> tasks, 
+            List<CoreScheduleAlgorithmService.DailyEmbryoTask> tasks,
             ScheduleContextVo context) {
         tasks.sort((a, b) -> {
-            // 1. 按月计划优先级排序
-            int priorityA = getMonthPlanPriority(a.getMaterialCode(), context);
-            int priorityB = getMonthPlanPriority(b.getMaterialCode(), context);
-            if (priorityA != priorityB) {
-                return Integer.compare(priorityA, priorityB);
-            }
-
-            // 2. 收尾任务优先
-            if (Boolean.TRUE.equals(a.getIsEndingTask()) && !Boolean.TRUE.equals(b.getIsEndingTask())) {
-                return -1;
-            }
-            if (!Boolean.TRUE.equals(a.getIsEndingTask()) && Boolean.TRUE.equals(b.getIsEndingTask())) {
-                return 1;
-            }
-
-            // 3. 紧急收尾优先
-            if (Boolean.TRUE.equals(a.getIsUrgentEnding()) && !Boolean.TRUE.equals(b.getIsUrgentEnding())) {
-                return -1;
-            }
-            if (!Boolean.TRUE.equals(a.getIsUrgentEnding()) && Boolean.TRUE.equals(b.getIsUrgentEnding())) {
-                return 1;
-            }
-            
-            // 4. 10天内收尾优先
-            if (Boolean.TRUE.equals(a.getIsNearEnding()) && !Boolean.TRUE.equals(b.getIsNearEnding())) {
-                return -1;
-            }
-            if (!Boolean.TRUE.equals(a.getIsNearEnding()) && Boolean.TRUE.equals(b.getIsNearEnding())) {
-                return 1;
-            }
-            
-            // 5. 新胎胚优先
-            boolean aIsNew = Boolean.TRUE.equals(a.getIsNewEmbryo());
-            boolean bIsNew = Boolean.TRUE.equals(b.getIsNewEmbryo());
-            if (aIsNew && !bIsNew) {
-                return -1;
-            }
-            if (!aIsNew && bIsNew) {
-                return 1;
-            }
-
-            // 6. 按需求量排序（大的优先）
-            return Integer.compare(b.getDemandQuantity(), a.getDemandQuantity());
+            Integer priA = a.getPriority();
+            Integer priB = b.getPriority();
+            return Integer.compare(
+                    priA != null ? priA : Integer.MAX_VALUE,
+                    priB != null ? priB : Integer.MAX_VALUE);
         });
-    }
-
-    private int getMonthPlanPriority(String materialCode, ScheduleContextVo context) {
-        List<CxStructurePriority> priorities = context.getStructurePriorities();
-        if (priorities != null) {
-            for (CxStructurePriority priority : priorities) {
-                // TODO: 需要根据物料编码匹配结构
-            }
-        }
-        return 999;
     }
 
     private CoreScheduleAlgorithmService.MachineAllocationResult createMachineAllocation(
@@ -482,25 +435,12 @@ public class NewTaskProcessor {
     private void allocateTaskToMachine(
             CoreScheduleAlgorithmService.MachineAllocationResult allocation,
             CoreScheduleAlgorithmService.DailyEmbryoTask task,
-            ScheduleContextVo context) {
-        // 默认不指定分配的硫化机台数，使用task的计划排量或需求排量
-        allocateTaskToMachine(allocation, task, null, context);
-    }
-
-    private void allocateTaskToMachine(
-            CoreScheduleAlgorithmService.MachineAllocationResult allocation,
-            CoreScheduleAlgorithmService.DailyEmbryoTask task,
             Integer assignedVulcanizeQty,
             ScheduleContextVo context) {
 
         // 排量使用任务的 demandQuantity（需求排量），这是根据硫化需求计算出来的
         // assignedVulcanizeQty 是均衡分配时分配的硫化机台数，仅用于记录
         int quantity = task.getDemandQuantity() != null ? task.getDemandQuantity() : 0;
-
-        // 调试日志：检查排量来源
-        System.err.println("[allocateTask] materialCode=" + task.getMaterialCode() 
-                + ", demandQuantity=" + quantity 
-                + ", assignedVulcanizeQty=" + assignedVulcanizeQty);
 
         CoreScheduleAlgorithmService.TaskAllocation taskAllocation = new CoreScheduleAlgorithmService.TaskAllocation();
         taskAllocation.setMaterialCode(task.getMaterialCode());
