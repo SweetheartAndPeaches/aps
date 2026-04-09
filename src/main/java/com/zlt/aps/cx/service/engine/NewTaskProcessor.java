@@ -62,6 +62,18 @@ public class NewTaskProcessor {
 
         log.info("========== 开始处理新增任务，共 {} 个任务 ==========", newTasks.size());
 
+        // 调试：检查任务排量
+        int totalDemandQty = 0;
+        int totalVulcanizeCount = 0;
+        for (CoreScheduleAlgorithmService.DailyEmbryoTask task : newTasks) {
+            int demandQty = task.getDemandQuantity() != null ? task.getDemandQuantity() : 0;
+            int vulcanizeCount = task.getVulcanizeMachineCount() != null ? task.getVulcanizeMachineCount() : 0;
+            totalDemandQty += demandQty;
+            totalVulcanizeCount += vulcanizeCount;
+        }
+        log.info("【DEBUG】新增任务统计: 总任务数={}, 总硫化机台数={}, 总需求排量={}", 
+                newTasks.size(), totalVulcanizeCount, totalDemandQty);
+
         // 停产日不排新增任务
         if (Boolean.TRUE.equals(context.getIsClosingDay())) {
             log.info("停产日不排新增任务");
@@ -479,6 +491,10 @@ public class NewTaskProcessor {
         int quantity = task.getPlannedProduction() != null && task.getPlannedProduction() > 0 
                 ? task.getPlannedProduction() 
                 : task.getDemandQuantity();
+
+        // 调试日志：检查排量来源
+        log.info("【DEBUG】任务排量: materialCode={}, plannedProduction={}, demandQuantity={}, finalQty={}",
+                task.getMaterialCode(), task.getPlannedProduction(), task.getDemandQuantity(), quantity);
 
         CoreScheduleAlgorithmService.TaskAllocation taskAllocation = new CoreScheduleAlgorithmService.TaskAllocation();
         taskAllocation.setMaterialCode(task.getMaterialCode());

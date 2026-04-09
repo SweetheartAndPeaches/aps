@@ -251,6 +251,8 @@ public class TaskGroupService {
 
         // 获取分配给该硫化任务的库存（按硫化任务维度分配，共用胎胚库存已按比例分配）
         int currentStock = getAllocatedStock(context, lhResult.getLhId());
+        log.info("硫化任务排量: embryoCode={}, vulcanizeDemand={}, currentStock={}", 
+                embryoCode, vulcanizeDemand, currentStock);
 
         // 获取物料信息
         MdmMaterialInfo material = materialMap.get(embryoCode);

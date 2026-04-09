@@ -57,6 +57,7 @@ springfox:
 logging:
   level:
     com.jinyu.aps: debug
+    com.zlt.aps: debug
     com.baomidou.mybatisplus: debug
   file:
     path: /app/work/logs/bypass

@@ -60,6 +60,22 @@ public class ShiftScheduleService {
 
         List<CoreScheduleAlgorithmService.ShiftAllocationResult> results = new ArrayList<>();
 
+        // 调试日志 - 使用ERROR级别确保可见
+        int totalTasks = 0;
+        int totalQty = 0;
+        if (allocations != null) {
+            for (CoreScheduleAlgorithmService.MachineAllocationResult alloc : allocations) {
+                if (alloc.getTaskAllocations() != null) {
+                    totalTasks += alloc.getTaskAllocations().size();
+                    for (CoreScheduleAlgorithmService.TaskAllocation task : alloc.getTaskAllocations()) {
+                        totalQty += task.getQuantity();
+                    }
+                }
+            }
+        }
+        log.error("【DEBUG】班次分配开始，机台分配数: {}, 总任务数: {}, 总排量: {}", 
+                allocations != null ? allocations.size() : 0, totalTasks, totalQty);
+
         if (dayShifts == null || dayShifts.isEmpty()) {
             log.warn("班次配置为空");
             return results;
@@ -149,6 +165,7 @@ public class ShiftScheduleService {
         for (CoreScheduleAlgorithmService.TaskAllocation task : tasks) {
             String structureCode = task.getStructureName();
             int taskQty = task.getQuantity();
+            log.info("班次分配-任务: 结构={}, 排量={}", structureCode, taskQty);
 
             MdmStructureTreadConfig treadConfig = structureTreadConfigMap.get(structureCode);
 
@@ -265,11 +282,12 @@ public class ShiftScheduleService {
 
         for (int i = 0; i < shiftCodes.length; i++) {
             String shiftCode = shiftCodes[i];
-            if (SHIFT_NIGHT.equals(shiftCode)) {
+            // 支持两种格式：1. SHIFT_NIGHT/SHIFT_DAY/SHIFT_AFTERNOON 常量；2. DAY_D1/NIGHT_D2/AFTERNOON_D3 格式
+            if (SHIFT_NIGHT.equals(shiftCode) || (shiftCode != null && shiftCode.startsWith("NIGHT_"))) {
                 adjustedRatio[i] = waveRatio[0];
-            } else if (SHIFT_DAY.equals(shiftCode)) {
+            } else if (SHIFT_DAY.equals(shiftCode) || (shiftCode != null && shiftCode.startsWith("DAY_"))) {
                 adjustedRatio[i] = waveRatio[1];
-            } else if (SHIFT_AFTERNOON.equals(shiftCode)) {
+            } else if (SHIFT_AFTERNOON.equals(shiftCode) || (shiftCode != null && shiftCode.startsWith("AFTERNOON_"))) {
                 adjustedRatio[i] = waveRatio[2];
             } else {
                 adjustedRatio[i] = 1;

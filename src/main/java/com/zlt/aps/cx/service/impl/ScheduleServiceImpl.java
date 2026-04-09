@@ -370,6 +370,10 @@ public class ScheduleServiceImpl implements ScheduleService {
                         .orderByAsc(CxShiftConfig::getDayShiftOrder)
         );
         context.setShiftConfigList(allShiftConfigs);
+        log.info("班次配置加载完成，班次数：{}，示例：{}", 
+                allShiftConfigs != null ? allShiftConfigs.size() : 0,
+                allShiftConfigs != null && !allShiftConfigs.isEmpty() 
+                        ? allShiftConfigs.get(0).getShiftCode() : "无");
 
         // 按排程天数分组
         Map<Integer, List<CxShiftConfig>> dayShiftMap = allShiftConfigs.stream()
@@ -379,7 +383,10 @@ public class ScheduleServiceImpl implements ScheduleService {
         int scheduleDays = dayShiftMap.isEmpty() ? DEFAULT_SCHEDULE_DAYS
                 : dayShiftMap.keySet().stream().max(Integer::compareTo).orElse(DEFAULT_SCHEDULE_DAYS);
         context.setScheduleDays(scheduleDays);
-        log.info("根据班次配置计算排程天数: {}", scheduleDays);
+        log.info("根据班次配置计算排程天数: {}, 班次分布: {}", scheduleDays, 
+                dayShiftMap.entrySet().stream()
+                        .map(e -> e.getKey() + ":" + e.getValue().size() + "个")
+                        .collect(Collectors.joining(", ")));
     }
 
     /**

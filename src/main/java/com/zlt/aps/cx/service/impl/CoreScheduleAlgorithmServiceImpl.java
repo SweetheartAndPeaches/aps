@@ -308,6 +308,10 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 .collect(Collectors.toMap(ShiftAllocationResult::getMachineCode, s -> s));
 
         for (MachineAllocationResult allocation : allocations) {
+            log.info("【结果构建】机台 {} usedCapacity={}, taskCount={}", 
+                    allocation.getMachineCode(), allocation.getUsedCapacity(),
+                    allocation.getTaskAllocations() != null ? allocation.getTaskAllocations().size() : 0);
+            
             CxScheduleResult result = new CxScheduleResult();
             result.setScheduleDate(scheduleDate.atStartOfDay());
             result.setCxMachineCode(allocation.getMachineCode());
@@ -322,6 +326,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             ShiftAllocationResult shiftResult = shiftMap.get(allocation.getMachineCode());
             if (shiftResult != null) {
                 Map<String, Integer> shiftPlanQty = shiftResult.getShiftPlanQty();
+                log.info("机台 {} 班次计划量映射: {}", allocation.getMachineCode(), shiftPlanQty);
 
                 for (CxShiftConfig shiftConfig : dayShifts) {
                     String classField = shiftConfig.getClassField();
@@ -330,6 +335,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
                     setClassFieldValue(result, classField, shiftQty);
                 }
+            } else {
+                log.warn("机台 {} 未找到班次分配结果", allocation.getMachineCode());
             }
 
             // 设置第一个任务的胎胚信息
