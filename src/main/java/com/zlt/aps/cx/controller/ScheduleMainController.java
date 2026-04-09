@@ -60,15 +60,18 @@ public class ScheduleMainController {
         if (result.isSuccess()) {
             return AjaxResult.success(result);
         } else {
-            // 校验不通过时，将完整校验明细返回前端
-            AjaxResult ajax = AjaxResult.error("排程失败[" + dto.getScheduleDate() + "]: " + result.getMessage());
-            if (result.getValidationErrors() != null && !result.getValidationErrors().isEmpty()) {
-                ajax.put("validationErrors", result.getValidationErrors());
-            }
-            if (result.getValidationWarnings() != null && !result.getValidationWarnings().isEmpty()) {
-                ajax.put("validationWarnings", result.getValidationWarnings());
-            }
-            return ajax;
+            // 校验不通过时，构建校验摘要返回前端
+            ScheduleService.ValidationSummary summary = new ScheduleService.ValidationSummary();
+            summary.setErrorCount(result.getValidationErrors() != null ? result.getValidationErrors().size() : 0);
+            summary.setWarningCount(result.getValidationWarnings() != null ? result.getValidationWarnings().size() : 0);
+            summary.setErrors(result.getValidationErrors());
+            summary.setWarnings(result.getValidationWarnings());
+
+            return AjaxResult.error(
+                    "排程失败[" + dto.getScheduleDate() + "]: 数据完整性校验不通过，共 "
+                            + summary.getErrorCount() + " 项错误，"
+                            + summary.getWarningCount() + " 项警告",
+                    summary);
         }
     }
 

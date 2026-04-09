@@ -56,6 +56,8 @@ public interface ScheduleService {
         private List<ValidationDetail> validationErrors;
         private List<ValidationDetail> validationWarnings;
 
+        public ScheduleResult() {}
+
         public boolean isSuccess() {
             return success;
         }
@@ -127,6 +129,25 @@ public interface ScheduleService {
         public void setMessage(String message) { this.message = message; }
         public String getSuggestion() { return suggestion; }
         public void setSuggestion(String suggestion) { this.suggestion = suggestion; }
+    }
+
+    /**
+     * 校验摘要（用于前端展示）
+     */
+    class ValidationSummary {
+        private int errorCount;
+        private int warningCount;
+        private List<ValidationDetail> errors;
+        private List<ValidationDetail> warnings;
+
+        public int getErrorCount() { return errorCount; }
+        public void setErrorCount(int errorCount) { this.errorCount = errorCount; }
+        public int getWarningCount() { return warningCount; }
+        public void setWarningCount(int warningCount) { this.warningCount = warningCount; }
+        public List<ValidationDetail> getErrors() { return errors; }
+        public void setErrors(List<ValidationDetail> errors) { this.errors = errors; }
+        public List<ValidationDetail> getWarnings() { return warnings; }
+        public void setWarnings(List<ValidationDetail> warnings) { this.warnings = warnings; }
     }
 
     /**
