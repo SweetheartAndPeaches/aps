@@ -197,7 +197,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         allAllocations.addAll(trialAllocations);
 
         // 班次分配前检查
-        log.info("班次分配前检查: 总分配数={}, 总排量={}", allAllocations.size(), totalUsedCapacity);
+        log.info("班次分配前检查: 总分配数={}", allAllocations.size());
 
         // ==================== 第六步：S5.3.7 班次排产 ====================
         List<ShiftAllocationResult> shiftAllocations = shiftScheduleService.balanceShiftAllocation(
