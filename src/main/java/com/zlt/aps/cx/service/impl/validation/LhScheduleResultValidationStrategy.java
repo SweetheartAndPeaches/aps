@@ -2,6 +2,7 @@ package com.zlt.aps.cx.service.impl.validation;
 
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
 import com.zlt.aps.cx.vo.ScheduleContextVo;
+import com.zlt.aps.mp.api.domain.entity.MdmMaterialInfo;
 import com.zlt.aps.mdm.api.domain.entity.MdmStructureTreadConfig;
 import com.zlt.aps.mp.api.domain.entity.MpCxCapacityConfiguration;
 import lombok.extern.slf4j.Slf4j;
@@ -30,6 +31,7 @@ import java.util.stream.Collectors;
  *
  * <p>校验关联配置完整性：
  * <ul>
+ *   <li>硫化任务中的物料必须在 T_MDM_MATERIAL_INFO 中有配置</li>
  *   <li>硫化任务中的结构必须在 T_MP_STRUCTURE_ALLOCATION 中有配置</li>
  *   <li>硫化任务中的结构必须在 T_MDM_STRUCTURE_TREAD_CONFIG 中有配置</li>
  * </ul>
@@ -98,10 +100,13 @@ public class LhScheduleResultValidationStrategy extends BaseValidationStrategy {
         // ==================== 1. 校验必填字段 ====================
         validateRequiredFields(lhResults, totalCount, result);
 
-        // ==================== 2. 校验结构排产配置完整性 ====================
+        // ==================== 2. 校验物料信息配置完整性 ====================
+        validateMaterialInfoConfig(context, lhResults, result);
+
+        // ==================== 3. 校验结构排产配置完整性 ====================
         validateStructureAllocationConfig(context, lhResults, result);
 
-        // ==================== 3. 校验结构整车配置完整性 ====================
+        // ==================== 4. 校验结构整车配置完整性 ====================
         validateStructureTreadConfig(context, lhResults, result);
     }
 
@@ -193,6 +198,61 @@ public class LhScheduleResultValidationStrategy extends BaseValidationStrategy {
         log.info("硫化排程结果必填字段校验完成：总数={}, 缺失字段数={}, 受影响记录={}",
                 totalCount, errorMessages.size(),
                 missingCountMap.values().stream().mapToInt(Integer::intValue).sum());
+    }
+
+    /**
+     * 校验物料信息配置完整性
+     * 硫化任务中的物料必须在 T_MDM_MATERIAL_INFO 中有配置
+     */
+    private void validateMaterialInfoConfig(ScheduleContextVo context, List<LhScheduleResult> lhResults,
+                                           ScheduleDataValidationResult result) {
+        // 获取已配置的物料信息
+        List<MdmMaterialInfo> materials = context.getMaterials();
+
+        if (materials == null || materials.isEmpty()) {
+            addError(result,
+                    "物料信息为空（T_MDM_MATERIAL_INFO）",
+                    "请检查 T_MDM_MATERIAL_INFO 表中是否存在物料数据");
+            return;
+        }
+
+        // 构建物料编码集合
+        Set<String> configuredMaterialCodes = materials.stream()
+                .map(MdmMaterialInfo::getMaterialCode)
+                .filter(Objects::nonNull)
+                .filter(s -> !s.trim().isEmpty())
+                .collect(Collectors.toSet());
+
+        // 获取硫化任务中出现的所有物料编码
+        Set<String> lhMaterialCodes = lhResults.stream()
+                .map(LhScheduleResult::getMaterialCode)
+                .filter(Objects::nonNull)
+                .filter(s -> !s.trim().isEmpty())
+                .collect(Collectors.toSet());
+
+        // 找出缺失配置的物料
+        List<String> missingMaterials = new ArrayList<>();
+        for (String materialCode : lhMaterialCodes) {
+            if (!configuredMaterialCodes.contains(materialCode)) {
+                missingMaterials.add(materialCode);
+            }
+        }
+
+        if (!missingMaterials.isEmpty()) {
+            String message = String.format(
+                    "硫化排程结果中有 %d 个物料在【T_MDM_MATERIAL_INFO】表中没有配置：%s",
+                    missingMaterials.size(), String.join(", ", missingMaterials));
+            addError(result, message,
+                    "请在 T_MDM_MATERIAL_INFO 表中为这些物料添加配置（MATERIAL_CODE、EMBRYO_CODE、STRUCTURE_NAME等）");
+        } else {
+            addInfo(result,
+                    String.format("物料信息配置完整，共 %d 条物料配置，硫化任务中的 %d 个物料均有配置",
+                            configuredMaterialCodes.size(), lhMaterialCodes.size()),
+                    null);
+        }
+
+        log.info("物料信息配置校验完成：配置物料数={}, 硫化任务物料数={}, 缺失数={}",
+                configuredMaterialCodes.size(), lhMaterialCodes.size(), missingMaterials.size());
     }
 
     /**
