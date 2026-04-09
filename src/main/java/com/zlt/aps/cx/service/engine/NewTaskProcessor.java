@@ -131,10 +131,6 @@ public class NewTaskProcessor {
 
             for (CoreScheduleAlgorithmService.DailyEmbryoTask task : newTasksForStructure) {
                 task.setIsContinueTask(false);
-                int demand = task.getPlannedProduction() != null && task.getPlannedProduction() > 0
-                        ? task.getPlannedProduction() : task.getDemandQuantity();
-                int load = (int) Math.ceil((double) demand / DEFAULT_TRIP_CAPACITY);
-                task.setVulcanizeMachineCount(load);
                 allTasksForStructure.add(task);
             }
 
