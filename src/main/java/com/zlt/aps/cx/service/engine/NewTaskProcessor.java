@@ -42,7 +42,7 @@ public class NewTaskProcessor {
      * @param dayShifts         当天班次配置
      * @param day               排程日（day of month）
      * @param existAllocations  续作任务分配结果
-     * @param trialAllocations 试制任务分配结果（暂不使用）
+     * @param trialAllocations 试制任务分配结果（用于量试约束）
      * @return 均衡分配结果
      */
     public List<CoreScheduleAlgorithmService.MachineAllocationResult> processNewTasks(
@@ -52,7 +52,8 @@ public class NewTaskProcessor {
             List<CxShiftConfig> dayShifts,
             int day,
             List<CoreScheduleAlgorithmService.DailyEmbryoTask> continueTasks,
-            List<CoreScheduleAlgorithmService.MachineAllocationResult> existAllocations) {
+            List<CoreScheduleAlgorithmService.MachineAllocationResult> existAllocations,
+            List<CoreScheduleAlgorithmService.MachineAllocationResult> trialAllocations) {
 
         List<CoreScheduleAlgorithmService.MachineAllocationResult> allResults = new ArrayList<>();
 
@@ -116,27 +117,49 @@ public class NewTaskProcessor {
                 }
             }
 
-            // Step 3.3: 合并续作任务和新增任务
-            List<CoreScheduleAlgorithmService.DailyEmbryoTask> allTasksForStructure = new ArrayList<>();
-            allTasksForStructure.addAll(continueTasksForStructure);
+            // Step 3.3: 构建试制机台映射 materialCode → machineCode（同结构下）
+            Map<String, String> trialMachineMap = buildTrialMachineMap(trialAllocations, structureName);
+
+            // Step 3.4: 分类新增任务 - 固定量试 vs 参与均衡
+            // 固定量试：量试任务 + 同胎胚有试制任务 → 固定到试制机台
+            // 参与均衡：其余新增任务（含无量试约束的量试任务）
+            List<CoreScheduleAlgorithmService.DailyEmbryoTask> fixedVolumeTrials = new ArrayList<>();
+            List<CoreScheduleAlgorithmService.DailyEmbryoTask> balancedTasks = new ArrayList<>();
 
             for (CoreScheduleAlgorithmService.DailyEmbryoTask task : newTasksForStructure) {
                 task.setIsContinueTask(false);
-                allTasksForStructure.add(task);
+                if (isVolumeTrialConstrained(task, trialMachineMap)) {
+                    fixedVolumeTrials.add(task);
+                } else {
+                    balancedTasks.add(task);
+                }
             }
 
-            log.info("结构 {} 合并后：续作={}, 新增={}",
-                    structureName, continueTasksForStructure.size(), newTasksForStructure.size());
+            // 固定量试预占机台：加入 machineHistoryMap
+            for (CoreScheduleAlgorithmService.DailyEmbryoTask fixedTask : fixedVolumeTrials) {
+                String targetMachine = trialMachineMap.get(fixedTask.getMaterialCode());
+                machineHistoryMap.computeIfAbsent(targetMachine, k -> new HashSet<>())
+                        .add(fixedTask.getMaterialCode());
+            }
 
-            // Step 3.4: 构建机台最大硫化机数映射
+            // Step 3.5: 合并续作任务和参与均衡的新增任务
+            List<CoreScheduleAlgorithmService.DailyEmbryoTask> allTasksForStructure = new ArrayList<>();
+            allTasksForStructure.addAll(continueTasksForStructure);
+            allTasksForStructure.addAll(balancedTasks);
+
+            log.info("结构 {} 合并后：续作={}, 均衡新增={}, 固定量试={}",
+                    structureName, continueTasksForStructure.size(),
+                    balancedTasks.size(), fixedVolumeTrials.size());
+
+            // Step 3.6: 构建机台最大硫化机数映射
             Map<String, Integer> machineMaxLhMap = buildMachineMaxLhMap(
                     availableMachines, structureName, context);
 
-            // Step 3.5: 构建机台最大胎胚种类数映射
+            // Step 3.7: 构建机台最大胎胚种类数映射
             Map<String, Integer> machineMaxEmbryoTypesMap = buildMachineMaxEmbryoTypesMap(
                     availableMachines, structureName, context);
 
-            // Step 3.6: 均衡分配
+            // Step 3.8: 均衡分配
             BalancingService.BalancingResult balancingResult =
                     balancingService.balanceEmbryosToMachinesWithMachineCapacity(
                             allTasksForStructure,
@@ -155,7 +178,7 @@ public class NewTaskProcessor {
 
             log.info("结构 {} 均衡分配完成", structureName);
 
-            // Step 3.7: 构建分配结果
+            // Step 3.9: 构建分配结果
             for (BalancingService.MachineAssignment assignment : balancingResult.getAssignments()) {
                 CoreScheduleAlgorithmService.MachineAllocationResult result =
                         new CoreScheduleAlgorithmService.MachineAllocationResult();
@@ -189,6 +212,44 @@ public class NewTaskProcessor {
 
                 result.setUsedCapacity(usedCapacity);
                 allResults.add(result);
+            }
+
+            // Step 3.10: 固定量试任务追加到对应机台结果
+            for (CoreScheduleAlgorithmService.DailyEmbryoTask fixedTask : fixedVolumeTrials) {
+                String targetMachine = trialMachineMap.get(fixedTask.getMaterialCode());
+                // 找到对应机台的结果
+                CoreScheduleAlgorithmService.MachineAllocationResult targetResult = null;
+                for (CoreScheduleAlgorithmService.MachineAllocationResult r : allResults) {
+                    if (r.getMachineCode().equals(targetMachine)) {
+                        targetResult = r;
+                        break;
+                    }
+                }
+                // 如果没找到，新建一个
+                if (targetResult == null) {
+                    targetResult = new CoreScheduleAlgorithmService.MachineAllocationResult();
+                    targetResult.setMachineCode(targetMachine);
+                    targetResult.setTaskAllocations(new ArrayList<>());
+                    targetResult.setUsedCapacity(0);
+                    allResults.add(targetResult);
+                }
+
+                CoreScheduleAlgorithmService.TaskAllocation taskAlloc =
+                        new CoreScheduleAlgorithmService.TaskAllocation();
+                taskAlloc.setMaterialCode(fixedTask.getMaterialCode());
+                taskAlloc.setMaterialName(fixedTask.getMaterialName());
+                taskAlloc.setStructureName(fixedTask.getStructureName());
+                taskAlloc.setQuantity(fixedTask.getPlannedProduction() != null ? fixedTask.getPlannedProduction() : 0);
+                taskAlloc.setPriority(fixedTask.getPriority());
+                taskAlloc.setStockHours(fixedTask.getStockHours());
+                taskAlloc.setIsTrialTask(fixedTask.getIsTrialTask());
+                taskAlloc.setIsContinueTask(false);
+                taskAlloc.setIsEndingTask(fixedTask.getIsEndingTask());
+                taskAlloc.setEndingSurplusQty(fixedTask.getEndingSurplusQty());
+                taskAlloc.setIsMainProduct(fixedTask.getIsMainProduct());
+
+                targetResult.getTaskAllocations().add(taskAlloc);
+                log.info("固定量试任务 {} → 机台 {}", fixedTask.getMaterialCode(), targetMachine);
             }
         }
 
@@ -337,5 +398,42 @@ public class NewTaskProcessor {
             }
         }
         return false;
+    }
+
+    /**
+     * 构建试制机台映射：materialCode → machineCode
+     * 仅返回指定结构下的试制任务
+     */
+    private Map<String, String> buildTrialMachineMap(
+            List<CoreScheduleAlgorithmService.MachineAllocationResult> trialAllocations,
+            String structureName) {
+        Map<String, String> trialMachineMap = new HashMap<>();
+        if (trialAllocations == null) {
+            return trialMachineMap;
+        }
+        for (CoreScheduleAlgorithmService.MachineAllocationResult allocation : trialAllocations) {
+            String machineCode = allocation.getMachineCode();
+            for (CoreScheduleAlgorithmService.TaskAllocation taskAlloc : allocation.getTaskAllocations()) {
+                if (structureName.equals(taskAlloc.getStructureName())
+                        && taskAlloc.getMaterialCode() != null
+                        && Boolean.TRUE.equals(taskAlloc.getIsTrialTask())) {
+                    trialMachineMap.put(taskAlloc.getMaterialCode(), machineCode);
+                }
+            }
+        }
+        return trialMachineMap;
+    }
+
+    /**
+     * 判断量试任务是否受试制约束
+     * 条件：是量试任务 + 同胎胚有试制任务
+     */
+    private boolean isVolumeTrialConstrained(
+            CoreScheduleAlgorithmService.DailyEmbryoTask task,
+            Map<String, String> trialMachineMap) {
+        if (!Boolean.TRUE.equals(task.getIsProductionTrial())) {
+            return false;
+        }
+        return trialMachineMap.containsKey(task.getMaterialCode());
     }
 }

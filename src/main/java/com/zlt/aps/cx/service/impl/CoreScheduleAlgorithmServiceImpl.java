@@ -193,7 +193,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 dayShifts,
                 day,
                 taskGroup.getContinueTasks(),
-                continueAllocations);
+                continueAllocations,
+                trialAllocations);
         log.info("新增任务处理完成，机台分配数: {}", newAllocations.size());
 
         // ==================== 第五步：合并分配结果 ====================
