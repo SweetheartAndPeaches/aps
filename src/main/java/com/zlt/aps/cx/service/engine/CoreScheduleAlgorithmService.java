@@ -1,15 +1,8 @@
 package com.zlt.aps.cx.service.engine;
 
-
-import com.zlt.aps.mdm.api.domain.entity.CxPrecisionPlan;
-import com.zlt.aps.cx.api.domain.entity.CxStock;
 import com.zlt.aps.cx.entity.config.CxShiftConfig;
-import com.zlt.aps.cx.entity.schedule.CxScheduleDetail;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
 import com.zlt.aps.cx.vo.ScheduleContextVo;
-
-import com.zlt.aps.mp.api.domain.entity.MdmMaterialInfo;
-import com.zlt.aps.mp.api.domain.entity.MdmMoldingMachine;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -19,172 +12,49 @@ import java.util.Set;
 
 /**
  * 核心排程算法服务接口
- * 
- * 基于需求文档实现以下核心算法：
- * - 试错分配算法（递归回溯）
- * - 班次均衡调整（波浪交替）
- * - 约束校验算法
- * - 顺位排序算法
- * - 库存时长计算
+ *
+ * <p>成型排程主流程编排，具体业务逻辑委托给各专门服务：
+ * <ul>
+ *   <li>{@link TaskGroupService} - 任务分组与属性计算</li>
+ *   <li>{@link ContinueTaskProcessor} - 续作任务处理</li>
+ *   <li>{@link TrialTaskProcessor} - 试制任务处理</li>
+ *   <li>{@link NewTaskProcessor} - 新增任务处理（含量试约束）</li>
+ *   <li>{@link ShiftScheduleService} - 班次精排</li>
+ * </ul>
  *
  * @author APS Team
  */
 public interface CoreScheduleAlgorithmService {
 
-    // ==================== 主流程算法 ====================
-
     /**
      * 执行完整排程算法
      *
+     * <p>主流程：
+     * <ol>
+     *   <li>按天循环排程（共排8个班次，约3天）</li>
+     *   <li>每天：任务分组 → 续作处理 → 试制处理 → 新增处理 → 班次精排</li>
+     *   <li>每天排完后更新上下文（库存/余量/在机信息）</li>
+     *   <li>汇总多天结果，按 机台+胎胚+物料编号 维度生成单表排程数据</li>
+     * </ol>
+     *
      * @param context 排程上下文
-     * @return 排程结果列表
+     * @return 排程结果列表（每条记录：机台+胎胚+物料编号，CLASS1~8为8班次排量）
      */
     List<CxScheduleResult> executeSchedule(ScheduleContextVo context);
-
-    /**
-     * 第一步：计算日胎胚任务
-     * 算需求量、检查收尾、处理节假日
-     *
-     * @param context                   排程上下文
-     * @param machineOnlineEmbryoMap   机台在产胎胚映射（用于续作判断）
-     * @param dayShifts                当前天的班次配置列表（用于获取对应班次的硫化计划量）
-     * @return 日胎胚任务列表
-     */
-    List<DailyEmbryoTask> calculateDailyEmbryoTasks(
-            ScheduleContextVo context,
-            Map<String, Set<String>> machineOnlineEmbryoMap,
-            List<CxShiftConfig> dayShifts);
-
-    /**
-     * 第二步：试错分配任务到机台
-     * 递归回溯算法，找最优分配方案
-     *
-     * @param tasks   日胎胚任务列表
-     * @param context 排程上下文
-     * @return 机台分配结果
-     */
-    List<MachineAllocationResult> allocateTasksToMachines(
-            List<DailyEmbryoTask> tasks, 
-            ScheduleContextVo context);
-
-    /**
-     * 第三步：班次均衡分配
-     * 波浪交替算法：夜班:早班:中班 = 1:2:1
-     *
-     * @param allocations 机台分配结果
-     * @param context     排程上下文
-     * @return 班次分配结果
-     */
-    List<ShiftAllocationResult> balanceShiftAllocation(
-            List<MachineAllocationResult> allocations,
-            ScheduleContextVo context);
-
-    /**
-     * 第四步：排生产顺位
-     * 按紧急程度和库存时长排序
-     *
-     * @param shiftAllocations 班次分配结果
-     * @param context          排程上下文
-     * @return 排程明细列表
-     */
-    List<CxScheduleDetail> calculateSequence(
-            List<ShiftAllocationResult> shiftAllocations,
-            ScheduleContextVo context);
-
-    // ==================== 辅助算法 ====================
-
-    /**
-     * 计算库存可供硫化时长
-     * 公式：库存时长 = 胎胚库存 / (硫化机数 × 单台模数)
-     *
-     * @param stock              库存信息
-     * @param vulcanizeMachineCount 硫化机台数
-     * @param vulcanizeMoldCount    总模数
-     * @return 可供硫化时长（小时）
-     */
-    BigDecimal calculateStockHours(
-            CxStock stock,
-            Integer vulcanizeMachineCount,
-            Integer vulcanizeMoldCount);
-
-    /**
-     * 计算日需求量
-     * 公式：日胎胚计划量 = (硫化消耗量 - 库存分配量) × (1 + 损耗率)
-     *
-     * @param material       物料信息
-     * @param stock          库存信息
-     * @param context        排程上下文
-     * @return 日需求量
-     */
-    BigDecimal calculateDailyDemand(
-            MdmMaterialInfo material,
-            CxStock stock,
-            ScheduleContextVo context);
-
-    /**
-     * 检查结构约束
-     * 包括：固定机台约束、不可作业约束、种类上限约束
-     *
-     * @param machine   机台信息
-     * @param material  物料信息
-     * @param context   排程上下文
-     * @return 是否通过约束检查
-     */
-    boolean checkStructureConstraint(
-            MdmMoldingMachine machine,
-            MdmMaterialInfo material,
-            ScheduleContextVo context);
-
-    /**
-     * 检查机台种类上限
-     * 每台成型机最多做4种不同的胎胚
-     *
-     * @param machine       机台信息
-     * @param currentTypes  当前已分配的种类数
-     * @param newMaterial   新物料
-     * @param context       排程上下文
-     * @return 是否可以分配
-     */
-    boolean checkTypeLimit(
-            MdmMoldingMachine machine,
-            int currentTypes,
-            MdmMaterialInfo newMaterial,
-            ScheduleContextVo context);
-
-    /**
-     * 计算优先级分数
-     * 综合考虑：紧急收尾、库存预警、主销产品、结构优先级
-     *
-     * @param material 物料信息
-     * @param stock    库存信息
-     * @param context  排程上下文
-     * @return 优先级分数（越大越优先）
-     */
-    int calculatePriorityScore(
-            MdmMaterialInfo material,
-            CxStock stock,
-            ScheduleContextVo context);
-
-    /**
-     * 整车取整
-     * 按12条一车取整
-     *
-     * @param quantity 原始数量
-     * @param mode     取整模式（CEILING向上/FLOOR向下/ROUND四舍五入）
-     * @return 取整后的数量
-     */
-    int roundToTrip(int quantity, String mode);
 
     // ==================== 数据结构定义 ====================
 
     /**
      * 日胎胚任务
+     *
+     * <p>排程调度的最小单元，一个胎胚在一个排程日的一条任务。
+     * 由 {@link TaskGroupService#groupTasks} 生成，包含完整的任务属性。
      */
     @lombok.Data
     class DailyEmbryoTask {
-        /** 胎胚编码（注意：此字段名为 materialCode 但实际存储的是 embryoCode） */
+        /** 胎胚编码 */
         private String materialCode;
-        /** 物料编号（真正的物料编码，用于判断主销产品） */
+        /** 物料编号（成品物料编码，用于判断主销产品） */
         private String relatedMaterialCode;
         /** 物料描述 */
         private String materialDesc;
@@ -206,7 +76,7 @@ public interface CoreScheduleAlgorithmService {
         private Boolean isTrialTask;
         /** 试制号 */
         private String trialNo;
-        /** 库存可供时长 */
+        /** 库存可供时长（小时） */
         private BigDecimal stockHours;
         /** 库存是否高预警（>18小时） */
         private Boolean isStockHighWarning;
@@ -226,13 +96,13 @@ public interface CoreScheduleAlgorithmService {
         private Integer vulcanizeDemand;
         /** 当前库存 */
         private Integer currentStock;
-        
+
         // ==================== 收尾相关字段 ====================
         /** 是否收尾任务（收尾余量<=0时为true） */
         private Boolean isEndingTask;
         /** 收尾余量 = 硫化余量(PLAN_SURPLUS_QTY) - 胎胚库存 */
         private Integer endingSurplusQty;
-        /** 硫化余量（来自t_mdm_month_surplus.PLAN_SURPLUS_QTY，已由系统计算） */
+        /** 硫化余量（来自t_mdm_month_surplus.PLAN_SURPLUS_QTY） */
         private Integer vulcanizeSurplusQty;
         /** 收尾日（月计划的最后排产日期） */
         private LocalDate endingDate;
@@ -246,7 +116,7 @@ public interface CoreScheduleAlgorithmService {
         private Boolean needMonthPlanAdjust;
         /** 追赶量（平摊到未来3天的延误量） */
         private Integer catchUpQuantity;
-        
+
         // ==================== S5.2 排程分类与余量计算新增字段 ====================
         /** 硫化任务ID（用于关联 materialStockMap） */
         private Long lhId;
@@ -256,7 +126,7 @@ public interface CoreScheduleAlgorithmService {
         private Integer plannedProduction;
         /** 需要的车数 = 待排产量 / 胎面整车条数 */
         private Integer requiredCars;
-        
+
         // ==================== S5.3 开停产处理新增字段 ====================
         /** 开产班次产能（首班只排6小时） */
         private Integer openingShiftCapacity;
@@ -272,13 +142,13 @@ public interface CoreScheduleAlgorithmService {
         private Map<String, Integer> shiftAllocation;
 
         // ==================== 收尾处理新增字段 ====================
-        /** 收尾是否被舍弃（非主销产品余量≤2条） */
+        /** 收尾是否被舍弃（非主销产品余量<=2条） */
         private Boolean endingAbandoned;
         /** 舍弃数量 */
         private Integer endingAbandonedQty;
         /** 多做的库存量（主销产品按整车下时） */
         private Integer endingExtraInventory;
-        
+
         // ==================== 新增任务排序相关字段 ====================
         /** 月计划优先级 */
         private Integer monthPlanPriority;
@@ -302,8 +172,6 @@ public interface CoreScheduleAlgorithmService {
         private Integer assignedTypes;
         private List<TaskAllocation> taskAllocations;
         private String currentStructure;
-        /** 精度计划（如果该机台当天有精度计划） */
-        private CxPrecisionPlan precisionPlan;
     }
 
     /**
@@ -325,7 +193,7 @@ public interface CoreScheduleAlgorithmService {
         private Integer quantity;
         /** 优先级 */
         private Integer priority;
-        /** 库存可供时长 */
+        /** 库存可供时长（小时） */
         private BigDecimal stockHours;
         /** 是否试制任务 */
         private Boolean isTrialTask;

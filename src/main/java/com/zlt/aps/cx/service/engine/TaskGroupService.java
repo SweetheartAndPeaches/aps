@@ -545,6 +545,12 @@ public class TaskGroupService {
     /** 库存高预警阈值（小时），可配置 */
     private static final int STOCK_HIGH_HOURS_THRESHOLD = 18;
 
+    /** 库存低预警阈值（小时），低于此值优先排产 */
+    private static final BigDecimal STOCK_LOW_HOURS_THRESHOLD = new BigDecimal("4");
+
+    /** 一天的秒数 */
+    private static final int SECONDS_PER_DAY = 24 * 60 * 60;
+
     /**
      * 计算库存可供硫化时长
      *
@@ -588,7 +594,7 @@ public class TaskGroupService {
                     && lhResult.getMouldQty() != null && lhResult.getMouldQty() > 0) {
                 int lhTimeSeconds = lhResult.getLhTime();
                 int mouldQty = lhResult.getMouldQty();
-                dailyLhCapacity = (24 * 60 * 60 / lhTimeSeconds) * mouldQty;
+                dailyLhCapacity = (SECONDS_PER_DAY / lhTimeSeconds) * mouldQty;
             }
         }
 
@@ -601,7 +607,7 @@ public class TaskGroupService {
         }
 
         // 2. 单胎单模硫化时长(秒) = 24×60×60 / 日硫化量
-        BigDecimal singleTireMoldSeconds = BigDecimal.valueOf(24 * 60 * 60)
+        BigDecimal singleTireMoldSeconds = BigDecimal.valueOf(SECONDS_PER_DAY)
                 .divide(BigDecimal.valueOf(dailyLhCapacity), 2, BigDecimal.ROUND_HALF_UP);
 
         // 3. 任务的模数
@@ -787,7 +793,7 @@ public class TaskGroupService {
 
         // 库存紧张（低库存时长 = 高优先级）
         if (task.getStockHours() != null) {
-            if (task.getStockHours().compareTo(new BigDecimal("4")) < 0) {
+            if (task.getStockHours().compareTo(STOCK_LOW_HOURS_THRESHOLD) < 0) {
                 score += 800;
             } else if (task.getStockHours().compareTo(new BigDecimal("6")) < 0) {
                 score += 400;

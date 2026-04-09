@@ -34,7 +34,11 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class TrialTaskProcessor {
 
-    private static final int DEFAULT_MAX_TYPES_PER_MACHINE = 4;
+    /** 默认最大胎胚种类数上限（与 BalancingService 保持一致） */
+    private static final int DEFAULT_MAX_TYPES_PER_MACHINE = BalancingService.DEFAULT_MAX_TYPES_PER_MACHINE;
+
+    /** 默认日产能（条/天），机台未配置时使用 */
+    private static final int DEFAULT_DAILY_CAPACITY = 1200;
 
     /**
      * 处理试制任务
@@ -307,11 +311,11 @@ public class TrialTaskProcessor {
         if (context.getAvailableMachines() != null) {
             for (MdmMoldingMachine machine : context.getAvailableMachines()) {
                 if (machine.getCxMachineCode().equals(machineCode)) {
-                    return machine.getMaxDayCapacity() != null ? machine.getMaxDayCapacity() : 1200;
+                    return machine.getMaxDayCapacity() != null ? machine.getMaxDayCapacity() : DEFAULT_DAILY_CAPACITY;
                 }
             }
         }
-        return 1200;
+        return DEFAULT_DAILY_CAPACITY;
     }
 
     /**

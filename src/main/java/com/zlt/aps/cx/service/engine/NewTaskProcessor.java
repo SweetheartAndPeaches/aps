@@ -29,7 +29,11 @@ public class NewTaskProcessor {
 
     private final BalancingService balancingService;
 
+    /** 默认单次行程产能（条/车），用于硫化机数计算 */
     private static final int DEFAULT_TRIP_CAPACITY = 60;
+
+    /** 默认最大硫化机台数 */
+    private static final int DEFAULT_MAX_LH_MACHINE_COUNT = 10;
 
     /**
      * 处理新增任务
@@ -341,7 +345,7 @@ public class NewTaskProcessor {
             }
 
             if (maxLh == null) {
-                maxLh = 10;
+                maxLh = DEFAULT_MAX_LH_MACHINE_COUNT;
             }
             result.put(machineCode, maxLh);
         }
@@ -385,7 +389,7 @@ public class NewTaskProcessor {
             Integer maxTypes = typeStructureMap.get(key);
             if (maxTypes == null) {
                 maxTypes = context.getMaxTypesPerMachine() != null
-                        ? context.getMaxTypesPerMachine() : 4;
+                        ? context.getMaxTypesPerMachine() : BalancingService.DEFAULT_MAX_TYPES_PER_MACHINE;
             }
             result.put(machineCode, maxTypes);
         }

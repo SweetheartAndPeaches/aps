@@ -1,10 +1,7 @@
 package com.zlt.aps.cx.service.impl;
 
-
 import com.zlt.aps.cx.api.domain.entity.CxStock;
 import com.zlt.aps.cx.entity.config.CxShiftConfig;
-
-import com.zlt.aps.cx.entity.schedule.CxScheduleDetail;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
 import com.zlt.aps.cx.service.engine.*;
@@ -12,8 +9,6 @@ import com.zlt.aps.cx.vo.ScheduleContextVo;
 import com.zlt.aps.mp.api.domain.entity.MdmMaterialInfo;
 import com.zlt.aps.mp.api.domain.entity.MdmMoldingMachine;
 import com.zlt.aps.mp.api.domain.entity.MdmMonthSurplus;
-import com.zlt.aps.mp.api.domain.entity.MdmWorkCalendar;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,21 +26,19 @@ import java.util.stream.Collectors;
  *
  * <p>负责排程主流程编排，具体业务逻辑委托给各专门服务：
  * <ul>
- *   <li>{@link TaskGroupService} - 任务分组服务</li>
- *   <li>{@link ContinueTaskProcessor} - 续作任务处理器</li>
- *   <li>{@link TrialTaskProcessor} - 试制任务处理器</li>
- *   <li>{@link NewTaskProcessor} - 新增任务处理器</li>
- *   <li>{@link ShiftScheduleService} - 班次排产服务</li>
+ *   <li>{@link TaskGroupService} - 任务分组与属性计算</li>
+ *   <li>{@link ContinueTaskProcessor} - 续作任务处理</li>
+ *   <li>{@link TrialTaskProcessor} - 试制任务处理</li>
+ *   <li>{@link NewTaskProcessor} - 新增任务处理（含量试约束）</li>
+ *   <li>{@link ShiftScheduleService} - 班次精排</li>
  * </ul>
  *
- * <p>任务处理流程（方案A）：
+ * <p>排程主流程：
  * <ol>
- *   <li>S5.2 任务分组：续作/试制/新增三类</li>
- *   <li>S5.3 处理续作任务</li>
- *   <li>S5.3 处理试制任务（独立处理，特殊约束）</li>
- *   <li>S5.3 处理新增任务（合并续作+新增，重新均衡）</li>
- *   <li>S5.3.7 班次排产</li>
- *   <li>生成排程结果</li>
+ *   <li>按天循环排程（共排8个班次，约3天）</li>
+ *   <li>每天：任务分组 → 续作处理 → 试制处理 → 新增处理 → 班次精排</li>
+ *   <li>每天排完后更新上下文（库存/余量/在机信息）</li>
+ *   <li>汇总多天结果，按 机台+胎胚+物料编号 维度生成单表排程数据</li>
  * </ol>
  *
  * @author APS Team
@@ -638,141 +631,6 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 log.warn("未知的 CLASS_FIELD: {}", classField);
         }
     }
-
-    // ==================== 以下为接口方法实现（委托给专门服务） ====================
-
-    @Override
-    public List<DailyEmbryoTask> calculateDailyEmbryoTasks(
-            ScheduleContextVo context,
-            Map<String, Set<String>> machineOnlineEmbryoMap,
-            List<CxShiftConfig> dayShifts) {
-
-        LocalDate scheduleDate = context.getCurrentScheduleDate() != null
-                ? context.getCurrentScheduleDate()
-                : context.getScheduleDate();
-
-        TaskGroupService.TaskGroupResult groupResult = taskGroupService.groupTasks(
-                context, machineOnlineEmbryoMap, scheduleDate, dayShifts);
-
-        List<DailyEmbryoTask> allTasks = new ArrayList<>();
-        allTasks.addAll(groupResult.getContinueTasks());
-        allTasks.addAll(groupResult.getTrialTasks());
-        allTasks.addAll(groupResult.getNewTasks());
-
-        return allTasks;
-    }
-
-    @Override
-    public List<MachineAllocationResult> allocateTasksToMachines(
-            List<DailyEmbryoTask> tasks,
-            ScheduleContextVo context) {
-        // 此方法由 processContinueTasks 和 processTrialAndNewTasks 实现
-        return new ArrayList<>();
-    }
-
-    @Override
-    public List<ShiftAllocationResult> balanceShiftAllocation(
-            List<MachineAllocationResult> allocations,
-            ScheduleContextVo context) {
-        return shiftScheduleService.balanceShiftAllocation(
-                allocations, context.getCurrentShiftConfigs(), context);
-    }
-
-    @Override
-    public List<CxScheduleDetail> calculateSequence(
-            List<ShiftAllocationResult> shiftAllocations,
-            ScheduleContextVo context) {
-        // TODO: 实现顺位排序
-        return new ArrayList<>();
-    }
-
-    @Override
-    public BigDecimal calculateStockHours(
-            CxStock stock,
-            Integer vulcanizeMachineCount,
-            Integer vulcanizeMoldCount) {
-
-        if (stock == null) {
-            return BigDecimal.ZERO;
-        }
-
-        Integer effectiveStock = stock.getEffectiveStock();
-        if (effectiveStock <= 0) {
-            return BigDecimal.ZERO;
-        }
-
-        if (vulcanizeMachineCount == null || vulcanizeMachineCount == 0 ||
-                vulcanizeMoldCount == null || vulcanizeMoldCount == 0) {
-            return BigDecimal.ZERO;
-        }
-
-        BigDecimal hourlyOutput = BigDecimal.valueOf(vulcanizeMachineCount)
-                .multiply(BigDecimal.valueOf(vulcanizeMoldCount))
-                .multiply(BigDecimal.valueOf(0.5));
-
-        return BigDecimal.valueOf(effectiveStock)
-                .divide(hourlyOutput, 2, BigDecimal.ROUND_HALF_UP);
-    }
-
-    @Override
-    public BigDecimal calculateDailyDemand(
-            MdmMaterialInfo material,
-            CxStock stock,
-            ScheduleContextVo context) {
-        // 简化实现
-        return BigDecimal.ZERO;
-    }
-
-    @Override
-    public boolean checkStructureConstraint(
-            MdmMoldingMachine machine,
-            MdmMaterialInfo material,
-            ScheduleContextVo context) {
-        // 委托给 NewTaskProcessor
-        return true;
-    }
-
-    @Override
-    public boolean checkTypeLimit(
-            MdmMoldingMachine machine,
-            int currentTypes,
-            MdmMaterialInfo newMaterial,
-            ScheduleContextVo context) {
-        int maxTypes = context.getMaxTypesPerMachine() != null
-                ? context.getMaxTypesPerMachine()
-                : 4;
-        return currentTypes < maxTypes;
-    }
-
-    @Override
-    public int calculatePriorityScore(
-            MdmMaterialInfo material,
-            CxStock stock,
-            ScheduleContextVo context) {
-        // 委托给 TaskGroupService
-        return 0;
-    }
-
-    @Override
-    public int roundToTrip(int quantity, String mode) {
-        int tripCapacity = 12;
-        int trips;
-        switch (mode) {
-            case "CEILING":
-                trips = (int) Math.ceil((double) quantity / tripCapacity);
-                break;
-            case "FLOOR":
-                trips = (int) Math.floor((double) quantity / tripCapacity);
-                break;
-            case "ROUND":
-            default:
-                trips = (int) Math.round((double) quantity / tripCapacity);
-                break;
-        }
-        return trips * tripCapacity;
-    }
-
-    // ==================== 多天排程上下文更新 ====================
 
     /**
      * 每天排程后更新上下文中的库存和硫化余量，供下一天排程使用

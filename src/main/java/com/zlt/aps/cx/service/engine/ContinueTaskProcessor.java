@@ -48,9 +48,18 @@ public class ContinueTaskProcessor {
 
     /** 胎胚库容上限比例 */
     private static final double EMBRYO_STORAGE_RATIO = 0.9;
-    
-    /** 默认整车容量 */
+
+    /** 默认整车容量（条/车） */
     private static final int DEFAULT_TRIP_CAPACITY = 12;
+
+    /** 默认最大硫化机台数 */
+    private static final int DEFAULT_MAX_LH_MACHINE_COUNT = 10;
+
+    /** 默认日产能（条/天），机台未配置时使用 */
+    private static final int DEFAULT_DAILY_CAPACITY = 1200;
+
+    /** 默认机台小时产能（条/小时） */
+    private static final int DEFAULT_HOURLY_CAPACITY = 50;
 
     /** 参数编码：强制保留历史任务 */
     private static final String PARAM_FORCE_KEEP_HISTORY = "FORCE_KEEP_HISTORY_TASK";
@@ -243,8 +252,8 @@ public class ContinueTaskProcessor {
 
             // 兜底：使用默认值
             if (maxLh == null) {
-                maxLh = 10;
-                log.debug("机台 {} 机型 {} 结构 {} 未找到配比配置，使用默认值 10",
+                maxLh = DEFAULT_MAX_LH_MACHINE_COUNT;
+                log.debug("机台 {} 机型 {} 结构 {} 未找到配比配置，使用默认值 {}",
                         machineCode, machineType, structureName);
             }
 
@@ -311,7 +320,7 @@ public class ContinueTaskProcessor {
 
             // 兜底：使用默认值
             if (maxTypes == null) {
-                maxTypes = context.getMaxTypesPerMachine() != null ? context.getMaxTypesPerMachine() : 4;
+                maxTypes = context.getMaxTypesPerMachine() != null ? context.getMaxTypesPerMachine() : BalancingService.DEFAULT_MAX_TYPES_PER_MACHINE;
                 log.debug("机台 {} 机型 {} 结构 {} 未找到胎胚种类数配置，使用默认值 {}",
                         machineCode, machineType, structureName, maxTypes);
             }
@@ -339,11 +348,11 @@ public class ContinueTaskProcessor {
         if (context.getAvailableMachines() != null) {
             for (MdmMoldingMachine machine : context.getAvailableMachines()) {
                 if (machine.getCxMachineCode().equals(machineCode)) {
-                    return machine.getMaxDayCapacity() != null ? machine.getMaxDayCapacity() : 1200;
+                    return machine.getMaxDayCapacity() != null ? machine.getMaxDayCapacity() : DEFAULT_DAILY_CAPACITY;
                 }
             }
         }
-        return 1200;
+        return DEFAULT_DAILY_CAPACITY;
     }
 
     /**
@@ -567,11 +576,11 @@ public class ContinueTaskProcessor {
         if (context.getMachineStructureCapacities() != null && machineCode != null && structureName != null) {
             for (CxMachineStructureCapacity capacity : context.getMachineStructureCapacities()) {
                 if (machineCode.equals(capacity.getCxMachineCode()) && structureName.equals(capacity.getStructureCode())) {
-                    return capacity.getHourlyCapacity() != null ? capacity.getHourlyCapacity() : 50;
+                    return capacity.getHourlyCapacity() != null ? capacity.getHourlyCapacity() : DEFAULT_HOURLY_CAPACITY;
                 }
             }
         }
-        return context.getMachineHourlyCapacity() != null ? context.getMachineHourlyCapacity() : 50;
+        return context.getMachineHourlyCapacity() != null ? context.getMachineHourlyCapacity() : DEFAULT_HOURLY_CAPACITY;
     }
 
     private void allocateTaskToMachine(

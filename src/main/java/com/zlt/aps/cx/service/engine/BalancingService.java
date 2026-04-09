@@ -35,6 +35,9 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class BalancingService {
 
+    /** 机台最大胎胚种类数上限（默认4种） */
+    public static final int DEFAULT_MAX_TYPES_PER_MACHINE = 4;
+
     /** 参数编码：强制保留历史任务 */
     private static final String PARAM_FORCE_KEEP_HISTORY = "FORCE_KEEP_HISTORY_TASK";
     
@@ -254,7 +257,7 @@ public class BalancingService {
 
             // 如果找不到，使用默认值
             if (maxTypes == null) {
-                maxTypes = context.getMaxTypesPerMachine() != null ? context.getMaxTypesPerMachine() : 4;
+                maxTypes = context.getMaxTypesPerMachine() != null ? context.getMaxTypesPerMachine() : DEFAULT_MAX_TYPES_PER_MACHINE;
             }
 
             result.put(machineCode, maxTypes);
@@ -327,7 +330,7 @@ public class BalancingService {
 
             // 从映射中获取该机台的最大胎胚种类数
             Integer maxTypes = machineMaxEmbryoTypesMap.get(config.getCxMachineCode());
-            state.setMaxTypes(maxTypes != null ? maxTypes : 4);
+            state.setMaxTypes(maxTypes != null ? maxTypes : DEFAULT_MAX_TYPES_PER_MACHINE);
 
             state.setCurrentLoad(0);
             state.setCurrentTypes(0);

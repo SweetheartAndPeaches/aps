@@ -22,7 +22,6 @@ import com.zlt.aps.cx.vo.ScheduleContextVo;
 import com.zlt.aps.cx.vo.ScheduleRequestVo;
 import com.zlt.aps.mdm.api.domain.entity.MdmStructureTreadConfig;
 import com.zlt.aps.mp.api.domain.entity.*;
-import com.zlt.aps.mp.api.domain.entity.MdmDevicePlanShut;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
