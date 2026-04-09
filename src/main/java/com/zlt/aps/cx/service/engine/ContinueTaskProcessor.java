@@ -124,7 +124,7 @@ public class ContinueTaskProcessor {
                     
                     // S5.3.1 分配胎胚库存
                     allocateEmbryoStock(task, context, scheduleDate);
-                    
+
                     // S5.3.2 计算待排产量
                     // isOpeningDay: 使用 DayFlagInfo 判断，最近标识为"开"则是开产日
                     boolean isOpeningDay = isOpeningDayByDayFlag(scheduleDate);
