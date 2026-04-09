@@ -392,14 +392,14 @@ public class ContinueTaskProcessor {
     }
     
     /**
-     * 计算任务的待排产量（条）
+     * 计算任务的计划量（条）
      *
-     * <p>仅计算硫化需求与库存抵扣后的待排产量（条），
-     * 整车取整（条→车）统一由 ProductionCalculator 处理。
+     * <p>硫化需求 − 库存抵扣后，调用 ProductionCalculator 整车取整。
+     * 仅在正常生产日执行，开停产日已在 handleOpeningClosingDay 中处理。
      *
      * @param task         任务
      * @param context      排程上下文
-     * @param scheduleDate 排程日期（未使用）
+     * @param scheduleDate 排程日期
      */
     public void calculatePlannedProduction(
             CoreScheduleAlgorithmService.DailyEmbryoTask task,
@@ -407,21 +407,24 @@ public class ContinueTaskProcessor {
             LocalDate scheduleDate,
             boolean isOpeningDay) {
 
-        // 非正常生产日不开常规划排产量计算（开停产日已在 handleOpeningClosingDay 中处理）
+        // 非正常生产日不做常规划排产量计算（开停产日已在 handleOpeningClosingDay 中处理）
         if (!scheduleDayTypeHelper.isNormalProductionDay(scheduleDate)) {
             return;
         }
 
-        // 获取硫化需求量和分配的库存
+        // 硫化需求 − 库存抵扣 = 待排条数
         int vulcanizeDemand = task.getVulcanizeDemand() != null ? task.getVulcanizeDemand() : 0;
         int allocatedStock = task.getAllocatedStock() != null ? task.getAllocatedStock() : 0;
-
-        // 计算待排产量（条），整车取整交给 ProductionCalculator
         int requiredProduction = Math.max(0, vulcanizeDemand - allocatedStock);
-        task.setPlannedProduction(requiredProduction);
 
-        log.debug("任务 {} 待排产量：需求={}，库存={}，待排={}",
-                task.getMaterialCode(), vulcanizeDemand, allocatedStock, requiredProduction);
+        // 整车取整（由 ProductionCalculator 统一管理）
+        int tripCapacity = getTripCapacity(task.getStructureName(), context);
+        int plannedProduction = productionCalculator.roundToVehicle(requiredProduction, tripCapacity);
+        task.setPlannedProduction(plannedProduction);
+
+        log.debug("任务 {} 待排产量：需求={}，库存={}，待排={}，胎面整车={}，计划量={}",
+                task.getMaterialCode(), vulcanizeDemand, allocatedStock,
+                requiredProduction, tripCapacity, plannedProduction);
     }
 
     

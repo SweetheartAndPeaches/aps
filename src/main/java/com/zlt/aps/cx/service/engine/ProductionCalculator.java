@@ -566,6 +566,23 @@ public class ProductionCalculator {
     }
 
     /**
+     * 正常任务的整车取整
+     *
+     * <p>将待排条数向上取整到整车（胎面）。
+     *
+     * @param stripQuantity 待排条数
+     * @param tripCapacity 整车条数（胎面每车条数）
+     * @return 整车取整后的条数
+     */
+    public int roundToVehicle(int stripQuantity, int tripCapacity) {
+        if (stripQuantity <= 0 || tripCapacity <= 0) {
+            return 0;
+        }
+        int trips = (int) Math.ceil((double) stripQuantity / tripCapacity);
+        return trips * tripCapacity;
+    }
+
+    /**
      * 设备计划停机处理
      *
      * <p>停机规则：
