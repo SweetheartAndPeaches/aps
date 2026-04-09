@@ -542,14 +542,7 @@ public class ContinueTaskProcessor {
         DayFlagInfo flagInfo = coreScheduleAlgorithmService.findNearestDayFlag(date);
         return flagInfo != null && "1".equals(flagInfo.dayFlag);
     }
-    
-    /**
-     * 从当前排产日期往前找最近一个有 dayFlag 标识的日期
-     *
-     * @param date 当前排产日期
-     * @return 最近标识信息，包含标识日期和标识值（"0"=停，"1"=开）
-     */
-    
+
     /**
      * 处理收尾任务的余量约束
      *
