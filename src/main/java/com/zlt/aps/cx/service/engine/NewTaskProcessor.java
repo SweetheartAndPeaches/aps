@@ -50,6 +50,9 @@ public class NewTaskProcessor {
      * 处理普通新增任务
      *
      * <p>方案A：合并续作+新增重新均衡
+     *
+     * <p><b>量试约束</b>：若新增任务（量试）的物料+结构与试制任务一致，
+     * 必须安排在同一机台上（试制优先占机台）。
      */
     public List<CoreScheduleAlgorithmService.MachineAllocationResult> processNewTasks(
             List<CoreScheduleAlgorithmService.DailyEmbryoTask> newTasks,
@@ -57,7 +60,8 @@ public class NewTaskProcessor {
             LocalDate scheduleDate,
             List<CxShiftConfig> dayShifts,
             int day,
-            List<CoreScheduleAlgorithmService.MachineAllocationResult> existAllocations) {
+            List<CoreScheduleAlgorithmService.MachineAllocationResult> existAllocations,
+            List<CoreScheduleAlgorithmService.MachineAllocationResult> trialAllocations) {
 
         if (CollectionUtils.isEmpty(newTasks)) {
             return existAllocations != null ? existAllocations : new ArrayList<>();
@@ -78,7 +82,12 @@ public class NewTaskProcessor {
         // Step 1: 排序新增任务
         sortNewTasks(newTasks, context);
 
-        // Step 2: 按结构分组
+        // Step 2: 构建试制约束映射（物料+结构 → 试制机台）
+        // 量试必须与同物料+结构的试制安排在同一机台
+        Map<String, String> trialMachineMap = buildTrialMachineMap(trialAllocations);
+        log.info("试制约束映射：{} 个物料有试制要求", trialMachineMap.size());
+
+        // Step 3: 按结构分组
         Map<String, List<CoreScheduleAlgorithmService.DailyEmbryoTask>> structureTaskMap = newTasks.stream()
                 .filter(t -> t.getStructureName() != null)
                 .collect(Collectors.groupingBy(
@@ -154,11 +163,53 @@ public class NewTaskProcessor {
                 }
             }
 
-            // 合并续作和新增任务
+            // 将试制分配合并到 machineHistoryMap（试制机台也需要被视为已占用）
+            Map<String, CoreScheduleAlgorithmService.MachineAllocationResult> trialAllocationMap =
+                    buildTrialAllocationMap(trialAllocations, structureName, machineHistoryMap);
+
+            // 合并试制任务到 machineHistoryMap
+            for (Map.Entry<String, CoreScheduleAlgorithmService.MachineAllocationResult> trialEntry
+                    : trialAllocationMap.entrySet()) {
+                String machineCode = trialEntry.getKey();
+                CoreScheduleAlgorithmService.MachineAllocationResult alloc = trialEntry.getValue();
+                Set<String> embryos = machineHistoryMap.computeIfAbsent(machineCode, k -> new HashSet<>());
+                if (alloc.getTaskAllocations() != null) {
+                    for (CoreScheduleAlgorithmService.TaskAllocation taskAlloc : alloc.getTaskAllocations()) {
+                        embryos.add(taskAlloc.getMaterialCode());
+                    }
+                }
+            }
+
+            // 将试制机台也加入已占用
+            for (String trialMachineCode : trialAllocationMap.keySet()) {
+                usedMachineCodes.add(trialMachineCode);
+            }
+
+            // 量试约束处理：强制将量试任务分配到对应试制机台
+            List<CoreScheduleAlgorithmService.DailyEmbryoTask> trialConstrainedHandled = new ArrayList<>();
+            List<CoreScheduleAlgorithmService.DailyEmbryoTask> normalTasks = new ArrayList<>();
+
+            for (CoreScheduleAlgorithmService.DailyEmbryoTask task : tasks) {
+                if (allocateTrialConstrainedTask(task, trialMachineMap, trialAllocationMap, context)) {
+                    trialConstrainedHandled.add(task);
+                } else {
+                    normalTasks.add(task);
+                }
+            }
+
+            if (!trialConstrainedHandled.isEmpty()) {
+                log.info("结构 {} 量试约束处理完成，强制分配 {} 个任务到试制机台",
+                        structureName, trialConstrainedHandled.size());
+            }
+            if (!normalTasks.isEmpty()) {
+                log.info("结构 {} 剩余 {} 个正常新增任务待均衡", structureName, normalTasks.size());
+            }
+
+            // 合并续作和正常新增任务（量试已强制分配，不再参与均衡）
             List<CoreScheduleAlgorithmService.DailyEmbryoTask> allTasksForStructure = new ArrayList<>();
             allTasksForStructure.addAll(continueTasksForStructure);
 
-            for (CoreScheduleAlgorithmService.DailyEmbryoTask task : tasks) {
+            for (CoreScheduleAlgorithmService.DailyEmbryoTask task : normalTasks) {
                 task.setIsContinueTask(false);
                 int demand = task.getPlannedProduction() != null && task.getPlannedProduction() > 0
                         ? task.getPlannedProduction() : task.getDemandQuantity();
@@ -458,5 +509,118 @@ public class NewTaskProcessor {
         allocation.getTaskAllocations().add(taskAllocation);
         allocation.setUsedCapacity(allocation.getUsedCapacity() + quantity);
         allocation.setRemainingCapacity(allocation.getRemainingCapacity() - quantity);
+    }
+
+    /**
+     * 构建试制约束映射（物料编码 → 机台编码）
+     *
+     * <p>量试任务必须与同物料+结构的试制安排在同一机台。
+     * 从试制分配结果中提取：materialCode → machineCode。
+     */
+    private Map<String, String> buildTrialMachineMap(
+            List<CoreScheduleAlgorithmService.MachineAllocationResult> trialAllocations) {
+        Map<String, String> trialMachineMap = new HashMap<>();
+        if (CollectionUtils.isEmpty(trialAllocations)) {
+            return trialMachineMap;
+        }
+        for (CoreScheduleAlgorithmService.MachineAllocationResult alloc : trialAllocations) {
+            String machineCode = alloc.getMachineCode();
+            if (alloc.getTaskAllocations() == null) {
+                continue;
+            }
+            for (CoreScheduleAlgorithmService.TaskAllocation taskAlloc : alloc.getTaskAllocations()) {
+                // key = materialCode，同物料的量试必须与试制同机台
+                if (taskAlloc.getMaterialCode() != null) {
+                    trialMachineMap.put(taskAlloc.getMaterialCode(), machineCode);
+                }
+            }
+        }
+        return trialMachineMap;
+    }
+
+    /**
+     * 构建试制分配映射（仅包含当前结构的试制分配）
+     *
+     * <p>将 trialAllocations 中属于当前结构的机台提取出来，
+     * 存入 machineAllocationMap，供量试任务强制分配使用。
+     */
+    private Map<String, CoreScheduleAlgorithmService.MachineAllocationResult> buildTrialAllocationMap(
+            List<CoreScheduleAlgorithmService.MachineAllocationResult> trialAllocations,
+            String structureName,
+            Map<String, Set<String>> machineHistoryMap) {
+
+        Map<String, CoreScheduleAlgorithmService.MachineAllocationResult> result = new HashMap<>();
+        if (CollectionUtils.isEmpty(trialAllocations)) {
+            return result;
+        }
+
+        // 获取当前结构可用的机台编码集合
+        Set<String> availableMachineCodes = new HashSet<>(machineHistoryMap.keySet());
+
+        for (CoreScheduleAlgorithmService.MachineAllocationResult alloc : trialAllocations) {
+            String machineCode = alloc.getMachineCode();
+            if (availableMachineCodes.contains(machineCode)) {
+                // 该试制机台也在当前结构可用机台中
+                result.put(machineCode, alloc);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 分配量试任务到试制机台
+     *
+     * <p>若该物料有对应试制机台（trialMachineMap），强制分配到该机台；
+     * 否则返回 false，由后续均衡逻辑处理。
+     *
+     * @param task               量试任务
+     * @param trialMachineMap    物料→试制机台映射
+     * @param trialAllocationMap 当前结构试制分配映射
+     * @param context            排程上下文
+     * @return true 表示已强制分配；false 表示无约束或试制机台不可用，跳过
+     */
+    private boolean allocateTrialConstrainedTask(
+            CoreScheduleAlgorithmService.DailyEmbryoTask task,
+            Map<String, String> trialMachineMap,
+            Map<String, CoreScheduleAlgorithmService.MachineAllocationResult> trialAllocationMap,
+            ScheduleContextVo context) {
+
+        String materialCode = task.getMaterialCode();
+        String forcedMachineCode = trialMachineMap.get(materialCode);
+        if (forcedMachineCode == null) {
+            // 无试制约束，跳过，由均衡逻辑处理
+            return false;
+        }
+
+        CoreScheduleAlgorithmService.MachineAllocationResult allocation =
+                trialAllocationMap.get(forcedMachineCode);
+        if (allocation == null) {
+            // 试制机台不在当前结构可用机台中，跳过
+            log.warn("试制约束：物料 {} 应分配到机台 {}，但该机台不在当前结构可用机台中，跳过",
+                    materialCode, forcedMachineCode);
+            return false;
+        }
+
+        // 强制分配到试制机台
+        int demand = task.getDemandQuantity() != null ? task.getDemandQuantity() : 0;
+        task.setPlannedProduction(demand);
+        task.setIsContinueTask(false);
+
+        CoreScheduleAlgorithmService.TaskAllocation taskAlloc = new CoreScheduleAlgorithmService.TaskAllocation();
+        taskAlloc.setMaterialCode(materialCode);
+        taskAlloc.setMaterialName(task.getMaterialName());
+        taskAlloc.setStructureName(task.getStructureName());
+        taskAlloc.setQuantity(demand);
+        taskAlloc.setPriority(task.getPriority());
+        taskAlloc.setStockHours(task.getStockHours());
+        taskAlloc.setIsTrialTask(false);
+        taskAlloc.setIsContinueTask(false);
+
+        allocation.getTaskAllocations().add(taskAlloc);
+        allocation.setUsedCapacity(allocation.getUsedCapacity() + demand);
+        allocation.setRemainingCapacity(allocation.getRemainingCapacity() - demand);
+
+        log.info("量试任务 {} 强制分配到试制机台 {}，计划量={}", materialCode, forcedMachineCode, demand);
+        return true;
     }
 }

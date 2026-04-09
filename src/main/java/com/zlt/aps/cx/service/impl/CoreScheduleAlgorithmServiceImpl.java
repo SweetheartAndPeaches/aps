@@ -188,13 +188,15 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         log.info("试制任务处理完成，机台分配数: {}", trialAllocations.size());
 
         // ==================== 第四步：S5.3 处理新增任务（合并续作+新增，重新均衡） ====================
+        // 注意：量试约束（与试制同物料+结构→同机台）在 NewTaskProcessor 中处理
         List<MachineAllocationResult> newAllocations = newTaskProcessor.processNewTasks(
                 taskGroup.getNewTasks(),
                 context,
                 scheduleDate,
                 dayShifts,
                 day,
-                continueAllocations);
+                continueAllocations,
+                trialAllocations);
         log.info("新增任务处理完成，机台分配数: {}", newAllocations.size());
 
         // ==================== 第五步：合并分配结果 ====================
