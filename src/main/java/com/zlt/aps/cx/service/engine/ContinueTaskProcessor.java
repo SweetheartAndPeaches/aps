@@ -390,16 +390,10 @@ public class ContinueTaskProcessor {
     }
     
     /**
-     * 计算任务的计划量（条）和所需车数
+     * 计算任务的待排产量（条）
      *
-     * <p>计算步骤：
-     * <ol>
-     *   <li>硫化需求量（vulcanizeDemand）= 排量</li>
-     *   <li>库存抵扣 = allocatedStock（由 allocateEmbryoStock 设置）</li>
-     *   <li>待排产量 = max(0, vulcanizeDemand - 库存抵扣)</li>
-     *   <li>所需车数 = ceil(待排产量 / 胎面整车条数)</li>
-     *   <li>若为收尾任务，根据成型余量判断是否收尾（收尾则不限量）</li>
-     * </ol>
+     * <p>仅计算硫化需求与库存抵扣后的待排产量（条），
+     * 整车取整（条→车）统一由 ProductionCalculator 处理。
      *
      * @param task         任务
      * @param context      排程上下文
@@ -415,61 +409,16 @@ public class ContinueTaskProcessor {
         int vulcanizeDemand = task.getVulcanizeDemand() != null ? task.getVulcanizeDemand() : 0;
         int allocatedStock = task.getAllocatedStock() != null ? task.getAllocatedStock() : 0;
 
-        // Step 2: 计算需要的计划量
+        // Step 2: 计算需要的计划量（条），整车取整交给 ProductionCalculator
         int requiredProduction = Math.max(0, vulcanizeDemand - allocatedStock);
 
-        // Step 3: 获取胎面整车条数
-        String structureName = task.getStructureName();
-        Map<String, Integer> treadCountMap = context.getStructureTreadCountMap();
-        int treadCount = treadCountMap != null ? treadCountMap.getOrDefault(structureName, 1) : 1;
-
-        // Step 4: 计算需要的车数
-        int requiredCars = 0;
-        if (treadCount > 0) {
-            requiredCars = (int) Math.ceil((double) requiredProduction / treadCount);
-        }
-
-        // Step 5: 如果是收尾任务，判断是否需要收尾
-        if (Boolean.TRUE.equals(task.getIsEndingTask())) {
-            requiredCars = calculateEndingCars(task, context, requiredProduction, requiredCars);
-        }
-
-        // Step 6: 设置任务属性
+        // Step 3: 设置待排产量
         task.setPlannedProduction(requiredProduction);
-        task.setRequiredCars(requiredCars);
 
-        log.debug("任务 {} 计划量计算：需求={}，库存={}，需要量={}，胎面条数={}，需要车数={}",
-                task.getMaterialCode(), vulcanizeDemand, allocatedStock, requiredProduction, treadCount, requiredCars);
+        log.debug("任务 {} 待排产量：需求={}，库存={}，待排={}",
+                task.getMaterialCode(), vulcanizeDemand, allocatedStock, requiredProduction);
     }
 
-    /**
-     * 计算收尾任务需要的车数
-     *
-     * <p>判断逻辑与 ProductionCalculator.handleEndingRemainder 一致：
-     * - 如果成型余量充足，不收尾
-     * - 如果成型余量不足，需要收尾
-     */
-    private int calculateEndingCars(
-            CoreScheduleAlgorithmService.DailyEmbryoTask task,
-            ScheduleContextVo context,
-            int requiredProduction,
-            int calculatedCars) {
-
-        String materialCode = task.getRelatedMaterialCode();
-        Map<String, Integer> formingRemainderMap = context.getFormingRemainderMap();
-        Integer formingRemainder = formingRemainderMap != null ? formingRemainderMap.get(materialCode) : 0;
-
-        // 判断是否需要收尾
-        if (formingRemainder != null && formingRemainder > 0) {
-            // 成型余量充足，不需要收尾
-            log.debug("任务 {} 收尾判断：成型余量={}，充足，不收尾", task.getMaterialCode(), formingRemainder);
-            return 0;
-        }
-
-        // 需要收尾，返回计算的车数
-        log.debug("任务 {} 收尾判断：成型余量不足，需要收尾，车数={}", task.getMaterialCode(), calculatedCars);
-        return calculatedCars;
-    }
     
     /**
      * 处理开产日和停产日对任务计划量的影响
