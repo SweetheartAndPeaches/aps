@@ -4,8 +4,8 @@ package com.zlt.aps.cx.service;
 import com.zlt.aps.cx.entity.CxStock;
 import com.zlt.aps.cx.entity.CxTreadParkingConfig;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
-import com.zlt.aps.mp.api.domain.entity.MdmMaterialInfo;
-import com.zlt.aps.mp.api.domain.entity.MdmMoldingMachine;
+import com.zlt.aps.mdm.api.domain.entity.MdmMaterialInfo;
+import com.zlt.aps.mdm.api.domain.entity.MdmMoldingMachine;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;

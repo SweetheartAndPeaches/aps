@@ -1,7 +1,7 @@
 package com.zlt.aps.cx.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import com.zlt.aps.mp.api.domain.entity.MdmStructureTreadConfig;
+import com.zlt.aps.mdm.api.domain.entity.MdmStructureTreadConfig;
 import org.apache.ibatis.annotations.Mapper;
 
 /**
