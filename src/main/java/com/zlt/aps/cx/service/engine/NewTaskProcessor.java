@@ -82,12 +82,7 @@ public class NewTaskProcessor {
         // Step 1: 排序新增任务
         sortNewTasks(newTasks, context);
 
-        // Step 2: 构建试制约束映射（物料+结构 → 试制机台）
-        // 量试必须与同物料+结构的试制安排在同一机台
-        Map<String, String> trialMachineMap = buildTrialMachineMap(trialAllocations);
-        log.info("试制约束映射：{} 个物料有试制要求", trialMachineMap.size());
-
-        // Step 3: 按结构分组
+        // Step 2: 按结构分组
         Map<String, List<CoreScheduleAlgorithmService.DailyEmbryoTask>> structureTaskMap = newTasks.stream()
                 .filter(t -> t.getStructureName() != null)
                 .collect(Collectors.groupingBy(
@@ -95,7 +90,7 @@ public class NewTaskProcessor {
                         LinkedHashMap::new,
                         Collectors.toList()));
 
-        // Step 3: 获取可用机台
+        // Step 2: 获取可用机台
         List<MdmMoldingMachine> availableMachines = context.getAvailableMachines();
         if (CollectionUtils.isEmpty(availableMachines)) {
             log.warn("没有可用的成型机台");
@@ -163,10 +158,13 @@ public class NewTaskProcessor {
                 }
             }
 
+            // 构建当前结构的试制约束映射（仅该结构下的试制任务）
+            // 量试任务与同物料+同结构的试制 → 固定机台
+            Map<String, String> trialMachineMap = buildTrialMachineMap(trialAllocations, structureName);
+
             // 记录试制机台及其量试约束
             // 试制任务本身忽略不计（数量少），不加入 machineHistoryMap
             // 量试任务（isProductionTrial）当新增任务，需合并到 machineHistoryMap
-            // 区分方式：试制任务由 TrialTaskProcessor 创建，量试任务在 newTasks 中存在同物料
 
             // 先建立 newTasks 中的物料集合（量试物料）
             Set<String> volumeTrialMaterials = new HashSet<>();
@@ -531,13 +529,14 @@ public class NewTaskProcessor {
     }
 
     /**
-     * 构建试制约束映射（物料编码 → 机台编码）
+     * 构建指定结构的试制约束映射（物料编码 → 机台编码）
      *
-     * <p>量试任务必须与同物料+结构的试制安排在同一机台。
-     * 从试制分配结果中提取：materialCode → machineCode。
+     * <p>仅返回与指定结构匹配的试制任务。
+     * 量试任务必须与同物料+结构的试制安排在同一机台。
      */
     private Map<String, String> buildTrialMachineMap(
-            List<CoreScheduleAlgorithmService.MachineAllocationResult> trialAllocations) {
+            List<CoreScheduleAlgorithmService.MachineAllocationResult> trialAllocations,
+            String structureName) {
         Map<String, String> trialMachineMap = new HashMap<>();
         if (CollectionUtils.isEmpty(trialAllocations)) {
             return trialMachineMap;
@@ -548,8 +547,9 @@ public class NewTaskProcessor {
                 continue;
             }
             for (CoreScheduleAlgorithmService.TaskAllocation taskAlloc : alloc.getTaskAllocations()) {
-                // key = materialCode，同物料的量试必须与试制同机台
-                if (taskAlloc.getMaterialCode() != null) {
+                if (structureName.equals(taskAlloc.getStructureName())
+                        && taskAlloc.getMaterialCode() != null) {
+                    // 仅返回与当前结构匹配的物料映射
                     trialMachineMap.put(taskAlloc.getMaterialCode(), machineCode);
                 }
             }
