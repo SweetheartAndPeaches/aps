@@ -604,10 +604,6 @@ public class ContinueTaskProcessor {
         return context.getMachineHourlyCapacity() != null ? context.getMachineHourlyCapacity() : 50;
     }
 
-    private int getEmbryoStorageLimit(String materialCode, ScheduleContextVo context) {
-        return Integer.MAX_VALUE;
-    }
-
     private void allocateTaskToMachine(
             CoreScheduleAlgorithmService.MachineAllocationResult allocation,
             CoreScheduleAlgorithmService.DailyEmbryoTask task,

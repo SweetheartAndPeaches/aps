@@ -315,20 +315,6 @@ public class ShiftScheduleService {
     }
 
     /**
-     * 获取结构的整车容量
-     */
-    private int getTripCapacity(String structureCode, Map<String, MdmStructureTreadConfig> shiftCapacityMap) {
-        if (shiftCapacityMap != null) {
-            for (MdmStructureTreadConfig capacity : shiftCapacityMap.values()) {
-                if (capacity.getTreadCount() != null && capacity.getTreadCount() > 0) {
-                    return capacity.getTreadCount();
-                }
-            }
-        }
-        return 12;
-    }
-
-    /**
      * 整车取整
      */
     private int roundToTrip(int quantity, String mode) {
