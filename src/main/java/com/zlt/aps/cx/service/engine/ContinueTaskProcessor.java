@@ -74,9 +74,9 @@ public class ContinueTaskProcessor {
 
         log.info("========== 开始处理续作任务，共 {} 个任务 ==========", continueTasks.size());
 
-        // Step 1: 按结构分组任务，并在分组时计算 plannedProduction
+        // Step 1: 按结构分组，并在分组时完成所有任务属性计算
         Map<String, List<CoreScheduleAlgorithmService.DailyEmbryoTask>> structureTaskMap = 
-                groupTasksByStructure(continueTasks, context, scheduleDate);
+                groupTasksByStructure(continueTasks, context, scheduleDate, dayShifts);
         log.info("按结构分组完成，共 {} 个结构", structureTaskMap.size());
 
         // Step 2: 获取是否强制保留历史任务
@@ -122,14 +122,7 @@ public class ContinueTaskProcessor {
                 for (BalancingService.EmbryoAssignment embryoAssignment : assignment.getEmbryoAssignments()) {
                     CoreScheduleAlgorithmService.DailyEmbryoTask task = embryoAssignment.getTask();
 
-                    // S5.3.3 收尾余量处理
-                    boolean isOpeningDay = isOpeningDayByDayFlag(scheduleDate);
-                    handleEndingRemainder(task, context, isOpeningDay);
-
-                     // S5.3.4 开停产特殊处理（根据工作日历 dayFlag 判断）
-                    handleOpeningClosingDay(task, context, dayShifts);
-                    
-                    // 分配任务到机台
+                    // S5.3.1~S5.3.4 均已在分组阶段计算完成，直接分配任务到机台
                     if (task.getPlannedProduction() != null && task.getPlannedProduction() > 0) {
                         allocateTaskToMachine(allocation, task, context);
                     }
@@ -148,12 +141,13 @@ public class ContinueTaskProcessor {
     // ==================== 辅助方法 ====================
 
     /**
-     * 按结构分组，并在分组时计算 plannedProduction
+     * 按结构分组，并在分组时完成所有任务属性计算
      */
     private Map<String, List<CoreScheduleAlgorithmService.DailyEmbryoTask>> groupTasksByStructure(
             List<CoreScheduleAlgorithmService.DailyEmbryoTask> tasks,
             ScheduleContextVo context,
-            LocalDate scheduleDate) {
+            LocalDate scheduleDate,
+            List<CxShiftConfig> dayShifts) {
 
         // 计算开产日标识（分组内所有任务共用）
         boolean isOpeningDay = isOpeningDayByDayFlag(scheduleDate);
@@ -166,13 +160,17 @@ public class ContinueTaskProcessor {
                         LinkedHashMap::new,
                         Collectors.toList()));
 
-        // 在分组内计算每个任务的 plannedProduction
+        // 在分组内计算每个任务的全部属性
         for (List<CoreScheduleAlgorithmService.DailyEmbryoTask> taskList : result.values()) {
             for (CoreScheduleAlgorithmService.DailyEmbryoTask task : taskList) {
                 // S5.3.1 分配胎胚库存（设置 allocatedStock）
                 allocateEmbryoStock(task, context, scheduleDate);
                 // S5.3.2 计算待排产量（plannedProduction 用于班次排量）
                 calculatePlannedProduction(task, context, scheduleDate, isOpeningDay);
+                // S5.3.3 收尾余量处理
+                handleEndingRemainder(task, context, isOpeningDay);
+                // S5.3.4 开停产特殊处理
+                handleOpeningClosingDay(task, context, dayShifts);
             }
         }
 
