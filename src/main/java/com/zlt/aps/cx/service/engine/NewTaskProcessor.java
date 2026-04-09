@@ -213,11 +213,7 @@ public class NewTaskProcessor {
                 }
             }
 
-            if (!volumeTrialTasks.isEmpty()) {
-                log.info("结构 {} 有 {} 个量试任务需均衡后分配到试制机台", structureName, volumeTrialTasks.size());
-            }
-
-            // 合并续作和正常新增任务（量试不参与均衡，等待均衡后分配到试制机台）
+            // 量试任务合并到续作任务中，一起参与均衡
             List<CoreScheduleAlgorithmService.DailyEmbryoTask> allTasksForStructure = new ArrayList<>();
             allTasksForStructure.addAll(continueTasksForStructure);
             for (CoreScheduleAlgorithmService.DailyEmbryoTask task : normalTasks) {
@@ -230,6 +226,18 @@ public class NewTaskProcessor {
 
                 log.debug("新增任务：materialCode={}, demand={}, load={} (DEFAULT_TRIP_CAPACITY={})",
                         task.getMaterialCode(), demand, load, DEFAULT_TRIP_CAPACITY);
+            }
+            // 量试任务：提前选好机台（试制机台已标记为已占用），合并进来参与均衡
+            for (CoreScheduleAlgorithmService.DailyEmbryoTask volTask : volumeTrialTasks) {
+                volTask.setIsContinueTask(false);
+                int demand = volTask.getPlannedProduction() != null && volTask.getPlannedProduction() > 0
+                        ? volTask.getPlannedProduction() : volTask.getDemandQuantity();
+                int load = (int) Math.ceil((double) demand / DEFAULT_TRIP_CAPACITY);
+                volTask.setVulcanizeMachineCount(load);
+                allTasksForStructure.add(volTask);
+
+                log.debug("量试任务：materialCode={}, demand={}, load={}, 固定机台={}",
+                        volTask.getMaterialCode(), demand, load, trialMachineMap.get(volTask.getMaterialCode()));
             }
 
             // 构建机台最大硫化机数映射（根据每台机台的机型+结构获取）
@@ -261,11 +269,6 @@ public class NewTaskProcessor {
             // 构建分配结果
             List<CoreScheduleAlgorithmService.MachineAllocationResult> structureResults =
                     buildResultsFromBalancingResult(balancingResult, allTasksForStructure, context);
-
-            // 量试任务分配到试制机台（均衡后处理）
-            if (!volumeTrialTasks.isEmpty()) {
-                allocateVolumeTrialsToTrialMachines(structureResults, volumeTrialTasks, trialMachineMap, context);
-            }
 
             allResults.addAll(structureResults);
 
@@ -553,69 +556,4 @@ public class NewTaskProcessor {
         }
         return trialMachineMap;
     }
-
-    /**
-
-    /**
-     * 将量试任务分配到试制机台
-     *
-     * <p>在均衡完成后执行。根据 trialMachineMap（物料→机台），
-     * 将量试任务追加到对应的试制机台上。
-     *
-     * @param structureResults        当前结构的均衡分配结果
-     * @param volumeTrialTasks       量试任务列表
-     * @param trialMachineMap       物料→试制机台映射
-     * @param context               排程上下文
-     */
-    private void allocateVolumeTrialsToTrialMachines(
-            List<CoreScheduleAlgorithmService.MachineAllocationResult> structureResults,
-            List<CoreScheduleAlgorithmService.DailyEmbryoTask> volumeTrialTasks,
-            Map<String, String> trialMachineMap,
-            ScheduleContextVo context) {
-
-        for (CoreScheduleAlgorithmService.DailyEmbryoTask volTask : volumeTrialTasks) {
-            String materialCode = volTask.getMaterialCode();
-            String machineCode = trialMachineMap.get(materialCode);
-            if (machineCode == null) {
-                log.warn("量试任务 {} 无法找到对应的试制机台，跳过", materialCode);
-                continue;
-            }
-
-            // 在结构结果中查找对应机台
-            CoreScheduleAlgorithmService.MachineAllocationResult targetAlloc = null;
-            for (CoreScheduleAlgorithmService.MachineAllocationResult alloc : structureResults) {
-                if (alloc.getMachineCode().equals(machineCode)) {
-                    targetAlloc = alloc;
-                    break;
-                }
-            }
-
-            if (targetAlloc == null) {
-                log.warn("量试任务 {} 的试制机台 {} 不在均衡结果中，跳过", materialCode, machineCode);
-                continue;
-            }
-
-            // 分配量试任务
-            int demand = volTask.getDemandQuantity() != null ? volTask.getDemandQuantity() : 0;
-            volTask.setPlannedProduction(demand);
-
-            CoreScheduleAlgorithmService.TaskAllocation taskAlloc = new CoreScheduleAlgorithmService.TaskAllocation();
-            taskAlloc.setMaterialCode(materialCode);
-            taskAlloc.setMaterialName(volTask.getMaterialName());
-            taskAlloc.setStructureName(volTask.getStructureName());
-            taskAlloc.setQuantity(demand);
-            taskAlloc.setPriority(volTask.getPriority());
-            taskAlloc.setStockHours(volTask.getStockHours());
-            taskAlloc.setIsTrialTask(false);
-            taskAlloc.setIsContinueTask(false);
-            taskAlloc.setIsMainProduct(volTask.getIsMainProduct());
-
-            targetAlloc.getTaskAllocations().add(taskAlloc);
-            targetAlloc.setUsedCapacity(targetAlloc.getUsedCapacity() + demand);
-            targetAlloc.setRemainingCapacity(targetAlloc.getRemainingCapacity() - demand);
-
-            log.info("量试任务 {} 分配到试制机台 {}，计划量={}", materialCode, machineCode, demand);
-        }
-    }
 }
-
