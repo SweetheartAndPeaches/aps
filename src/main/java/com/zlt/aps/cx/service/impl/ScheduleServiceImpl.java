@@ -137,7 +137,16 @@ public class ScheduleServiceImpl implements ScheduleService {
             }
 
             // 2. 数据完整性校验
-            validateScheduleData(context, request.getScheduleDate(), request.getFactoryCode());
+            ScheduleDataValidationResult validationResult = validateScheduleData(context, request.getScheduleDate(), request.getFactoryCode());
+
+            if (!validationResult.isPassed()) {
+                result.setMessage("数据完整性校验不通过，共 " + validationResult.getErrorCount() + " 项错误");
+                result.setValidationErrors(convertValidationDetails(validationResult,
+                        ScheduleDataValidationResult.ValidationLevel.ERROR));
+                result.setValidationWarnings(convertValidationDetails(validationResult,
+                        ScheduleDataValidationResult.ValidationLevel.WARN));
+                return result;
+            }
 
             // 3. 执行核心排程算法(流程图S5.2-S5.5)
             List<CxScheduleResult> scheduleResults = coreScheduleAlgorithmService.executeSchedule(context);
@@ -716,21 +725,42 @@ public class ScheduleServiceImpl implements ScheduleService {
     /**
      * 数据完整性校验
      */
-    private void validateScheduleData(ScheduleContextVo context, LocalDate scheduleDate, String factoryCode) {
+    private ScheduleDataValidationResult validateScheduleData(ScheduleContextVo context, LocalDate scheduleDate, String factoryCode) {
         ScheduleDataValidationResult validationResult = scheduleDataValidator.validate(context, scheduleDate, factoryCode);
 
         if (!validationResult.isPassed()) {
-            String errorMsg = "数据完整性校验不通过，无法进行排程：" + validationResult.generateSummary();
-            log.error(errorMsg);
-            throw new RuntimeException(errorMsg);
+            log.error("数据完整性校验不通过：{}", validationResult.generateSummary());
+            for (ScheduleDataValidationResult.ValidationDetail detail : validationResult.getDetails()) {
+                if (detail.getLevel() == ScheduleDataValidationResult.ValidationLevel.ERROR) {
+                    log.error("  [错误] {} - {} | 建议：{}", detail.getDataItem(), detail.getMessage(), detail.getSuggestion());
+                }
+            }
         }
 
         if (validationResult.getWarnCount() > 0) {
             log.warn("数据完整性校验存在警告，请检查日志：{}", validationResult.generateSummary());
         }
+
+        return validationResult;
     }
 
     // ==================== 私有方法：排程结果相关 ====================
+
+    /**
+     * 将校验明细转换为API返回的ValidationDetail列表
+     */
+    private List<ScheduleService.ValidationDetail> convertValidationDetails(
+            ScheduleDataValidationResult validationResult,
+            ScheduleDataValidationResult.ValidationLevel level) {
+        List<ScheduleService.ValidationDetail> result = new ArrayList<>();
+        for (ScheduleDataValidationResult.ValidationDetail detail : validationResult.getDetails()) {
+            if (detail.getLevel() == level) {
+                result.add(new ScheduleService.ValidationDetail(
+                        detail.getDataItem(), detail.getMessage(), detail.getSuggestion()));
+            }
+        }
+        return result;
+    }
 
     /**
      * 保存排程结果

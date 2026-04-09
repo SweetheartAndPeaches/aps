@@ -60,7 +60,15 @@ public class ScheduleMainController {
         if (result.isSuccess()) {
             return AjaxResult.success(result);
         } else {
-            return AjaxResult.error("排程失败[" + dto.getScheduleDate() + "]: " + result.getMessage());
+            // 校验不通过时，将完整校验明细返回前端
+            AjaxResult ajax = AjaxResult.error("排程失败[" + dto.getScheduleDate() + "]: " + result.getMessage());
+            if (result.getValidationErrors() != null && !result.getValidationErrors().isEmpty()) {
+                ajax.put("validationErrors", result.getValidationErrors());
+            }
+            if (result.getValidationWarnings() != null && !result.getValidationWarnings().isEmpty()) {
+                ajax.put("validationWarnings", result.getValidationWarnings());
+            }
+            return ajax;
         }
     }
 
