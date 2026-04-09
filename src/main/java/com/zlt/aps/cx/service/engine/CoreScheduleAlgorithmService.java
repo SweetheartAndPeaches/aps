@@ -1,7 +1,7 @@
 package com.zlt.aps.cx.service.engine;
 
 
-import com.zlt.aps.cx.entity.CxPrecisionPlan;
+import com.zlt.aps.mdm.api.domain.entity.CxPrecisionPlan;
 import com.zlt.aps.cx.api.domain.entity.CxStock;
 import com.zlt.aps.cx.entity.config.CxShiftConfig;
 import com.zlt.aps.cx.entity.schedule.CxScheduleDetail;
