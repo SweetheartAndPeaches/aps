@@ -159,10 +159,10 @@ public class ShiftScheduleService {
 
             MdmStructureTreadConfig treadConfig = structureTreadConfigMap.get(structureCode);
 
-            // 只在花纹数合理（<=排量）时使用花纹配置分配
+            // 只在整车条数合理（<=排量）时使用整车条数配置分配
             if (treadConfig != null && treadConfig.getTreadCount() != null && treadConfig.getTreadCount() > 0 && treadConfig.getTreadCount() <= taskQty) {
                 int treadCount = treadConfig.getTreadCount();
-                log.info("花纹配置分配: 结构={}, 排量={}, 花纹数={}", structureCode, taskQty, treadCount);
+                log.info("整车条数配置分配: 结构={}, 排量={}, 整车条数={}", structureCode, taskQty, treadCount);
                 int[] shiftQty = calculateShiftQtyByTreadCount(taskQty, treadCount, shiftCodes, context);
 
                 for (int i = 0; i < shiftCodes.length; i++) {
