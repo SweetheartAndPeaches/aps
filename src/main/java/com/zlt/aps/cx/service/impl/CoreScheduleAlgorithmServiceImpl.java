@@ -275,29 +275,55 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
     /**
      * 判断是否为停产日
-     * 按日期查询工作日历，检查dayFlag字段
+     * 从当前日期往前找最近一个有 dayFlag 标识的日期，根据该标识判断
      */
     private boolean isStopProductionDay(ScheduleContextVo context, LocalDate date) {
-        // 按日期查询工作日历
-        MdmWorkCalendar workCalendar = workCalendarMapper.selectOne(
-                new LambdaQueryWrapper<MdmWorkCalendar>()
-                        .eq(MdmWorkCalendar::getProcCode, "CX")  // 成型工序编码
-                        .eq(MdmWorkCalendar::getProductionDate, java.sql.Date.valueOf(date)));
-        
-        if (workCalendar != null) {
-            // 使用 dayFlag 判断：0-停, 1-开
-            String dayFlag = workCalendar.getDayFlag();
-            log.info("日期 {} 工作日历查询结果: dayFlag={}, 判定为{}", date, dayFlag, "0".equals(dayFlag) ? "停产日" : "生产日");
-            if ("0".equals(dayFlag)) {
-                return true; // 停产日
-            }
-        } else {
-            // 工作日历中没有记录，默认为生产日
-            log.info("日期 {} 无工作日历记录，默认为生产日", date);
+        DayFlagInfo flagInfo = findNearestDayFlag(context.getCurrentScheduleDate());
+        if (flagInfo == null || flagInfo.dayFlag == null) {
+            return false;
         }
-
-        // 不再使用 isClosingDay 判断，仅依赖工作日历配置
+        // 最近的标识是「停」，则该日期及之后都是停产日
+        if ("0".equals(flagInfo.dayFlag)) {
+            log.info("日期 {} 最近 dayFlag={}（停），判定为停产日", date, flagInfo.dayFlag);
+            return true;
+        }
         return false;
+    }
+    
+    /**
+     * 从当前排产日期往前找最近一个有 dayFlag 标识的日期
+     *
+     * @param date 当前排产日期
+     * @return 最近标识信息，包含标识日期和标识值（"0"=停，"1"=开）
+     */
+    public DayFlagInfo findNearestDayFlag(LocalDate date) {
+        // 最多往前查 30 天
+        for (int i = 0; i < 30; i++) {
+            LocalDate queryDate = date.minusDays(i);
+            MdmWorkCalendar calendar = workCalendarMapper.selectOne(
+                    new LambdaQueryWrapper<MdmWorkCalendar>()
+                            .eq(MdmWorkCalendar::getProcCode, "CX")
+                            .eq(MdmWorkCalendar::getProductionDate, java.sql.Date.valueOf(queryDate)));
+            if (calendar != null && calendar.getDayFlag() != null) {
+                return new DayFlagInfo(queryDate, calendar.getDayFlag());
+            }
+        }
+        return null;
+    }
+    
+    /**
+     * 最近工作日历标识信息
+     */
+    public class DayFlagInfo {
+        /** 标识日期 */
+        public final LocalDate nearestDate;
+        /** 标识值：0=停，1=开 */
+        public final String dayFlag;
+        
+        public DayFlagInfo(LocalDate nearestDate, String dayFlag) {
+            this.nearestDate = nearestDate;
+            this.dayFlag = dayFlag;
+        }
     }
 
     /**

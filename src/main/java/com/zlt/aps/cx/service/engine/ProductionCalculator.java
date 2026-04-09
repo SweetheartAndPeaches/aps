@@ -4,6 +4,7 @@ package com.zlt.aps.cx.service.engine;
 import com.zlt.aps.cx.api.domain.entity.CxStock;
 import com.zlt.aps.cx.entity.config.CxShiftConfig;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
+import com.zlt.aps.cx.service.impl.CoreScheduleAlgorithmServiceImpl;
 import com.zlt.aps.cx.vo.ScheduleContextVo;
 
 import com.zlt.aps.mp.api.domain.entity.MdmMoldingMachine;
@@ -65,8 +66,8 @@ public class ProductionCalculator {
     /** 默认日产能 */
     public static final int DEFAULT_DAILY_CAPACITY = 1200;
 
-    /** 开产首班工作时长（小时） */
-    public static final int OPENING_SHIFT_HOURS = 6;
+    private final CoreScheduleAlgorithmServiceImpl coreScheduleAlgorithmService;
+
 
     /** 试制量试允许的班次时间范围 */
     public static final String TRIAL_SHIFT_DAY = "SHIFT_DAY";        // 早班
@@ -388,52 +389,6 @@ public class ProductionCalculator {
             result.setPlanQuantity(exactQuantity);
             result.setExactClosing(true);
             log.info("停产日 {} 胎胚 {} 精确计划量={}", scheduleDate, embryoCode, exactQuantity);
-        }
-
-        return result;
-    }
-
-    /**
-     * 开产日计划量计算
-     *
-     * <p>开产规则：
-     * <ul>
-     *   <li>成型开产时间早于硫化开模1个班</li>
-     *   <li>开产后第一个班只排6小时</li>
-     *   <li>如果结构里有"关键产品"，开产第一个班不排，从第二个班才开始做</li>
-     * </ul>
-     *
-     * @param embryoCode    胎胚编码
-     * @param structureName 结构名称
-     * @param isKeyProduct  是否关键产品
-     * @param context       排程上下文
-     * @param scheduleDate  排程日期
-     * @return 开产计划量结果
-     */
-    public PlanQuantityResult calculateOpeningDayQuantity(
-            String embryoCode,
-            String structureName,
-            boolean isKeyProduct,
-            ScheduleContextVo context,
-            LocalDate scheduleDate) {
-
-        PlanQuantityResult result = calculatePlanQuantity(embryoCode, structureName, context, scheduleDate);
-        result.setOpeningDay(true);
-        result.setKeyProduct(isKeyProduct);
-
-        if (isKeyProduct) {
-            // 关键产品：开产第一个班不排
-            result.setSkipFirstShift(true);
-            log.info("开产日 {} 胎胚 {} 是关键产品，跳过第一班", scheduleDate, embryoCode);
-        } else {
-            // 普通产品：第一班只排6小时（约一半产能）
-            result.setFirstShiftHours(OPENING_SHIFT_HOURS);
-            // 第一班产能减半
-            int tripCapacity = result.getTripCapacity();
-            int normalShiftCapacity = result.getPlanQuantity() / 3; // 假设3班制
-            int reducedShiftCapacity = normalShiftCapacity / 2; // 首班减半
-            result.setOpeningShiftReduction(reducedShiftCapacity);
-            log.info("开产日 {} 胎胚 {} 第一班限制{}小时", scheduleDate, embryoCode, OPENING_SHIFT_HOURS);
         }
 
         return result;
@@ -901,48 +856,21 @@ public class ProductionCalculator {
             return endingResult;
         }
 
-        // Step 3: 判断是否停产日
-        Boolean isClosingDay = context.getIsClosingDay();
-        if (isClosingDay != null && isClosingDay) {
+        // Step 3: 判断是否停产日（根据 dayFlag：最近标识为"停"则停产）
+        CoreScheduleAlgorithmServiceImpl.DayFlagInfo flagInfo =
+                coreScheduleAlgorithmService.findNearestDayFlag(scheduleDate);
+        if (flagInfo != null && "0".equals(flagInfo.dayFlag)) {
+            // 停产是今天：有量（库存必须为0），安排=硫化需要量，不做整车取整
+            // 停产不是今天：已停产，plannedProduction = 0
             return calculateClosingDayQuantity(embryoCode, structureName, context, scheduleDate);
         }
 
-        // Step 4: 判断是否开产日
-        Boolean isOpeningDay = context.getIsOpeningDay();
-        if (isOpeningDay != null && isOpeningDay) {
-            // 关键产品判断使用胎胚编码（embryoCode）
-            boolean isKeyProduct = isKeyProduct(embryoCode, context);
-            PlanQuantityResult openingResult = calculateOpeningDayQuantity(
-                    embryoCode, structureName, isKeyProduct, context, scheduleDate);
-
-            // 开产日：调整班次分配
-            if (openingResult.isSkipFirstShift()) {
-                // 关键产品：跳过第一班，平均分配到剩余班次
-                int planQty = openingResult.getPlanQuantity();
-                int remainingShifts = 2; // 假设3班制，跳过第一班后剩2班
-                int qtyPerShift = planQty / remainingShifts;
-
-                Map<String, Integer> shiftAllocation = new LinkedHashMap<>();
-                shiftAllocation.put("SHIFT_NIGHT", 0); // 跳过夜班
-                shiftAllocation.put(TRIAL_SHIFT_DAY, qtyPerShift);
-                shiftAllocation.put(TRIAL_SHIFT_AFTERNOON, planQty - qtyPerShift);
-                openingResult.setShiftAllocation(shiftAllocation);
-            } else {
-                // 普通产品：第一班减半
-                int planQty = openingResult.getPlanQuantity();
-                int normalShiftCapacity = planQty / 3;
-                int firstShiftCapacity = normalShiftCapacity / 2; // 第一班减半
-                int remainingQty = planQty - firstShiftCapacity;
-                int secondShiftCapacity = remainingQty / 2;
-
-                Map<String, Integer> shiftAllocation = new LinkedHashMap<>();
-                shiftAllocation.put("SHIFT_NIGHT", firstShiftCapacity);
-                shiftAllocation.put(TRIAL_SHIFT_DAY, secondShiftCapacity);
-                shiftAllocation.put(TRIAL_SHIFT_AFTERNOON, remainingQty - secondShiftCapacity);
-                openingResult.setShiftAllocation(shiftAllocation);
-            }
-
-            return openingResult;
+        // Step 4: 判断是否开产日（最近标识为"开"则正常按硫化计划安排，取整到整车）
+        // 开产日有量但不多，严格按硫化计划安排，取整到整车
+        // 收尾任务的整车取整已在上面完成，此处不再做额外限制
+        if (flagInfo != null && "1".equals(flagInfo.dayFlag)) {
+            // 开产日按正常硫化计划走，不做班次限制，直接用上面的收尾计算结果
+            log.debug("开产日，materialCode={}，按硫化计划正常安排", materialCode);
         }
 
         // Step 5: 正常情况计算
@@ -1024,13 +952,8 @@ public class ProductionCalculator {
 
         // 特殊情况标记
         private boolean closingDay;
-        private boolean openingDay;
-        private boolean keyProduct;
         private boolean trialTask;
         private boolean exactClosing;
-        private boolean skipFirstShift;
-        private int firstShiftHours;
-        private int openingShiftReduction;
         private List<String> allowedShifts;
 
         // 收尾相关字段

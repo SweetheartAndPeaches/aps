@@ -2,6 +2,7 @@ package com.zlt.aps.cx.service.engine;
 
 import com.zlt.aps.cx.entity.config.CxShiftConfig;
 import com.zlt.aps.cx.entity.config.CxStructurePriority;
+import com.zlt.aps.cx.service.impl.CoreScheduleAlgorithmServiceImpl;
 import com.zlt.aps.cx.vo.ScheduleContextVo;
 import com.zlt.aps.mp.api.domain.entity.MdmMoldingMachine;
 import com.zlt.aps.mp.api.domain.entity.MdmStructureLhRatio;
@@ -36,6 +37,7 @@ import java.util.stream.Collectors;
 public class NewTaskProcessor {
 
     private final BalancingService balancingService;
+    private final CoreScheduleAlgorithmServiceImpl coreScheduleAlgorithmService;
 
     /** 默认整车容量 */
     private static final int DEFAULT_TRIP_CAPACITY = 12;
@@ -62,9 +64,11 @@ public class NewTaskProcessor {
 
         log.info("========== 开始处理新增任务，共 {} 个任务 ==========", newTasks.size());
 
-        // 停产日不排新增任务
-        if (Boolean.TRUE.equals(context.getIsClosingDay())) {
-            log.info("停产日不排新增任务");
+        // 停产日不排新增任务（根据 dayFlag 判断：最近标识为"停"则停产）
+        CoreScheduleAlgorithmServiceImpl.DayFlagInfo flagInfo =
+                coreScheduleAlgorithmService.findNearestDayFlag(context.getCurrentScheduleDate());
+        if (flagInfo != null && "0".equals(flagInfo.dayFlag)) {
+            log.info("停产日不排新增任务，dayFlag={}", flagInfo.dayFlag);
             return existAllocations != null ? existAllocations : new ArrayList<>();
         }
 
