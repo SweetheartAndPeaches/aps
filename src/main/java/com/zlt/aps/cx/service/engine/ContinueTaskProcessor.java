@@ -125,16 +125,17 @@ public class ContinueTaskProcessor {
                     // S5.3.1 分配胎胚库存
                     allocateEmbryoStock(task, context, scheduleDate);
                     
+
                     // S5.3.2 计算待排产量
                     // isOpeningDay: 使用 DayFlagInfo 判断，最近标识为"开"则是开产日
                     boolean isOpeningDay = isOpeningDayByDayFlag(scheduleDate);
                     calculatePlannedProduction(task, context, scheduleDate, isOpeningDay);
-                    
-                    // S5.3.3 开停产特殊处理（根据工作日历 dayFlag 判断）
-                    handleOpeningClosingDay(task, context, dayShifts);
-                    
-                    // S5.3.4 收尾余量处理
+
+                    // S5.3.3 收尾余量处理
                     handleEndingRemainder(task, context, isOpeningDay);
+
+                     // S5.3.4 开停产特殊处理（根据工作日历 dayFlag 判断）
+                    handleOpeningClosingDay(task, context, dayShifts);
                     
                     // S5.3.5 计算延误量和补做
                     if (Boolean.TRUE.equals(task.getIsNearEnding()) && !isOpeningDay) {
@@ -406,14 +407,17 @@ public class ContinueTaskProcessor {
             LocalDate scheduleDate,
             boolean isOpeningDay) {
 
-        // Step 1: 获取硫化需求量和分配的库存
+        // 非正常生产日不开常规划排产量计算（开停产日已在 handleOpeningClosingDay 中处理）
+        if (!scheduleDayTypeHelper.isNormalProductionDay(scheduleDate)) {
+            return;
+        }
+
+        // 获取硫化需求量和分配的库存
         int vulcanizeDemand = task.getVulcanizeDemand() != null ? task.getVulcanizeDemand() : 0;
         int allocatedStock = task.getAllocatedStock() != null ? task.getAllocatedStock() : 0;
 
-        // Step 2: 计算需要的计划量（条），整车取整交给 ProductionCalculator
+        // 计算待排产量（条），整车取整交给 ProductionCalculator
         int requiredProduction = Math.max(0, vulcanizeDemand - allocatedStock);
-
-        // Step 3: 设置待排产量
         task.setPlannedProduction(requiredProduction);
 
         log.debug("任务 {} 待排产量：需求={}，库存={}，待排={}",
