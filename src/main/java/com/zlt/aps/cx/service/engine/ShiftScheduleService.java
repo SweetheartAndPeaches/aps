@@ -109,7 +109,7 @@ public class ShiftScheduleService {
                 if (keyProductCodes != null && !keyProductCodes.isEmpty() && dayShifts.size() > 1) {
                     int keyProductQty = 0;
                     for (CoreScheduleAlgorithmService.TaskAllocation task : allocation.getTaskAllocations()) {
-                        if (keyProductCodes.contains(task.getMaterialCode())) {
+                        if (keyProductCodes.contains(task.getSapCode())) {
                             keyProductQty += task.getQuantity();
                         }
                     }
@@ -465,7 +465,8 @@ public class ShiftScheduleService {
             result.setMachineCode(machineCode);
             result.setShiftCode(shiftConfig.getShiftCode());
             result.setShiftName(shiftConfig.getShiftName());
-            result.setMaterialCode(task.getMaterialCode());
+            result.setEmbryoCode(task.getMaterialCode());
+            result.setSapCode(task.getRelatedMaterialCode());
             result.setMaterialName(task.getMaterialName());
             result.setStructureName(task.getStructureName());
             result.setQuantity(batchQty);
@@ -480,9 +481,9 @@ public class ShiftScheduleService {
 
             remainingCars -= carsForShift;
 
-            log.debug("班次排产：机台={}, 班次={}, 胎胚={}, 车数={}, 数量={}, 时间={}-{}",
+            log.debug("班次排产：机台={}, 班次={}, 胎胚={}, SAP物料={}, 车数={}, 数量={}, 时间={}-{}",
                     machineCode, shiftConfig.getShiftName(), task.getMaterialCode(),
-                    carsForShift, batchQty, startTime, endTime);
+                    task.getRelatedMaterialCode(), carsForShift, batchQty, startTime, endTime);
         }
 
         if (remainingCars > 0) {
@@ -922,7 +923,10 @@ public class ShiftScheduleService {
         private String machineCode;
         private String shiftCode;
         private String shiftName;
-        private String materialCode;
+        /** 胎胚编码（成型生产的胎胚） */
+        private String embryoCode;
+        /** SAP物料编码（成品物料编码，用于关联硫化需求） */
+        private String sapCode;
         private String materialName;
         private String structureName;
         private int quantity;

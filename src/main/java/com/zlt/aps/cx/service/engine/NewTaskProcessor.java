@@ -108,7 +108,7 @@ public class NewTaskProcessor {
                     Set<String> embryos = new HashSet<>();
                     for (CoreScheduleAlgorithmService.TaskAllocation taskAlloc : allocation.getTaskAllocations()) {
                         if (structureName.equals(taskAlloc.getStructureName())) {
-                            embryos.add(taskAlloc.getMaterialCode());
+                            embryos.add(taskAlloc.getEmbryoCode());
                         }
                     }
                     if (!embryos.isEmpty()) {
@@ -195,7 +195,8 @@ public class NewTaskProcessor {
 
                     CoreScheduleAlgorithmService.TaskAllocation taskAlloc =
                             new CoreScheduleAlgorithmService.TaskAllocation();
-                    taskAlloc.setMaterialCode(task.getMaterialCode());
+                    taskAlloc.setEmbryoCode(task.getMaterialCode());
+                    taskAlloc.setSapCode(task.getRelatedMaterialCode());
                     taskAlloc.setMaterialName(task.getMaterialName());
                     taskAlloc.setStructureName(task.getStructureName());
                     taskAlloc.setQuantity(task.getPlannedProduction() != null ? task.getPlannedProduction() : 0);
@@ -206,6 +207,7 @@ public class NewTaskProcessor {
                     taskAlloc.setIsEndingTask(task.getIsEndingTask());
                     taskAlloc.setEndingSurplusQty(task.getEndingSurplusQty());
                     taskAlloc.setIsMainProduct(task.getIsMainProduct());
+                    taskAlloc.setLhId(task.getLhId());
 
                     result.getTaskAllocations().add(taskAlloc);
                 }
@@ -236,7 +238,8 @@ public class NewTaskProcessor {
 
                 CoreScheduleAlgorithmService.TaskAllocation taskAlloc =
                         new CoreScheduleAlgorithmService.TaskAllocation();
-                taskAlloc.setMaterialCode(fixedTask.getMaterialCode());
+                taskAlloc.setEmbryoCode(fixedTask.getMaterialCode());
+                taskAlloc.setSapCode(fixedTask.getRelatedMaterialCode());
                 taskAlloc.setMaterialName(fixedTask.getMaterialName());
                 taskAlloc.setStructureName(fixedTask.getStructureName());
                 taskAlloc.setQuantity(fixedTask.getPlannedProduction() != null ? fixedTask.getPlannedProduction() : 0);
@@ -247,6 +250,7 @@ public class NewTaskProcessor {
                 taskAlloc.setIsEndingTask(fixedTask.getIsEndingTask());
                 taskAlloc.setEndingSurplusQty(fixedTask.getEndingSurplusQty());
                 taskAlloc.setIsMainProduct(fixedTask.getIsMainProduct());
+                taskAlloc.setLhId(fixedTask.getLhId());
 
                 targetResult.getTaskAllocations().add(taskAlloc);
                 log.info("固定量试任务 {} → 机台 {}", fixedTask.getMaterialCode(), targetMachine);
@@ -415,9 +419,9 @@ public class NewTaskProcessor {
             String machineCode = allocation.getMachineCode();
             for (CoreScheduleAlgorithmService.TaskAllocation taskAlloc : allocation.getTaskAllocations()) {
                 if (structureName.equals(taskAlloc.getStructureName())
-                        && taskAlloc.getMaterialCode() != null
+                        && taskAlloc.getEmbryoCode() != null
                         && Boolean.TRUE.equals(taskAlloc.getIsTrialTask())) {
-                    trialMachineMap.put(taskAlloc.getMaterialCode(), machineCode);
+                    trialMachineMap.put(taskAlloc.getEmbryoCode(), machineCode);
                 }
             }
         }

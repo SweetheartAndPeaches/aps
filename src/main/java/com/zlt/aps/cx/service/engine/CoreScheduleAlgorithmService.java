@@ -309,17 +309,32 @@ public interface CoreScheduleAlgorithmService {
      */
     @lombok.Data
     class TaskAllocation {
-        private String materialCode;
+        /** 胎胚编码（成型生产的胎胚） */
+        private String embryoCode;
+        /** SAP物料编码（成品物料编码，用于关联硫化需求） */
+        private String sapCode;
+        /** 物料名称（兼容旧字段，实际为胎胚名称） */
         private String materialName;
+        /** 结构名称 */
         private String structureName;
+        /** 计划数量 */
         private Integer quantity;
+        /** 优先级 */
         private Integer priority;
+        /** 库存可供时长 */
         private BigDecimal stockHours;
+        /** 是否试制任务 */
         private Boolean isTrialTask;
+        /** 是否收尾任务 */
         private Boolean isEndingTask;
+        /** 收尾余量 */
         private Integer endingSurplusQty;
+        /** 是否主销产品 */
         private Boolean isMainProduct;
+        /** 是否续作任务 */
         private Boolean isContinueTask;
+        /** 硫化任务ID（关联LhScheduleResult） */
+        private Long lhId;
     }
 
     /**

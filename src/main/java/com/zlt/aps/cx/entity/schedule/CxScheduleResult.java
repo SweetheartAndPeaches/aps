@@ -4,19 +4,20 @@ import com.baomidou.mybatisplus.annotation.*;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.zlt.aps.common.core.domain.ApsBaseEntity;
 import io.swagger.annotations.ApiModel;
-import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.util.Date;
-import java.util.List;
 
 /**
- * 成型排程结果表
- * 对应表：T_CX_SCHEDULE_RESULT
+ * 成型排程结果表（单表结构）
+ *
+ * <p>每条记录代表一个成型机台+胎胚在排程周期内的8班次排产计划。
+ * 不再使用主子表结构，所有班次排量直接拍平到 CLASS1~8 字段。
+ *
+ * <p>对应表：T_CX_SCHEDULE_RESULT
  *
  * @author APS Team
  * @since 2.0.0
@@ -24,7 +25,7 @@ import java.util.List;
 @Data
 @EqualsAndHashCode(callSuper = true)
 @TableName("T_CX_SCHEDULE_RESULT")
-@ApiModel(value = "成型排程结果对象", description = "成型排程结果表")
+@ApiModel(value = "成型排程结果对象", description = "成型排程结果表（单表）")
 public class CxScheduleResult extends ApsBaseEntity {
 
     private static final long serialVersionUID = 1L;
@@ -50,7 +51,7 @@ public class CxScheduleResult extends ApsBaseEntity {
     private String isRelease;
 
     @ApiModelProperty(value = "排程日期")
-    @JsonFormat(pattern = "yyyy-MM-dd")
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     @TableField("SCHEDULE_DATE")
     private Date scheduleDate;
 
@@ -82,17 +83,21 @@ public class CxScheduleResult extends ApsBaseEntity {
     @TableField("LH_MACHINE_QTY")
     private BigDecimal lhMachineQty;
 
-    @ApiModelProperty(value = "外胎代码")
+    @ApiModelProperty(value = "物料编码")
     @TableField("SAP_CODE")
     private String sapCode;
 
-    @ApiModelProperty(value = "外胎规格描述")
+    @ApiModelProperty(value = "物料描述")
     @TableField("SPEC_DESC")
     private String specDesc;
 
     @ApiModelProperty(value = "胎胚代码")
     @TableField("EMBRYO_CODE")
     private String embryoCode;
+
+    @ApiModelProperty(value = "胎胚描述")
+    @TableField("EMBRYO_DESC")
+    private String embryoDesc;
 
     @ApiModelProperty(value = "胎胚寸口")
     @TableField("SPEC_DIMENSION")
@@ -131,6 +136,14 @@ public class CxScheduleResult extends ApsBaseEntity {
     @TableField("CLASS1_ANALYSIS")
     private String class1Analysis;
 
+    @ApiModelProperty(value = "一班示方书类型")
+    @TableField("CLASS1_RECIPE_TYPE")
+    private String class1RecipeType;
+
+    @ApiModelProperty(value = "一班示方书编号")
+    @TableField("CLASS1_RECIPE_NO")
+    private String class1RecipeNo;
+
     // ========== 二班 ==========
     @ApiModelProperty(value = "二班计划数")
     @TableField("CLASS2_PLAN_QTY")
@@ -147,6 +160,14 @@ public class CxScheduleResult extends ApsBaseEntity {
     @ApiModelProperty(value = "二班原因分析")
     @TableField("CLASS2_ANALYSIS")
     private String class2Analysis;
+
+    @ApiModelProperty(value = "二班示方书类型")
+    @TableField("CLASS2_RECIPE_TYPE")
+    private String class2RecipeType;
+
+    @ApiModelProperty(value = "二班示方书编号")
+    @TableField("CLASS2_RECIPE_NO")
+    private String class2RecipeNo;
 
     // ========== 三班 ==========
     @ApiModelProperty(value = "三班计划数")
@@ -165,6 +186,14 @@ public class CxScheduleResult extends ApsBaseEntity {
     @TableField("CLASS3_ANALYSIS")
     private String class3Analysis;
 
+    @ApiModelProperty(value = "三班示方书类型")
+    @TableField("CLASS3_RECIPE_TYPE")
+    private String class3RecipeType;
+
+    @ApiModelProperty(value = "三班示方书编号")
+    @TableField("CLASS3_RECIPE_NO")
+    private String class3RecipeNo;
+
     // ========== 四班 ==========
     @ApiModelProperty(value = "四班计划数")
     @TableField("CLASS4_PLAN_QTY")
@@ -181,6 +210,14 @@ public class CxScheduleResult extends ApsBaseEntity {
     @ApiModelProperty(value = "四班原因分析")
     @TableField("CLASS4_ANALYSIS")
     private String class4Analysis;
+
+    @ApiModelProperty(value = "四班示方书类型")
+    @TableField("CLASS4_RECIPE_TYPE")
+    private String class4RecipeType;
+
+    @ApiModelProperty(value = "四班示方书编号")
+    @TableField("CLASS4_RECIPE_NO")
+    private String class4RecipeNo;
 
     // ========== 五班 ==========
     @ApiModelProperty(value = "五班计划数")
@@ -199,6 +236,14 @@ public class CxScheduleResult extends ApsBaseEntity {
     @TableField("CLASS5_ANALYSIS")
     private String class5Analysis;
 
+    @ApiModelProperty(value = "五班示方书类型")
+    @TableField("CLASS5_RECIPE_TYPE")
+    private String class5RecipeType;
+
+    @ApiModelProperty(value = "五班示方书编号")
+    @TableField("CLASS5_RECIPE_NO")
+    private String class5RecipeNo;
+
     // ========== 六班 ==========
     @ApiModelProperty(value = "六班计划数")
     @TableField("CLASS6_PLAN_QTY")
@@ -215,6 +260,14 @@ public class CxScheduleResult extends ApsBaseEntity {
     @ApiModelProperty(value = "六班原因分析")
     @TableField("CLASS6_ANALYSIS")
     private String class6Analysis;
+
+    @ApiModelProperty(value = "六班示方书类型")
+    @TableField("CLASS6_RECIPE_TYPE")
+    private String class6RecipeType;
+
+    @ApiModelProperty(value = "六班示方书编号")
+    @TableField("CLASS6_RECIPE_NO")
+    private String class6RecipeNo;
 
     // ========== 七班 ==========
     @ApiModelProperty(value = "七班计划数")
@@ -233,6 +286,14 @@ public class CxScheduleResult extends ApsBaseEntity {
     @TableField("CLASS7_ANALYSIS")
     private String class7Analysis;
 
+    @ApiModelProperty(value = "七班示方书类型")
+    @TableField("CLASS7_RECIPE_TYPE")
+    private String class7RecipeType;
+
+    @ApiModelProperty(value = "七班示方书编号")
+    @TableField("CLASS7_RECIPE_NO")
+    private String class7RecipeNo;
+
     // ========== 八班 ==========
     @ApiModelProperty(value = "八班计划数")
     @TableField("CLASS8_PLAN_QTY")
@@ -250,6 +311,14 @@ public class CxScheduleResult extends ApsBaseEntity {
     @TableField("CLASS8_ANALYSIS")
     private String class8Analysis;
 
+    @ApiModelProperty(value = "八班示方书类型")
+    @TableField("CLASS8_RECIPE_TYPE")
+    private String class8RecipeType;
+
+    @ApiModelProperty(value = "八班示方书编号")
+    @TableField("CLASS8_RECIPE_NO")
+    private String class8RecipeNo;
+
     // ========== 其他字段 ==========
     @ApiModelProperty(value = "收尾提示标识：0-提示收尾；1-不需要提示")
     @TableField("MARK_CLOSE_OUT_TIP")
@@ -263,29 +332,15 @@ public class CxScheduleResult extends ApsBaseEntity {
     @TableField("SPECIAL_REQUIREMENTS")
     private String specialRequirements;
 
-    // ========== 非数据库字段 ==========
-    
-    @ApiModelProperty(value = "排程明细列表")
-    @TableField(exist = false)
-    private List<CxScheduleDetail> details;
-    
-    @ApiModelProperty(value = "状态")
-    @TableField(exist = false)
-    private String status;
-    
-    @ApiModelProperty(value = "班次编码")
-    @TableField(exist = false)
-    private String shiftCode;
-    
-    @ApiModelProperty(value = "试制计划ID")
-    @TableField(exist = false)
-    private Long trialPlanId;
-    
-    @ApiModelProperty(value = "是否试制")
-    @TableField(exist = false)
-    private Integer isTrial;
-    
-    @ApiModelProperty(value = "完成率")
-    @TableField(exist = false)
-    private BigDecimal completionRate;
+    @ApiModelProperty(value = "成型余量")
+    @TableField("CX_REMAIN_QTY")
+    private BigDecimal cxRemainQty;
+
+    @ApiModelProperty(value = "硫化余量")
+    @TableField("LH_REMAIN_QTY")
+    private BigDecimal lhRemainQty;
+
+    @ApiModelProperty(value = "硫化班产")
+    @TableField("LH_CLASS_QTY")
+    private BigDecimal lhClassQty;
 }

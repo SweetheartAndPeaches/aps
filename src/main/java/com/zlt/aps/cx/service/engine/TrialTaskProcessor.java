@@ -323,7 +323,8 @@ public class TrialTaskProcessor {
 
         CoreScheduleAlgorithmService.TaskAllocation taskAllocation =
                 new CoreScheduleAlgorithmService.TaskAllocation();
-        taskAllocation.setMaterialCode(task.getMaterialCode());
+        taskAllocation.setEmbryoCode(task.getMaterialCode());
+        taskAllocation.setSapCode(task.getRelatedMaterialCode());
         taskAllocation.setMaterialName(task.getMaterialName());
         taskAllocation.setStructureName(task.getStructureName());
         taskAllocation.setQuantity(task.getPlannedProduction());
@@ -333,6 +334,7 @@ public class TrialTaskProcessor {
         taskAllocation.setIsEndingTask(task.getIsEndingTask());
         taskAllocation.setEndingSurplusQty(task.getEndingSurplusQty());
         taskAllocation.setIsMainProduct(task.getIsMainProduct());
+        taskAllocation.setLhId(task.getLhId());
 
         allocation.getTaskAllocations().add(taskAllocation);
         allocation.setUsedCapacity(allocation.getUsedCapacity() + task.getPlannedProduction());

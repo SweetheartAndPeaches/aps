@@ -3,6 +3,7 @@ package com.zlt.aps.cx.service.impl;
 
 import com.zlt.aps.cx.api.domain.entity.CxStock;
 import com.zlt.aps.cx.entity.config.CxShiftConfig;
+
 import com.zlt.aps.cx.entity.schedule.CxScheduleDetail;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
@@ -226,7 +227,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             for (TaskAllocation taskAlloc : allocation.getTaskAllocations()) {
                 // 重建 DailyEmbryoTask 传给 scheduleTaskToShifts
                 CoreScheduleAlgorithmService.DailyEmbryoTask task = new CoreScheduleAlgorithmService.DailyEmbryoTask();
-                task.setMaterialCode(taskAlloc.getMaterialCode());
+                task.setMaterialCode(taskAlloc.getEmbryoCode());
+                task.setRelatedMaterialCode(taskAlloc.getSapCode());
                 task.setMaterialName(taskAlloc.getMaterialName());
                 task.setStructureName(taskAlloc.getStructureName());
                 task.setPlannedProduction(taskAlloc.getQuantity());
@@ -236,6 +238,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 task.setIsOpeningDayTask(context.getIsOpeningDay());
                 task.setStockHours(taskAlloc.getStockHours());
                 task.setPriority(taskAlloc.getPriority());
+                task.setLhId(taskAlloc.getLhId());
 
                 // 计算车数
                 int tripCapacity = productionCalculator.getTripCapacity(taskAlloc.getStructureName(), context);
@@ -277,8 +280,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             String machineCode = allocation.getMachineCode();
             Set<String> embryos = new HashSet<>();
             for (TaskAllocation taskAlloc : allocation.getTaskAllocations()) {
-                if (taskAlloc.getMaterialCode() != null) {
-                    embryos.add(taskAlloc.getMaterialCode());
+                if (taskAlloc.getEmbryoCode() != null) {
+                    embryos.add(taskAlloc.getEmbryoCode());
                 }
             }
             if (!embryos.isEmpty()) {
@@ -320,15 +323,26 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     }
 
     /**
-     * 合并多天排产结果：每个机台一条记录，8个班次排量分别映射到CLASS1~8
+     * 合并多天排产结果：每个机台+胎胚+SAP物料一条记录，8个班次排量分别映射到CLASS1~8
      *
-     * <p>班次映射由 CxShiftConfig.classField 决定，如：
+     * <p>单表结构：不再有主子表，按 机台+胎胚+SAP物料 三维维度产生记录。
+     * 每条记录的 CLASS1~8 对应8个班次中该胎胚/SAP物料在该机台上的排产数量。
+     *
+     * <p>三维 key 说明：
      * <ul>
-     *   <li>第1天夜班 → CLASS1</li>
-     *   <li>第1天早班 → CLASS2</li>
-     *   <li>第1天中班 → CLASS3</li>
-     *   <li>第2天夜班 → CLASS4</li>
-     *   <li>...</li>
+     *   <li>machineCode - 成型机台</li>
+     *   <li>embryoCode - 胎胚编码（成型生产的半成品）</li>
+     *   <li>sapCode - SAP物料编码（成品物料，对应硫化需求）</li>
+     * </ul>
+     * 同一台机台生产同一胎胚，如果对应不同SAP物料，会拆成多条记录。
+     *
+     * <p>填充策略：从排程上下文和分配结果中收集所有可用信息，尽可能填满字段：
+     * <ul>
+     *   <li>机台信息：从 MdmMoldingMachine 获取编号/名称/类型</li>
+     *   <li>胎胚/物料信息：从 MdmMaterialInfo 获取编码/描述/结构/寸口</li>
+     *   <li>库存信息：从 materialStockMap 获取分配库存</li>
+     *   <li>硫化信息：从 LhScheduleResult 获取硫化机台/模数/班产/余量</li>
+     *   <li>成型余量：从 formingRemainderMap 获取</li>
      * </ul>
      */
     private List<CxScheduleResult> buildFinalScheduleResults(
@@ -343,70 +357,238 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             shiftClassFieldMap.put(key, shiftConfig.getClassField());
         }
 
-        // 按机台汇总所有天所有班次的排产量
-        // machineCode → classField → quantity
-        Map<String, Map<String, Integer>> machineClassQtyMap = new LinkedHashMap<>();
-        // machineCode → 总排产量
-        Map<String, Integer> machineTotalQtyMap = new LinkedHashMap<>();
-        // machineCode → (embryoCode, structureName) 取第一条任务的
-        Map<String, String[]> machineEmbryoMap = new LinkedHashMap<>();
+        // ==================== 按 机台+胎胚+SAP物料 三维维度汇总班次排量 ====================
+        // key: machineCode + "|" + embryoCode + "|" + sapCode
+        // value: classField → quantity
+        Map<String, Map<String, Integer>> taskClassQtyMap = new LinkedHashMap<>();
+        // key → 总排产量
+        Map<String, Integer> taskTotalQtyMap = new LinkedHashMap<>();
+        // key → structureName
+        Map<String, String> taskStructureMap = new LinkedHashMap<>();
+        // key → lhId（硫化任务ID，用于关联库存和硫化信息）
+        Map<String, Long> taskLhIdMap = new LinkedHashMap<>();
 
         for (DayScheduleResult dayResult : dayResults) {
             int day = dayResult.getDay();
             for (ShiftScheduleService.ShiftProductionResult spr : dayResult.getShiftProductionResults()) {
                 String machineCode = spr.getMachineCode();
+                String embryoCode = spr.getEmbryoCode();
+                String sapCode = spr.getSapCode() != null ? spr.getSapCode() : "";
                 String shiftCode = spr.getShiftCode();
-                String key = shiftCode + "_" + day;
-                String classField = shiftClassFieldMap.get(key);
+                String shiftKey = shiftCode + "_" + day;
+                String classField = shiftClassFieldMap.get(shiftKey);
 
                 if (classField == null) {
                     log.warn("未找到班次映射: shiftCode={}, day={}", shiftCode, day);
                     continue;
                 }
 
-                machineClassQtyMap.computeIfAbsent(machineCode, k -> new LinkedHashMap<>())
+                String taskKey = machineCode + "|" + embryoCode + "|" + sapCode;
+                taskClassQtyMap.computeIfAbsent(taskKey, k -> new LinkedHashMap<>())
                         .merge(classField, spr.getQuantity(), Integer::sum);
-                machineTotalQtyMap.merge(machineCode, spr.getQuantity(), Integer::sum);
-            }
-
-            // 取每个机台第一个任务的胎胚信息
-            for (MachineAllocationResult allocation : dayResult.getAllAllocations()) {
-                String machineCode = allocation.getMachineCode();
-                if (!machineEmbryoMap.containsKey(machineCode)
-                        && allocation.getTaskAllocations() != null
-                        && !allocation.getTaskAllocations().isEmpty()) {
-                    TaskAllocation firstTask = allocation.getTaskAllocations().get(0);
-                    machineEmbryoMap.put(machineCode,
-                            new String[]{firstTask.getMaterialCode(), firstTask.getStructureName()});
+                taskTotalQtyMap.merge(taskKey, spr.getQuantity(), Integer::sum);
+                if (spr.getStructureName() != null) {
+                    taskStructureMap.putIfAbsent(taskKey, spr.getStructureName());
                 }
             }
         }
 
-        // 构建最终的 CxScheduleResult 列表
+        // 从 DayScheduleResult 的 allAllocations 中收集 lhId 信息
+        for (DayScheduleResult dayResult : dayResults) {
+            for (MachineAllocationResult allocation : dayResult.getAllAllocations()) {
+                if (allocation.getTaskAllocations() != null) {
+                    for (TaskAllocation taskAlloc : allocation.getTaskAllocations()) {
+                        String embryoCode = taskAlloc.getEmbryoCode();
+                        String sapCode = taskAlloc.getSapCode() != null ? taskAlloc.getSapCode() : "";
+                        String taskKey = allocation.getMachineCode() + "|" + embryoCode + "|" + sapCode;
+                        if (taskAlloc.getLhId() != null) {
+                            taskLhIdMap.putIfAbsent(taskKey, taskAlloc.getLhId());
+                        }
+                    }
+                }
+            }
+        }
+
+        // ==================== 构建辅助查询映射 ====================
+        // 机台编码 → MdmMoldingMachine
+        Map<String, MdmMoldingMachine> machineMap = new HashMap<>();
+        if (context.getAvailableMachines() != null) {
+            for (MdmMoldingMachine machine : context.getAvailableMachines()) {
+                machineMap.put(machine.getCxMachineCode(), machine);
+            }
+        }
+
+        // 物料编码 → MdmMaterialInfo（按 materialCode 即 SAP 物料编码索引）
+        Map<String, MdmMaterialInfo> materialBySapMap = new HashMap<>();
+        // 胎胚编码 → MdmMaterialInfo（按 embryoCode 索引，同一胎胚可能有多个物料取第一个）
+        Map<String, MdmMaterialInfo> materialByEmbryoMap = new HashMap<>();
+        if (context.getMaterials() != null) {
+            for (MdmMaterialInfo material : context.getMaterials()) {
+                if (material.getMaterialCode() != null) {
+                    materialBySapMap.putIfAbsent(material.getMaterialCode(), material);
+                }
+                if (material.getEmbryoCode() != null) {
+                    materialByEmbryoMap.putIfAbsent(material.getEmbryoCode(), material);
+                }
+            }
+        }
+
+        // 硫化任务ID → LhScheduleResult
+        Map<Long, LhScheduleResult> lhByIdMap = new HashMap<>();
+        // SAP物料编码 → 对应硫化任务列表
+        Map<String, List<LhScheduleResult>> sapToLhMap = new HashMap<>();
+        if (context.getLhScheduleResults() != null) {
+            for (LhScheduleResult lh : context.getLhScheduleResults()) {
+                if (lh.getId() != null) {
+                    lhByIdMap.put(lh.getId(), lh);
+                }
+                if (lh.getMaterialCode() != null) {
+                    sapToLhMap.computeIfAbsent(lh.getMaterialCode(), k -> new ArrayList<>()).add(lh);
+                }
+            }
+        }
+
+        // ==================== 构建最终的 CxScheduleResult 列表 ====================
         List<CxScheduleResult> results = new ArrayList<>();
         LocalDate startDate = context.getScheduleDate();
 
-        for (Map.Entry<String, Map<String, Integer>> entry : machineClassQtyMap.entrySet()) {
-            String machineCode = entry.getKey();
+        for (Map.Entry<String, Map<String, Integer>> entry : taskClassQtyMap.entrySet()) {
+            String taskKey = entry.getKey();
             Map<String, Integer> classQtyMap = entry.getValue();
 
+            String[] parts = taskKey.split("\\|", 3);
+            String machineCode = parts[0];
+            String embryoCode = parts.length > 1 ? parts[1] : null;
+            String sapCode = parts.length > 2 && !parts[2].isEmpty() ? parts[2] : null;
+            String structureName = taskStructureMap.get(taskKey);
+
             CxScheduleResult result = new CxScheduleResult();
+
+            // ---- 排程日期 ----
             result.setScheduleDate(java.sql.Timestamp.valueOf(startDate.atStartOfDay()));
+
+            // ---- 机台信息 ----
             result.setCxMachineCode(machineCode);
-            result.setProductNum(new BigDecimal(machineTotalQtyMap.getOrDefault(machineCode, 0)));
+            MdmMoldingMachine machine = machineMap.get(machineCode);
+            if (machine != null) {
+                result.setCxMachineName(machine.getCxMachineName());
+                result.setCxMachineType(machine.getCxMachineBrandCode());
+            }
+
+            // ---- 胎胚信息（从 embryoCode 索引获取） ----
+            if (embryoCode != null) {
+                result.setEmbryoCode(embryoCode);
+                MdmMaterialInfo materialByEmbryo = materialByEmbryoMap.get(embryoCode);
+                if (materialByEmbryo != null) {
+                    result.setEmbryoDesc(materialByEmbryo.getEmbryoDesc());
+                    if (materialByEmbryo.getProSize() != null) {
+                        try {
+                            result.setSpecDimension(new BigDecimal(materialByEmbryo.getProSize()));
+                        } catch (NumberFormatException e) {
+                            log.debug("无法解析寸口: {}", materialByEmbryo.getProSize());
+                        }
+                    }
+                    result.setStructureName(materialByEmbryo.getStructureName() != null ? materialByEmbryo.getStructureName() : structureName);
+                } else {
+                    result.setStructureName(structureName);
+                }
+            }
+
+            // ---- SAP物料信息（从 sapCode 索引获取） ----
+            if (sapCode != null) {
+                result.setSapCode(sapCode);
+                MdmMaterialInfo materialBySap = materialBySapMap.get(sapCode);
+                if (materialBySap != null) {
+                    result.setSpecDesc(materialBySap.getMaterialDesc());
+                    result.setBomDataVersion(materialBySap.getEmbryoNo());
+                    // structureName 优先用 SAP 物料的
+                    if (materialBySap.getStructureName() != null) {
+                        result.setStructureName(materialBySap.getStructureName());
+                    }
+                }
+            }
+
+            // ---- 库存信息（按 lhId 从 materialStockMap 获取） ----
+            Long lhId = taskLhIdMap.get(taskKey);
+            if (lhId != null) {
+                Map<String, Integer> stockMap = context.getMaterialStockMap();
+                if (stockMap != null) {
+                    Integer stock = stockMap.get(String.valueOf(lhId));
+                    if (stock != null && stock > 0) {
+                        result.setTotalStock(new BigDecimal(stock));
+                    }
+                }
+            }
+
+            // ---- 硫化信息（按 lhId 或 sapCode 查找 LhScheduleResult） ----
+            LhScheduleResult primaryLh = null;
+            if (lhId != null) {
+                primaryLh = lhByIdMap.get(lhId);
+            }
+            // 回退：按 sapCode 查找
+            if (primaryLh == null && sapCode != null) {
+                List<LhScheduleResult> relatedLhResults = sapToLhMap.get(sapCode);
+                if (relatedLhResults != null && !relatedLhResults.isEmpty()) {
+                    primaryLh = relatedLhResults.get(0);
+                }
+            }
+
+            if (primaryLh != null) {
+                result.setLhMachineCode(primaryLh.getLhMachineCode());
+                result.setLhMachineName(primaryLh.getLhMachineName());
+                result.setLhScheduleIds(primaryLh.getId() != null ? String.valueOf(primaryLh.getId()) : null);
+
+                // 硫化机使用总模数
+                if (primaryLh.getMouldQty() != null) {
+                    result.setLhMachineQty(new BigDecimal(primaryLh.getMouldQty()));
+                }
+
+                // 硫化班产
+                if (primaryLh.getSingleMouldShiftQty() != null) {
+                    result.setLhClassQty(new BigDecimal(primaryLh.getSingleMouldShiftQty()));
+                }
+
+                // 硫化余量：从 monthSurplusMap 获取
+                Map<String, MdmMonthSurplus> monthSurplusMap = context.getMonthSurplusMap();
+                if (monthSurplusMap != null) {
+                    // 优先按 SAP物料编码 查找
+                    String surplusKey = sapCode != null ? sapCode : embryoCode;
+                    MdmMonthSurplus surplus = monthSurplusMap.get(surplusKey);
+                    if (surplus != null && surplus.getPlanSurplusQty() != null) {
+                        result.setLhRemainQty(surplus.getPlanSurplusQty());
+                    }
+                }
+            }
+
+            // ---- 成型余量 ----
+            {
+                Map<String, Integer> formingRemainderMap = context.getFormingRemainderMap();
+                if (formingRemainderMap != null && embryoCode != null) {
+                    Integer cxRemain = formingRemainderMap.get(embryoCode);
+                    if (cxRemain != null) {
+                        result.setCxRemainQty(new BigDecimal(cxRemain));
+                    }
+                }
+            }
+
+            // ---- 胎胚总计划量 ----
+            int totalQty = taskTotalQtyMap.getOrDefault(taskKey, 0);
+            result.setProductNum(new BigDecimal(totalQty));
+
+            // ---- 状态字段 ----
             result.setProductionStatus("0");
             result.setIsRelease("0");
             result.setDataSource("0");
             result.setCreateTime(new Date());
 
-            // 设置胎胚信息
-            String[] embryoInfo = machineEmbryoMap.get(machineCode);
-            if (embryoInfo != null) {
-                result.setEmbryoCode(embryoInfo[0]);
-                result.setStructureName(embryoInfo[1]);
+            // ---- 收尾提示 ----
+            if (result.getCxRemainQty() != null && result.getCxRemainQty().compareTo(BigDecimal.ZERO) <= 0) {
+                result.setMarkCloseOutTip("0"); // 0=提示收尾
+            } else {
+                result.setMarkCloseOutTip("1"); // 1=不需要提示
             }
 
-            // 映射班次排量到 CLASS1~8
+            // ---- 映射班次排量到 CLASS1~8 ----
             for (Map.Entry<String, Integer> classEntry : classQtyMap.entrySet()) {
                 setClassFieldValue(result, classEntry.getKey(), classEntry.getValue());
             }
@@ -414,7 +596,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             results.add(result);
         }
 
-        log.info("最终排程结果：共 {} 台机台", results.size());
+        log.info("最终排程结果：共 {} 条记录（机台+胎胚+SAP物料维度）", results.size());
         return results;
     }
 
@@ -655,10 +837,10 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         }
         for (MachineAllocationResult allocation : dayAllocations) {
             for (TaskAllocation taskAlloc : allocation.getTaskAllocations()) {
-                String materialCode = taskAlloc.getMaterialCode();
+                String embryoCode = taskAlloc.getEmbryoCode();
                 Integer qty = taskAlloc.getQuantity();
-                if (materialCode != null && qty != null && qty > 0) {
-                    outputMap.merge(materialCode, qty, Integer::sum);
+                if (embryoCode != null && qty != null && qty > 0) {
+                    outputMap.merge(embryoCode, qty, Integer::sum);
                 }
             }
         }

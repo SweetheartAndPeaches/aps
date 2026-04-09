@@ -7,7 +7,6 @@ import com.zlt.aps.cx.api.domain.entity.CxStock;
 import com.zlt.aps.cx.entity.config.CxKeyProduct;
 import com.zlt.aps.cx.entity.config.CxParamConfig;
 import com.zlt.aps.cx.entity.config.CxShiftConfig;
-import com.zlt.aps.cx.entity.schedule.CxScheduleDetail;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
 import com.zlt.aps.cx.enums.DayVulcanizationModeEnum;
@@ -107,7 +106,6 @@ public class ScheduleServiceImpl implements ScheduleService {
 
     private final CxStockMapper stockMapper;
     private final CxScheduleResultMapper scheduleResultMapper;
-    private final CxScheduleDetailMapper scheduleDetailMapper;
     private final CxParamConfigMapper paramConfigMapper;
     private final MdmStructureTreadConfigMapper structureShiftCapacityMapper;
     private final CxKeyProductMapper keyProductMapper;
@@ -776,14 +774,6 @@ public class ScheduleServiceImpl implements ScheduleService {
         for (CxScheduleResult result : results) {
             result.setCreateTime(new Date());
             scheduleResultMapper.insert(result);
-
-            if (!CollectionUtils.isEmpty(result.getDetails())) {
-                for (CxScheduleDetail detail : result.getDetails()) {
-                    detail.setMainId(result.getId());
-                    detail.setCreateTime(new Date());
-                    scheduleDetailMapper.insert(detail);
-                }
-            }
         }
         log.info("保存排程结果 {} 条", results.size());
     }
