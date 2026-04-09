@@ -184,7 +184,7 @@ public class NewTaskProcessor {
                     taskAlloc.setMaterialCode(task.getMaterialCode());
                     taskAlloc.setMaterialName(task.getMaterialName());
                     taskAlloc.setStructureName(task.getStructureName());
-                    taskAlloc.setQuantity(assignedQty * DEFAULT_TRIP_CAPACITY);
+                    taskAlloc.setQuantity(task.getPlannedProduction() != null ? task.getPlannedProduction() : 0);
                     taskAlloc.setPriority(task.getPriority());
                     taskAlloc.setStockHours(task.getStockHours());
                     taskAlloc.setIsTrialTask(task.getIsTrialTask());
