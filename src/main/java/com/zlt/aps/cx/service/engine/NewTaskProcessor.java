@@ -3,6 +3,7 @@ package com.zlt.aps.cx.service.engine;
 import com.zlt.aps.cx.entity.config.CxShiftConfig;
 import com.zlt.aps.cx.entity.config.CxStructurePriority;
 import com.zlt.aps.cx.service.impl.CoreScheduleAlgorithmServiceImpl;
+import com.zlt.aps.cx.service.engine.ScheduleDayTypeHelper;
 import com.zlt.aps.cx.vo.ScheduleContextVo;
 import com.zlt.aps.mp.api.domain.entity.MdmMoldingMachine;
 import com.zlt.aps.mp.api.domain.entity.MdmStructureLhRatio;
@@ -38,6 +39,7 @@ public class NewTaskProcessor {
 
     private final BalancingService balancingService;
     private final CoreScheduleAlgorithmServiceImpl coreScheduleAlgorithmService;
+    private final ScheduleDayTypeHelper scheduleDayTypeHelper;
 
     /** 默认整车容量 */
     private static final int DEFAULT_TRIP_CAPACITY = 12;
@@ -66,7 +68,7 @@ public class NewTaskProcessor {
 
         // 停产日不排新增任务（停产标识日之后才算停产，停产日当天有量）
         CoreScheduleAlgorithmServiceImpl.DayFlagInfo flagInfo =
-                coreScheduleAlgorithmService.findNearestDayFlag(context.getCurrentScheduleDate());
+                scheduleDayTypeHelper.getDayFlagInfo(context.getCurrentScheduleDate());
         if (flagInfo != null && "0".equals(flagInfo.dayFlag)
                 && context.getCurrentScheduleDate().isAfter(flagInfo.nearestDate)) {
             log.info("停产日（已停产）不排新增任务，dayFlag={}, 标识日={}",

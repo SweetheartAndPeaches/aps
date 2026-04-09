@@ -45,6 +45,7 @@ public class ContinueTaskProcessor {
     private final BalancingService balancingService;
     private final ProductionCalculator productionCalculator;
     private final CoreScheduleAlgorithmServiceImpl coreScheduleAlgorithmService;
+    private final ScheduleDayTypeHelper scheduleDayTypeHelper;
 
     /** 胎胚库容上限比例 */
     private static final double EMBRYO_STORAGE_RATIO = 0.9;
@@ -453,7 +454,7 @@ public class ContinueTaskProcessor {
         LocalDate scheduleDate = context.getCurrentScheduleDate();
         
         // Step 1: 从当前日期往前找最近一个有 dayFlag 标识的日期
-        DayFlagInfo flagInfo = coreScheduleAlgorithmService.findNearestDayFlag(scheduleDate);
+        DayFlagInfo flagInfo = scheduleDayTypeHelper.getDayFlagInfo(scheduleDate);
         
         if (flagInfo == null || flagInfo.dayFlag == null) {
             // 没有找到任何标识，按正常日期处理
@@ -488,7 +489,7 @@ public class ContinueTaskProcessor {
      * @return true 表示开产日
      */
     private boolean isOpeningDayByDayFlag(LocalDate date) {
-        DayFlagInfo flagInfo = coreScheduleAlgorithmService.findNearestDayFlag(date);
+        DayFlagInfo flagInfo = scheduleDayTypeHelper.getDayFlagInfo(date);
         return flagInfo != null && "1".equals(flagInfo.dayFlag);
     }
 
