@@ -4,15 +4,19 @@ import com.zlt.aps.cx.entity.CxMachineStructureCapacity;
 import com.zlt.aps.cx.entity.config.CxParamConfig;
 import com.zlt.aps.cx.entity.config.CxShiftConfig;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
+import com.zlt.aps.cx.mapper.MdmWorkCalendarMapper;
 import com.zlt.aps.cx.vo.ScheduleContextVo;
 import com.zlt.aps.mp.api.domain.entity.MdmMoldingMachine;
 import com.zlt.aps.mp.api.domain.entity.MdmStructureLhRatio;
+import com.zlt.aps.mp.api.domain.entity.MdmWorkCalendar;
 import com.zlt.aps.mp.api.domain.entity.MpCxCapacityConfiguration;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 
+import java.sql.Date;
 import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -40,10 +44,8 @@ public class ContinueTaskProcessor {
 
     private final BalancingService balancingService;
     private final ProductionCalculator productionCalculator;
+    private final MdmWorkCalendarMapper workCalendarMapper;
 
-    /** 开产首班排产时长（小时） */
-    private static final int OPENING_SHIFT_HOURS = 6;
-    
     /** 胎胚库容上限比例 */
     private static final double EMBRYO_STORAGE_RATIO = 0.9;
     
@@ -123,12 +125,12 @@ public class ContinueTaskProcessor {
                     allocateEmbryoStock(task, context, scheduleDate);
                     
                     // S5.3.2 计算待排产量
-                    boolean isOpeningDay = Boolean.TRUE.equals(context.getIsOpeningDay()) && day == 1;
+                    // isOpeningDay: 使用 DayFlagInfo 判断，最近标识为"开"则是开产日
+                    boolean isOpeningDay = isOpeningDayByDayFlag(scheduleDate);
                     calculatePlannedProduction(task, context, scheduleDate, isOpeningDay);
                     
-                    // S5.3.3 开停产特殊处理
-                    boolean isClosingDay = Boolean.TRUE.equals(context.getIsClosingDay());
-                    handleOpeningClosingDay(task, context, dayShifts, isOpeningDay, isClosingDay);
+                    // S5.3.3 开停产特殊处理（根据工作日历 dayFlag 判断）
+                    handleOpeningClosingDay(task, context, dayShifts);
                     
                     // S5.3.4 收尾余量处理
                     handleEndingRemainder(task, context, isOpeningDay);
@@ -472,55 +474,113 @@ public class ContinueTaskProcessor {
     /**
      * 处理开产日和停产日对任务计划量的影响
      *
-     * <p>停产日：当天计划量置0，不排产
-     * <p>开产日：
+     * <p>判断逻辑：
+     * <ol>
+     *   <li>从当前排产日期往前找最近一个有 dayFlag 标识的日期（MdmWorkCalendar.dayFlag 不为 null）</li>
+     *   <li>若该日期是「停」（dayFlag="0"）→ 往后都是停产</li>
+     *   <li>若该日期是「开」（dayFlag="1"）→ 正常按硫化计划安排</li>
+     * </ol>
+     *
+     * <p>停产日处理：
      * <ul>
-     *   <li>关键产品 → 当天不排产（setOpeningShiftCapacity=0）</li>
-     *   <li>非关键产品 → 计划量取 min(原计划量, 开产班次产能)</li>
+     *   <li>停产是今天：有量（库存必须为0），安排 = 硫化需要的量（不做整车取整）</li>
+     *   <li>停产不是今天（已停产）：plannedProduction = 0</li>
      * </ul>
-     * 开产班次产能 = 机台小时产能 × 6小时（OPENING_SHIFT_HOURS）
+     *
+     * <p>开产日处理：
+     * <ul>
+     *   <li>开产日有量但不多，严格按硫化计划安排，取整到整车</li>
+     * </ul>
      *
      * @param task         任务
      * @param context      排程上下文
-     * @param dayShifts    当天班次配置
-     * @param isOpeningDay 是否开产日
-     * @param isClosingDay 是否停产日
+     * @param dayShifts    当天班次配置（未使用，开产停产处理不需要分班次）
      */
     public void handleOpeningClosingDay(
             CoreScheduleAlgorithmService.DailyEmbryoTask task,
             ScheduleContextVo context,
-            List<CxShiftConfig> dayShifts,
-            boolean isOpeningDay,
-            boolean isClosingDay) {
+            List<CxShiftConfig> dayShifts) {
         
-        if (isClosingDay) {
-            task.setPlannedProduction(0);
-            task.setIsClosingDayTask(true);
+        LocalDate scheduleDate = context.getCurrentScheduleDate();
+        
+        // Step 1: 从当前日期往前找最近一个有 dayFlag 标识的日期
+        DayFlagInfo flagInfo = findNearestDayFlag(scheduleDate);
+        
+        if (flagInfo == null || flagInfo.dayFlag == null) {
+            // 没有找到任何标识，按正常日期处理
             return;
         }
         
-        if (isOpeningDay) {
-            int hourlyCapacity = getMachineHourlyCapacity(
-                    task.getContinueMachineCodes() != null && !task.getContinueMachineCodes().isEmpty()
-                            ? task.getContinueMachineCodes().get(0) : null,
-                    task.getStructureName(), context);
+        if ("0".equals(flagInfo.dayFlag)) {
+            // 最近标识是「停」→ 往后都是停产
+            task.setIsClosingDayTask(true);
             
-            int openingShiftCapacity = hourlyCapacity * OPENING_SHIFT_HOURS;
-            
-            // 关键产品判断：使用胎胚编码（task.getMaterialCode() 返回的是 embryoCode）
-            boolean isKeyProduct = context.getKeyProductCodes() != null 
-                    && context.getKeyProductCodes().contains(task.getMaterialCode());
-            
-            if (isKeyProduct) {
-                task.setIsKeyProductOnOpening(true);
-                task.setOpeningShiftCapacity(0);
+            if (flagInfo.nearestDate.equals(scheduleDate)) {
+                // 停产是今天：可能有量，但必须满足库存=0的条件
+                // 安排 = 硫化需要的量（不做整车取整，直接取排量）
+                int plannedProduction = task.getPlannedProduction() != null ? task.getPlannedProduction() : 0;
+                task.setPlannedProduction(plannedProduction);
+                log.debug("停产日（今天），直接按硫化需求安排：materialCode={}, 排量={}",
+                        task.getMaterialCode(), plannedProduction);
             } else {
-                task.setOpeningShiftCapacity(openingShiftCapacity);
-                int originalPlanned = task.getPlannedProduction() != null ? task.getPlannedProduction() : 0;
-                task.setPlannedProduction(Math.min(originalPlanned, openingShiftCapacity));
+                // 停产不是今天（已停产）：无法安排
+                task.setPlannedProduction(0);
+                log.debug("停产日（已停产），不安排：materialCode={}", task.getMaterialCode());
             }
-            
+        } else if ("1".equals(flagInfo.dayFlag)) {
+            // 最近标识是「开」→ 正常按硫化计划安排，取整到整车
             task.setIsOpeningDayTask(true);
+            // 不需要额外限制计划量，直接按硫化计划的排量安排（已在 calculatePlannedProduction 中计算）
+            log.debug("开产日，正常按硫化计划安排：materialCode={}", task.getMaterialCode());
+        }
+        // 其他情况（dayFlag 未知）按正常处理，不做干预
+    }
+    
+    /**
+     * 根据 dayFlag 判断当天是否为开产日
+     *
+     * @param date 当前排产日期
+     * @return true 表示开产日
+     */
+    private boolean isOpeningDayByDayFlag(LocalDate date) {
+        DayFlagInfo flagInfo = findNearestDayFlag(date);
+        return flagInfo != null && "1".equals(flagInfo.dayFlag);
+    }
+    
+    /**
+     * 从当前排产日期往前找最近一个有 dayFlag 标识的日期
+     *
+     * @param date 当前排产日期
+     * @return 最近标识信息，包含标识日期和标识值（"0"=停，"1"=开）
+     */
+    private DayFlagInfo findNearestDayFlag(LocalDate date) {
+        // 最多往前查 30 天
+        for (int i = 0; i < 30; i++) {
+            LocalDate queryDate = date.minusDays(i);
+            MdmWorkCalendar calendar = workCalendarMapper.selectOne(
+                    new LambdaQueryWrapper<MdmWorkCalendar>()
+                            .eq(MdmWorkCalendar::getProcCode, "CX")
+                            .eq(MdmWorkCalendar::getProductionDate, Date.valueOf(queryDate)));
+            
+            if (calendar != null && calendar.getDayFlag() != null) {
+                return new DayFlagInfo(queryDate, calendar.getDayFlag());
+            }
+        }
+        return null;
+    }
+    
+    /**
+     * 最近工作日历标识信息
+     */
+    private static class DayFlagInfo {
+        /** 标识日期 */
+        final LocalDate nearestDate;
+        /** 标识值：0=停，1=开 */
+        final String dayFlag;
+        
+        DayFlagInfo(LocalDate nearestDate, String dayFlag) {
+            this.nearestDate = nearestDate;
+            this.dayFlag = dayFlag;
         }
     }
     
