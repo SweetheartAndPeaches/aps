@@ -51,8 +51,8 @@ public class NewTaskProcessor {
             LocalDate scheduleDate,
             List<CxShiftConfig> dayShifts,
             int day,
-            List<CoreScheduleAlgorithmService.MachineAllocationResult> existAllocations,
-            List<CoreScheduleAlgorithmService.MachineAllocationResult> trialAllocations) {
+            List<CoreScheduleAlgorithmService.DailyEmbryoTask> continueTasks,
+            List<CoreScheduleAlgorithmService.MachineAllocationResult> existAllocations) {
 
         List<CoreScheduleAlgorithmService.MachineAllocationResult> allResults = new ArrayList<>();
 
@@ -88,37 +88,28 @@ public class NewTaskProcessor {
                 continue;
             }
 
-            // Step 3.2: 从续作分配中提取该结构的任务，构建 machineHistoryMap
+            // Step 3.2: 获取该结构的续作任务，构建 machineHistoryMap
             List<CoreScheduleAlgorithmService.DailyEmbryoTask> continueTasksForStructure = new ArrayList<>();
             Map<String, Set<String>> machineHistoryMap = new HashMap<>();
 
+            if (continueTasks != null) {
+                for (CoreScheduleAlgorithmService.DailyEmbryoTask task : continueTasks) {
+                    if (structureName.equals(task.getStructureName())) {
+                        continueTasksForStructure.add(task);
+                    }
+                }
+            }
+
+            // 从 existAllocations（续作第一轮均衡结果）构建 machineHistoryMap
             if (existAllocations != null) {
                 for (CoreScheduleAlgorithmService.MachineAllocationResult allocation : existAllocations) {
                     String machineCode = allocation.getMachineCode();
                     Set<String> embryos = new HashSet<>();
-
                     for (CoreScheduleAlgorithmService.TaskAllocation taskAlloc : allocation.getTaskAllocations()) {
                         if (structureName.equals(taskAlloc.getStructureName())) {
                             embryos.add(taskAlloc.getMaterialCode());
-
-                            CoreScheduleAlgorithmService.DailyEmbryoTask continueTask =
-                                    new CoreScheduleAlgorithmService.DailyEmbryoTask();
-                            continueTask.setMaterialCode(taskAlloc.getMaterialCode());
-                            continueTask.setMaterialName(taskAlloc.getMaterialName());
-                            continueTask.setStructureName(taskAlloc.getStructureName());
-                            continueTask.setIsContinueTask(true);
-                            continueTask.setIsEndingTask(taskAlloc.getIsEndingTask());
-                            continueTask.setIsMainProduct(taskAlloc.getIsMainProduct());
-                            continueTask.setPlannedProduction(taskAlloc.getQuantity());
-
-                            int load = (int) Math.ceil(
-                                    (double) taskAlloc.getQuantity() / DEFAULT_TRIP_CAPACITY);
-                            continueTask.setVulcanizeMachineCount(load);
-
-                            continueTasksForStructure.add(continueTask);
                         }
                     }
-
                     if (!embryos.isEmpty()) {
                         machineHistoryMap.put(machineCode, embryos);
                     }
