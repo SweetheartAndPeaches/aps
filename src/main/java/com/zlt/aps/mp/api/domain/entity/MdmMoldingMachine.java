@@ -43,12 +43,6 @@ public class MdmMoldingMachine extends BaseEntity {
     @TableField(value = "CX_MACHINE_CODE")
     private String cxMachineCode;
 
-    /** 成型机名称 */
-    @Excel(name = "ui.data.column.mdmMoldingMachine.cxMachineName", sort = 3)
-    @ApiModelProperty(value = "成型机名称", name = "cxMachineName")
-    @TableField(exist = false)
-    private String cxMachineName;
-
     /** 成型机类型 */
     @Excel(name = "ui.data.column.mdmMoldingMachine.cxMachineBrandCode",dictType = "biz_machine_brand", sort = 4)
     @ApiModelProperty(value = "成型机类型", name = "cxMachineBrandCode")
@@ -113,12 +107,5 @@ public class MdmMoldingMachine extends BaseEntity {
     @TableField("IS_ACTIVE")
     private Integer isActive;
 
-    /**
-     * 删除标志：0-未删除 1-已删除
-     */
-    @ApiModelProperty(value = "删除标志：0-未删除 1-已删除")
-    @TableField("IS_DELETE")
-    @TableLogic(value = "0", delval = "1")
-    private String isDelete;
 
 }

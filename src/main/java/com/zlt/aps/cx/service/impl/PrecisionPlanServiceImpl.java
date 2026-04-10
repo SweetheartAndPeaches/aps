@@ -335,7 +335,7 @@ public class PrecisionPlanServiceImpl extends ServiceImpl<CxPrecisionPlanMapper,
     private CxPrecisionPlan createPrecisionPlan(MdmMoldingMachine machine, LocalDate planDate) {
         CxPrecisionPlan plan = new CxPrecisionPlan();
         plan.setMachineCode(machine.getCxMachineCode());
-        plan.setMachineName(machine.getCxMachineName());
+        plan.setMachineName(machine.getMachineName());
         plan.setPlanDate(planDate);
         plan.setEstimatedHours(PRECISION_HOURS);
         plan.setStatus("PLANNED");

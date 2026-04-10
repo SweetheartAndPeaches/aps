@@ -465,7 +465,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             result.setCxMachineCode(machineCode);
             MdmMoldingMachine machine = machineMap.get(machineCode);
             if (machine != null) {
-                result.setCxMachineName(machine.getCxMachineName());
+                result.setCxMachineName(machine.getMachineName());
                 result.setCxMachineType(machine.getCxMachineBrandCode());
             }
 
