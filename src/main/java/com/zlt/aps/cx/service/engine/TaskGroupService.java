@@ -242,12 +242,12 @@ public class TaskGroupService {
 
         // Step 1: 与库存对冲，计算净需求
         int requiredProduction = Math.max(0, vulcanizeDemand - currentStock);
+        task.setPlannedProduction(requiredProduction);
 
         // Step 2: 整车取整
         int tripCapacity = getTripCapacity(task.getStructureName(), context);
         int plannedProduction = productionCalculator.roundToVehicle(requiredProduction, tripCapacity);
-
-        task.setPlannedProduction(plannedProduction);
+        task.setRequiredCars(plannedProduction)
     }
 
     /**
@@ -288,7 +288,13 @@ public class TaskGroupService {
             task.setEndingAbandonedQty(endingSurplusQty);
             log.info("收尾任务 {} 余量{}条被舍弃（非主销+余量≤2）", task.getEmbryoCode(), endingSurplusQty);
         } else {
-            // 主销产品：记录最后一批
+            // 主销产品最后一批：不够一车则补足到一车
+            int tripCapacity = getTripCapacity(task.getStructureName(), context);
+            if (plannedProduction > 0 && plannedProduction < tripCapacity) {
+                plannedProduction = tripCapacity;
+                task.setPlannedProduction(plannedProduction);
+                log.info("收尾任务 {} 主销最后一批不足一车，补足到一车：{}", task.getEmbryoCode(), tripCapacity);
+            }
             task.setIsLastEndingBatch(true);
             log.info("收尾任务 {} 今天最后一批，主销={}，余量={}，计划={}",
                     task.getEmbryoCode(), task.getIsMainProduct(), endingSurplusQty, plannedProduction);
