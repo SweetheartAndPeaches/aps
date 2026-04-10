@@ -145,7 +145,7 @@ public interface CoreScheduleAlgorithmService {
         private Boolean endingAbandoned;
         /** 舍弃数量 */
         private Integer endingAbandonedQty;
-        /** 多做的库存量（主销产品按整车下时） */
+        /** 主销产品按整车下的量 */
         private Integer endingExtraInventory;
 
         // ==================== 新增任务排序相关字段 ====================

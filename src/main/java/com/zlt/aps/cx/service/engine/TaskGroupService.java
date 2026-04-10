@@ -248,13 +248,13 @@ public class TaskGroupService {
         BigDecimal requiredProduction = new BigDecimal(netDemand)
                 .multiply(BigDecimal.ONE.add(lossRate))
                 .setScale(0, BigDecimal.ROUND_UP);
-        task.setPlannedProduction(requiredProduction);
+        task.setPlannedProduction(requiredProduction.intValue());
 
 
         // Step 3: 整车取整
         int tripCapacity = getTripCapacity(task.getStructureName(), context);
         int plannedProduction = productionCalculator.roundToVehicle(requiredProduction.intValue(), tripCapacity);
-        task.setRequiredCars( (int) Math.ceil((double) stripQuantity / tripCapacity));
+        task.setRequiredCars(plannedProduction / Math.max(tripCapacity, 1));
         task.setEndingExtraInventory(plannedProduction);
  
     }
@@ -293,19 +293,22 @@ public class TaskGroupService {
         if (!Boolean.TRUE.equals(task.getIsMainProduct()) && endingSurplusQty <= ENDING_SURPLUS_THRESHOLD) {
             // 非主销产品 + 收尾余量≤2条，舍弃当天排产
             task.setPlannedProduction(0);
+            task.setEndingExtraInventory(0);
             task.setEndingAbandoned(true);
             task.setEndingAbandonedQty(endingSurplusQty);
             log.info("收尾任务 {} 余量{}条被舍弃（非主销+余量≤2）", task.getEmbryoCode(), endingSurplusQty);
         } else if (!Boolean.TRUE.equals(task.getIsMainProduct())) {
             // 非主销产品 + 收尾余量>2条，按实际量下（不补车）
+            task.setEndingExtraInventory(task.getPlannedProduction());
             task.setIsLastEndingBatch(true);
             log.info("收尾任务 {} 今天最后一批（非主销），余量={}，计划={}",
-                    task.getEmbryoCode(), endingSurplusQty, endingExtraInventory);
+                    task.getEmbryoCode(), endingSurplusQty, task.getPlannedProduction());
         } else {
             // 主销产品最后一批：不够一车则补足到一车
             int tripCapacity = getTripCapacity(task.getStructureName(), context);
             if (endingExtraInventory > 0 && endingExtraInventory < tripCapacity) {
                 task.setPlannedProduction(tripCapacity);
+                task.setEndingExtraInventory(tripCapacity);
                 log.info("收尾任务 {} 主销最后一批不足一车，补足到一车：{}", task.getEmbryoCode(), tripCapacity);
             }
             task.setIsLastEndingBatch(true);
