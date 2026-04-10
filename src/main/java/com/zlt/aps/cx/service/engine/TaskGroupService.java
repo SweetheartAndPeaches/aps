@@ -248,10 +248,6 @@ public class TaskGroupService {
         int plannedProduction = productionCalculator.roundToVehicle(requiredProduction, tripCapacity);
 
         task.setPlannedProduction(plannedProduction);
-
-        // Step 3: 计算需要的硫化机台数
-        int vulcanizeMachineCount = plannedProduction / Math.max(tripCapacity, 1);
-        task.setVulcanizeMachineCount(vulcanizeMachineCount);
     }
 
     /**
