@@ -373,6 +373,7 @@ public class ScheduleServiceImpl implements ScheduleService {
                 new LambdaQueryWrapper<CxShiftConfig>()
                         .eq(CxShiftConfig::getFactoryCode, factoryCode)
                         .eq(CxShiftConfig::getIsActive, ACTIVE_STATUS)
+                        .eq(CxShiftConfig::getIsActive, "0")
                         .orderByAsc(CxShiftConfig::getScheduleDay)
                         .orderByAsc(CxShiftConfig::getDayShiftOrder)
         );
@@ -1067,21 +1068,21 @@ public class ScheduleServiceImpl implements ScheduleService {
 
                     for (int i = 0; i < taskDemands.size(); i++) {
                         TaskDemand td = taskDemands.get(i);
-                        int allocatedStock;
+                        int currentStock;
 
                         if (i == taskDemands.size() - 1) {
                             // 最后一个硫化任务分配剩余库存（倒扣）
-                            allocatedStock = totalStock - allocatedTotal;
+                            currentStock = totalStock - allocatedTotal;
                         } else {
                             // 按比例分配
-                            allocatedStock = (int) ((long) totalStock * td.demand / totalDemand);
+                            currentStock = (int) ((long) totalStock * td.demand / totalDemand);
                         }
 
-                        materialStockMap.merge(td.taskKey, allocatedStock, Integer::sum);
-                        allocatedTotal += allocatedStock;
+                        materialStockMap.merge(td.taskKey, currentStock, Integer::sum);
+                        allocatedTotal += currentStock;
 
                         log.debug("胎胚 {} 共用分配：硫化任务 {} 需求 {}，分配库存 {}",
-                                embryoCode, td.taskKey, td.demand, allocatedStock);
+                                embryoCode, td.taskKey, td.demand, currentStock);
                     }
                 }
             }

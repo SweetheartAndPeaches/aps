@@ -356,11 +356,11 @@ public class ContinueTaskProcessor {
     }
 
     /**
-     * 从任务对象中读取已分配的库存，写入任务的 allocatedStock 字段
+     * 从任务对象中读取当前库存，同步到 currentStock 字段
      *
      * <p>materialStockMap 的库存分配在 TaskGroupService.buildSingleTask 中已完成
-     * （按各硫化任务的需求比例预分配）。此处仅读取 task.getCurrentStock() 并同步到
-     * allocatedStock 字段，供后续 calculatePlannedProduction 使用。
+     * （按各硫化任务的需求比例预分配）。此处仅读取并同步到
+     * currentStock 字段，供后续 calculatePlannedProduction 使用。
      *
      * @param task         任务
      * @param context      排程上下文
@@ -372,10 +372,10 @@ public class ContinueTaskProcessor {
             LocalDate scheduleDate) {
         
         // 库存已在 TaskGroupService.buildSingleTask 中按物料需求比例分配好
-        // 这里直接使用已分配的库存
-        int allocatedStock = task.getCurrentStock() != null ? task.getCurrentStock() : 0;
-        task.setAllocatedStock(allocatedStock);
-        log.debug("胎胚 {} 库存分配：分配量={}", task.getEmbryoCode(), allocatedStock);
+        // 这里直接使用当前库存
+        int currentStock = task.getCurrentStock() != null ? task.getCurrentStock() : 0;
+        task.setCurrentStock(currentStock);
+        log.debug("胎胚 {} 当前库存：{}", task.getEmbryoCode(), currentStock);
     }
     
     /**
@@ -401,8 +401,8 @@ public class ContinueTaskProcessor {
 
         // 硫化需求 − 库存抵扣 = 待排条数
         int vulcanizeDemand = task.getVulcanizeDemand() != null ? task.getVulcanizeDemand() : 0;
-        int allocatedStock = task.getAllocatedStock() != null ? task.getAllocatedStock() : 0;
-        int requiredProduction = Math.max(0, vulcanizeDemand - allocatedStock);
+        int currentStock = task.getCurrentStock() != null ? task.getCurrentStock() : 0;
+        int requiredProduction = Math.max(0, vulcanizeDemand - currentStock);
 
         // 整车取整（由 ProductionCalculator 统一管理）
         int tripCapacity = getTripCapacity(task.getStructureName(), context);
@@ -410,7 +410,7 @@ public class ContinueTaskProcessor {
         task.setPlannedProduction(plannedProduction);
 
         log.debug("任务 {} 待排产量：需求={}，库存={}，待排={}，胎面整车={}，计划量={}",
-                task.getEmbryoCode(), vulcanizeDemand, allocatedStock,
+                task.getEmbryoCode(), vulcanizeDemand, currentStock,
                 requiredProduction, tripCapacity, plannedProduction);
     }
 
@@ -522,12 +522,12 @@ public class ContinueTaskProcessor {
         }
         
         int plannedProduction = task.getPlannedProduction() != null ? task.getPlannedProduction() : 0;
-        int allocatedStock = task.getAllocatedStock() != null ? task.getAllocatedStock() : 0;
-        int totalPlanned = plannedProduction + allocatedStock;
-        
+        int currentStock = task.getCurrentStock() != null ? task.getCurrentStock() : 0;
+        int totalPlanned = plannedProduction + currentStock;
+
         // 使用 ProductionCalculator 计算收尾计划量
         boolean isMainProduct = Boolean.TRUE.equals(task.getIsMainProduct());
-        int remainingToProduce = Math.max(0, endingSurplus - allocatedStock);
+        int remainingToProduce = Math.max(0, endingSurplus - currentStock);
         
         ProductionCalculator.PlanQuantityResult endingResult = productionCalculator.calculateEndingQuantity(
                 remainingToProduce,

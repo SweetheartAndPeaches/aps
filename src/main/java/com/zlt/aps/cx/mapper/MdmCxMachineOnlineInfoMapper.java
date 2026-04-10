@@ -23,7 +23,7 @@ public interface MdmCxMachineOnlineInfoMapper extends BaseMapper<MdmCxMachineOnl
      * @param date 日期
      * @return 在机信息列表
      */
-    @Select("SELECT * FROM T_MDM_CX_MACHINE_ONLINE_INFO WHERE ONLINE_DATE = #{date} AND IS_DELETE = 0")
+    @Select("SELECT * FROM T_MDM_CX_MACHINE_ONLINE_INFO WHERE ONLINE_DATE = #{date} AND IS_DELETE = '0'")
     List<MdmCxMachineOnlineInfo> selectByDate(@Param("date") LocalDate date);
 
     /**
@@ -35,7 +35,7 @@ public interface MdmCxMachineOnlineInfoMapper extends BaseMapper<MdmCxMachineOnl
      * @return 在机信息列表
      */
     @Select("SELECT * FROM T_MDM_CX_MACHINE_ONLINE_INFO " +
-            "WHERE (ONLINE_DATE = #{today} OR ONLINE_DATE = #{yesterday}) AND IS_DELETE = 0")
+            "WHERE (ONLINE_DATE = #{today} OR ONLINE_DATE = #{yesterday}) AND IS_DELETE = '0'")
     List<MdmCxMachineOnlineInfo> selectByDateRange(@Param("today") LocalDate today, 
                                                     @Param("yesterday") LocalDate yesterday);
 
@@ -45,7 +45,7 @@ public interface MdmCxMachineOnlineInfoMapper extends BaseMapper<MdmCxMachineOnl
      * @param cxCode 机台编码
      * @return 在机信息列表
      */
-    @Select("SELECT * FROM T_MDM_CX_MACHINE_ONLINE_INFO WHERE CX_CODE = #{cxCode} AND IS_DELETE = 0 ORDER BY ONLINE_DATE DESC")
+    @Select("SELECT * FROM T_MDM_CX_MACHINE_ONLINE_INFO WHERE CX_CODE = #{cxCode} AND IS_DELETE = '0' ORDER BY ONLINE_DATE DESC")
     List<MdmCxMachineOnlineInfo> selectByCxCode(@Param("cxCode") String cxCode);
 
     /**
@@ -53,6 +53,6 @@ public interface MdmCxMachineOnlineInfoMapper extends BaseMapper<MdmCxMachineOnl
      *
      * @return 在机信息列表
      */
-    @Select("SELECT * FROM T_MDM_CX_MACHINE_ONLINE_INFO WHERE IS_DELETE = 0 ORDER BY CX_CODE, ONLINE_DATE DESC")
+    @Select("SELECT * FROM T_MDM_CX_MACHINE_ONLINE_INFO WHERE IS_DELETE = '0' ORDER BY CX_CODE, ONLINE_DATE DESC")
     List<MdmCxMachineOnlineInfo> selectAllValid();
 }

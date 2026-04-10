@@ -239,9 +239,9 @@ public class TaskGroupService {
     private void allocateEmbryoStock(CoreScheduleAlgorithmService.DailyEmbryoTask task,
                                      ScheduleContextVo context, LocalDate scheduleDate) {
         if (task.getCurrentStock() != null && task.getCurrentStock() > 0) {
-            task.setAllocatedStock(task.getCurrentStock());
+            task.setCurrentStock(task.getCurrentStock());
         } else {
-            task.setAllocatedStock(0);
+            task.setCurrentStock(0);
         }
     }
 
@@ -294,13 +294,13 @@ public class TaskGroupService {
             return;
         }
 
-        Integer allocatedStock = task.getAllocatedStock();
-        if (allocatedStock == null) {
-            allocatedStock = 0;
+        Integer currentStock = task.getCurrentStock();
+        if (currentStock == null) {
+            currentStock = 0;
         }
 
         // 收尾任务当天可排产量 = min(胎胚库存, 当天计划量)
-        int availableQty = Math.min(allocatedStock, task.getPlannedProduction() != null ? task.getPlannedProduction() : 0);
+        int availableQty = Math.min(currentStock, task.getPlannedProduction() != null ? task.getPlannedProduction() : 0);
 
         if (availableQty > 0) {
             int tripCapacity = getTripCapacity(task.getStructureName(), context);
@@ -327,11 +327,11 @@ public class TaskGroupService {
 
         // 停产标识日：当天产量按胎胚库存取整
         if (scheduleDayTypeHelper.isStopFlagDay(scheduleDate)) {
-            Integer allocatedStock = task.getAllocatedStock();
-            if (allocatedStock != null && allocatedStock > 0) {
+            Integer currentStock = task.getCurrentStock();
+            if (currentStock != null && currentStock > 0) {
                 int tripCapacity = getTripCapacity(task.getStructureName(), context);
-                int cars = productionCalculator.roundToVehicle(allocatedStock, tripCapacity);
-                int qty = Math.min(cars * tripCapacity, allocatedStock);
+                int cars = productionCalculator.roundToVehicle(currentStock, tripCapacity);
+                int qty = Math.min(cars * tripCapacity, currentStock);
                 task.setPlannedProduction(qty);
                 task.setVulcanizeMachineCount(cars);
             } else {
@@ -382,7 +382,7 @@ public class TaskGroupService {
         }
 
         // 获取分配给该硫化任务的库存（按硫化任务维度分配，共用胎胚库存已按比例分配）
-        int currentStock = getAllocatedStock(context, lhResult.getId());
+        int currentStock = getCurrentStock(context, lhResult.getId());
         log.info("硫化任务排量: embryoCode={}, vulcanizeDemand={}, currentStock={}", 
                 embryoCode, vulcanizeDemand, currentStock);
 
@@ -522,13 +522,13 @@ public class TaskGroupService {
      * 获取分配给该硫化任务的库存
      *
      * <p>库存已按硫化任务维度分配，共用胎胚库存按硫化任务需求比例分配
-     * 使用硫化任务的唯一标识 (lhId) 获取分配库存
+     * 使用硫化任务的唯一标识 (lhId) 获取当前库存
      *
      * @param context 排程上下文
      * @param lhId    硫化任务ID
-     * @return 分配给该硫化任务的库存数量
+     * @return 当前库存数量
      */
-    private int getAllocatedStock(ScheduleContextVo context, Long lhId) {
+    private int getCurrentStock(ScheduleContextVo context, Long lhId) {
         if (lhId == null) {
             return 0;
         }
