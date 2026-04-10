@@ -388,7 +388,6 @@ public class TaskGroupService {
 
         task.setDemandQuantity(vulcanizeDemand);
         task.setAssignedQuantity(0);
-        task.setRemainingQuantity(vulcanizeDemand);
 
         // 是否主销产品
         String mainProductCode = task.getMaterialCode();
