@@ -141,9 +141,9 @@ public class NewTaskProcessor {
 
             // 固定量试预占机台：加入 machineHistoryMap
             for (CoreScheduleAlgorithmService.DailyEmbryoTask fixedTask : fixedVolumeTrials) {
-                String targetMachine = trialMachineMap.get(fixedTask.getMaterialCode());
+                String targetMachine = trialMachineMap.get(fixedTask.getEmbryoCode());
                 machineHistoryMap.computeIfAbsent(targetMachine, k -> new HashSet<>())
-                        .add(fixedTask.getMaterialCode());
+                        .add(fixedTask.getEmbryoCode());
             }
 
             // Step 3.5: 合并续作任务和参与均衡的新增任务
@@ -199,8 +199,8 @@ public class NewTaskProcessor {
 
                     CoreScheduleAlgorithmService.TaskAllocation taskAlloc =
                             new CoreScheduleAlgorithmService.TaskAllocation();
-                    taskAlloc.setEmbryoCode(task.getMaterialCode());
-                    taskAlloc.setMaterialCode(task.getRelatedMaterialCode());
+                    taskAlloc.setEmbryoCode(task.getEmbryoCode());
+                    taskAlloc.setMaterialCode(task.getMaterialCode());
                     taskAlloc.setMaterialDesc(task.getMaterialDesc());
                     taskAlloc.setMainMaterialDesc(task.getMainMaterialDesc());
                     taskAlloc.setStructureName(task.getStructureName());
@@ -223,7 +223,7 @@ public class NewTaskProcessor {
 
             // Step 3.10: 固定量试任务追加到对应机台结果
             for (CoreScheduleAlgorithmService.DailyEmbryoTask fixedTask : fixedVolumeTrials) {
-                String targetMachine = trialMachineMap.get(fixedTask.getMaterialCode());
+                String targetMachine = trialMachineMap.get(fixedTask.getEmbryoCode());
                 // 找到对应机台的结果
                 CoreScheduleAlgorithmService.MachineAllocationResult targetResult = null;
                 for (CoreScheduleAlgorithmService.MachineAllocationResult r : allResults) {
@@ -243,8 +243,8 @@ public class NewTaskProcessor {
 
                 CoreScheduleAlgorithmService.TaskAllocation taskAlloc =
                         new CoreScheduleAlgorithmService.TaskAllocation();
-                taskAlloc.setEmbryoCode(fixedTask.getMaterialCode());
-                taskAlloc.setMaterialCode(fixedTask.getRelatedMaterialCode());
+                taskAlloc.setEmbryoCode(fixedTask.getEmbryoCode());
+                taskAlloc.setMaterialCode(fixedTask.getMaterialCode());
                 taskAlloc.setMaterialDesc(fixedTask.getMaterialDesc());
                 taskAlloc.setMainMaterialDesc(fixedTask.getMainMaterialDesc());
                 taskAlloc.setStructureName(fixedTask.getStructureName());
@@ -259,7 +259,7 @@ public class NewTaskProcessor {
                 taskAlloc.setLhId(fixedTask.getLhId());
 
                 targetResult.getTaskAllocations().add(taskAlloc);
-                log.info("固定量试任务 {} → 机台 {}", fixedTask.getMaterialCode(), targetMachine);
+                log.info("固定量试任务 {} → 机台 {}", fixedTask.getEmbryoCode(), targetMachine);
             }
         }
 
@@ -444,6 +444,6 @@ public class NewTaskProcessor {
         if (!Boolean.TRUE.equals(task.getIsProductionTrial())) {
             return false;
         }
-        return trialMachineMap.containsKey(task.getMaterialCode());
+        return trialMachineMap.containsKey(task.getEmbryoCode());
     }
 }

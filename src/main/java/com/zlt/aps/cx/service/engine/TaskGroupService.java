@@ -400,7 +400,7 @@ public class TaskGroupService {
         // 构建任务
         CoreScheduleAlgorithmService.DailyEmbryoTask task = new CoreScheduleAlgorithmService.DailyEmbryoTask();
         task.setLhId(lhResult.getId());  // 设置硫化任务ID，用于关联库存分配
-        task.setMaterialCode(embryoCode);
+        task.setEmbryoCode(embryoCode);
         task.setVulcanizeDemand(vulcanizeDemand);
         task.setCurrentStock(currentStock);
 
@@ -408,8 +408,8 @@ public class TaskGroupService {
             task.setMaterialDesc(material.getMaterialDesc());
             task.setMainMaterialDesc(material.getEmbryoDesc());
             task.setStructureName(material.getStructureName());
-            // 设置关联的物料编码（用于判断主销产品）
-            task.setRelatedMaterialCode(material.getMaterialCode());
+            // 设置成品物料编码（用于判断主销产品）
+            task.setMaterialCode(material.getMaterialCode());
         } else {
             task.setMaterialDesc(embryoCode);
             task.setMainMaterialDesc(embryoCode);
@@ -421,10 +421,10 @@ public class TaskGroupService {
         task.setRemainingQuantity(dailyDemand);
 
         // 是否主销产品
-        String relatedMaterialCode = task.getRelatedMaterialCode();
+        String mainProductCode = task.getMaterialCode();
         task.setIsMainProduct(context.getMainProductCodes() != null
-                && relatedMaterialCode != null
-                && context.getMainProductCodes().contains(relatedMaterialCode));
+                && mainProductCode != null
+                && context.getMainProductCodes().contains(mainProductCode));
 
         // 硫化机台数和模数
         // 一条LhScheduleResult = 一台硫化机，机台数直接为1
@@ -577,8 +577,8 @@ public class TaskGroupService {
         Map<String, MonthPlanProductLhCapacityVo> lhCapacityMap = context.getMaterialLhCapacityMap();
         Integer dailyLhCapacity = null;
         if (lhCapacityMap != null) {
-            String materialCode = task.getMaterialCode();
-            MonthPlanProductLhCapacityVo capacityVo = lhCapacityMap.get(materialCode);
+            String embryoCode = task.getEmbryoCode();
+            MonthPlanProductLhCapacityVo capacityVo = lhCapacityMap.get(embryoCode);
             if (capacityVo != null) {
                 if (capacityVo.getDayVulcanizationQty() != null && capacityVo.getDayVulcanizationQty() > 0) {
                     dailyLhCapacity = capacityVo.getDayVulcanizationQty();
@@ -600,7 +600,7 @@ public class TaskGroupService {
 
         // 仍然取不到，无法计算
         if (dailyLhCapacity == null || dailyLhCapacity <= 0) {
-            log.warn("无法获取物料 {} 的日硫化量，stockHours 无法计算", task.getMaterialCode());
+            log.warn("无法获取物料 {} 的日硫化量，stockHours 无法计算", task.getEmbryoCode());
             task.setStockHours(BigDecimal.ZERO);
             task.setIsStockHighWarning(false);
             return;
@@ -630,7 +630,7 @@ public class TaskGroupService {
         task.setIsStockHighWarning(isHighStock);
 
         log.debug("物料 {} stockHours计算: 日硫化量={}, 单胎单模时长={}s, 模数={}, 库存={}, 库存可供时长={}h",
-                task.getMaterialCode(), dailyLhCapacity, singleTireMoldSeconds, taskMoldQty, currentStock, stockHours);
+                task.getEmbryoCode(), dailyLhCapacity, singleTireMoldSeconds, taskMoldQty, currentStock, stockHours);
     }
 
     /**
@@ -675,7 +675,7 @@ public class TaskGroupService {
             ScheduleContextVo context,
             LocalDate scheduleDate) {
 
-        String materialCode = task.getMaterialCode();
+        String embryoCode = task.getEmbryoCode();
 
         // 获取成型余量（从预计算的映射中获取）
         Map<String, Integer> formingRemainderMap = context.getFormingRemainderMap();
@@ -684,15 +684,15 @@ public class TaskGroupService {
 
         // 从月计划余量获取硫化余量
         if (context.getMonthSurplusMap() != null) {
-            MdmMonthSurplus monthSurplus = context.getMonthSurplusMap().get(materialCode);
+            MdmMonthSurplus monthSurplus = context.getMonthSurplusMap().get(embryoCode);
             if (monthSurplus != null && monthSurplus.getPlanSurplusQty() != null) {
                 vulcanizeSurplusQty = monthSurplus.getPlanSurplusQty().intValue();
             }
         }
 
         // 获取成型余量
-        if (formingRemainderMap != null && formingRemainderMap.containsKey(materialCode)) {
-            formingRemainder = formingRemainderMap.get(materialCode);
+        if (formingRemainderMap != null && formingRemainderMap.containsKey(embryoCode)) {
+            formingRemainder = formingRemainderMap.get(embryoCode);
         } else if (vulcanizeSurplusQty != null) {
             // 成型余量 = 硫化余量 - 胎胚库存
             int currentStock = task.getCurrentStock() != null ? task.getCurrentStock() : 0;
@@ -707,7 +707,7 @@ public class TaskGroupService {
         task.setIsEndingTask(isEndingTask);
 
         // 获取收尾日（从物料收尾管理表）
-        LocalDate endingDate = findEndingDate(materialCode, context);
+        LocalDate endingDate = findEndingDate(embryoCode, context);
         task.setEndingDate(endingDate);
 
         if (endingDate != null) {
@@ -724,7 +724,7 @@ public class TaskGroupService {
 
             if (isUrgentEnding) {
                 log.info("紧急收尾任务：物料={}, 收尾日={}, 距收尾{}天", 
-                        materialCode, endingDate, daysToEnding);
+                        embryoCode, endingDate, daysToEnding);
             }
         }
 
@@ -732,7 +732,7 @@ public class TaskGroupService {
         if (formingRemainder != null && formingRemainder < ENDING_SURPLUS_THRESHOLD && formingRemainder > 0) {
             task.setIsUrgentEnding(true);
             log.info("成型余量低于阈值的收尾任务：物料={}, 成型余量={}, 阈值={}",
-                    materialCode, formingRemainder, ENDING_SURPLUS_THRESHOLD);
+                    embryoCode, formingRemainder, ENDING_SURPLUS_THRESHOLD);
         }
 
         // 计算优先级
@@ -803,7 +803,7 @@ public class TaskGroupService {
         // 库存高预警（>18小时 = 低优先级，排后面）
         if (Boolean.TRUE.equals(task.getIsStockHighWarning())) {
             score -= 500;
-            log.debug("胎胚 {} 库存水位过高，优先级降低500分", task.getMaterialCode());
+            log.debug("胎胚 {} 库存水位过高，优先级降低500分", task.getEmbryoCode());
         }
 
         // 主销产品

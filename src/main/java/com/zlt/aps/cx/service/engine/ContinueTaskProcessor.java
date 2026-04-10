@@ -375,7 +375,7 @@ public class ContinueTaskProcessor {
         // 这里直接使用已分配的库存
         int allocatedStock = task.getCurrentStock() != null ? task.getCurrentStock() : 0;
         task.setAllocatedStock(allocatedStock);
-        log.debug("胎胚 {} 库存分配：分配量={}", task.getMaterialCode(), allocatedStock);
+        log.debug("胎胚 {} 库存分配：分配量={}", task.getEmbryoCode(), allocatedStock);
     }
     
     /**
@@ -410,7 +410,7 @@ public class ContinueTaskProcessor {
         task.setPlannedProduction(plannedProduction);
 
         log.debug("任务 {} 待排产量：需求={}，库存={}，待排={}，胎面整车={}，计划量={}",
-                task.getMaterialCode(), vulcanizeDemand, allocatedStock,
+                task.getEmbryoCode(), vulcanizeDemand, allocatedStock,
                 requiredProduction, tripCapacity, plannedProduction);
     }
 
@@ -463,7 +463,7 @@ public class ContinueTaskProcessor {
             if (scheduleDate.isAfter(flagInfo.nearestDate)) {
                 // 停产日之后：无法安排
                 task.setPlannedProduction(0);
-                log.debug("停产日（已停产），不安排：materialCode={}", task.getMaterialCode());
+                log.debug("停产日（已停产），不安排：materialCode={}", task.getEmbryoCode());
             }
             // 停产标识日当天：有量，plannedProduction 保持原值
             // 整车取整由 calculatePlannedProduction 完成
@@ -471,7 +471,7 @@ public class ContinueTaskProcessor {
             // 最近标识是「开」→ 正常按硫化计划安排，取整到整车
             task.setIsOpeningDayTask(true);
             // 开产日有量但不多，整车取整由 calculatePlannedProduction 完成
-            log.debug("开产日，正常按硫化计划安排：materialCode={}", task.getMaterialCode());
+            log.debug("开产日，正常按硫化计划安排：materialCode={}", task.getEmbryoCode());
         }
         // 其他情况（dayFlag 未知）按正常处理，不做干预
     }
@@ -533,7 +533,7 @@ public class ContinueTaskProcessor {
                 remainingToProduce,
                 getTripCapacity(task.getStructureName(), context),
                 isMainProduct,
-                task.getMaterialCode()
+                task.getEmbryoCode()
         );
         
         // 更新任务状态
@@ -542,7 +542,7 @@ public class ContinueTaskProcessor {
             task.setPlannedProduction(0);
             task.setEndingAbandoned(true);
             task.setEndingAbandonedQty(endingResult.getAbandonedQuantity());
-            log.info("收尾任务 {} 余量 {} 条被舍弃", task.getMaterialCode(), endingResult.getAbandonedQuantity());
+            log.info("收尾任务 {} 余量 {} 条被舍弃", task.getEmbryoCode(), endingResult.getAbandonedQuantity());
         } else {
             // 更新计划量
             int newPlanQuantity = endingResult.getPlanQuantity();
@@ -552,7 +552,7 @@ public class ContinueTaskProcessor {
             if (endingResult.getExtraInventory() > 0) {
                 task.setEndingExtraInventory(endingResult.getExtraInventory());
                 log.info("收尾任务 {} 主销产品，多做 {} 条当库存", 
-                        task.getMaterialCode(), endingResult.getExtraInventory());
+                        task.getEmbryoCode(), endingResult.getExtraInventory());
             }
             
             // 标记是否为收尾最后一批
@@ -592,8 +592,8 @@ public class ContinueTaskProcessor {
                 ? task.getPlannedProduction() : task.getDemandQuantity();
 
         CoreScheduleAlgorithmService.TaskAllocation taskAllocation = new CoreScheduleAlgorithmService.TaskAllocation();
-        taskAllocation.setEmbryoCode(task.getMaterialCode());
-        taskAllocation.setMaterialCode(task.getRelatedMaterialCode());
+        taskAllocation.setEmbryoCode(task.getEmbryoCode());
+        taskAllocation.setMaterialCode(task.getMaterialCode());
         taskAllocation.setMaterialDesc(task.getMaterialDesc());
         taskAllocation.setMainMaterialDesc(task.getMainMaterialDesc());
         taskAllocation.setStructureName(task.getStructureName());

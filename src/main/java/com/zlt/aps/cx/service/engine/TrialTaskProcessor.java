@@ -129,12 +129,12 @@ public class TrialTaskProcessor {
             ScheduleContextVo context) {
 
         String structureName = task.getStructureName();
-        String materialCode = task.getMaterialCode();
+        String embryoCode = task.getEmbryoCode();
 
         MdmMoldingMachine selectedMachine = selectMachineForTrial(
-                materialCode, structureName, structMachines, machineAllocationMap, context);
+                embryoCode, structureName, structMachines, machineAllocationMap, context);
         if (selectedMachine == null) {
-            log.warn("试制任务 {} 无法找到合适的机台，跳过", materialCode);
+            log.warn("试制任务 {} 无法找到合适的机台，跳过", embryoCode);
             return;
         }
 
@@ -151,7 +151,7 @@ public class TrialTaskProcessor {
 
         // 分配到机台
         allocateTaskToMachine(allocation, task);
-        log.debug("试制任务 {} 分配到机台 {}，计划量={}", materialCode, machineCode, demandQty);
+        log.debug("试制任务 {} 分配到机台 {}，计划量={}", embryoCode, machineCode, demandQty);
     }
 
     /**
@@ -327,8 +327,8 @@ public class TrialTaskProcessor {
 
         CoreScheduleAlgorithmService.TaskAllocation taskAllocation =
                 new CoreScheduleAlgorithmService.TaskAllocation();
-        taskAllocation.setEmbryoCode(task.getMaterialCode());
-        taskAllocation.setMaterialCode(task.getRelatedMaterialCode());
+        taskAllocation.setEmbryoCode(task.getEmbryoCode());
+        taskAllocation.setMaterialCode(task.getMaterialCode());
         taskAllocation.setMaterialDesc(task.getMaterialDesc());
         taskAllocation.setMainMaterialDesc(task.getMainMaterialDesc());
         taskAllocation.setStructureName(task.getStructureName());

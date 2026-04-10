@@ -555,7 +555,7 @@ public class BalancingService {
         }
         
         CoreScheduleAlgorithmService.DailyEmbryoTask task = tasks.get(taskIndex);
-        String embryoCode = task.getMaterialCode();
+        String embryoCode = task.getEmbryoCode();
         
         // 如果当前胎胚还有剩余未分配的硫化机数
         if (remainingCount > 0) {
@@ -849,7 +849,7 @@ public class BalancingService {
         }
         
         for (CoreScheduleAlgorithmService.DailyEmbryoTask task : tasks) {
-            String embryoCode = task.getMaterialCode();
+            String embryoCode = task.getEmbryoCode();
             int remainingCount = task.getVulcanizeMachineCount() != null ? task.getVulcanizeMachineCount() : 0;
             
             if (remainingCount <= 0) {

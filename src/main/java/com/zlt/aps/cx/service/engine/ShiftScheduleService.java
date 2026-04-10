@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -178,12 +179,16 @@ public class ShiftScheduleService {
             result.setMachineCode(machineCode);
             result.setShiftCode(shiftConfig.getShiftCode());
             result.setShiftName(shiftConfig.getShiftName());
-            result.setEmbryoCode(task.getMaterialCode());
-            result.setMaterialCode(task.getRelatedMaterialCode());
+            result.setEmbryoCode(task.getEmbryoCode());
+            result.setMaterialCode(task.getMaterialCode());
             result.setMaterialDesc(task.getMaterialDesc());
             result.setMainMaterialDesc(task.getMainMaterialDesc());
             result.setStructureName(task.getStructureName());
             result.setQuantity(batchQty);
+            result.setTripNo(String.valueOf(i + 1));
+            result.setTripCapacity(treadCount);
+            result.setStockHours(task.getStockHours());
+            result.setSequence(i + 1);
             result.setPlanStartTime(startTime);
             result.setPlanEndTime(endTime);
             result.setIsTrialTask(task.getIsTrialTask());
@@ -195,12 +200,12 @@ public class ShiftScheduleService {
             remainingCars -= carsForShift;
 
             log.debug("班次排产：机台={}, 班次={}, 胎胚={}, 物料编号={}, 车数={}, 数量={}, 时间={}-{}",
-                    machineCode, shiftConfig.getShiftName(), task.getMaterialCode(),
-                    task.getRelatedMaterialCode(), carsForShift, batchQty, startTime, endTime);
+                    machineCode, shiftConfig.getShiftName(), task.getEmbryoCode(),
+                    task.getMaterialCode(), carsForShift, batchQty, startTime, endTime);
         }
 
         if (remainingCars > 0) {
-            log.warn("任务 {} 还有 {} 车未排产，产能不足", task.getMaterialCode(), remainingCars);
+            log.warn("任务 {} 还有 {} 车未排产，产能不足", task.getEmbryoCode(), remainingCars);
         }
 
         return results;
@@ -481,8 +486,8 @@ public class ShiftScheduleService {
         if (keyProductCodes == null || keyProductCodes.isEmpty()) {
             return false;
         }
-        return keyProductCodes.contains(task.getMaterialCode())
-                || keyProductCodes.contains(task.getRelatedMaterialCode());
+        return keyProductCodes.contains(task.getEmbryoCode())
+                || keyProductCodes.contains(task.getMaterialCode());
     }
 
     // ==================== 产能与时间计算 ====================
@@ -746,7 +751,15 @@ public class ShiftScheduleService {
         /** 结构名称 */
         private String structureName;
         /** 排产数量（条） */
-        private int quantity;
+        private Integer quantity;
+        /** 车次号（班次内第几车） */
+        private String tripNo;
+        /** 本车次容量（整车条数） */
+        private Integer tripCapacity;
+        /** 库存可供硫化时长（小时） */
+        private BigDecimal stockHours;
+        /** 顺位（班次内排序） */
+        private Integer sequence;
         /** 计划开始时间 */
         private LocalDateTime planStartTime;
         /** 计划结束时间 */

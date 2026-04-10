@@ -53,9 +53,9 @@ public interface CoreScheduleAlgorithmService {
     @lombok.Data
     class DailyEmbryoTask {
         /** 胎胚编码 */
+        private String embryoCode;
+        /** 物料编码（成品物料编码，用于判断主销产品） */
         private String materialCode;
-        /** 物料编号（成品物料编码，用于判断主销产品） */
-        private String relatedMaterialCode;
         /** 物料描述 */
         private String materialDesc;
         /** 主物料描述（胎胚描述） */

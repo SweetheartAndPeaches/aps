@@ -220,8 +220,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             for (TaskAllocation taskAlloc : allocation.getTaskAllocations()) {
                 // 重建 DailyEmbryoTask 传给 scheduleTaskToShifts
                 CoreScheduleAlgorithmService.DailyEmbryoTask task = new CoreScheduleAlgorithmService.DailyEmbryoTask();
-                task.setMaterialCode(taskAlloc.getEmbryoCode());
-                task.setRelatedMaterialCode(taskAlloc.getMaterialCode());
+                task.setEmbryoCode(taskAlloc.getEmbryoCode());
+                task.setMaterialCode(taskAlloc.getMaterialCode());
                 task.setMaterialDesc(taskAlloc.getMaterialDesc());
                 task.setMainMaterialDesc(taskAlloc.getMainMaterialDesc());
                 task.setStructureName(taskAlloc.getStructureName());
@@ -353,8 +353,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
         // ==================== 按 机台+胎胚+SAP物料 三维维度汇总班次排量 ====================
         // key: machineCode + "|" + embryoCode + "|" + materialCode
-        // value: classField → quantity
-        Map<String, Map<String, Integer>> taskClassQtyMap = new LinkedHashMap<>();
+        // value: classField → ShiftProductionResult（拍平到CxScheduleResult的8班次列）
+        Map<String, Map<String, ShiftScheduleService.ShiftProductionResult>> taskClassSprMap = new LinkedHashMap<>();
         // key → 总排产量
         Map<String, Integer> taskTotalQtyMap = new LinkedHashMap<>();
         // key → structureName
@@ -378,9 +378,31 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 }
 
                 String taskKey = machineCode + "|" + embryoCode + "|" + materialCode;
-                taskClassQtyMap.computeIfAbsent(taskKey, k -> new LinkedHashMap<>())
-                        .merge(classField, spr.getQuantity(), Integer::sum);
-                taskTotalQtyMap.merge(taskKey, spr.getQuantity(), Integer::sum);
+                taskClassSprMap.computeIfAbsent(taskKey, k -> new LinkedHashMap<>())
+                        .compute(classField, (k, existing) -> {
+                            if (existing == null) {
+                                return spr;
+                            }
+                            // 合并：排量累加，其他字段保留第一个
+                            ShiftScheduleService.ShiftProductionResult merged = new ShiftScheduleService.ShiftProductionResult();
+                            merged.setMachineCode(existing.getMachineCode());
+                            merged.setEmbryoCode(existing.getEmbryoCode());
+                            merged.setMaterialCode(existing.getMaterialCode());
+                            merged.setMaterialDesc(existing.getMaterialDesc());
+                            merged.setMainMaterialDesc(existing.getMainMaterialDesc());
+                            merged.setStructureName(existing.getStructureName());
+                            merged.setShiftCode(classField);
+                            merged.setQuantity((existing.getQuantity() != null ? existing.getQuantity() : 0)
+                                    + (spr.getQuantity() != null ? spr.getQuantity() : 0));
+                            merged.setTripNo(existing.getTripNo());
+                            merged.setTripCapacity(existing.getTripCapacity());
+                            merged.setStockHours(existing.getStockHours());
+                            merged.setSequence(existing.getSequence());
+                            merged.setPlanStartTime(existing.getPlanStartTime());
+                            merged.setPlanEndTime(existing.getPlanEndTime());
+                            return merged;
+                        });
+                taskTotalQtyMap.merge(taskKey, spr.getQuantity() != null ? spr.getQuantity() : 0, Integer::sum);
                 if (spr.getStructureName() != null) {
                     taskStructureMap.putIfAbsent(taskKey, spr.getStructureName());
                 }
@@ -446,9 +468,9 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         List<CxScheduleResult> results = new ArrayList<>();
         LocalDate startDate = context.getScheduleDate();
 
-        for (Map.Entry<String, Map<String, Integer>> entry : taskClassQtyMap.entrySet()) {
+        for (Map.Entry<String, Map<String, ShiftScheduleService.ShiftProductionResult>> entry : taskClassSprMap.entrySet()) {
             String taskKey = entry.getKey();
-            Map<String, Integer> classQtyMap = entry.getValue();
+            Map<String, ShiftScheduleService.ShiftProductionResult> classSprMap = entry.getValue();
 
             String[] parts = taskKey.split("\\|", 3);
             String machineCode = parts[0];
@@ -583,7 +605,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             }
 
             // ---- 映射班次排量到 CLASS1~8 ----
-            for (Map.Entry<String, Integer> classEntry : classQtyMap.entrySet()) {
+            for (Map.Entry<String, ShiftScheduleService.ShiftProductionResult> classEntry : classSprMap.entrySet()) {
                 setClassFieldValue(result, classEntry.getKey(), classEntry.getValue());
             }
 
@@ -595,37 +617,86 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     }
 
     /**
-     * 按 CLASS_FIELD 设置对应的班次计划量
+     * 按 CLASS_FIELD 设置对应的班次计划量及子表字段
+     * <p>将 ShiftProductionResult 的 7 个字段拍平到 CxScheduleResult 的 CLASSn_* 列：
+     * PLAN_QTY、TRIP_NO、TRIP_CAPACITY、STOCK_HOURS、SEQUENCE、PLAN_START_TIME、PLAN_END_TIME
      */
-    private void setClassFieldValue(CxScheduleResult result, String classField, Integer qty) {
-        if (classField == null || qty == null) {
+    private void setClassFieldValue(CxScheduleResult result, String classField, ShiftScheduleService.ShiftProductionResult spr) {
+        if (classField == null || spr == null) {
             return;
         }
-        BigDecimal qtyDecimal = new BigDecimal(qty);
         switch (classField) {
             case "CLASS1":
-                result.setClass1PlanQty(qtyDecimal);
+                result.setClass1PlanQty(spr.getQuantity() != null ? new BigDecimal(spr.getQuantity()) : null);
+                result.setClass1TripNo(spr.getTripNo());
+                result.setClass1TripCapacity(spr.getTripCapacity() != null ? new BigDecimal(spr.getTripCapacity()) : null);
+                result.setClass1StockHours(spr.getStockHours());
+                result.setClass1Sequence(spr.getSequence());
+                result.setClass1PlanStartTime(spr.getPlanStartTime() != null ? java.sql.Timestamp.valueOf(spr.getPlanStartTime()) : null);
+                result.setClass1PlanEndTime(spr.getPlanEndTime() != null ? java.sql.Timestamp.valueOf(spr.getPlanEndTime()) : null);
                 break;
             case "CLASS2":
-                result.setClass2PlanQty(qtyDecimal);
+                result.setClass2PlanQty(spr.getQuantity() != null ? new BigDecimal(spr.getQuantity()) : null);
+                result.setClass2TripNo(spr.getTripNo());
+                result.setClass2TripCapacity(spr.getTripCapacity() != null ? new BigDecimal(spr.getTripCapacity()) : null);
+                result.setClass2StockHours(spr.getStockHours());
+                result.setClass2Sequence(spr.getSequence());
+                result.setClass2PlanStartTime(spr.getPlanStartTime() != null ? java.sql.Timestamp.valueOf(spr.getPlanStartTime()) : null);
+                result.setClass2PlanEndTime(spr.getPlanEndTime() != null ? java.sql.Timestamp.valueOf(spr.getPlanEndTime()) : null);
                 break;
             case "CLASS3":
-                result.setClass3PlanQty(qtyDecimal);
+                result.setClass3PlanQty(spr.getQuantity() != null ? new BigDecimal(spr.getQuantity()) : null);
+                result.setClass3TripNo(spr.getTripNo());
+                result.setClass3TripCapacity(spr.getTripCapacity() != null ? new BigDecimal(spr.getTripCapacity()) : null);
+                result.setClass3StockHours(spr.getStockHours());
+                result.setClass3Sequence(spr.getSequence());
+                result.setClass3PlanStartTime(spr.getPlanStartTime() != null ? java.sql.Timestamp.valueOf(spr.getPlanStartTime()) : null);
+                result.setClass3PlanEndTime(spr.getPlanEndTime() != null ? java.sql.Timestamp.valueOf(spr.getPlanEndTime()) : null);
                 break;
             case "CLASS4":
-                result.setClass4PlanQty(qtyDecimal);
+                result.setClass4PlanQty(spr.getQuantity() != null ? new BigDecimal(spr.getQuantity()) : null);
+                result.setClass4TripNo(spr.getTripNo());
+                result.setClass4TripCapacity(spr.getTripCapacity() != null ? new BigDecimal(spr.getTripCapacity()) : null);
+                result.setClass4StockHours(spr.getStockHours());
+                result.setClass4Sequence(spr.getSequence());
+                result.setClass4PlanStartTime(spr.getPlanStartTime() != null ? java.sql.Timestamp.valueOf(spr.getPlanStartTime()) : null);
+                result.setClass4PlanEndTime(spr.getPlanEndTime() != null ? java.sql.Timestamp.valueOf(spr.getPlanEndTime()) : null);
                 break;
             case "CLASS5":
-                result.setClass5PlanQty(qtyDecimal);
+                result.setClass5PlanQty(spr.getQuantity() != null ? new BigDecimal(spr.getQuantity()) : null);
+                result.setClass5TripNo(spr.getTripNo());
+                result.setClass5TripCapacity(spr.getTripCapacity() != null ? new BigDecimal(spr.getTripCapacity()) : null);
+                result.setClass5StockHours(spr.getStockHours());
+                result.setClass5Sequence(spr.getSequence());
+                result.setClass5PlanStartTime(spr.getPlanStartTime() != null ? java.sql.Timestamp.valueOf(spr.getPlanStartTime()) : null);
+                result.setClass5PlanEndTime(spr.getPlanEndTime() != null ? java.sql.Timestamp.valueOf(spr.getPlanEndTime()) : null);
                 break;
             case "CLASS6":
-                result.setClass6PlanQty(qtyDecimal);
+                result.setClass6PlanQty(spr.getQuantity() != null ? new BigDecimal(spr.getQuantity()) : null);
+                result.setClass6TripNo(spr.getTripNo());
+                result.setClass6TripCapacity(spr.getTripCapacity() != null ? new BigDecimal(spr.getTripCapacity()) : null);
+                result.setClass6StockHours(spr.getStockHours());
+                result.setClass6Sequence(spr.getSequence());
+                result.setClass6PlanStartTime(spr.getPlanStartTime() != null ? java.sql.Timestamp.valueOf(spr.getPlanStartTime()) : null);
+                result.setClass6PlanEndTime(spr.getPlanEndTime() != null ? java.sql.Timestamp.valueOf(spr.getPlanEndTime()) : null);
                 break;
             case "CLASS7":
-                result.setClass7PlanQty(qtyDecimal);
+                result.setClass7PlanQty(spr.getQuantity() != null ? new BigDecimal(spr.getQuantity()) : null);
+                result.setClass7TripNo(spr.getTripNo());
+                result.setClass7TripCapacity(spr.getTripCapacity() != null ? new BigDecimal(spr.getTripCapacity()) : null);
+                result.setClass7StockHours(spr.getStockHours());
+                result.setClass7Sequence(spr.getSequence());
+                result.setClass7PlanStartTime(spr.getPlanStartTime() != null ? java.sql.Timestamp.valueOf(spr.getPlanStartTime()) : null);
+                result.setClass7PlanEndTime(spr.getPlanEndTime() != null ? java.sql.Timestamp.valueOf(spr.getPlanEndTime()) : null);
                 break;
             case "CLASS8":
-                result.setClass8PlanQty(qtyDecimal);
+                result.setClass8PlanQty(spr.getQuantity() != null ? new BigDecimal(spr.getQuantity()) : null);
+                result.setClass8TripNo(spr.getTripNo());
+                result.setClass8TripCapacity(spr.getTripCapacity() != null ? new BigDecimal(spr.getTripCapacity()) : null);
+                result.setClass8StockHours(spr.getStockHours());
+                result.setClass8Sequence(spr.getSequence());
+                result.setClass8PlanStartTime(spr.getPlanStartTime() != null ? java.sql.Timestamp.valueOf(spr.getPlanStartTime()) : null);
+                result.setClass8PlanEndTime(spr.getPlanEndTime() != null ? java.sql.Timestamp.valueOf(spr.getPlanEndTime()) : null);
                 break;
             default:
                 log.warn("未知的 CLASS_FIELD: {}", classField);
