@@ -153,13 +153,11 @@ public class TaskGroupService {
             // 计算收尾相关属性
             calculateEndingInfo(task, context, scheduleDate);
 
-            // S5.3.1 分配胎胚库存
-            allocateEmbryoStock(task, context, scheduleDate);
-            // S5.3.2 计算待排产量
+            // S5.3.1 计算待排产量
             calculatePlannedProduction(task, context, scheduleDate, isOpeningDay);
-            // S5.3.3 收尾余量处理
+            // S5.3.2 收尾余量处理
             handleEndingRemainder(task, context, isOpeningDay);
-            // S5.3.4 开停产特殊处理
+            // S5.3.3 开停产特殊处理
             handleOpeningClosingDay(task, context, dayShifts);
 
             // 分组
@@ -234,19 +232,7 @@ public class TaskGroupService {
     // ==================== S5.3 任务属性计算 ====================
 
     /**
-     * S5.3.1 分配胎胚库存
-     */
-    private void allocateEmbryoStock(CoreScheduleAlgorithmService.DailyEmbryoTask task,
-                                     ScheduleContextVo context, LocalDate scheduleDate) {
-        if (task.getCurrentStock() != null && task.getCurrentStock() > 0) {
-            task.setCurrentStock(task.getCurrentStock());
-        } else {
-            task.setCurrentStock(0);
-        }
-    }
-
-    /**
-     * S5.3.2 计算待排产量
+     * S5.3.1 计算待排产量
      */
     private void calculatePlannedProduction(CoreScheduleAlgorithmService.DailyEmbryoTask task,
                                             ScheduleContextVo context,
@@ -280,7 +266,7 @@ public class TaskGroupService {
     }
 
     /**
-     * S5.3.3 收尾余量处理
+     * S5.3.2 收尾余量处理
      */
     private void handleEndingRemainder(CoreScheduleAlgorithmService.DailyEmbryoTask task,
                                         ScheduleContextVo context,
@@ -311,7 +297,7 @@ public class TaskGroupService {
     }
 
     /**
-     * S5.3.4 开停产特殊处理
+     * S5.3.3 开停产特殊处理
      */
     private void handleOpeningClosingDay(CoreScheduleAlgorithmService.DailyEmbryoTask task,
                                          ScheduleContextVo context,
