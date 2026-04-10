@@ -151,7 +151,7 @@ public class TaskGroupService {
             calculateEndingInfo(task, context, scheduleDate);
 
             // S5.3.1 计算待排产量
-            calculatePlannedProduction(task, context, scheduleDate, isOpeningDay);
+            calculatePlannedProduction(task, context, scheduleDate);
             // S5.3.2 收尾余量处理
             handleEndingRemainder(task, context);
             // S5.3.3 开停产特殊处理
@@ -252,31 +252,46 @@ public class TaskGroupService {
 
     /**
      * S5.3.2 收尾余量处理
+     *
+     * <p>近3天收尾的任务，判断是否今天收尾：
+     * - plannedProduction >= endingSurplusQty → 今天是最后一天
+     *   - 非主销产品 + 成型余量≤2条 → 舍弃（plannedProduction=0, endingAbandoned=true）
+     *   - 主销产品 → 记录最后一批
      */
     private void handleEndingRemainder(CoreScheduleAlgorithmService.DailyEmbryoTask task,
                                         ScheduleContextVo context) {
-        if (task.getIsEndingTask() == null || !task.getIsEndingTask()) {
+        // 仅处理近3天收尾的紧急任务
+        if (!Boolean.TRUE.equals(task.getIsUrgentEnding())) {
             return;
         }
 
-        Integer surplusQty = task.getEndingSurplusQty();
-        if (surplusQty == null || surplusQty <= 0) {
+        Integer plannedProduction = task.getPlannedProduction();
+        Integer endingSurplusQty = task.getEndingSurplusQty();
+
+        if (plannedProduction == null || plannedProduction <= 0
+                || endingSurplusQty == null || endingSurplusQty <= 0) {
             return;
         }
 
-        Integer currentStock = task.getCurrentStock();
-        if (currentStock == null) {
-            currentStock = 0;
+        // 今天是否最后一天收尾：当天计划量 >= 剩余成型量
+        boolean isLastDay = plannedProduction >= endingSurplusQty;
+        if (!isLastDay) {
+            // 今天还能继续生产，无需特殊处理
+            return;
         }
 
-        // 收尾任务当天可排产量 = min(胎胚库存, 当天计划量)
-        int availableQty = Math.min(currentStock, task.getPlannedProduction() != null ? task.getPlannedProduction() : 0);
-
-        if (availableQty > 0) {
-            int tripCapacity = getTripCapacity(task.getStructureName(), context);
-            int cars = productionCalculator.roundToVehicle(availableQty, tripCapacity);
-            task.setPlannedProduction(cars * tripCapacity);
-            task.setEndingSurplusQty(surplusQty - task.getPlannedProduction());
+        // 今天最后一天收尾
+        if (!Boolean.TRUE.equals(task.getIsMainProduct()) && endingSurplusQty <= ENDING_SURPLUS_THRESHOLD) {
+            // 非主销产品 + 成型余量≤2条，舍弃当天排产
+            task.setPlannedProduction(0);
+            task.setEndingAbandoned(true);
+            task.setEndingAbandonedQty(endingSurplusQty);
+            log.info("收尾任务 {} 余量{}条被舍弃（非主销+余量≤2）", task.getEmbryoCode(), endingSurplusQty);
+        } else {
+            // 主销产品：记录最后一批
+            task.setIsLastEndingBatch(true);
+            log.info("收尾任务 {} 今天最后一批，主销={}，余量={}，计划={}",
+                    task.getEmbryoCode(), task.getIsMainProduct(), endingSurplusQty, plannedProduction);
         }
     }
 
