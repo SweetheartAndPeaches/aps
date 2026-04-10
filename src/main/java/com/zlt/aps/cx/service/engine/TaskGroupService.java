@@ -230,26 +230,27 @@ public class TaskGroupService {
 
     /**
      * S5.3.1 计算待排产量
+     *
+     * <p>与库存对冲后的计划产量：
+     * plannedProduction = ceil(max(0, vulcanizeDemand - currentStock) / tripCapacity) × tripCapacity
      */
     private void calculatePlannedProduction(CoreScheduleAlgorithmService.DailyEmbryoTask task,
                                             ScheduleContextVo context,
                                             LocalDate scheduleDate) {
-        int plannedProduction;
-        if (task.getIsEndingTask() != null && task.getIsEndingTask()) {
-            // 收尾任务：按胎胚库存计算，剩余库存全部排产
-            plannedProduction = task.getEndingSurplusQty() != null ? task.getEndingSurplusQty() : 0;
-        } else if (task.getRemainingQuantity() != null) {
-            // 正常任务：取月计划剩余量
-            plannedProduction = task.getRemainingQuantity();
-        } else {
-            plannedProduction = 0;
-        }
+        int vulcanizeDemand = task.getVulcanizeDemand() != null ? task.getVulcanizeDemand() : 0;
+        int currentStock = task.getCurrentStock() != null ? task.getCurrentStock() : 0;
+
+        // Step 1: 与库存对冲，计算净需求
+        int requiredProduction = Math.max(0, vulcanizeDemand - currentStock);
+
+        // Step 2: 整车取整
+        int tripCapacity = getTripCapacity(task.getStructureName(), context);
+        int plannedProduction = productionCalculator.roundToVehicle(requiredProduction, tripCapacity);
 
         task.setPlannedProduction(plannedProduction);
 
-        // 根据计划量计算硫化机台数（向上取整）
-        int tripCapacity = getTripCapacity(task.getStructureName(), context);
-        int vulcanizeMachineCount = productionCalculator.roundToVehicle(plannedProduction, tripCapacity);
+        // Step 3: 计算需要的硫化机台数
+        int vulcanizeMachineCount = plannedProduction / Math.max(tripCapacity, 1);
         task.setVulcanizeMachineCount(vulcanizeMachineCount);
     }
 
