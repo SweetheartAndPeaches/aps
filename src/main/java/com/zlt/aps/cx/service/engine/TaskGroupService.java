@@ -241,13 +241,19 @@ public class TaskGroupService {
         int currentStock = task.getCurrentStock() != null ? task.getCurrentStock() : 0;
 
         // Step 1: 与库存对冲，计算净需求
-        int requiredProduction = Math.max(0, vulcanizeDemand - currentStock);
-        task.setPlannedProduction(requiredProduction);
+        int netDemand = Math.max(0, vulcanizeDemand - currentStock);
 
-        // Step 2: 整车取整
+        // Step 2: 乘以(1 + 损耗率)
+        BigDecimal lossRate = context.getLossRate() != null ? context.getLossRate() : BigDecimal.ZERO;
+        BigDecimal requiredProduction = new BigDecimal(netDemand)
+                .multiply(BigDecimal.ONE.add(lossRate))
+                .setScale(0, BigDecimal.ROUND_UP);
+
+        // Step 3: 整车取整
         int tripCapacity = getTripCapacity(task.getStructureName(), context);
-        int plannedProduction = productionCalculator.roundToVehicle(requiredProduction, tripCapacity);
-        task.setRequiredCars(plannedProduction)
+        int plannedProduction = productionCalculator.roundToVehicle(requiredProduction.intValue(), tripCapacity);
+
+        task.setPlannedProduction(plannedProduction);
     }
 
     /**
