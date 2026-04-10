@@ -248,12 +248,16 @@ public class TaskGroupService {
         BigDecimal requiredProduction = new BigDecimal(netDemand)
                 .multiply(BigDecimal.ONE.add(lossRate))
                 .setScale(0, BigDecimal.ROUND_UP);
+        task.setPlannedProduction(requiredProduction);
+
 
         // Step 3: 整车取整
         int tripCapacity = getTripCapacity(task.getStructureName(), context);
         int plannedProduction = productionCalculator.roundToVehicle(requiredProduction.intValue(), tripCapacity);
+        task.setRequiredCars( (int) Math.ceil((double) stripQuantity / tripCapacity));
+        task.setEndingExtraInventory(plannedProduction);
 
-        task.setPlannedProduction(plannedProduction);
+        
     }
 
     /**

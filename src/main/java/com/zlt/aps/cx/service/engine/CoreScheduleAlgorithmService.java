@@ -124,7 +124,6 @@ public interface CoreScheduleAlgorithmService {
         private Integer plannedProduction;
         /** 需要的车数 = 待排产量 / 胎面整车条数 */
         private Integer requiredCars;
-        /** 最终的
         
 
         // ==================== S5.3 开停产处理新增字段 ====================
