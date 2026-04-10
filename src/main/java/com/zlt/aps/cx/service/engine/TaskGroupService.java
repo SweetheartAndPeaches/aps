@@ -106,9 +106,6 @@ public class TaskGroupService {
             machineOnlineEmbryoMap = new HashMap<>();
         }
 
-        // 计算开产日标识（分组内所有任务共用）
-        boolean isOpeningDay = scheduleDayTypeHelper.isOpeningDay(scheduleDate);
-
         // 直接遍历每条硫化记录，为每条记录创建独立的任务
         int skippedNullEmbryo = 0;
         int skippedNullTask = 0;
@@ -156,7 +153,7 @@ public class TaskGroupService {
             // S5.3.1 计算待排产量
             calculatePlannedProduction(task, context, scheduleDate, isOpeningDay);
             // S5.3.2 收尾余量处理
-            handleEndingRemainder(task, context, isOpeningDay);
+            handleEndingRemainder(task, context);
             // S5.3.3 开停产特殊处理
             handleOpeningClosingDay(task, context, dayShifts);
 
@@ -236,8 +233,7 @@ public class TaskGroupService {
      */
     private void calculatePlannedProduction(CoreScheduleAlgorithmService.DailyEmbryoTask task,
                                             ScheduleContextVo context,
-                                            LocalDate scheduleDate,
-                                            boolean isOpeningDay) {
+                                            LocalDate scheduleDate) {
         int plannedProduction;
         if (task.getIsEndingTask() != null && task.getIsEndingTask()) {
             // 收尾任务：按胎胚库存计算，剩余库存全部排产
@@ -247,14 +243,6 @@ public class TaskGroupService {
             plannedProduction = task.getRemainingQuantity();
         } else {
             plannedProduction = 0;
-        }
-
-        // 开产日：如果胎胚库存在合理范围内（≥24小时库存），则减产
-        if (isOpeningDay) {
-            int tripCapacity = getTripCapacity(task.getStructureName(), context);
-            if (plannedProduction > tripCapacity) {
-                plannedProduction -= tripCapacity;
-            }
         }
 
         task.setPlannedProduction(plannedProduction);
@@ -269,8 +257,7 @@ public class TaskGroupService {
      * S5.3.2 收尾余量处理
      */
     private void handleEndingRemainder(CoreScheduleAlgorithmService.DailyEmbryoTask task,
-                                        ScheduleContextVo context,
-                                        boolean isOpeningDay) {
+                                        ScheduleContextVo context) {
         if (task.getIsEndingTask() == null || !task.getIsEndingTask()) {
             return;
         }
