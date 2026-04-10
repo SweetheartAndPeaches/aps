@@ -367,9 +367,6 @@ public class TaskGroupService {
 
         String structureName = material != null ? material.getStructureName() : lhResult.getStructureName();
 
-        // 计算日需求量
-        int dailyDemand = calculateDailyDemand(vulcanizeDemand, currentStock, structureName, context);
-
         // 构建任务
         CoreScheduleAlgorithmService.DailyEmbryoTask task = new CoreScheduleAlgorithmService.DailyEmbryoTask();
         task.setLhId(lhResult.getId());  // 设置硫化任务ID，用于关联库存分配
@@ -389,9 +386,9 @@ public class TaskGroupService {
             task.setStructureName(structureName);
         }
 
-        task.setDemandQuantity(dailyDemand);
+        task.setDemandQuantity(vulcanizeDemand);
         task.setAssignedQuantity(0);
-        task.setRemainingQuantity(dailyDemand);
+        task.setRemainingQuantity(vulcanizeDemand);
 
         // 是否主销产品
         String mainProductCode = task.getMaterialCode();
@@ -605,31 +602,6 @@ public class TaskGroupService {
         log.debug("物料 {} stockHours计算: 日硫化量={}, 单胎单模时长={}s, 模数={}, 库存={}, 库存可供时长={}h",
                 task.getEmbryoCode(), dailyLhCapacity, singleTireMoldSeconds, taskMoldQty, currentStock, stockHours);
     }
-
-    /**
-     * 计算日需求量
-     *
-     * <p>简化实现：直接返回硫化需求量（排量）。
-     * 更精细的需求拆分（考虑历史排产量、班次分配等）在续作/新增任务处理器中进行。
-     *
-     * @param totalVulcanizeDemand 硫化总需求（排量）
-     * @param currentStock         当前库存（未使用，为扩展预留）
-     * @param structureName        结构名称（未使用，为扩展预留）
-     * @param context              排程上下文（未使用，为扩展预留）
-     * @return 日需求量
-     */
-    private int calculateDailyDemand(
-            int totalVulcanizeDemand,
-            int currentStock,
-            String structureName,
-            ScheduleContextVo context) {
-
-        // 简化计算：日需求量 = 硫化需求量
-        // 更详细的计算在续作任务处理器中进行
-        return totalVulcanizeDemand;
-    }
-
-
 
     /**
      * 计算收尾相关信息
