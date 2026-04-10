@@ -493,7 +493,8 @@ public class ScheduleServiceImpl implements ScheduleService {
         List<CxStock> stocks = stockMapper.selectList(
                 new LambdaQueryWrapper<CxStock>()
                         .eq(CxStock::getStockDate, stockDate)
-                        .gt(CxStock::getStockNum, 0));
+                        .gt(CxStock::getStockNum, 0)
+                        .eq(CxStock::getIsDelete, "0"));
         context.setStocks(stocks);
         log.info("加载胎胚库存 {} 条 (库存日期: {})", stocks.size(), scheduleDate);
     }
@@ -535,7 +536,9 @@ public class ScheduleServiceImpl implements ScheduleService {
      * 加载参数配置
      */
     private void loadParamConfigs(ScheduleContextVo context) {
-        List<CxParamConfig> paramConfigs = paramConfigMapper.selectList(null);
+        List<CxParamConfig> paramConfigs = paramConfigMapper.selectList(
+                new LambdaQueryWrapper<CxParamConfig>()
+                        .eq(CxParamConfig::getIsDelete, "0"));
         log.info("加载参数配置，共 {} 条记录", paramConfigs != null ? paramConfigs.size() : 0);
         if (paramConfigs != null && !paramConfigs.isEmpty()) {
             for (CxParamConfig config : paramConfigs) {
@@ -571,7 +574,8 @@ public class ScheduleServiceImpl implements ScheduleService {
     private void loadKeyProducts(ScheduleContextVo context) {
         List<CxKeyProduct> keyProducts = keyProductMapper.selectList(
                 new LambdaQueryWrapper<CxKeyProduct>()
-                        .eq(CxKeyProduct::getIsActive, ACTIVE_STATUS));
+                        .eq(CxKeyProduct::getIsActive, ACTIVE_STATUS)
+                        .eq(CxKeyProduct::getIsDelete, "0"));
         context.setKeyProducts(keyProducts);
 
         Set<String> keyProductCodes = new HashSet<>();

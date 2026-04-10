@@ -29,6 +29,7 @@ public interface MdmDevicePlanShutMapper extends BaseMapper<MdmDevicePlanShut> {
             "WHERE MACHINE_CODE = #{machineCode} " +
             "AND BEGIN_DATE < #{endDate} " +
             "AND END_DATE > #{beginDate} " +
+            "AND IS_DELETE = '0' " +
             "ORDER BY BEGIN_DATE")
     List<MdmDevicePlanShut> selectByMachineAndDateRange(
             @Param("machineCode") String machineCode,
@@ -47,6 +48,7 @@ public interface MdmDevicePlanShutMapper extends BaseMapper<MdmDevicePlanShut> {
             "WHERE MACHINE_TYPE = #{machineType} " +
             "AND BEGIN_DATE < #{endDate} " +
             "AND END_DATE > #{beginDate} " +
+            "AND IS_DELETE = '0' " +
             "ORDER BY MACHINE_CODE, BEGIN_DATE")
     List<MdmDevicePlanShut> selectByMachineTypeAndDateRange(
             @Param("machineType") String machineType,
