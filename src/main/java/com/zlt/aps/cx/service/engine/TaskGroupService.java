@@ -282,11 +282,16 @@ public class TaskGroupService {
 
         // 今天最后一天收尾
         if (!Boolean.TRUE.equals(task.getIsMainProduct()) && endingSurplusQty <= ENDING_SURPLUS_THRESHOLD) {
-            // 非主销产品 + 成型余量≤2条，舍弃当天排产
+            // 非主销产品 + 收尾余量≤2条，舍弃当天排产
             task.setPlannedProduction(0);
             task.setEndingAbandoned(true);
             task.setEndingAbandonedQty(endingSurplusQty);
             log.info("收尾任务 {} 余量{}条被舍弃（非主销+余量≤2）", task.getEmbryoCode(), endingSurplusQty);
+        } else if (!Boolean.TRUE.equals(task.getIsMainProduct())) {
+            // 非主销产品 + 收尾余量>2条，按实际量下（不补车）
+            task.setIsLastEndingBatch(true);
+            log.info("收尾任务 {} 今天最后一批（非主销），余量={}，计划={}",
+                    task.getEmbryoCode(), endingSurplusQty, plannedProduction);
         } else {
             // 主销产品最后一批：不够一车则补足到一车
             int tripCapacity = getTripCapacity(task.getStructureName(), context);
@@ -296,8 +301,8 @@ public class TaskGroupService {
                 log.info("收尾任务 {} 主销最后一批不足一车，补足到一车：{}", task.getEmbryoCode(), tripCapacity);
             }
             task.setIsLastEndingBatch(true);
-            log.info("收尾任务 {} 今天最后一批，主销={}，余量={}，计划={}",
-                    task.getEmbryoCode(), task.getIsMainProduct(), endingSurplusQty, plannedProduction);
+            log.info("收尾任务 {} 今天最后一批（主销），余量={}，计划={}",
+                    task.getEmbryoCode(), endingSurplusQty, plannedProduction);
         }
     }
 
