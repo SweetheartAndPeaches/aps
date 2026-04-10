@@ -361,6 +361,12 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         Map<String, String> taskStructureMap = new LinkedHashMap<>();
         // key → lhId（硫化任务ID，用于关联库存和硫化信息）
         Map<String, Long> taskLhIdMap = new LinkedHashMap<>();
+        // key + classField → sequence（顺位）
+        Map<String, Map<String, Integer>> taskClassSequenceMap = new LinkedHashMap<>();
+        // key + classField → planStartTime
+        Map<String, Map<String, java.time.LocalDateTime>> taskClassStartTimeMap = new LinkedHashMap<>();
+        // key + classField → planEndTime
+        Map<String, Map<String, java.time.LocalDateTime>> taskClassEndTimeMap = new LinkedHashMap<>();
 
         for (DayScheduleResult dayResult : dayResults) {
             int day = dayResult.getDay();
@@ -384,6 +390,14 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 if (spr.getStructureName() != null) {
                     taskStructureMap.putIfAbsent(taskKey, spr.getStructureName());
                 }
+
+                // 收集顺位和时间信息（同一 classField 只对应一条 ShiftProductionResult）
+                taskClassSequenceMap.computeIfAbsent(taskKey, k -> new LinkedHashMap<>())
+                        .putIfAbsent(classField, spr.getSequence());
+                taskClassStartTimeMap.computeIfAbsent(taskKey, k -> new LinkedHashMap<>())
+                        .putIfAbsent(classField, spr.getPlanStartTime());
+                taskClassEndTimeMap.computeIfAbsent(taskKey, k -> new LinkedHashMap<>())
+                        .putIfAbsent(classField, spr.getPlanEndTime());
             }
         }
 
@@ -582,9 +596,17 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 result.setMarkCloseOutTip("1"); // 1=不需要提示
             }
 
-            // ---- 映射班次排量到 CLASS1~8 ----
+            // ---- 映射班次排量/顺位/时间到 CLASS1~8 ----
+            Map<String, Integer> sequenceMap = taskClassSequenceMap.getOrDefault(taskKey, Collections.emptyMap());
+            Map<String, java.time.LocalDateTime> startTimeMap = taskClassStartTimeMap.getOrDefault(taskKey, Collections.emptyMap());
+            Map<String, java.time.LocalDateTime> endTimeMap = taskClassEndTimeMap.getOrDefault(taskKey, Collections.emptyMap());
+
             for (Map.Entry<String, Integer> classEntry : classQtyMap.entrySet()) {
-                setClassFieldValue(result, classEntry.getKey(), classEntry.getValue());
+                String classField = classEntry.getKey();
+                setClassFieldValue(result, classField, classEntry.getValue());
+                setClassSequenceField(result, classField, sequenceMap.get(classField));
+                setClassTimeField(result, classField,
+                        startTimeMap.get(classField), endTimeMap.get(classField));
             }
 
             results.add(result);
@@ -629,6 +651,84 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 break;
             default:
                 log.warn("未知的 CLASS_FIELD: {}", classField);
+        }
+    }
+
+    /**
+     * 设置班次顺位字段
+     *
+     * @param result     排程结果
+     * @param classField 班次字段名（CLASS1~CLASS8）
+     * @param sequence   顺位值
+     */
+    private void setClassSequenceField(CxScheduleResult result, String classField, Integer sequence) {
+        if (classField == null) {
+            return;
+        }
+        if (sequence != null) {
+            switch (classField) {
+                case "CLASS1": result.setClass1Sequence(sequence); break;
+                case "CLASS2": result.setClass2Sequence(sequence); break;
+                case "CLASS3": result.setClass3Sequence(sequence); break;
+                case "CLASS4": result.setClass4Sequence(sequence); break;
+                case "CLASS5": result.setClass5Sequence(sequence); break;
+                case "CLASS6": result.setClass6Sequence(sequence); break;
+                case "CLASS7": result.setClass7Sequence(sequence); break;
+                case "CLASS8": result.setClass8Sequence(sequence); break;
+                default: break;
+            }
+        }
+    }
+
+    /**
+     * 设置班次计划开始/结束时间字段
+     *
+     * @param result       排程结果
+     * @param classField   班次字段名（CLASS1~CLASS8）
+     * @param startTime    计划开始时间
+     * @param endTime      计划结束时间
+     */
+    private void setClassTimeField(CxScheduleResult result, String classField,
+                                   java.time.LocalDateTime startTime, java.time.LocalDateTime endTime) {
+        if (classField == null) {
+            return;
+        }
+        if (startTime != null || endTime != null) {
+            switch (classField) {
+                case "CLASS1":
+                    result.setClass1PlanStartTime(startTime);
+                    result.setClass1PlanEndTime(endTime);
+                    break;
+                case "CLASS2":
+                    result.setClass2PlanStartTime(startTime);
+                    result.setClass2PlanEndTime(endTime);
+                    break;
+                case "CLASS3":
+                    result.setClass3PlanStartTime(startTime);
+                    result.setClass3PlanEndTime(endTime);
+                    break;
+                case "CLASS4":
+                    result.setClass4PlanStartTime(startTime);
+                    result.setClass4PlanEndTime(endTime);
+                    break;
+                case "CLASS5":
+                    result.setClass5PlanStartTime(startTime);
+                    result.setClass5PlanEndTime(endTime);
+                    break;
+                case "CLASS6":
+                    result.setClass6PlanStartTime(startTime);
+                    result.setClass6PlanEndTime(endTime);
+                    break;
+                case "CLASS7":
+                    result.setClass7PlanStartTime(startTime);
+                    result.setClass7PlanEndTime(endTime);
+                    break;
+                case "CLASS8":
+                    result.setClass8PlanStartTime(startTime);
+                    result.setClass8PlanEndTime(endTime);
+                    break;
+                default: break;
+            }
         }
     }
 

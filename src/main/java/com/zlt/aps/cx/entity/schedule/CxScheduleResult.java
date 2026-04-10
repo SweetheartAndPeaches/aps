@@ -10,6 +10,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.Date;
 
 /**
@@ -136,6 +137,20 @@ public class CxScheduleResult extends ApsBaseEntity {
     @TableField("CLASS1_PLAN_QTY")
     private BigDecimal class1PlanQty;
 
+    @ApiModelProperty(value = "一班顺位")
+    @TableField("CLASS1_SEQUENCE")
+    private Integer class1Sequence;
+
+    @ApiModelProperty(value = "一班计划开始时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
+    @TableField("CLASS1_PLAN_START_TIME")
+    private LocalDateTime class1PlanStartTime;
+
+    @ApiModelProperty(value = "一班计划结束时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
+    @TableField("CLASS1_PLAN_END_TIME")
+    private LocalDateTime class1PlanEndTime;
+
     @ApiModelProperty(value = "一班原因分析手工输入")
     @TableField("CLASS1_ANALYSIS_INPUT")
     private String class1AnalysisInput;
@@ -160,6 +175,20 @@ public class CxScheduleResult extends ApsBaseEntity {
     @ApiModelProperty(value = "二班计划数")
     @TableField("CLASS2_PLAN_QTY")
     private BigDecimal class2PlanQty;
+
+    @ApiModelProperty(value = "二班顺位")
+    @TableField("CLASS2_SEQUENCE")
+    private Integer class2Sequence;
+
+    @ApiModelProperty(value = "二班计划开始时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
+    @TableField("CLASS2_PLAN_START_TIME")
+    private LocalDateTime class2PlanStartTime;
+
+    @ApiModelProperty(value = "二班计划结束时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
+    @TableField("CLASS2_PLAN_END_TIME")
+    private LocalDateTime class2PlanEndTime;
 
     @ApiModelProperty(value = "二班原因分析手工输入")
     @TableField("CLASS2_ANALYSIS_INPUT")
@@ -186,6 +215,20 @@ public class CxScheduleResult extends ApsBaseEntity {
     @TableField("CLASS3_PLAN_QTY")
     private BigDecimal class3PlanQty;
 
+    @ApiModelProperty(value = "三班顺位")
+    @TableField("CLASS3_SEQUENCE")
+    private Integer class3Sequence;
+
+    @ApiModelProperty(value = "三班计划开始时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
+    @TableField("CLASS3_PLAN_START_TIME")
+    private LocalDateTime class3PlanStartTime;
+
+    @ApiModelProperty(value = "三班计划结束时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
+    @TableField("CLASS3_PLAN_END_TIME")
+    private LocalDateTime class3PlanEndTime;
+
     @ApiModelProperty(value = "三班原因分析手工输入")
     @TableField("CLASS3_ANALYSIS_INPUT")
     private String class3AnalysisInput;
@@ -210,6 +253,20 @@ public class CxScheduleResult extends ApsBaseEntity {
     @ApiModelProperty(value = "四班计划数")
     @TableField("CLASS4_PLAN_QTY")
     private BigDecimal class4PlanQty;
+
+    @ApiModelProperty(value = "四班顺位")
+    @TableField("CLASS4_SEQUENCE")
+    private Integer class4Sequence;
+
+    @ApiModelProperty(value = "四班计划开始时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
+    @TableField("CLASS4_PLAN_START_TIME")
+    private LocalDateTime class4PlanStartTime;
+
+    @ApiModelProperty(value = "四班计划结束时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
+    @TableField("CLASS4_PLAN_END_TIME")
+    private LocalDateTime class4PlanEndTime;
 
     @ApiModelProperty(value = "四班原因分析手工输入")
     @TableField("CLASS4_ANALYSIS_INPUT")
@@ -236,6 +293,20 @@ public class CxScheduleResult extends ApsBaseEntity {
     @TableField("CLASS5_PLAN_QTY")
     private BigDecimal class5PlanQty;
 
+    @ApiModelProperty(value = "五班顺位")
+    @TableField("CLASS5_SEQUENCE")
+    private Integer class5Sequence;
+
+    @ApiModelProperty(value = "五班计划开始时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
+    @TableField("CLASS5_PLAN_START_TIME")
+    private LocalDateTime class5PlanStartTime;
+
+    @ApiModelProperty(value = "五班计划结束时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
+    @TableField("CLASS5_PLAN_END_TIME")
+    private LocalDateTime class5PlanEndTime;
+
     @ApiModelProperty(value = "五班原因分析手工输入")
     @TableField("CLASS5_ANALYSIS_INPUT")
     private String class5AnalysisInput;
@@ -260,6 +331,20 @@ public class CxScheduleResult extends ApsBaseEntity {
     @ApiModelProperty(value = "六班计划数")
     @TableField("CLASS6_PLAN_QTY")
     private BigDecimal class6PlanQty;
+
+    @ApiModelProperty(value = "六班顺位")
+    @TableField("CLASS6_SEQUENCE")
+    private Integer class6Sequence;
+
+    @ApiModelProperty(value = "六班计划开始时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
+    @TableField("CLASS6_PLAN_START_TIME")
+    private LocalDateTime class6PlanStartTime;
+
+    @ApiModelProperty(value = "六班计划结束时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
+    @TableField("CLASS6_PLAN_END_TIME")
+    private LocalDateTime class6PlanEndTime;
 
     @ApiModelProperty(value = "六班原因分析手工输入")
     @TableField("CLASS6_ANALYSIS_INPUT")
@@ -286,6 +371,20 @@ public class CxScheduleResult extends ApsBaseEntity {
     @TableField("CLASS7_PLAN_QTY")
     private BigDecimal class7PlanQty;
 
+    @ApiModelProperty(value = "七班顺位")
+    @TableField("CLASS7_SEQUENCE")
+    private Integer class7Sequence;
+
+    @ApiModelProperty(value = "七班计划开始时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
+    @TableField("CLASS7_PLAN_START_TIME")
+    private LocalDateTime class7PlanStartTime;
+
+    @ApiModelProperty(value = "七班计划结束时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
+    @TableField("CLASS7_PLAN_END_TIME")
+    private LocalDateTime class7PlanEndTime;
+
     @ApiModelProperty(value = "七班原因分析手工输入")
     @TableField("CLASS7_ANALYSIS_INPUT")
     private String class7AnalysisInput;
@@ -310,6 +409,20 @@ public class CxScheduleResult extends ApsBaseEntity {
     @ApiModelProperty(value = "八班计划数")
     @TableField("CLASS8_PLAN_QTY")
     private BigDecimal class8PlanQty;
+
+    @ApiModelProperty(value = "八班顺位")
+    @TableField("CLASS8_SEQUENCE")
+    private Integer class8Sequence;
+
+    @ApiModelProperty(value = "八班计划开始时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
+    @TableField("CLASS8_PLAN_START_TIME")
+    private LocalDateTime class8PlanStartTime;
+
+    @ApiModelProperty(value = "八班计划结束时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
+    @TableField("CLASS8_PLAN_END_TIME")
+    private LocalDateTime class8PlanEndTime;
 
     @ApiModelProperty(value = "八班原因分析手工输入")
     @TableField("CLASS8_ANALYSIS_INPUT")
