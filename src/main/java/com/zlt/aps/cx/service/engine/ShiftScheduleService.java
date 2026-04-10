@@ -759,7 +759,5 @@ public class ShiftScheduleService {
         private Boolean isContinueTask;
         /** 该班次分配的车数 */
         private Integer carsForShift;
-        /** 顺位（同机台同班次内的排序号） */
-        private Integer sequence;
     }
 }
