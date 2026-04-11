@@ -3,7 +3,6 @@ package com.zlt.aps.cx.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 
 import com.zlt.aps.cx.entity.CxMaterialEnding;
-import com.zlt.aps.cx.entity.CxMachineStructureCapacity;
 import com.zlt.aps.cx.api.domain.entity.CxStock;
 import com.zlt.aps.cx.entity.config.CxKeyProduct;
 import com.zlt.aps.cx.entity.config.CxParamConfig;
@@ -115,7 +114,6 @@ public class ScheduleServiceImpl implements ScheduleService {
     private final FactoryMonthPlanProductionFinalResultMapper monthPlanMapper;
     private final CxMaterialEndingMapper materialEndingMapper;
     private final MpCxCapacityConfigurationMapper capacityConfigurationMapper;
-    private final CxMachineStructureCapacityMapper machineStructureCapacityMapper;
 
     // ==================== 公共方法 ====================
 
@@ -287,13 +285,6 @@ public class ScheduleServiceImpl implements ScheduleService {
                 loadStructureShiftCapacities(context);
             } catch (Exception e) {
                 log.warn("加载结构整车配置失败，继续执行：{}", e.getMessage());
-            }
-
-            // 10.1 获取机台结构产能配置
-            try {
-                loadMachineStructureCapacities(context);
-            } catch (Exception e) {
-                log.warn("加载机台结构产能配置失败，继续执行：{}", e.getMessage());
             }
 
             // 11. 获取关键产品配置
@@ -578,28 +569,7 @@ public class ScheduleServiceImpl implements ScheduleService {
         log.info("加载结构班次产能配置 {} 条", structureShiftCapacities.size());
     }
 
-    /**
-     * 加载机台结构产能配置
-     *
-     * <p>从 T_CX_MACHINE_STRUCTURE_CAPACITY 表读取每个机台+结构维度的小时产能和班次产能，
-     * 供 ShiftScheduleService / ContinueTaskProcessor 计算班次排产时长使用。
-     */
-    private void loadMachineStructureCapacities(ScheduleContextVo context) {
-        List<CxMachineStructureCapacity> capacities = machineStructureCapacityMapper.selectList(
-                new LambdaQueryWrapper<CxMachineStructureCapacity>()
-                        .eq(CxMachineStructureCapacity::getIsActive, 1));
-        context.setMachineStructureCapacities(capacities);
 
-        // 构建 机台+结构 → 产能 的映射，方便快速查找
-        Map<String, CxMachineStructureCapacity> capacityMap = new HashMap<>();
-        for (CxMachineStructureCapacity cap : capacities) {
-            String key = cap.getCxMachineCode() + "|" + cap.getStructureCode();
-            capacityMap.put(key, cap);
-        }
-        context.setMachineCapacityMap(capacityMap);
-
-        log.info("加载机台结构产能配置 {} 条", capacities.size());
-    }
 
     /**
      * 加载关键产品配置

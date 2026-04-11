@@ -1,6 +1,5 @@
 package com.zlt.aps.cx.service.engine;
 
-import com.zlt.aps.cx.entity.CxMachineStructureCapacity;
 import com.zlt.aps.cx.entity.config.CxShiftConfig;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
 import com.zlt.aps.cx.vo.MonthPlanProductLhCapacityVo;
@@ -222,7 +221,7 @@ public class ShiftScheduleService {
             }
 
             // 计算时间
-            int hourlyCapacity = getMachineHourlyCapacity(machineCode, task.getStructureName(), context);
+            int hourlyCapacity = getMachineHourlyCapacity(machineCode, task.getEmbryoCode(), task.getStructureName(), context);
             double productionHours = (double) shiftQty / hourlyCapacity;
             LocalDateTime startTime = calculateStartTime(machineCode, shiftConfig, scheduleDate, context);
             LocalDateTime endTime = startTime.plusMinutes((long) (productionHours * 60));
@@ -321,7 +320,7 @@ public class ShiftScheduleService {
         }
 
         // 按班次顺序分配，最后一个班次使用剩余量（不补整车）
-        int hourlyCapacity = getMachineHourlyCapacity(machineCode, task.getStructureName(), context);
+        int hourlyCapacity = getMachineHourlyCapacity(machineCode, task.getEmbryoCode(), task.getStructureName(), context);
         int remainingQty = totalQty;
 
         for (int i = 0; i < dayShifts.size() && remainingQty > 0; i++) {
@@ -431,7 +430,7 @@ public class ShiftScheduleService {
             } else {
                 // 后续班次：按整车分配
                 int shiftHours = calculateShiftHours(shiftConfig);
-                int hourlyCapacity = getMachineHourlyCapacity(machineCode, task.getStructureName(), context);
+                int hourlyCapacity = getMachineHourlyCapacity(machineCode, task.getEmbryoCode(), task.getStructureName(), context);
                 int shiftCapacity = shiftHours * hourlyCapacity;
                 shiftCapacity -= calculateShiftShutdownDeduction(machineCode, shiftConfig, hourlyCapacity, context);
                 shiftCapacity -= calculateShiftPrecisionDeduction(machineCode, shiftConfig, hourlyCapacity, context);
@@ -446,7 +445,7 @@ public class ShiftScheduleService {
             }
 
             // 计算时间
-            int hourlyCapacity = getMachineHourlyCapacity(machineCode, task.getStructureName(), context);
+            int hourlyCapacity = getMachineHourlyCapacity(machineCode, task.getEmbryoCode(), task.getStructureName(), context);
             LocalDateTime startTime = calculateStartTime(machineCode, shiftConfig, scheduleDate, context);
             double productionHours = (double) shiftQty / hourlyCapacity;
             LocalDateTime endTime = startTime.plusMinutes((long) (productionHours * 60));
@@ -512,7 +511,7 @@ public class ShiftScheduleService {
 
         if (dailyLhCapacity == null || dailyLhCapacity <= 0) {
             log.warn("开产首班产能计算：无法获取物料 {} 的日硫化量，使用默认值", task.getEmbryoCode());
-            return OPENING_FIRST_SHIFT_HOURS * getMachineHourlyCapacity(machineCode, task.getStructureName(), context);
+            return OPENING_FIRST_SHIFT_HOURS * getMachineHourlyCapacity(machineCode, task.getEmbryoCode(), task.getStructureName(), context);
         }
 
         // 2. 获取配比（机型+结构 → 配比）
@@ -581,7 +580,7 @@ public class ShiftScheduleService {
             }
         }
 
-        int hourlyCapacity = getMachineHourlyCapacity(machineCode, task.getStructureName(), context);
+        int hourlyCapacity = getMachineHourlyCapacity(machineCode, task.getEmbryoCode(), task.getStructureName(), context);
         int remainingQty = totalQty;
 
         for (int i = 0; i < dayShifts.size() && remainingQty > 0; i++) {
@@ -656,7 +655,7 @@ public class ShiftScheduleService {
         int requiredCars = tripCapacity > 0 ? (totalQty + tripCapacity - 1) / tripCapacity : 1;
         int[] shiftCars = calculateWaveCars(requiredCars, dayShifts);
 
-        int hourlyCapacity = getMachineHourlyCapacity(machineCode, task.getStructureName(), context);
+        int hourlyCapacity = getMachineHourlyCapacity(machineCode, task.getEmbryoCode(), task.getStructureName(), context);
         int remainingCars = requiredCars;
 
         for (int i = 0; i < dayShifts.size() && remainingCars > 0; i++) {
@@ -1131,18 +1130,62 @@ public class ShiftScheduleService {
     }
 
     /**
-     * 获取机台小时产能
+     * 计算机台小时产能
+     *
+     * <p>每个机台生产不同物料成型一条胎的时间不一样，需要动态计算：
+     * <ol>
+     *   <li>从 materialLhCapacityMap 获取该物料的日硫化量</li>
+     *   <li>从 structureLhRatioMap 通过 结构+机型 获取配比 (lhMachineMaxQty)</li>
+     *   <li>成型一条胎的时间(s) = 86400 / (配比 × 日硫化量)</li>
+     *   <li>小时产能 = 3600 / 成型一条胎的时间(s)</li>
+     * </ol>
+     *
+     * @param machineCode   机台编码
+     * @param embryoCode    胎胚编码
+     * @param structureName 结构名称
+     * @param context       排程上下文
+     * @return 小时产能（条/小时）
      */
-    private int getMachineHourlyCapacity(String machineCode, String structureName, ScheduleContextVo context) {
-        if (context.getMachineStructureCapacities() != null && machineCode != null && structureName != null) {
-            for (CxMachineStructureCapacity capacity : context.getMachineStructureCapacities()) {
-                if (machineCode.equals(capacity.getCxMachineCode())
-                        && structureName.equals(capacity.getStructureCode())) {
-                    return capacity.getHourlyCapacity() != null ? capacity.getHourlyCapacity() : DEFAULT_HOURLY_CAPACITY;
-                }
+    private int getMachineHourlyCapacity(String machineCode, String embryoCode,
+                                          String structureName, ScheduleContextVo context) {
+        // 1. 获取日硫化量
+        Integer dailyLhCapacity = null;
+        Map<String, MonthPlanProductLhCapacityVo> lhCapacityMap = context.getMaterialLhCapacityMap();
+        if (lhCapacityMap != null && embryoCode != null) {
+            MonthPlanProductLhCapacityVo capacityVo = lhCapacityMap.get(embryoCode);
+            if (capacityVo != null) {
+                dailyLhCapacity = capacityVo.getDefaultDayVulcanizationQty();
             }
         }
-        return context.getMachineHourlyCapacity() != null ? context.getMachineHourlyCapacity() : DEFAULT_HOURLY_CAPACITY;
+
+        // 2. 获取配比（结构+机型 → lhMachineMaxQty）
+        int ratio = 1;
+        if (context.getStructureLhRatioMap() != null && structureName != null) {
+            MdmStructureLhRatio lhRatio = context.getStructureLhRatioMap().get(structureName);
+            if (lhRatio != null && lhRatio.getLhMachineMaxQty() != null && lhRatio.getLhMachineMaxQty() > 0) {
+                ratio = lhRatio.getLhMachineMaxQty();
+            }
+        }
+
+        if (dailyLhCapacity != null && dailyLhCapacity > 0) {
+            // 3. 成型一条胎的时间(s) = 86400 / (配比 × 日硫化量)
+            BigDecimal timePerTire = BigDecimal.valueOf(SECONDS_PER_DAY)
+                    .divide(BigDecimal.valueOf((long) ratio * dailyLhCapacity), 2, RoundingMode.HALF_UP);
+
+            // 4. 小时产能 = 3600 / 成型一条胎的时间(s)
+            if (timePerTire.compareTo(BigDecimal.ZERO) > 0) {
+                int hourlyCapacity = BigDecimal.valueOf(SECONDS_PER_HOUR)
+                        .divide(timePerTire, 0, RoundingMode.FLOOR)
+                        .intValue();
+                log.debug("机台 {} 物料 {} 小时产能计算: 日硫化量={}, 配比={}, 单条耗时={}s, 产能={}条/h",
+                        machineCode, embryoCode, dailyLhCapacity, ratio, timePerTire, hourlyCapacity);
+                return hourlyCapacity;
+            }
+        }
+
+        log.warn("无法计算机台 {} 物料 {} 的小时产能(日硫化量={}, 配比={})，使用默认值 {}",
+                machineCode, embryoCode, dailyLhCapacity, ratio, DEFAULT_HOURLY_CAPACITY);
+        return DEFAULT_HOURLY_CAPACITY;
     }
 
     /**
