@@ -50,9 +50,6 @@ public class ShiftScheduleService {
 
     // ==================== 业务阈值常量 ====================
 
-    /** 默认波浪比例：夜班:早班:中班 = 1:2:1 */
-    private static final int[] DEFAULT_WAVE_RATIO = {1, 2, 1};
-
     /** 默认整车容量（条/车） */
     private static final int DEFAULT_TRIP_CAPACITY = 12;
 
@@ -182,17 +179,27 @@ public class ShiftScheduleService {
             return results;
         }
 
-        // 按波浪比例分配到早班和中班（跳过夜班）
-        int[] waveRatio = context.getWaveRatio();
-        if (waveRatio == null || waveRatio.length < 3) {
-            waveRatio = DEFAULT_WAVE_RATIO;
+        // 按均分方式分配到早班和中班（跳过夜班）
+        // 先统计可排班次
+        List<CxShiftConfig> trialShifts = new ArrayList<>();
+        for (CxShiftConfig shiftConfig : dayShifts) {
+            if (!SHIFT_NIGHT.equals(shiftConfig.getShiftCode())) {
+                trialShifts.add(shiftConfig);
+            }
         }
-        // 夜班:早班:中班 → 只取早班和中班的比例
-        int dayRatio = waveRatio.length > 1 ? waveRatio[1] : 2;
-        int afternoonRatio = waveRatio.length > 2 ? waveRatio[2] : 1;
-        int totalRatio = dayRatio + afternoonRatio;
+        int trialShiftCount = Math.max(trialShifts.size(), 1);
+
+        // 按班次均分总量
+        int[] shiftQuantities = distributeQuantityEvenly(totalQty, trialShiftCount);
+        // 确保双数
+        for (int i = 0; i < shiftQuantities.length; i++) {
+            if (shiftQuantities[i] % 2 != 0) {
+                shiftQuantities[i] = shiftQuantities[i] - 1;
+            }
+        }
 
         int remainingQty = totalQty;
+        int shiftIndex = 0;
 
         for (CxShiftConfig shiftConfig : dayShifts) {
             String shiftCode = shiftConfig.getShiftCode();
@@ -202,23 +209,8 @@ public class ShiftScheduleService {
                 continue;
             }
 
-            // 按比例分配
-            int shiftQty;
-            if (SHIFT_DAY.equals(shiftCode)) {
-                shiftQty = totalQty * dayRatio / totalRatio;
-            } else if (SHIFT_AFTERNOON.equals(shiftCode)) {
-                shiftQty = totalQty - results.stream().mapToInt(r -> r.getQuantity() != null ? r.getQuantity() : 0).sum();
-            } else {
-                shiftQty = remainingQty;
-            }
-
-            // 确保双数
-            if (shiftQty % 2 != 0) {
-                shiftQty = shiftQty - 1;
-            }
-            if (shiftQty <= 0) {
-                continue;
-            }
+            int shiftQty = shiftIndex < shiftQuantities.length ? shiftQuantities[shiftIndex] : 0;
+            shiftIndex++;
 
             // 不能超过剩余量
             shiftQty = Math.min(shiftQty, remainingQty);
@@ -579,7 +571,7 @@ public class ShiftScheduleService {
 
         // 计算波浪分配
         int requiredCars = tripCapacity > 0 ? (totalQty + tripCapacity - 1) / tripCapacity : 1;
-        int[] shiftCars = calculateWaveCars(requiredCars, dayShifts, context, task);
+        int[] shiftCars = calculateWaveCars(requiredCars, dayShifts);
 
         // 收尾班次约束：只能在 maxShiftIndex 或之前的班次安排
         for (int i = maxShiftIndex + 1; i < shiftCars.length; i++) {
@@ -662,7 +654,7 @@ public class ShiftScheduleService {
         }
 
         int requiredCars = tripCapacity > 0 ? (totalQty + tripCapacity - 1) / tripCapacity : 1;
-        int[] shiftCars = calculateWaveCars(requiredCars, dayShifts, context, task);
+        int[] shiftCars = calculateWaveCars(requiredCars, dayShifts);
 
         int hourlyCapacity = getMachineHourlyCapacity(machineCode, task.getStructureName(), context);
         int remainingCars = requiredCars;
@@ -725,15 +717,10 @@ public class ShiftScheduleService {
      *
      * @param requiredCars 需要的车数
      * @param dayShifts    班次配置
-     * @param context      排程上下文
-     * @param task         任务
+     * @param dayShifts    班次配置
      * @return 各班次车数数组
      */
-    private int[] calculateWaveCars(
-            int requiredCars,
-            List<CxShiftConfig> dayShifts,
-            ScheduleContextVo context,
-            CoreScheduleAlgorithmService.DailyEmbryoTask task) {
+    private int[] calculateWaveCars(int requiredCars, List<CxShiftConfig> dayShifts) {
 
         int shiftCount = dayShifts.size();
         int[] shiftCars = new int[shiftCount];
@@ -742,34 +729,36 @@ public class ShiftScheduleService {
             return shiftCars;
         }
 
-        int[] waveRatio = context.getWaveRatio();
-        if (waveRatio == null || waveRatio.length < shiftCount) {
-            waveRatio = DEFAULT_WAVE_RATIO;
-        }
+        // 均分车数：每个班次车数相差不超过1
+        int base = requiredCars / shiftCount;
+        int remainder = requiredCars % shiftCount;
 
-        // 按班次顺序映射波浪比例
-        int[] adjustedRatio = mapShiftRatio(waveRatio, dayShifts);
-
-        int totalRatio = 0;
-        for (int ratio : adjustedRatio) {
-            totalRatio += ratio;
-        }
-
-        // 按比例分配车数
-        int remainingCars = requiredCars;
+        // 全部初始化为基础车数
         for (int i = 0; i < shiftCount; i++) {
-            shiftCars[i] = requiredCars * adjustedRatio[i] / totalRatio;
-            remainingCars -= shiftCars[i];
+            shiftCars[i] = base;
         }
 
-        // 将剩余车数分配到靠前的班次（实现波浪效果）
-        for (int i = 0; i < shiftCount && remainingCars > 0; i++) {
-            shiftCars[i]++;
-            remainingCars--;
+        // 将余数对称分配：从外向内配对，每对两侧各+1；奇数余数给中间班次
+        int left = 0;
+        int right = shiftCount - 1;
+        while (remainder > 0 && left <= right) {
+            if (left == right) {
+                // 中间班次，+1
+                shiftCars[left]++;
+                remainder--;
+            } else if (remainder >= 2) {
+                // 两侧对称各+1
+                shiftCars[left]++;
+                shiftCars[right]++;
+                remainder -= 2;
+            } else {
+                // remainder == 1，给中间
+                shiftCars[shiftCount / 2]++;
+                remainder--;
+            }
+            left++;
+            right--;
         }
-
-        // 波浪均衡：确保相邻班次车数相差不超过1
-        shiftCars = balanceWaveDistribution(shiftCars);
 
         log.debug("波浪分配：需要{}车，分配结果：{}", requiredCars, Arrays.toString(shiftCars));
 
@@ -777,62 +766,47 @@ public class ShiftScheduleService {
     }
 
     /**
-     * 将波浪比例映射到具体班次
+     * 将总量按条数均分到各班次（与 calculateWaveCars 对称，但分配的是条数而非车数）
+     *
+     * <p>分配结果对称：两侧多、中间少（余数为1时中间多1）
+     *
+     * @param totalQuantity 总条数
+     * @param shiftCount    班次数
+     * @return 各班次分配条数
      */
-    private int[] mapShiftRatio(int[] waveRatio, List<CxShiftConfig> dayShifts) {
-        int shiftCount = dayShifts.size();
-        int[] adjustedRatio = new int[shiftCount];
+    private int[] distributeQuantityEvenly(int totalQuantity, int shiftCount) {
+        int[] quantities = new int[shiftCount];
+        if (totalQuantity <= 0 || shiftCount <= 0) {
+            return quantities;
+        }
+
+        int base = totalQuantity / shiftCount;
+        int remainder = totalQuantity % shiftCount;
 
         for (int i = 0; i < shiftCount; i++) {
-            String shiftCode = dayShifts.get(i).getShiftCode();
-            if (SHIFT_NIGHT.equals(shiftCode)) {
-                adjustedRatio[i] = waveRatio.length > 0 ? waveRatio[0] : 1;
-            } else if (SHIFT_DAY.equals(shiftCode)) {
-                adjustedRatio[i] = waveRatio.length > 1 ? waveRatio[1] : 2;
-            } else if (SHIFT_AFTERNOON.equals(shiftCode)) {
-                adjustedRatio[i] = waveRatio.length > 2 ? waveRatio[2] : 1;
+            quantities[i] = base;
+        }
+
+        // 对称分配余数
+        int left = 0;
+        int right = shiftCount - 1;
+        while (remainder > 0 && left <= right) {
+            if (left == right) {
+                quantities[left]++;
+                remainder--;
+            } else if (remainder >= 2) {
+                quantities[left]++;
+                quantities[right]++;
+                remainder -= 2;
             } else {
-                adjustedRatio[i] = 1;
+                quantities[shiftCount / 2]++;
+                remainder--;
             }
+            left++;
+            right--;
         }
 
-        return adjustedRatio;
-    }
-
-    /**
-     * 波浪均衡：确保相邻班次车数相差不超过1
-     */
-    private int[] balanceWaveDistribution(int[] shiftCars) {
-        if (shiftCars == null || shiftCars.length <= 1) {
-            return shiftCars;
-        }
-
-        int n = shiftCars.length;
-        boolean changed;
-
-        do {
-            changed = false;
-            for (int i = 1; i < n; i++) {
-                if (shiftCars[i] < shiftCars[i - 1] - 1) {
-                    shiftCars[i]++;
-                    changed = true;
-                } else if (shiftCars[i] > shiftCars[i - 1] + 1) {
-                    shiftCars[i]--;
-                    changed = true;
-                }
-            }
-            for (int i = n - 2; i >= 0; i--) {
-                if (shiftCars[i] < shiftCars[i + 1] - 1) {
-                    shiftCars[i]++;
-                    changed = true;
-                } else if (shiftCars[i] > shiftCars[i + 1] + 1) {
-                    shiftCars[i]--;
-                    changed = true;
-                }
-            }
-        } while (changed);
-
-        return shiftCars;
+        return quantities;
     }
 
     // ==================== 停产反推计算 ====================
