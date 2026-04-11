@@ -737,6 +737,7 @@ public class TaskGroupService {
         // 停产日：当天产量设为0
         if (scheduleDayTypeHelper.isStopDay(scheduleDate)) {
             task.setPlannedProduction(0);
+            task.setRequiredCars(0);
             task.setEndingExtraInventory(0);
             return;
         }
@@ -796,24 +797,29 @@ public class TaskGroupService {
         }
 
         // 今天最后一天收尾
+        int tripCapacity = getTripCapacity(task.getStructureName(), context);
         if (!Boolean.TRUE.equals(task.getIsMainProduct()) && endingSurplusQty <= ENDING_DISCARD_THRESHOLD) {
             // 非主销产品 + 收尾余量≤2条，舍弃当天排产
             task.setPlannedProduction(0);
+            task.setRequiredCars(0);
             task.setEndingExtraInventory(0);
             task.setEndingAbandoned(true);
             task.setEndingAbandonedQty(endingSurplusQty);
             log.info("收尾任务 {} 余量{}条被舍弃（非主销+余量≤2）", task.getEmbryoCode(), endingSurplusQty);
         } else if (!Boolean.TRUE.equals(task.getIsMainProduct())) {
             // 非主销产品 + 收尾余量>2条，按实际量下（不补车）
-            task.setEndingExtraInventory(task.getPlannedProduction());
+            // requiredCars 按实际量计算，不足一车的部分也算1车
+            int planned = task.getPlannedProduction();
+            task.setRequiredCars((planned + tripCapacity - 1) / Math.max(tripCapacity, 1));
+            task.setEndingExtraInventory(planned);
             task.setIsLastEndingBatch(true);
             log.info("收尾任务 {} 今天最后一批（非主销），余量={}，计划={}",
-                    task.getEmbryoCode(), endingSurplusQty, task.getPlannedProduction());
+                    task.getEmbryoCode(), endingSurplusQty, planned);
         } else {
             // 主销产品最后一批：不够一车则补足到一车
-            int tripCapacity = getTripCapacity(task.getStructureName(), context);
             if (endingExtraInventory > 0 && endingExtraInventory < tripCapacity) {
                 task.setPlannedProduction(tripCapacity);
+                task.setRequiredCars(1);
                 task.setEndingExtraInventory(tripCapacity);
                 log.info("收尾任务 {} 主销最后一批不足一车，补足到一车：{}", task.getEmbryoCode(), tripCapacity);
             }
@@ -838,9 +844,10 @@ public class TaskGroupService {
                                           List<CxShiftConfig> dayShifts) {
         LocalDate scheduleDate = context.getCurrentScheduleDate();
 
-        // 停产日：当天产量设为0（在 calculatePlannedProduction 中已处理）
+        // 停产日：当天产量设为0
         if (scheduleDayTypeHelper.isStopDay(scheduleDate)) {
             task.setPlannedProduction(0);
+            task.setRequiredCars(0);
             task.setEndingExtraInventory(0);
             return;
         }

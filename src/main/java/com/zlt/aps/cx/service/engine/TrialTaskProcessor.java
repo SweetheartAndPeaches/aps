@@ -146,7 +146,7 @@ public class TrialTaskProcessor {
 
         // 分配到机台
         allocateTaskToMachine(allocation, task);
-        log.debug("试制任务 {} 分配到机台 {}，计划量={}", embryoCode, machineCode, demandQty);
+        log.debug("试制任务 {} 分配到机台 {}，计划量={}", embryoCode, machineCode, task.getPlannedProduction());
     }
 
     /**
