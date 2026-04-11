@@ -1216,18 +1216,17 @@ public class ScheduleServiceImpl implements ScheduleService {
 
                 // 计算延误量（如果成型余量 > 0 且接近收尾日）
                 if (formingRemainder != null && formingRemainder > 0 && daysToEnding >= 0 && daysToEnding <= NEAR_ENDING_DAYS) {
-                    // 日产能估算（简化：假设每天能做100条）
-                    int dailyCapacity = 100;
-                    int remainingDays = Math.max(daysToEnding, 1);
-                    int producibleQty = dailyCapacity * remainingDays;
+                    // 从月计划中累加当前日到收尾日之间各天的计划排产量
+                    int producibleQty = calculateProducibleQty(plans, currentDay, endingDay);
 
                     if (formingRemainder > producibleQty) {
                         int delayQty = formingRemainder - producibleQty;
                         ending.setDelayQuantity(delayQty);
                         ending.setDistributedQuantity(delayQty / CATCH_UP_DAYS);
 
-                        // 如果未来3天满产仍追不上，需要调整月计划
-                        if (delayQty > dailyCapacity * CATCH_UP_DAYS) {
+                        // 如果未来追补天数内的计划排产仍追不上延误量，需要调整月计划
+                        int catchUpCapacity = calculateProducibleQty(plans, currentDay, Math.min(currentDay + CATCH_UP_DAYS, endingDay));
+                        if (delayQty > catchUpCapacity) {
                             ending.setNeedMonthPlanAdjust(1);
                         }
                     }
@@ -1409,6 +1408,29 @@ public class ScheduleServiceImpl implements ScheduleService {
         }
 
         return endingDay;
+    }
+
+    /**
+     * 计算从当前日到目标日之间的可生产量
+     *
+     * <p>遍历该物料的所有月计划记录，累加 [fromDay, toDay] 区间内每天的排产量。
+     *
+     * @param plans   该物料的月计划列表
+     * @param fromDay 起始日（含）
+     * @param toDay   截止日（含）
+     * @return 区间内计划排产总量
+     */
+    private int calculateProducibleQty(List<FactoryMonthPlanProductionFinalResult> plans, int fromDay, int toDay) {
+        int total = 0;
+        for (FactoryMonthPlanProductionFinalResult plan : plans) {
+            for (int day = fromDay; day <= toDay; day++) {
+                Integer dayQty = plan.getDayQty(day);
+                if (dayQty != null && dayQty > 0) {
+                    total += dayQty;
+                }
+            }
+        }
+        return total;
     }
 
     /**
