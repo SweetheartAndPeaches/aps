@@ -1,5 +1,6 @@
 package com.zlt.aps.cx.service.engine;
 
+import com.zlt.aps.cx.entity.CxMachineStructureCapacity;
 import com.zlt.aps.cx.entity.config.CxShiftConfig;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
 import com.zlt.aps.cx.vo.MonthPlanProductLhCapacityVo;
@@ -1131,59 +1132,17 @@ public class ShiftScheduleService {
 
     /**
      * 获取机台小时产能
-     *
-     * <p>计算公式：hourlyCapacity = 配比 × 日硫化量 / 24
-     * <ol>
-     *   <li>从 materialLhCapacityMap 获取该物料的日硫化量</li>
-     *   <li>从 machineTypeCodeMap 获取机型编码</li>
-     *   <li>从 structureLhRatioMap 获取配比（机型+结构 → lhMachineMaxQty）</li>
-     *   <li>hourlyCapacity = lhMachineMaxQty × dayVulcanizationQty / 24</li>
-     * </ol>
-     *
-     * @param machineCode   机台编码
-     * @param structureName 结构名称
-     * @param context       排程上下文
-     * @return 小时产能（条/小时）
      */
     private int getMachineHourlyCapacity(String machineCode, String structureName, ScheduleContextVo context) {
-        // 1. 获取日硫化量
-        Integer dayVulcanizationQty = null;
-        Map<String, MonthPlanProductLhCapacityVo> lhCapacityMap = context.getMaterialLhCapacityMap();
-        // 注意：lhCapacityMap 的 key 是 embryoCode，这里没有 embryoCode，用 structureName 近似
-        // 实际调用处都有 task.embryoCode，应该优先传入 embryoCode
-        // 此处用 structureName 作为 fallback
-        if (lhCapacityMap != null && structureName != null) {
-            MonthPlanProductLhCapacityVo capacityVo = lhCapacityMap.get(structureName);
-            if (capacityVo != null) {
-                dayVulcanizationQty = capacityVo.getDefaultDayVulcanizationQty();
+        if (context.getMachineStructureCapacities() != null && machineCode != null && structureName != null) {
+            for (CxMachineStructureCapacity capacity : context.getMachineStructureCapacities()) {
+                if (machineCode.equals(capacity.getCxMachineCode())
+                        && structureName.equals(capacity.getStructureCode())) {
+                    return capacity.getHourlyCapacity() != null ? capacity.getHourlyCapacity() : DEFAULT_HOURLY_CAPACITY;
+                }
             }
         }
-
-        if (dayVulcanizationQty == null || dayVulcanizationQty <= 0) {
-            log.debug("无法获取结构 {} 的日硫化量，使用默认小时产能 {}", structureName, DEFAULT_HOURLY_CAPACITY);
-            return DEFAULT_HOURLY_CAPACITY;
-        }
-
-        // 2. 获取配比（结构 → lhMachineMaxQty）
-        int ratio = 1;
-        Map<String, MdmStructureLhRatio> structureLhRatioMap = context.getStructureLhRatioMap();
-        if (structureLhRatioMap != null && structureName != null) {
-            MdmStructureLhRatio lhRatio = structureLhRatioMap.get(structureName);
-            if (lhRatio != null && lhRatio.getLhMachineMaxQty() != null && lhRatio.getLhMachineMaxQty() > 0) {
-                ratio = lhRatio.getLhMachineMaxQty();
-            }
-        }
-
-        // 3. hourlyCapacity = 配比 × 日硫化量 / 24
-        int hourlyCapacity = ratio * dayVulcanizationQty / 24;
-        if (hourlyCapacity <= 0) {
-            hourlyCapacity = DEFAULT_HOURLY_CAPACITY;
-        }
-
-        log.trace("机台 {} 结构 {} 小时产能计算: 配比={}, 日硫化量={}, 结果={}条/h",
-                machineCode, structureName, ratio, dayVulcanizationQty, hourlyCapacity);
-
-        return hourlyCapacity;
+        return context.getMachineHourlyCapacity() != null ? context.getMachineHourlyCapacity() : DEFAULT_HOURLY_CAPACITY;
     }
 
     /**

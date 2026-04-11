@@ -1,6 +1,7 @@
 package com.zlt.aps.cx.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.zlt.aps.cx.entity.CxMachineStructureCapacity;
 import com.zlt.aps.cx.api.domain.entity.CxStock;
 import com.zlt.aps.cx.entity.CxTreadParkingConfig;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
@@ -43,6 +44,9 @@ public class ConstraintCheckServiceImpl implements ConstraintCheckService {
     private CxPrecisionPlanMapper precisionPlanMapper;
 
 
+
+    @Autowired
+    private CxMachineStructureCapacityMapper machineStructureCapacityMapper;
 
     @Autowired
     private MdmMoldingMachineMapper moldingMachineMapper;
@@ -245,34 +249,37 @@ public class ConstraintCheckServiceImpl implements ConstraintCheckService {
 
         List<String> violations = new ArrayList<>();
 
-        // 计算机台产能：配比 × 日硫化量 / 24 × 班次时长
+        // 计算机台产能：优先从机台结构产能表获取
         BigDecimal capacity;
         String capacitySource;
 
         if (structureCode != null && !structureCode.isEmpty()) {
-            // 从结构硫化配比表获取配比，从月计划产能获取日硫化量
-            MdmStructureLhRatio lhRatio = structureLhRatioMapper.selectOne(
-                    new LambdaQueryWrapper<MdmStructureLhRatio>()
-                            .eq(MdmStructureLhRatio::getStructureName, structureCode)
-                            .last("LIMIT 1"));
+            // 从机台结构产能表获取
+            CxMachineStructureCapacity machineCapacity = machineStructureCapacityMapper.selectOne(
+                    new LambdaQueryWrapper<CxMachineStructureCapacity>()
+                            .eq(CxMachineStructureCapacity::getCxMachineCode, machine.getCxMachineCode())
+                            .eq(CxMachineStructureCapacity::getStructureCode, structureCode)
+                            .eq(CxMachineStructureCapacity::getIsActive, 1));
 
-            int ratio = 1;
-            if (lhRatio != null && lhRatio.getLhMachineMaxQty() != null && lhRatio.getLhMachineMaxQty() > 0) {
-                ratio = lhRatio.getLhMachineMaxQty();
-            }
-
-            // 日硫化量默认值（如果无法获取具体值）
-            int dayVulcanizationQty = 1200;
-            int hourlyCapacity = ratio * dayVulcanizationQty / 24;
-
-            if (shiftCode != null) {
-                // 班次产能 = 小时产能 × 8小时
-                capacity = BigDecimal.valueOf(hourlyCapacity * 8);
-                capacitySource = String.format("配比计算(配比:%d, 班次:%s)", ratio, shiftCode);
+            if (machineCapacity != null) {
+                if (shiftCode != null) {
+                    // 获取班次产能
+                    Integer shiftCapacity = machineCapacity.getShiftCapacity(shiftCode);
+                    capacity = BigDecimal.valueOf(shiftCapacity);
+                    capacitySource = String.format("机台结构产能表(班次:%s)", shiftCode);
+                } else {
+                    // 获取日产能
+                    capacity = BigDecimal.valueOf(machineCapacity.getDailyCapacity());
+                    capacitySource = "机台结构产能表(日产能)";
+                }
             } else {
-                // 日产能 = 小时产能 × 24小时
-                capacity = BigDecimal.valueOf(hourlyCapacity * 24);
-                capacitySource = String.format("配比计算(配比:%d, 日产能)", ratio);
+                // 未找到配置，使用机台最大日产能兜底
+                capacity = machine.getMaxDayCapacity() != null
+                        ? BigDecimal.valueOf(machine.getMaxDayCapacity())
+                        : BigDecimal.valueOf(1200);
+                capacitySource = "机台最大日产能(兜底)";
+                log.warn("未找到机台 {} 结构 {} 的产能配置，使用默认值",
+                        machine.getCxMachineCode(), structureCode);
             }
         } else {
             // 无结构信息，使用机台最大日产能
