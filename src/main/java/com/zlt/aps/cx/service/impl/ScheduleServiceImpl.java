@@ -3,7 +3,6 @@ package com.zlt.aps.cx.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 
 import com.zlt.aps.cx.entity.CxMaterialEnding;
-import com.zlt.aps.cx.entity.CxMachineStructureCapacity;
 import com.zlt.aps.cx.api.domain.entity.CxStock;
 import com.zlt.aps.cx.entity.config.CxKeyProduct;
 import com.zlt.aps.cx.entity.config.CxParamConfig;
@@ -115,7 +114,6 @@ public class ScheduleServiceImpl implements ScheduleService {
     private final FactoryMonthPlanProductionFinalResultMapper monthPlanMapper;
     private final CxMaterialEndingMapper materialEndingMapper;
     private final MpCxCapacityConfigurationMapper capacityConfigurationMapper;
-    private final CxMachineStructureCapacityMapper machineStructureCapacityMapper;
 
     // ==================== 公共方法 ====================
 
@@ -289,13 +287,6 @@ public class ScheduleServiceImpl implements ScheduleService {
                 log.warn("加载结构整车配置失败，继续执行：{}", e.getMessage());
             }
 
-            // 10.1 获取机台结构产能配置
-            try {
-                loadMachineStructureCapacities(context);
-            } catch (Exception e) {
-                log.warn("加载机台结构产能配置失败，继续执行：{}", e.getMessage());
-            }
-
             // 11. 获取关键产品配置
             try {
                 loadKeyProducts(context);
@@ -428,7 +419,17 @@ public class ScheduleServiceImpl implements ScheduleService {
                         .eq(MdmMoldingMachine::getIsActive, 1)
                         .eq(MdmMoldingMachine::getIsDelete, "0"));
         context.setAvailableMachines(machines);
-        log.info("加载成型机台 {} 台（已过滤禁用和已删除）", machines.size());
+
+        // 构建 机台编码 → 机型编码 映射（供小时产能计算使用）
+        Map<String, String> machineTypeCodeMap = new HashMap<>();
+        for (MdmMoldingMachine machine : machines) {
+            if (machine.getCxMachineCode() != null && machine.getCxMachineTypeCode() != null) {
+                machineTypeCodeMap.put(machine.getCxMachineCode(), machine.getCxMachineTypeCode());
+            }
+        }
+        context.setMachineTypeCodeMap(machineTypeCodeMap);
+
+        log.info("加载成型机台 {} 台（已过滤禁用和已删除），机型映射 {} 条", machines.size(), machineTypeCodeMap.size());
     }
 
     /**
@@ -576,29 +577,6 @@ public class ScheduleServiceImpl implements ScheduleService {
                         .eq(MdmStructureTreadConfig::getIsDelete, "0"));
         context.setStructureShiftCapacities(structureShiftCapacities);
         log.info("加载结构班次产能配置 {} 条", structureShiftCapacities.size());
-    }
-
-    /**
-     * 加载机台结构产能配置
-     *
-     * <p>从 T_CX_MACHINE_STRUCTURE_CAPACITY 表读取每个机台+结构维度的小时产能和班次产能，
-     * 供 ShiftScheduleService / ContinueTaskProcessor 计算班次排产时长使用。
-     */
-    private void loadMachineStructureCapacities(ScheduleContextVo context) {
-        List<CxMachineStructureCapacity> capacities = machineStructureCapacityMapper.selectList(
-                new LambdaQueryWrapper<CxMachineStructureCapacity>()
-                        .eq(CxMachineStructureCapacity::getIsActive, 1));
-        context.setMachineStructureCapacities(capacities);
-
-        // 构建 机台+结构 → 产能 的映射，方便快速查找
-        Map<String, CxMachineStructureCapacity> capacityMap = new HashMap<>();
-        for (CxMachineStructureCapacity cap : capacities) {
-            String key = cap.getCxMachineCode() + "|" + cap.getStructureCode();
-            capacityMap.put(key, cap);
-        }
-        context.setMachineCapacityMap(capacityMap);
-
-        log.info("加载机台结构产能配置 {} 条", capacities.size());
     }
 
     /**

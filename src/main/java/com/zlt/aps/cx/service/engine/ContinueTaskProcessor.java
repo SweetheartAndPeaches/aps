@@ -1,6 +1,5 @@
 package com.zlt.aps.cx.service.engine;
 
-import com.zlt.aps.cx.entity.CxMachineStructureCapacity;
 import com.zlt.aps.cx.entity.config.CxParamConfig;
 import com.zlt.aps.cx.entity.config.CxShiftConfig;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
@@ -572,15 +571,13 @@ public class ContinueTaskProcessor {
         return productionCalculator.getTripCapacity(structureCode, context);
     }
 
+    /**
+     * 获取机台小时产能
+     *
+     * <p>计算公式：hourlyCapacity = 配比 × 日硫化量 / 24
+     */
     private int getMachineHourlyCapacity(String machineCode, String structureName, ScheduleContextVo context) {
-        if (context.getMachineStructureCapacities() != null && machineCode != null && structureName != null) {
-            for (CxMachineStructureCapacity capacity : context.getMachineStructureCapacities()) {
-                if (machineCode.equals(capacity.getCxMachineCode()) && structureName.equals(capacity.getStructureCode())) {
-                    return capacity.getHourlyCapacity() != null ? capacity.getHourlyCapacity() : DEFAULT_HOURLY_CAPACITY;
-                }
-            }
-        }
-        return context.getMachineHourlyCapacity() != null ? context.getMachineHourlyCapacity() : DEFAULT_HOURLY_CAPACITY;
+        return productionCalculator.getMachineHourlyCapacity(machineCode, structureName, context);
     }
 
     private void allocateTaskToMachine(
