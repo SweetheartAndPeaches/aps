@@ -1005,6 +1005,132 @@ public class BalancingService {
         return false;
     }
 
+    // ==================== 班次间均衡方法 ====================
+
+    /**
+     * 班次间生产量均衡
+     *
+     * <p>在同结构下，以硫化机台数最多的胎胚（绑定胎胚）的班次分配比例为基准，
+     * 将同组其他胎胚的班次计划量按该比例重新分配，使同一结构下各班次总产量趋于均衡。
+     *
+     * <p>仅对普通任务（非试制、非开产、非收尾）进行均衡：
+     * <ul>
+     *   <li>试制任务独立排产，不参与结构均衡</li>
+     *   <li>开产/收尾任务仅在首/末班生产，不参与班次比例调整</li>
+     * </ul>
+     *
+     * <p>均衡策略：
+     * <ul>
+     *   <li>Step1: 按 structureName 分组</li>
+     *   <li>Step2: 在每组内，找 vulcanizeMachineCount 最大的胎胚作为绑定胎胚</li>
+     *   <li>Step3: 计算绑定胎胚各班次的车数比例</li>
+     *   <li>Step4: 将该比例应用到同组其他胎胚，重新计算各班次的车数</li>
+     *   <li>Step5: 更新对应 ShiftProductionResult 的 quantity 和 carsForShift</li>
+     * </ul>
+     *
+     * @param results 排产结果列表（会被直接修改）
+     * @param context 排程上下文
+     * @return 均衡后的结果列表（与输入 results 相同引用）
+     */
+    public List<ShiftScheduleService.ShiftProductionResult> balanceShiftQuantities(
+            List<ShiftScheduleService.ShiftProductionResult> results,
+            ScheduleContextVo context) {
+
+        if (results == null || results.isEmpty()) {
+            return results;
+        }
+
+        // Step1: 按 structureName 分组
+        Map<String, List<ShiftScheduleService.ShiftProductionResult>> byStructure = results.stream()
+                .collect(Collectors.groupingBy(r -> {
+                    CoreScheduleAlgorithmService.DailyEmbryoTask task = r.getSourceTask();
+                    return task != null ? task.getStructureName() : r.getStructureName();
+                }));
+
+        for (Map.Entry<String, List<ShiftScheduleService.ShiftProductionResult>> entry : byStructure.entrySet()) {
+            String structureName = entry.getKey();
+            List<ShiftScheduleService.ShiftProductionResult> group = entry.getValue();
+
+            // 过滤出普通任务（排除试制、收尾）
+            List<ShiftScheduleService.ShiftProductionResult> regularTasks = group.stream()
+                    .filter(r -> !Boolean.TRUE.equals(r.getIsTrialTask())
+                            && !Boolean.TRUE.equals(r.getIsEndingTask()))
+                    .collect(Collectors.toList());
+
+            if (regularTasks.size() < 2) {
+                // 不足2个普通任务，无需均衡
+                continue;
+            }
+
+            // Step2: 按 vulcanizeMachineCount 找绑定胎胚
+            ShiftScheduleService.ShiftProductionResult bindingResult = regularTasks.stream()
+                    .max(Comparator.comparingInt(r -> {
+                        CoreScheduleAlgorithmService.DailyEmbryoTask task = r.getSourceTask();
+                        return task != null && task.getVulcanizeMachineCount() != null
+                                ? task.getVulcanizeMachineCount() : 0;
+                    }))
+                    .orElse(null);
+
+            if (bindingResult == null) {
+                continue;
+            }
+
+            // Step3: 构建绑定胎胚各班次的车数比例
+            // 按 embryoCode + shiftCode 聚合
+            Map<String, Integer> bindingShiftCarsMap = regularTasks.stream()
+                    .filter(r -> r.getEmbryoCode().equals(bindingResult.getEmbryoCode()))
+                    .collect(Collectors.toMap(
+                            r -> r.getShiftCode(),
+                            ShiftScheduleService.ShiftProductionResult::getCarsForShift,
+                            Integer::sum
+                    ));
+
+            int totalBindingCars = bindingShiftCarsMap.values().stream().mapToInt(Integer::intValue).sum();
+            if (totalBindingCars == 0) {
+                continue;
+            }
+
+            // Step4: 对每个非绑定胎胚，按绑定胎胚的车数比例重新分配
+            Set<String> nonBindingEmbryos = regularTasks.stream()
+                    .map(ShiftScheduleService.ShiftProductionResult::getEmbryoCode)
+                    .filter(code -> !code.equals(bindingResult.getEmbryoCode()))
+                    .collect(Collectors.toSet());
+
+            for (String embryoCode : nonBindingEmbryos) {
+                // 获取该胎胚各班次的结果
+                List<ShiftScheduleService.ShiftProductionResult> embryoResults = regularTasks.stream()
+                        .filter(r -> r.getEmbryoCode().equals(embryoCode))
+                        .collect(Collectors.toList());
+
+                // 计算该胎胚的总车数
+                int embryoTotalCars = embryoResults.stream()
+                        .mapToInt(ShiftScheduleService.ShiftProductionResult::getCarsForShift)
+                        .sum();
+                if (embryoTotalCars == 0) {
+                    continue;
+                }
+
+                // 按绑定胎胚的比例，分配每个班次的车数
+                for (ShiftScheduleService.ShiftProductionResult result : embryoResults) {
+                    String shiftCode = result.getShiftCode();
+                    int bindingCars = bindingShiftCarsMap.getOrDefault(shiftCode, 0);
+
+                    // 比例分配：bindingCars / totalBindingCars
+                    // 用绑定胎胚该班次占比 × 当前胎胚总车数
+                    int newCars = Math.max(1, Math.round(
+                            (float) bindingCars * embryoTotalCars / totalBindingCars));
+                    newCars = Math.min(newCars, embryoTotalCars);
+
+                    // 更新车数和数量
+                    result.setCarsForShift(newCars);
+                    result.setQuantity(newCars * result.getTripCapacity());
+                }
+            }
+        }
+
+        return results;
+    }
+
     // ==================== 内部类 ====================
 
     /**

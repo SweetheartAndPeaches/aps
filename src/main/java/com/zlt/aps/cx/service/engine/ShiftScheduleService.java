@@ -1273,6 +1273,8 @@ public class ShiftScheduleService {
         result.setIsTrialTask(isTrialTask);
         result.setIsEndingTask(isEndingTask);
         result.setIsContinueTask(isContinueTask);
+        // 保存来源任务（用于均衡计算时获取 vulcanizeMachineCount）
+        result.setSourceTask(task);
 
         return result;
     }
@@ -1322,5 +1324,7 @@ public class ShiftScheduleService {
         private Boolean isContinueTask;
         /** 该班次分配的车数 */
         private Integer carsForShift;
+        /** 来源任务（用于均衡计算：获取硫化机数 vulcanizeMachineCount） */
+        private CoreScheduleAlgorithmService.DailyEmbryoTask sourceTask;
     }
 }

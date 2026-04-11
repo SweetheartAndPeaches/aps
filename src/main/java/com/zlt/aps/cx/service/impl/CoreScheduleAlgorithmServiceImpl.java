@@ -31,6 +31,7 @@ import java.util.stream.Collectors;
  *   <li>{@link TrialTaskProcessor} - 试制任务处理</li>
  *   <li>{@link NewTaskProcessor} - 新增任务处理（含量试约束）</li>
  *   <li>{@link ShiftScheduleService} - 班次精排</li>
+ *   <li>{@link BalancingService} - 班次间生产量均衡</li>
  * </ul>
  *
  * <p>排程主流程：
@@ -58,6 +59,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     private final ShiftScheduleService shiftScheduleService;
     private final ProductionCalculator productionCalculator;
     private final ScheduleDayTypeHelper scheduleDayTypeHelper;
+    private final BalancingService balancingService;
 
     /** 默认排程天数 */
     private static final int DEFAULT_SCHEDULE_DAYS = 3;
@@ -247,7 +249,10 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         log.info("班次排产完成，共 {} 条班次排产记录", shiftProductionResults.size());
 
 
-        //补充班次间量的均衡
+        // S5.3.7 班次间均衡：同结构下，以硫化机台数最多的胎胚为绑定胎胚，其他胎胚按绑定胎胚的班次比例重新分配
+        // 注意：试制、收尾任务不参与均衡，它们在固定班次独立排产
+        balancingService.balanceShiftQuantities(shiftProductionResults, context);
+        log.info("班次间均衡完成");
 
         // 封装当天排产结果
         DayScheduleResult dayResult = new DayScheduleResult();
