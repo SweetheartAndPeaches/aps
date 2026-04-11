@@ -642,12 +642,12 @@ public class TaskGroupService {
             int currentStock,
             ScheduleContextVo context) {
 
-        // 1. 从 materialLhCapacityMap 获取该物料的日硫化量
+        // 1. 从 materialLhCapacityMap 获取该物料的日硫化量（key 是 materialCode，不是 embryoCode）
         Map<String, MonthPlanProductLhCapacityVo> lhCapacityMap = context.getMaterialLhCapacityMap();
         Integer dailyLhCapacity = null;
         if (lhCapacityMap != null) {
-            String embryoCode = task.getEmbryoCode();
-            MonthPlanProductLhCapacityVo capacityVo = lhCapacityMap.get(embryoCode);
+            String materialCode = task.getMaterialCode();
+            MonthPlanProductLhCapacityVo capacityVo = lhCapacityMap.get(materialCode);
             if (capacityVo != null) {
                 if (capacityVo.getDayVulcanizationQty() != null && capacityVo.getDayVulcanizationQty() > 0) {
                     dailyLhCapacity = capacityVo.getDayVulcanizationQty();
