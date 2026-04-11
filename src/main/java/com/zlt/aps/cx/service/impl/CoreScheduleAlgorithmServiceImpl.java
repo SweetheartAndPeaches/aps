@@ -622,93 +622,153 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
         log.info("最终排程结果：共 {} 条记录（机台+胎胚+SAP物料维度）", results.size());
         return results;
+
     }
 
     /**
-     * 按 CLASS_FIELD 设置对应的班次计划量及子表字段
-     * <p>将 ShiftProductionResult 的 7 个字段拍平到 CxScheduleResult 的 CLASSn_* 列：
-     * PLAN_QTY、TRIP_NO、TRIP_CAPACITY、STOCK_HOURS、SEQUENCE、PLAN_START_TIME、PLAN_END_TIME
+     * 构建任务Key（用于关联主表记录）
+     */
+    private String buildTaskKey(String machineCode, String embryoCode, String materialCode) {
+        return (machineCode != null ? machineCode : "") + "|"
+                + (embryoCode != null ? embryoCode : "") + "|"
+                + (materialCode != null ? materialCode : "");
+    }
+
+    /**
+     * 按 CLASS_FIELD 设置对应的班次计划量
+     * <p>将 ShiftProductionResult 的计划量字段设置到 CxScheduleResult 的 CLASSn 列：
+     * PLAN_QTY、ANALYSIS（原因分析）
+     *
+     * <p>原因分析标记规则：
+     * <ul>
+     *   <li>试制任务 → "试制"</li>
+     *   <li>收尾任务 → "收尾"</li>
+     *   <li>开产任务 → "开产"</li>
+     *   <li>停产任务 → "停产"</li>
+     *   <li>量试任务 → "量试"</li>
+     *   <li>新增任务 → "新增"</li>
+     *   <li>多个原因可叠加，如 "试制,收尾"</li>
+     * </ul>
+     *
+     * @param result    排程结果记录
+     * @param classField CLASS1~CLASS8 班次字段标识
+     * @param spr       班次排产结果
      */
     private void setClassFieldValue(CxScheduleResult result, String classField, ShiftScheduleService.ShiftProductionResult spr) {
         if (classField == null || spr == null) {
             return;
         }
+
+        // 构建原因分析字符串
+        String analysis = buildTaskAnalysis(spr);
+
         switch (classField) {
             case "CLASS1":
                 result.setClass1PlanQty(spr.getQuantity() != null ? new BigDecimal(spr.getQuantity()) : null);
-                result.setClass1TripNo(spr.getTripNo());
-                result.setClass1TripCapacity(spr.getTripCapacity() != null ? new BigDecimal(spr.getTripCapacity()) : null);
-                result.setClass1StockHours(spr.getStockHours());
-                result.setClass1Sequence(spr.getSequence());
-                result.setClass1PlanStartTime(spr.getPlanStartTime() != null ? java.sql.Timestamp.valueOf(spr.getPlanStartTime()) : null);
-                result.setClass1PlanEndTime(spr.getPlanEndTime() != null ? java.sql.Timestamp.valueOf(spr.getPlanEndTime()) : null);
+                if (analysis != null) {
+                    result.setClass1Analysis(analysis);
+                }
                 break;
             case "CLASS2":
                 result.setClass2PlanQty(spr.getQuantity() != null ? new BigDecimal(spr.getQuantity()) : null);
-                result.setClass2TripNo(spr.getTripNo());
-                result.setClass2TripCapacity(spr.getTripCapacity() != null ? new BigDecimal(spr.getTripCapacity()) : null);
-                result.setClass2StockHours(spr.getStockHours());
-                result.setClass2Sequence(spr.getSequence());
-                result.setClass2PlanStartTime(spr.getPlanStartTime() != null ? java.sql.Timestamp.valueOf(spr.getPlanStartTime()) : null);
-                result.setClass2PlanEndTime(spr.getPlanEndTime() != null ? java.sql.Timestamp.valueOf(spr.getPlanEndTime()) : null);
+                if (analysis != null) {
+                    result.setClass2Analysis(analysis);
+                }
                 break;
             case "CLASS3":
                 result.setClass3PlanQty(spr.getQuantity() != null ? new BigDecimal(spr.getQuantity()) : null);
-                result.setClass3TripNo(spr.getTripNo());
-                result.setClass3TripCapacity(spr.getTripCapacity() != null ? new BigDecimal(spr.getTripCapacity()) : null);
-                result.setClass3StockHours(spr.getStockHours());
-                result.setClass3Sequence(spr.getSequence());
-                result.setClass3PlanStartTime(spr.getPlanStartTime() != null ? java.sql.Timestamp.valueOf(spr.getPlanStartTime()) : null);
-                result.setClass3PlanEndTime(spr.getPlanEndTime() != null ? java.sql.Timestamp.valueOf(spr.getPlanEndTime()) : null);
+                if (analysis != null) {
+                    result.setClass3Analysis(analysis);
+                }
                 break;
             case "CLASS4":
                 result.setClass4PlanQty(spr.getQuantity() != null ? new BigDecimal(spr.getQuantity()) : null);
-                result.setClass4TripNo(spr.getTripNo());
-                result.setClass4TripCapacity(spr.getTripCapacity() != null ? new BigDecimal(spr.getTripCapacity()) : null);
-                result.setClass4StockHours(spr.getStockHours());
-                result.setClass4Sequence(spr.getSequence());
-                result.setClass4PlanStartTime(spr.getPlanStartTime() != null ? java.sql.Timestamp.valueOf(spr.getPlanStartTime()) : null);
-                result.setClass4PlanEndTime(spr.getPlanEndTime() != null ? java.sql.Timestamp.valueOf(spr.getPlanEndTime()) : null);
+                if (analysis != null) {
+                    result.setClass4Analysis(analysis);
+                }
                 break;
             case "CLASS5":
                 result.setClass5PlanQty(spr.getQuantity() != null ? new BigDecimal(spr.getQuantity()) : null);
-                result.setClass5TripNo(spr.getTripNo());
-                result.setClass5TripCapacity(spr.getTripCapacity() != null ? new BigDecimal(spr.getTripCapacity()) : null);
-                result.setClass5StockHours(spr.getStockHours());
-                result.setClass5Sequence(spr.getSequence());
-                result.setClass5PlanStartTime(spr.getPlanStartTime() != null ? java.sql.Timestamp.valueOf(spr.getPlanStartTime()) : null);
-                result.setClass5PlanEndTime(spr.getPlanEndTime() != null ? java.sql.Timestamp.valueOf(spr.getPlanEndTime()) : null);
+                if (analysis != null) {
+                    result.setClass5Analysis(analysis);
+                }
                 break;
             case "CLASS6":
                 result.setClass6PlanQty(spr.getQuantity() != null ? new BigDecimal(spr.getQuantity()) : null);
-                result.setClass6TripNo(spr.getTripNo());
-                result.setClass6TripCapacity(spr.getTripCapacity() != null ? new BigDecimal(spr.getTripCapacity()) : null);
-                result.setClass6StockHours(spr.getStockHours());
-                result.setClass6Sequence(spr.getSequence());
-                result.setClass6PlanStartTime(spr.getPlanStartTime() != null ? java.sql.Timestamp.valueOf(spr.getPlanStartTime()) : null);
-                result.setClass6PlanEndTime(spr.getPlanEndTime() != null ? java.sql.Timestamp.valueOf(spr.getPlanEndTime()) : null);
+                if (analysis != null) {
+                    result.setClass6Analysis(analysis);
+                }
                 break;
             case "CLASS7":
                 result.setClass7PlanQty(spr.getQuantity() != null ? new BigDecimal(spr.getQuantity()) : null);
-                result.setClass7TripNo(spr.getTripNo());
-                result.setClass7TripCapacity(spr.getTripCapacity() != null ? new BigDecimal(spr.getTripCapacity()) : null);
-                result.setClass7StockHours(spr.getStockHours());
-                result.setClass7Sequence(spr.getSequence());
-                result.setClass7PlanStartTime(spr.getPlanStartTime() != null ? java.sql.Timestamp.valueOf(spr.getPlanStartTime()) : null);
-                result.setClass7PlanEndTime(spr.getPlanEndTime() != null ? java.sql.Timestamp.valueOf(spr.getPlanEndTime()) : null);
+                if (analysis != null) {
+                    result.setClass7Analysis(analysis);
+                }
                 break;
             case "CLASS8":
                 result.setClass8PlanQty(spr.getQuantity() != null ? new BigDecimal(spr.getQuantity()) : null);
-                result.setClass8TripNo(spr.getTripNo());
-                result.setClass8TripCapacity(spr.getTripCapacity() != null ? new BigDecimal(spr.getTripCapacity()) : null);
-                result.setClass8StockHours(spr.getStockHours());
-                result.setClass8Sequence(spr.getSequence());
-                result.setClass8PlanStartTime(spr.getPlanStartTime() != null ? java.sql.Timestamp.valueOf(spr.getPlanStartTime()) : null);
-                result.setClass8PlanEndTime(spr.getPlanEndTime() != null ? java.sql.Timestamp.valueOf(spr.getPlanEndTime()) : null);
+                if (analysis != null) {
+                    result.setClass8Analysis(analysis);
+                }
                 break;
             default:
                 log.warn("未知的 CLASS_FIELD: {}", classField);
         }
+    }
+
+    /**
+     * 构建任务原因分析字符串
+     * <p>根据任务类型组合原因标记，多个原因用逗号分隔
+     */
+    private String buildTaskAnalysis(ShiftScheduleService.ShiftProductionResult spr) {
+        if (spr == null) {
+            return null;
+        }
+
+        List<String> reasons = new ArrayList<>();
+
+        // 从 sourceTask 获取详细任务类型
+        CoreScheduleAlgorithmService.DailyEmbryoTask task = spr.getSourceTask();
+        if (task != null) {
+            if (Boolean.TRUE.equals(task.getIsTrialTask())) {
+                reasons.add("试制");
+            }
+            if (Boolean.TRUE.equals(task.getIsProductionTrial())) {
+                reasons.add("量试");
+            }
+            if (Boolean.TRUE.equals(task.getIsEndingTask())) {
+                reasons.add("收尾");
+            }
+            if (Boolean.TRUE.equals(task.getIsOpeningDayTask())) {
+                reasons.add("开产");
+            }
+            if (Boolean.TRUE.equals(task.getIsClosingDayTask())) {
+                reasons.add("停产");
+            }
+            if (Boolean.TRUE.equals(task.getIsFirstTask()) && !Boolean.TRUE.equals(task.getIsContinueTask())) {
+                // 新增任务（非续作的首次任务）
+                reasons.add("新增");
+            }
+        }
+
+        // 如果 sourceTask 为空，回退到 ShiftProductionResult 的标记
+        if (task == null) {
+            if (Boolean.TRUE.equals(spr.getIsTrialTask())) {
+                reasons.add("试制");
+            }
+            if (Boolean.TRUE.equals(spr.getIsEndingTask())) {
+                reasons.add("收尾");
+            }
+            if (Boolean.TRUE.equals(spr.getIsContinueTask())) {
+                // 续作任务不标记
+            }
+        }
+
+        if (reasons.isEmpty()) {
+            return null;
+        }
+
+        return String.join(",", reasons);
     }
 
     /**

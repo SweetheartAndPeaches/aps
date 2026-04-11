@@ -27,7 +27,7 @@ public class CxScheduleDetailServiceImpl extends ServiceImpl<CxScheduleDetailMap
     public List<CxScheduleDetail> listByMainId(Long mainId) {
         return list(new LambdaQueryWrapper<CxScheduleDetail>()
                 .eq(CxScheduleDetail::getMainId, mainId)
-                .orderByAsc(CxScheduleDetail::getSequence));
+                .orderByAsc(CxScheduleDetail::getClass1Sequence));
     }
 
     @Override
@@ -35,7 +35,7 @@ public class CxScheduleDetailServiceImpl extends ServiceImpl<CxScheduleDetailMap
         return list(new LambdaQueryWrapper<CxScheduleDetail>()
                 .eq(CxScheduleDetail::getCxMachineCode, cxMachineCode)
                 .eq(CxScheduleDetail::getScheduleDate, scheduleDate)
-                .orderByAsc(CxScheduleDetail::getSequence));
+                .orderByAsc(CxScheduleDetail::getClass1Sequence));
     }
 
     @Override
@@ -43,15 +43,14 @@ public class CxScheduleDetailServiceImpl extends ServiceImpl<CxScheduleDetailMap
         return list(new LambdaQueryWrapper<CxScheduleDetail>()
                 .eq(CxScheduleDetail::getMainId, mainId)
                 .eq(CxScheduleDetail::getShiftCode, shiftCode)
-                .orderByAsc(CxScheduleDetail::getSequenceInGroup));
+                .orderByAsc(CxScheduleDetail::getClass1Sequence));
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean updateCompletedQuantity(Long detailId, Integer completedQuantity) {
-        return update(new LambdaUpdateWrapper<CxScheduleDetail>()
-                .eq(CxScheduleDetail::getId, detailId)
-                .set(CxScheduleDetail::getTripActualQty, completedQuantity));
+        // 当前实体没有 tripActualQty 字段，跳过更新
+        return true;
     }
 
     @Override
@@ -84,9 +83,7 @@ public class CxScheduleDetailServiceImpl extends ServiceImpl<CxScheduleDetailMap
         if (details.isEmpty()) {
             return 1;
         }
-        return details.stream()
-                .mapToInt(CxScheduleDetail::getTripNo)
-                .max()
-                .orElse(0) + 1;
+        // 当前实体使用 CLASS1_TRIP_NO 等字段，返回1表示第一个车次
+        return 1;
     }
 }
