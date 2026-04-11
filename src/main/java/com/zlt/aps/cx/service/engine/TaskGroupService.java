@@ -328,11 +328,11 @@ public class TaskGroupService {
         // 停产日：当天产量设为0
         if (scheduleDayTypeHelper.isStopDay(scheduleDate)) {
             task.setPlannedProduction(0);
-            task.setVulcanizeMachineCount(0);
+            task.setEndingExtraInventory(0);
             return;
         }
 
-        // 停产标识日：当天产量按胎胚库存取整
+        // 停产标识日：当天产量按实际量下（不补车）
         if (scheduleDayTypeHelper.isStopFlagDay(scheduleDate)) {
             Integer currentStock = task.getCurrentStock();
             if (currentStock != null && currentStock > 0) {
@@ -340,16 +340,16 @@ public class TaskGroupService {
                 int cars = productionCalculator.roundToVehicle(currentStock, tripCapacity);
                 int qty = Math.min(cars * tripCapacity, currentStock);
                 task.setPlannedProduction(qty);
-                task.setVulcanizeMachineCount(cars);
+                task.setEndingExtraInventory(qty);
             } else {
                 task.setPlannedProduction(0);
-                task.setVulcanizeMachineCount(0);
+                task.setEndingExtraInventory(0);
             }
         }
     }
 
     /**
-     * 获取班次换胎产能
+     * 获取结构胎面整车配置
      */
     private int getTripCapacity(String structureName, ScheduleContextVo context) {
         return productionCalculator.getTripCapacity(structureName, context);
