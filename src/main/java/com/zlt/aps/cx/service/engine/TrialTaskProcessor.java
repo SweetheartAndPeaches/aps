@@ -144,11 +144,6 @@ public class TrialTaskProcessor {
         CoreScheduleAlgorithmService.MachineAllocationResult allocation =
                 machineAllocationMap.computeIfAbsent(machineCode, k -> createMachineAllocation(k, context));
 
-        // 设置试制任务计划量（直接取需求，不整车换算）
-        int demandQty = task.getDemandQuantity() != null ? task.getDemandQuantity() : 0;
-        task.setPlannedProduction(demandQty);
-        task.setIsTrialTask(true);
-
         // 分配到机台
         allocateTaskToMachine(allocation, task);
         log.debug("试制任务 {} 分配到机台 {}，计划量={}", embryoCode, machineCode, demandQty);

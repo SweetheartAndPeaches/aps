@@ -1223,12 +1223,6 @@ public class ScheduleServiceImpl implements ScheduleService {
                         int delayQty = formingRemainder - producibleQty;
                         ending.setDelayQuantity(delayQty);
                         ending.setDistributedQuantity(delayQty / CATCH_UP_DAYS);
-
-                        // 如果未来追补天数内的计划排产仍追不上延误量，需要调整月计划
-                        int catchUpCapacity = calculateProducibleQty(plans, currentDay, Math.min(currentDay + CATCH_UP_DAYS, endingDay));
-                        if (delayQty > catchUpCapacity) {
-                            ending.setNeedMonthPlanAdjust(1);
-                        }
                     }
                 }
             } else {
