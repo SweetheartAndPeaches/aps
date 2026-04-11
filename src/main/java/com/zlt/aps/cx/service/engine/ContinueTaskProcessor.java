@@ -5,7 +5,6 @@ import com.zlt.aps.cx.entity.config.CxShiftConfig;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
 
 import com.zlt.aps.cx.service.engine.ScheduleDayTypeHelper.DayFlagInfo;
-import com.zlt.aps.cx.vo.MonthPlanProductLhCapacityVo;
 import com.zlt.aps.cx.vo.ScheduleContextVo;
 import com.zlt.aps.mp.api.domain.entity.MdmMoldingMachine;
 import com.zlt.aps.mp.api.domain.entity.MdmStructureLhRatio;
@@ -17,7 +16,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.sql.Date;
 import java.time.LocalDate;
 import java.util.*;
@@ -572,52 +570,6 @@ public class ContinueTaskProcessor {
 
     private int getTripCapacity(String structureCode, ScheduleContextVo context) {
         return productionCalculator.getTripCapacity(structureCode, context);
-    }
-
-    /**
-     * 计算机台小时产能
-     *
-     * <p>每个机台生产不同物料成型一条胎的时间不一样，动态计算：
-     * <ol>
-     *   <li>从 materialLhCapacityMap 获取该物料的日硫化量</li>
-     *   <li>从 structureLhRatioMap 通过 结构+机型 获取配比 (lhMachineMaxQty)</li>
-     *   <li>成型一条胎的时间(s) = 86400 / (配比 × 日硫化量)</li>
-     *   <li>小时产能 = 3600 / 成型一条胎的时间(s)</li>
-     * </ol>
-     */
-    private int getMachineHourlyCapacity(String machineCode, String embryoCode,
-                                          String structureName, ScheduleContextVo context) {
-        // 1. 获取日硫化量
-        Integer dailyLhCapacity = null;
-        Map<String, MonthPlanProductLhCapacityVo> lhCapacityMap = context.getMaterialLhCapacityMap();
-        if (lhCapacityMap != null && embryoCode != null) {
-            MonthPlanProductLhCapacityVo capacityVo = lhCapacityMap.get(embryoCode);
-            if (capacityVo != null) {
-                dailyLhCapacity = capacityVo.getDefaultDayVulcanizationQty();
-            }
-        }
-
-        // 2. 获取配比
-        int ratio = 1;
-        if (context.getStructureLhRatioMap() != null && structureName != null) {
-            MdmStructureLhRatio lhRatio = context.getStructureLhRatioMap().get(structureName);
-            if (lhRatio != null && lhRatio.getLhMachineMaxQty() != null && lhRatio.getLhMachineMaxQty() > 0) {
-                ratio = lhRatio.getLhMachineMaxQty();
-            }
-        }
-
-        if (dailyLhCapacity != null && dailyLhCapacity > 0) {
-            BigDecimal timePerTire = BigDecimal.valueOf(86400L)
-                    .divide(BigDecimal.valueOf((long) ratio * dailyLhCapacity), 2, RoundingMode.HALF_UP);
-            if (timePerTire.compareTo(BigDecimal.ZERO) > 0) {
-                return BigDecimal.valueOf(3600L)
-                        .divide(timePerTire, 0, RoundingMode.FLOOR)
-                        .intValue();
-            }
-        }
-
-        log.warn("无法计算机台 {} 物料 {} 的小时产能，使用默认值 {}", machineCode, embryoCode, DEFAULT_HOURLY_CAPACITY);
-        return DEFAULT_HOURLY_CAPACITY;
     }
 
     private void allocateTaskToMachine(
