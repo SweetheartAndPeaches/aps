@@ -246,6 +246,9 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         }
         log.info("班次排产完成，共 {} 条班次排产记录", shiftProductionResults.size());
 
+
+        //补充班次间量的均衡
+
         // 封装当天排产结果
         DayScheduleResult dayResult = new DayScheduleResult();
         dayResult.setDay(day);

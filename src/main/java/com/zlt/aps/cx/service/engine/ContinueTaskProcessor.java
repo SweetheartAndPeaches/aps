@@ -475,18 +475,6 @@ public class ContinueTaskProcessor {
         }
         // 其他情况（dayFlag 未知）按正常处理，不做干预
     }
-    
-    /**
-     * 根据 dayFlag 判断当天是否为开产日
-     *
-     * @param date 当前排产日期
-     * @return true 表示开产日
-     */
-    private boolean isOpeningDayByDayFlag(LocalDate date) {
-        DayFlagInfo flagInfo = scheduleDayTypeHelper.getDayFlagInfo(date);
-        return flagInfo != null && "1".equals(flagInfo.dayFlag);
-    }
-
     /**
      * 处理收尾任务的余量约束
      *
