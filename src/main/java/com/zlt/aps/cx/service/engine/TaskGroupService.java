@@ -154,8 +154,17 @@ public class TaskGroupService {
             calculatePlannedProduction(task, context, scheduleDate);
             // S5.3.2 收尾余量处理
             handleEndingRemainder(task, context);
-            // S5.3.3 开停产特殊处理
+            // S5.3.3 停产特殊处理
             handleOpeningClosingDay(task, context, dayShifts);
+            // S5.3.4 试制任务：产量必须是双数，不补整车
+            if (Boolean.TRUE.equals(isTrialTask)) {
+                Integer pp = task.getPlannedProduction();
+                if (pp != null && pp % 2 != 0) {
+                    task.setPlannedProduction(pp - 1);
+                    task.setEndingExtraInventory(pp - 1);
+                    log.debug("试制任务 {} 产量{}为奇数，调整为偶数{}", task.getEmbryoCode(), pp, pp - 1);
+                }
+            }
 
             // 分组
             if (isContinueTask) {
@@ -318,7 +327,7 @@ public class TaskGroupService {
     }
 
     /**
-     * S5.3.3 开停产特殊处理
+     * S5.3.3 停产特殊处理
      */
     private void handleOpeningClosingDay(CoreScheduleAlgorithmService.DailyEmbryoTask task,
                                          ScheduleContextVo context,
