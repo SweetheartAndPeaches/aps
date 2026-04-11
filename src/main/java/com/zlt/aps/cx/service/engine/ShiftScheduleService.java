@@ -78,12 +78,24 @@ public class ShiftScheduleService {
      * <p>将单个任务的待排产量分配到具体的班次和时间段，支持5种任务类型：
      * <ul>
      *   <li>普通任务：波浪放置，每个班次车数相差不超过1</li>
-     *   <li>收尾任务：只能在硫化的收尾班次或之前安排</li>
-     *   <li>开产任务：首班6小时，关键产品从第二班开始</li>
-     *   <li>停产任务：库存全部消耗，反推计划量</li>
-     *   <li>试制任务：只在早班/中班，双数，不补整车</li>
+     *   <li>收尾任务：只能在硫化的收尾班次或之前班次安排，这里不一定是车，所以最后一个班次可以不是整车</li>
+     *   <li>开产任务：首班6小时，关键产品从第二班开始，第一个班次可以不是车这里需要计算
+                       // 1. 从 materialLhCapacityMap 获取该物料的日硫化量
+        Map<String, MonthPlanProductLhCapacityVo> lhCapacityMap = context.getMaterialLhCapacityMap();
+                       // 2. 获取  // 结构硫化配比映射  context.setStructureLhRatioMap(structureLhRatioMap);
+                       // 3. 通过机型 + 结构 获取配备
+                       // 4. 计算成型机成型一条胎的时间:单位S =24小时*60*60 /   配比 * 日硫化量 
+                       // 这里第一班要扣2小时产能就是剩下6小时产能：6*60*60 / 成型一条胎的时间:单位S = 6小时生产多少条，安排到1班 
+     </li>
+     *   <li>停产任务：库存全部消耗，最后一个班次的计划量使用反推计划量</li>
+                      怎么反推硫化任务LhScheduleResult.class*EndTime
+                      会告诉我们什么时候结束生产，我们必须按照这个时间推算出今天的结束生产时候，成型要生产多少刚好够它完全消化
+                      用可供硫化时常TaskGroupService.calculateStockHours()方法可以计算出来
+                      那我们推算出在那个class*EndTime结束时需要多少可供硫化时常从而推算出需要的量
+     *   <li>试制任务：只在早班/中班</li>
      * </ul>
      *
+        最终我们会得到每个任务每个班次生产多少数量。
      * @param task          日胎胚任务
      * @param machineCode   机台编码
      * @param context       排程上下文
