@@ -110,6 +110,13 @@ public class ScheduleContextVo {
     private Map<String, Set<String>> machineOnlineEmbryoMap;
 
     /**
+     * 机台机型映射（快速查询用）
+     * Key: 机台编码
+     * Value: 机型编码（cxMachineTypeCode）
+     */
+    private Map<String, String> machineTypeCodeMap;
+
+    /**
      * 固定机台配置列表
      */
     private List<MdmCxMachineFixed> machineFixedConfigs;

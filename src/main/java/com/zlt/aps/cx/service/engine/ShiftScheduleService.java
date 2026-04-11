@@ -1160,10 +1160,15 @@ public class ShiftScheduleService {
 
         // 2. 获取配比（结构+机型 → lhMachineMaxQty）
         int ratio = 1;
-        if (context.getStructureLhRatioMap() != null && structureName != null) {
-            MdmStructureLhRatio lhRatio = context.getStructureLhRatioMap().get(structureName);
-            if (lhRatio != null && lhRatio.getLhMachineMaxQty() != null && lhRatio.getLhMachineMaxQty() > 0) {
-                ratio = lhRatio.getLhMachineMaxQty();
+        if (context.getStructureLhRatioMap() != null && structureName != null && machineCode != null) {
+            // 先通过机台编码查机型，再以 机型+结构 组合 key 查配比
+            Map<String, String> machineTypeCodeMap = context.getMachineTypeCodeMap();
+            String machineTypeCode = machineTypeCodeMap != null ? machineTypeCodeMap.get(machineCode) : null;
+            if (machineTypeCode != null) {
+                MdmStructureLhRatio lhRatio = context.getStructureLhRatioMap().get(machineTypeCode + "|" + structureName);
+                if (lhRatio != null && lhRatio.getLhMachineMaxQty() != null && lhRatio.getLhMachineMaxQty() > 0) {
+                    ratio = lhRatio.getLhMachineMaxQty();
+                }
             }
         }
 

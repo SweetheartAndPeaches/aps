@@ -420,6 +420,16 @@ public class ScheduleServiceImpl implements ScheduleService {
                         .eq(MdmMoldingMachine::getIsDelete, "0"));
         context.setAvailableMachines(machines);
         log.info("加载成型机台 {} 台（已过滤禁用和已删除）", machines.size());
+
+        // 构建机台机型映射
+        Map<String, String> machineTypeCodeMap = new HashMap<>();
+        for (MdmMoldingMachine machine : machines) {
+            if (machine.getCxMachineCode() != null && machine.getCxMachineTypeCode() != null) {
+                machineTypeCodeMap.put(machine.getCxMachineCode(), machine.getCxMachineTypeCode());
+            }
+        }
+        context.setMachineTypeCodeMap(machineTypeCodeMap);
+        log.info("构建机台机型映射，共 {} 条", machineTypeCodeMap.size());
     }
 
     /**
@@ -865,6 +875,8 @@ public class ScheduleServiceImpl implements ScheduleService {
     /**
      * 构建结构硫化配比映射
      *
+     * <p>key = 机型编码 + "|" + 结构名称，兼容同一结构在不同机型上有不同配比的情况
+     *
      * @return 结构硫化配比映射
      */
     private Map<String, MdmStructureLhRatio> buildStructureLhRatioMap() {
@@ -874,11 +886,12 @@ public class ScheduleServiceImpl implements ScheduleService {
             List<MdmStructureLhRatio> ratios = structureLhRatioMapper.selectList(null);
             for (MdmStructureLhRatio ratio : ratios) {
                 String structureName = ratio.getStructureName();
-                if (structureName != null) {
-                    resultMap.put(structureName, ratio);
+                String machineTypeCode = ratio.getCxMachineTypeCode();
+                if (structureName != null && machineTypeCode != null) {
+                    resultMap.put(machineTypeCode + "|" + structureName, ratio);
                 }
             }
-            log.info("从结构硫化配比表构建映射，共 {} 个结构", resultMap.size());
+            log.info("从结构硫化配比表构建映射，共 {} 条（机型+结构维度）", resultMap.size());
 
         } catch (Exception e) {
             log.error("构建结构硫化配比映射失败", e);
