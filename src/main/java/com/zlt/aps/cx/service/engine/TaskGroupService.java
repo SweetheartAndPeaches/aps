@@ -333,19 +333,8 @@ public class TaskGroupService {
         }
 
         // 停产标识日：当天产量按实际量下（不补车）
-        if (scheduleDayTypeHelper.isStopFlagDay(scheduleDate)) {
-            Integer currentStock = task.getCurrentStock();
-            if (currentStock != null && currentStock > 0) {
-                int tripCapacity = getTripCapacity(task.getStructureName(), context);
-                int cars = productionCalculator.roundToVehicle(currentStock, tripCapacity);
-                int qty = Math.min(cars * tripCapacity, currentStock);
-                task.setPlannedProduction(qty);
-                task.setEndingExtraInventory(qty);
-            } else {
-                task.setPlannedProduction(0);
-                task.setEndingExtraInventory(0);
-            }
-        }
+        // plannedProduction 已在 calculatePlannedProduction 中计算好（含损耗率+整车取整）
+        // 停产标识日不做额外处理，保持原值即可（不补车）
     }
 
     /**
