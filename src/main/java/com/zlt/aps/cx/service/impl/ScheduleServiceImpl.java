@@ -70,6 +70,9 @@ public class ScheduleServiceImpl implements ScheduleService {
     /** 参数编码：损耗率 */
     private static final String PARAM_CODE_LOSS_RATE = "LOSS_RATE";
 
+    /** 参数编码：波浪比例（夜班:早班:中班） */
+    private static final String PARAM_CODE_WAVE_RATIO = "WAVE_RATIO";
+
     /** 默认损耗率 */
     private static final BigDecimal DEFAULT_LOSS_RATE = new BigDecimal("0.02");
 
@@ -556,6 +559,26 @@ public class ScheduleServiceImpl implements ScheduleService {
                 ? new BigDecimal(lossRateConfig.getParamValue())
                 : DEFAULT_LOSS_RATE;
         context.setLossRate(lossRate);
+
+        // 加载波浪比例（夜班:早班:中班，格式如 "1:2:1"）
+        CxParamConfig waveRatioConfig = paramConfigMap.get(PARAM_CODE_WAVE_RATIO);
+        if (waveRatioConfig != null && waveRatioConfig.getParamValue() != null) {
+            try {
+                String[] parts = waveRatioConfig.getParamValue().split(":");
+                int[] waveRatio = new int[parts.length];
+                for (int i = 0; i < parts.length; i++) {
+                    waveRatio[i] = Integer.parseInt(parts[i].trim());
+                }
+                context.setWaveRatio(waveRatio);
+                log.info("加载波浪比例：{}", waveRatioConfig.getParamValue());
+            } catch (NumberFormatException e) {
+                log.warn("波浪比例配置格式错误：{}，使用默认值 1:2:1", waveRatioConfig.getParamValue());
+                context.setWaveRatio(new int[]{1, 2, 1});
+            }
+        } else {
+            context.setWaveRatio(new int[]{1, 2, 1});
+            log.info("未配置波浪比例，使用默认值 1:2:1");
+        }
     }
 
     /**
