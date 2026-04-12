@@ -789,7 +789,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                     .filter(t -> !t.getIsTrialTask() && !t.getIsEndingTask())
                     .collect(Collectors.toList());
 
-            // 按班次顺序排，再按库存时长排
+            // 按班次分组，每组内按 stockHours 排序，各班次独立分配顺序号
+            // 先按班次顺序排，再按 stockHours 排
             regularTrips.sort((a, b) -> {
                 int classA = classFieldOrder.getOrDefault(a.getClassField(), 99);
                 int classB = classFieldOrder.getOrDefault(b.getClassField(), 99);
@@ -797,10 +798,11 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 return Double.compare(a.getStockHours().doubleValue(), b.getStockHours().doubleValue());
             });
 
-            // 分配班次内顺序号（按班次顺序 + stockHours 排序后，连续递增）
-            int seq = 0;
+            // 分配顺序号：每个班次独立累计
+            Map<String, Integer> classSeqMap = new HashMap<>();
             for (TripRecord trip : regularTrips) {
-                trip.setSequence(++seq);
+                int seq = classSeqMap.merge(trip.getClassField(), 1, Integer::sum);
+                trip.setSequence(seq);
             }
 
             // 构建 CxScheduleDetail 记录
