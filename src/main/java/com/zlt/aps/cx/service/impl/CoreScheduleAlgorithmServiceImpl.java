@@ -671,6 +671,16 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             }
         }
 
+        // 构建硫化任务ID → LhScheduleResult 的映射（用于获取硫化班次计划量）
+        Map<Long, LhScheduleResult> lhResultMap = new HashMap<>();
+        if (context.getLhScheduleResults() != null) {
+            for (LhScheduleResult lh : context.getLhScheduleResults()) {
+                if (lh.getId() != null) {
+                    lhResultMap.put(lh.getId(), lh);
+                }
+            }
+        }
+
         // 按 (embryoCode, materialCode) 追踪每个胎胚的库存递推
         // embryoKey → { beginStock, cumulativeForming, cumulativeVulcanize, vulcanizeMachineCount, vulcanizeMoldCount, dailyLhCapacity, tripRecords }
         Map<String, EmbryoTripTracker> embryoTrackers = new LinkedHashMap<>();
@@ -708,16 +718,35 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 int planQty = spr.getQuantity() != null ? spr.getQuantity() : 0;
                 int tripCount = (planQty + tripCapacity - 1) / tripCapacity;
 
+                // 获取硫化任务ID，查找对应的硫化班次计划量
+                Long lhId = null;
+                LhScheduleResult lhResult = null;
+                if (spr.getSourceTask() != null) {
+                    lhId = spr.getSourceTask().getLhId();
+                    if (lhId != null) {
+                        lhResult = lhResultMap.get(lhId);
+                    }
+                }
+
+                // 获取该班次的硫化消耗量（从硫化记录获取该班次的计划量）
+                String classField = shiftToClassField.getOrDefault(spr.getShiftCode(), spr.getShiftCode());
+                int vulcanizeClassIndex = getClassIndex(classField);
+                int vulcanizeClassConsumption = lhResult != null
+                        ? getClassPlanQtyByIndex(lhResult, vulcanizeClassIndex) : 0;
+
                 // 生成每个车次记录
                 int cumulativeTripPlan = 0;
                 for (int i = 1; i <= tripCount; i++) {
                     int tripPlanQty = Math.min(tripCapacity, planQty - (i - 1) * tripCapacity);
                     cumulativeTripPlan += tripPlanQty;
 
-                    // 胎胚预计库存可供硫化时长 = (班次开始前库存 + 累计计划量) / 硫化机数 / 单台模数
+                    // 胎胚预计库存可供硫化时长 = (当前库存 + 成型累计) / 硫化机数 / 单台模数
+                    // 当前库存 = 期初库存 + 成型累计 - 硫化累计（由tracker内部维护）
+                    int currentStock = tracker.getCurrentStock();
                     double stockHours = calculateStockHours(
-                            beginStock,
-                            cumulativeTripPlan,
+                            currentStock,
+                            tracker.getCumulativeForming(),
+                            tracker.getCumulativeVulcanize(),
                             tracker.getVulcanizeMachineCount(),
                             tracker.getVulcanizeMoldCount()
                     );
@@ -728,7 +757,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                     record.setMachineCode(spr.getMachineCode());
                     record.setDay(day);
                     record.setShiftCode(spr.getShiftCode());
-                    record.setClassField(shiftToClassField.getOrDefault(spr.getShiftCode(), spr.getShiftCode()));
+                    record.setClassField(classField);
                     record.setTripNo(i);
                     record.setTripCapacity(tripCapacity);
                     record.setPlanQty(tripPlanQty);
@@ -741,9 +770,11 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
                     tracker.addTrip(record);
 
-                    // 更新追踪器：成型生产增加，硫化消耗增加
+                    // 更新追踪器：成型生产增加，硫化消耗按班次累加（只在第一个车次时累加硫化班次计划量）
                     tracker.addFormingProduction(tripPlanQty);
-                    tracker.addVulcanizeConsumption(tripPlanQty);
+                    if (i == 1 && vulcanizeClassConsumption > 0) {
+                        tracker.addVulcanizeConsumption(vulcanizeClassConsumption);
+                    }
                 }
             }
         }
@@ -792,20 +823,25 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     /**
      * 计算库存可供硫化时长（小时）
      *
-     * <p>公式：库存可供硫化时长 = (班次开始前库存 + 累计计划量) / 硫化机数 / 单台模数
+     * <p>公式：库存可供硫化时长 = (当前库存 + 成型累计计划量) / 硫化机数 / 单台模数
      *
-     * @param beginStock    班次开始前库存
-     * @param cumulativePlan 累计计划量（该车次及之前各车次计划量之和）
+     * <p>其中当前库存 = 期初库存 + 成型累计 - 硫化累计
+     *
+     * @param currentStock      当前库存（期初库存 + 成型累计 - 硫化累计）
+     * @param cumulativeForming 成型累计生产量
+     * @param vulcanizeConsumed 硫化累计消耗量
      * @param vulcanizeMachineCount 硫化机台数
      * @param vulcanizeMoldCount   单台模数
      * @return 库存可供硫化时长（小时）
      */
-    private double calculateStockHours(int beginStock, int cumulativePlan,
+    private double calculateStockHours(int currentStock, int cumulativeForming,
+                                       int vulcanizeConsumed,
                                        int vulcanizeMachineCount, int vulcanizeMoldCount) {
         if (vulcanizeMachineCount <= 0 || vulcanizeMoldCount <= 0) {
             return 0;
         }
-        return (double) (beginStock + cumulativePlan) / vulcanizeMachineCount / vulcanizeMoldCount;
+        // 库存可供硫化时长 = (当前库存 + 成型累计) / 硫化机数 / 单台模数
+        return (double) (currentStock + cumulativeForming) / vulcanizeMachineCount / vulcanizeMoldCount;
     }
 
     /**
@@ -843,6 +879,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             return (beginStock != null ? beginStock : 0) + cumulativeForming - cumulativeVulcanize;
         }
 
+        int getCumulativeForming() { return cumulativeForming; }
+        int getCumulativeVulcanize() { return cumulativeVulcanize; }
         void addFormingProduction(int qty) { this.cumulativeForming += qty; }
         void addVulcanizeConsumption(int qty) { this.cumulativeVulcanize += qty; }
         void addTrip(TripRecord trip) { this.trips.add(trip); }
@@ -1259,6 +1297,23 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             }
         }
         return total;
+    }
+
+    /**
+     * 根据班次字段获取班次索引
+     *
+     * @param classField 班次字段（如 "CLASS1"）
+     * @return 班次索引 (1-8)，解析失败返回 0
+     */
+    private int getClassIndex(String classField) {
+        if (classField != null && classField.startsWith("CLASS")) {
+            try {
+                return Integer.parseInt(classField.substring(5));
+            } catch (NumberFormatException e) {
+                log.warn("无法解析班次字段: {}", classField);
+            }
+        }
+        return 0;
     }
 
     /**
