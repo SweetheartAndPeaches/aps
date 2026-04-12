@@ -1019,25 +1019,27 @@ public class BalancingService {
     /**
      * 班次间生产量均衡
      *
-     * <p>在同结构下，以硫化机台数最多的胎胚（绑定胎胚）的班次分配比例为基准，
-     * 将同组其他胎胚的班次计划量按该比例重新分配，使同一结构下各班次总产量趋于均衡。
+     * <p>目标：使同一结构（structureName）下，各机台同班次的总车数趋于均衡。
+     * 硫化机台数最多的胎胚（绑定胎胚）决定该结构的排产节奏，其他胎胚向其靠拢。
      *
-     * <p>仅对普通任务（非试制、非开产、非收尾）进行均衡：
+     * <p>不参与均衡的任务类型：
      * <ul>
-     *   <li>试制任务独立排产，不参与结构均衡</li>
-     *   <li>开产/收尾任务仅在首/末班生产，不参与班次比例调整</li>
+     *   <li>试制任务：独立排产，不与其他任务混合</li>
+     *   <li>收尾任务：仅在首/末班生产，不参与班次比例调整</li>
      * </ul>
      *
-     * <p>均衡策略：
+     * <p>均衡执行步骤：
      * <ul>
      *   <li>Step1: 按 structureName 分组</li>
-     *   <li>Step2: 在每组内，找 vulcanizeMachineCount 最大的胎胚作为绑定胎胚</li>
-     *   <li>Step3: 计算绑定胎胚各班次的车数比例</li>
-     *   <li>Step4: 将该比例应用到同组其他胎胚，重新计算各班次的车数</li>
-     *   <li>Step5: 更新对应 ShiftProductionResult 的 quantity 和 carsForShift</li>
+     *   <li>Step2: 在每个结构组内，按 (machineCode, embryoCode) 分组</li>
+     *   <li>Step3: 在每个 (machine, embryo) 组合内，找硫化机台数最多的胎胚作为绑定胎胚</li>
+     *   <li>Step4: 对每个绑定胎胚执行"排序+循环右移"均衡（例：76,86,76 → 86,76,76）</li>
+     *   <li>Step5: 汇总每个班次的总车数，检查是否均衡（max-min ≤ 1）</li>
+     *   <li>Step6: 若不均衡，执行跨机台调整，按比例分摊差额</li>
+     *   <li>Step7: 更新所有 ShiftProductionResult 的 carsForShift 和 quantity</li>
      * </ul>
      *
-     * @param results 排产结果列表（会被直接修改）
+     * @param results 排产结果列表（包含所有任务的班次精排结果，会被直接修改）
      * @param context 排程上下文
      * @return 均衡后的结果列表（与输入 results 相同引用）
      */
