@@ -751,6 +751,19 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                             tracker.getVulcanizeMoldCount()
                     );
 
+                    // 计算每车的开始/结束时间
+                    LocalDateTime tripStartTime = null;
+                    LocalDateTime tripEndTime = null;
+                    if (spr.getPlanStartTime() != null && spr.getPlanEndTime() != null && tripCount > 0) {
+                        LocalDateTime shiftStart = spr.getPlanStartTime();
+                        LocalDateTime shiftEnd = spr.getPlanEndTime();
+                        long totalMinutes = java.time.Duration.between(shiftStart, shiftEnd).toMinutes();
+                        long tripMinutes = totalMinutes / tripCount;
+                        
+                        tripStartTime = shiftStart.plusMinutes((i - 1) * tripMinutes);
+                        tripEndTime = shiftStart.plusMinutes(i * tripMinutes);
+                    }
+
                     TripRecord record = new TripRecord();
                     record.setEmbryoCode(embryoCode);
                     record.setMaterialCode(materialCode);
@@ -762,8 +775,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                     record.setTripCapacity(tripCapacity);
                     record.setPlanQty(tripPlanQty);
                     record.setStockHours(BigDecimal.valueOf(stockHours).setScale(2, RoundingMode.HALF_UP));
-                    record.setPlanStartTime(spr.getPlanStartTime());
-                    record.setPlanEndTime(spr.getPlanEndTime());
+                    record.setPlanStartTime(tripStartTime);
+                    record.setPlanEndTime(tripEndTime);
                     record.setIsTrialTask(Boolean.TRUE.equals(spr.getIsTrialTask()));
                     record.setIsEndingTask(Boolean.TRUE.equals(spr.getIsEndingTask()));
                     record.setVulcanizeMachineCount(tracker.getVulcanizeMachineCount());
