@@ -758,7 +758,7 @@ public class TaskGroupService {
         // Step 3: 整车取整
         int tripCapacity = getTripCapacity(task.getStructureName(), context);
         int plannedProduction = productionCalculator.roundToVehicle(requiredProduction.intValue(), tripCapacity);
-        task.setRequiredCars(plannedProduction / Math.max(tripCapacity, 1));
+        task.setRequiredCars((plannedProduction + tripCapacity - 1) / Math.max(tripCapacity, 1));
         task.setEndingExtraInventory(plannedProduction);
     }
 
