@@ -131,7 +131,7 @@ public class ContinueTaskProcessor {
                     CoreScheduleAlgorithmService.DailyEmbryoTask task = embryoAssignment.getTask();
 
                     // S5.3.1~S5.3.4 均已在分组阶段计算完成，直接分配任务到机台
-                    if (task.getPlannedProduction() != null && task.getPlannedProduction() > 0) {
+                    if (task.getEndingExtraInventory() != null && task.getEndingExtraInventory() > 0) {
                         allocateTaskToMachine(allocation, task, context);
                     }
                 }
