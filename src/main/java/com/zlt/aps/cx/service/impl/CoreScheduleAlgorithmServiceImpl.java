@@ -766,11 +766,10 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 return Double.compare(a.getStockHours().doubleValue(), b.getStockHours().doubleValue());
             });
 
-            // 分配班次内顺序号
-            Map<String, Integer> classSeqMap = new HashMap<>();
+            // 分配班次内顺序号（按班次顺序 + stockHours 排序后，连续递增）
+            int seq = 0;
             for (TripRecord trip : regularTrips) {
-                int seq = classSeqMap.merge(trip.getClassField(), 1, Integer::sum);
-                trip.setSequence(seq);
+                trip.setSequence(++seq);
             }
 
             // 构建 CxScheduleDetail 记录
