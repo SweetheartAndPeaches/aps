@@ -147,6 +147,8 @@ public interface CoreScheduleAlgorithmService {
         private Integer endingAbandonedQty;
         /** 最终需要生产的量 */
         private Integer endingExtraInventory;
+        /** 机台小时产能（条/小时） */
+        private Integer hourCapacity;
 
         // ==================== 新增任务排序相关字段 ====================
         /** 月计划优先级 */

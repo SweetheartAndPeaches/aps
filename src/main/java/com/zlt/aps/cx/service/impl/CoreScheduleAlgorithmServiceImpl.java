@@ -710,6 +710,20 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                         // 期初库存只设置一次
                         tracker.setBeginStock(task.getCurrentStock());
                     }
+                    if (task.getHourCapacity() != null && task.getHourCapacity() > 0) {
+                        // 使用任务中已有的小时产能
+                        tracker.setHourlyCapacity(task.getHourCapacity());
+                    } else {
+                        // 计算机台小时产能：小时产能 = 3600 / 成型一条胎的时间(s)
+                        // 成型一条胎的时间(s) = 86400 / (配比 × 日硫化量)
+                        int hourlyCapacity = calculateHourlyCapacity(
+                                spr.getMachineCode(),
+                                materialCode,
+                                task.getStructureName(),
+                                context
+                        );
+                        tracker.setHourlyCapacity(hourlyCapacity);
+                    }
                 }
 
                 // 班次开始前库存 = 期初库存 + 成型累计生产 - 硫化累计消耗
@@ -752,16 +766,26 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                     );
 
                     // 计算每车的开始/结束时间
+                    // 按每条胎胚成型耗时累积计算
                     LocalDateTime tripStartTime = null;
                     LocalDateTime tripEndTime = null;
-                    if (spr.getPlanStartTime() != null && spr.getPlanEndTime() != null && tripCount > 0) {
+                    if (spr.getPlanStartTime() != null && tracker.getHourlyCapacity() > 0) {
                         LocalDateTime shiftStart = spr.getPlanStartTime();
-                        LocalDateTime shiftEnd = spr.getPlanEndTime();
-                        long totalMinutes = java.time.Duration.between(shiftStart, shiftEnd).toMinutes();
-                        long tripMinutes = totalMinutes / tripCount;
-                        
-                        tripStartTime = shiftStart.plusMinutes((i - 1) * tripMinutes);
-                        tripEndTime = shiftStart.plusMinutes(i * tripMinutes);
+                        int hourlyCapacity = tracker.getHourlyCapacity();
+
+                        // 累积已排数量（该车次之前的所有车次计划量之和）
+                        int cumulativeBeforeTrip = 0;
+                        for (int j = 1; j < i; j++) {
+                            cumulativeBeforeTrip += Math.min(tripCapacity, planQty - (j - 1) * tripCapacity);
+                        }
+
+                        // 第i车开始 = 班次开始 + 累积已排数量 / 小时产能
+                        // 第i车结束 = 第i车开始 + 当前车数量 / 小时产能
+                        long minutesBefore = (long) cumulativeBeforeTrip * 60 / hourlyCapacity;
+                        long minutesForTrip = (long) tripPlanQty * 60 / hourlyCapacity;
+
+                        tripStartTime = shiftStart.plusMinutes(minutesBefore);
+                        tripEndTime = shiftStart.plusMinutes(minutesBefore + minutesForTrip);
                     }
 
                     TripRecord record = new TripRecord();
@@ -872,6 +896,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         private int cumulativeVulcanize;   // 硫化累计消耗
         private int vulcanizeMachineCount = 1;
         private int vulcanizeMoldCount = 1;
+        private int hourlyCapacity = 12;   // 小时产能（条/小时）
         private final List<TripRecord> trips = new ArrayList<>();
 
         EmbryoTripTracker(String embryoCode, String materialCode) {
@@ -898,6 +923,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         int getCumulativeVulcanize() { return cumulativeVulcanize; }
         void addFormingProduction(int qty) { this.cumulativeForming += qty; }
         void addVulcanizeConsumption(int qty) { this.cumulativeVulcanize += qty; }
+        int getHourlyCapacity() { return hourlyCapacity; }
+        void setHourlyCapacity(int capacity) { this.hourlyCapacity = capacity > 0 ? capacity : 12; }
         void addTrip(TripRecord trip) { this.trips.add(trip); }
         List<TripRecord> getTrips() { return trips; }
     }
@@ -1525,6 +1552,63 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                         materialCode, oldSurplus, consumption, newSurplus);
             }
         }
+    }
+
+    /**
+     * 计算机台小时产能
+     *
+     * <p>参考 ShiftScheduleService.getMachineHourlyCapacity：
+     * <ol>
+     *   <li>从 materialLhCapacityMap 获取该物料的日硫化量</li>
+     *   <li>从 structureLhRatioMap 通过 结构+机型 获取配比 (lhMachineMaxQty)</li>
+     *   <li>成型一条胎的时间(s) = 86400 / (配比 × 日硫化量)</li>
+     *   <li>小时产能 = 3600 / 成型一条胎的时间(s)</li>
+     * </ol>
+     *
+     * @param machineCode   机台编码
+     * @param materialCode  物料编码
+     * @param structureName 结构名称
+     * @param context       排程上下文
+     * @return 小时产能（条/小时）
+     */
+    private int calculateHourlyCapacity(String machineCode, String materialCode,
+                                        String structureName, ScheduleContextVo context) {
+        // 1. 获取日硫化量
+        Integer dailyLhCapacity = null;
+        Map<String, MonthPlanProductLhCapacityVo> lhCapacityMap = context.getMaterialLhCapacityMap();
+        if (lhCapacityMap != null && materialCode != null) {
+            MonthPlanProductLhCapacityVo capacityVo = lhCapacityMap.get(materialCode);
+            if (capacityVo != null) {
+                dailyLhCapacity = capacityVo.getDefaultDayVulcanizationQty();
+            }
+        }
+
+        // 2. 获取配比
+        int ratio = 1;
+        if (context.getStructureLhRatioMap() != null && structureName != null && machineCode != null) {
+            Map<String, String> machineTypeCodeMap = context.getMachineTypeCodeMap();
+            String machineTypeCode = machineTypeCodeMap != null ? machineTypeCodeMap.get(machineCode) : null;
+            if (machineTypeCode != null) {
+                MdmStructureLhRatio lhRatio = context.getStructureLhRatioMap().get(machineTypeCode + "|" + structureName);
+                if (lhRatio != null && lhRatio.getLhMachineMaxQty() != null && lhRatio.getLhMachineMaxQty() > 0) {
+                    ratio = lhRatio.getLhMachineMaxQty();
+                }
+            }
+        }
+
+        if (dailyLhCapacity != null && dailyLhCapacity > 0) {
+            // 3. 成型一条胎的时间(s) = 86400 / (配比 × 日硫化量)
+            BigDecimal timePerTire = BigDecimal.valueOf(86400)
+                    .divide(BigDecimal.valueOf((long) ratio * dailyLhCapacity), 2, RoundingMode.HALF_UP);
+            // 4. 小时产能 = 3600 / 成型一条胎的时间(s)
+            if (timePerTire.compareTo(BigDecimal.ZERO) > 0) {
+                return BigDecimal.valueOf(3600)
+                        .divide(timePerTire, 0, RoundingMode.FLOOR)
+                        .intValue();
+            }
+        }
+
+        return 12; // 默认值
     }
 
     /**

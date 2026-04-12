@@ -1324,6 +1324,8 @@ public class ShiftScheduleService {
         private Boolean isContinueTask;
         /** 该班次分配的车数 */
         private Integer carsForShift;
+        /** 机台小时产能（条/小时） */
+        private Integer hourCapacity;
         /** 来源任务（用于均衡计算：获取硫化机数 vulcanizeMachineCount） */
         private CoreScheduleAlgorithmService.DailyEmbryoTask sourceTask;
     }
