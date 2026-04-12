@@ -269,6 +269,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         dayResult.setShiftProductionResults(shiftProductionResults);
         dayResult.setDayShifts(dayShifts);
 
+
         log.info("========== 第 {} 天排程完成 ==========\n", day);
         return dayResult;
     }
@@ -313,10 +314,15 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
      * 单天排产结果
      */
     public static class DayScheduleResult {
+        /** 排产日（1-31），与scheduleDate的day值相同，用于快速筛选 */
         private int day;
+        /** 排产日期 */
         private LocalDate scheduleDate;
+        /** 该天所有机台的任务分配结果（包含续作/新任务/试制任务分配） */
         private List<MachineAllocationResult> allAllocations;
+        /** 该天所有班次的精排结果（包含班次级别的车数/数量） */
         private List<ShiftScheduleService.ShiftProductionResult> shiftProductionResults;
+        /** 该天的工作班次配置（早/中/夜班的起止时间） */
         private List<CxShiftConfig> dayShifts;
 
         public int getDay() { return day; }
