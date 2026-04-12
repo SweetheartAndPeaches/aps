@@ -770,9 +770,9 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
                     tracker.addTrip(record);
 
-                    // 更新追踪器：成型生产增加，硫化消耗按班次累加（只在第一个车次时累加硫化班次计划量）
+                    // 更新追踪器：成型按车次累加，硫化按班次累加（在班次最后一个车次时）
                     tracker.addFormingProduction(tripPlanQty);
-                    if (i == 1 && vulcanizeClassConsumption > 0) {
+                    if (i == tripCount && vulcanizeClassConsumption > 0) {
                         tracker.addVulcanizeConsumption(vulcanizeClassConsumption);
                     }
                 }
