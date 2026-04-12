@@ -565,8 +565,9 @@ public class ContinueTaskProcessor {
             CoreScheduleAlgorithmService.DailyEmbryoTask task,
             ScheduleContextVo context) {
 
-        int quantity = task.getPlannedProduction() != null && task.getPlannedProduction() > 0 
-                ? task.getPlannedProduction() : task.getDemandQuantity();
+        // 使用 endingExtraInventory（最终需要生产的量，经过收尾处理）
+        int quantity = task.getEndingExtraInventory() != null && task.getEndingExtraInventory() > 0
+                ? task.getEndingExtraInventory() : task.getDemandQuantity();
 
         CoreScheduleAlgorithmService.TaskAllocation taskAllocation = new CoreScheduleAlgorithmService.TaskAllocation();
         taskAllocation.setEmbryoCode(task.getEmbryoCode());
