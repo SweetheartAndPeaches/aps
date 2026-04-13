@@ -5,6 +5,7 @@ import com.zlt.aps.cx.entity.config.CxShiftConfig;
 import com.zlt.aps.cx.entity.schedule.CxScheduleDetail;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
+import com.zlt.aps.cx.service.CxAlgorithmLogRecorder;
 import com.zlt.aps.cx.service.engine.*;
 import com.zlt.aps.cx.vo.MonthPlanProductLhCapacityVo;
 import com.zlt.aps.cx.vo.ScheduleContextVo;
@@ -63,6 +64,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     private final ProductionCalculator productionCalculator;
     private final ScheduleDayTypeHelper scheduleDayTypeHelper;
     private final BalancingService balancingService;
+    private final CxAlgorithmLogRecorder logRecorder;
 
     /** 构造函数注入 */
     @Autowired
@@ -73,7 +75,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             @Lazy ShiftScheduleService shiftScheduleService,
             @Lazy ProductionCalculator productionCalculator,
             ScheduleDayTypeHelper scheduleDayTypeHelper,
-            @Lazy BalancingService balancingService) {
+            @Lazy BalancingService balancingService,
+            CxAlgorithmLogRecorder logRecorder) {
         this.continueTaskProcessor = continueTaskProcessor;
         this.trialTaskProcessor = trialTaskProcessor;
         this.newTaskProcessor = newTaskProcessor;
@@ -81,6 +84,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         this.productionCalculator = productionCalculator;
         this.scheduleDayTypeHelper = scheduleDayTypeHelper;
         this.balancingService = balancingService;
+        this.logRecorder = logRecorder;
     }
 
     /** 默认排程天数 */
@@ -91,7 +95,10 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
     @Override
     public List<CxScheduleResult> executeSchedule(ScheduleContextVo context) {
-        log.info("开始执行排程算法，日期: {}", context.getScheduleDate());
+        // 生成批次号并开始日志记录
+        String batchNo = "BATCH_" + System.currentTimeMillis();
+        logRecorder.startNewBatch(batchNo);
+        log.info("开始执行排程算法，批次号: {}, 日期: {}", batchNo, context.getScheduleDate());
 
         // 预加载工作日历缓存，避免后续频繁数据库查询
         LocalDate scheduleDate = context.getScheduleDate();
@@ -174,6 +181,15 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         log.debug("子表记录构建完成，共 {} 条", allDetails.size());
 
         log.info("排程算法执行完成，共 {} 天，总机台数: {}", scheduleDays, allResults.size());
+        
+        // 统计总计划数
+        int totalPlanQty = allResults.stream()
+                .mapToInt(r -> r.getProductNum() != null ? r.getProductNum().intValue() : 0)
+                .sum();
+        
+        // 异步保存日志到数据库
+        logRecorder.saveLogsToDatabase(context, totalPlanQty, allResults.size());
+        log.info("算法日志汇总: {}", logRecorder.getBatchSummary());
         
         return allResults;
     }

@@ -59,9 +59,23 @@ public class CxScheduleAlgorithmLog extends BaseEntity {
     @TableField("STRUCTURE_NAME")
     private String structureName;
 
-    @ApiModelProperty(value = "结构编码")
-    @TableField("STRUCTURE_CODE")
-    private String structureCode;
+    // ==================== 日志内容 ====================
+    
+    @ApiModelProperty(value = "日志内容（完整操作流水账）")
+    @TableField("LOG_CONTENT")
+    private String logContent;
+
+    @ApiModelProperty(value = "该结构总计划数")
+    @TableField("TOTAL_PLAN_QTY")
+    private BigDecimal totalPlanQty;
+
+    @ApiModelProperty(value = "生成排程结果数量")
+    @TableField("SCHEDULE_RESULT_COUNT")
+    private Integer scheduleResultCount;
+
+    @ApiModelProperty(value = "执行耗时（毫秒）")
+    @TableField("EXECUTION_TIME_MS")
+    private Long executionTimeMs;
 
     @ApiModelProperty(value = "机型编码（该结构对应的机型）")
     @TableField("MACHINE_TYPE_CODE")
