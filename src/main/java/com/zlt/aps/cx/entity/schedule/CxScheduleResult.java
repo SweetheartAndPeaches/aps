@@ -43,7 +43,7 @@ import java.util.Date;
 @EqualsAndHashCode(callSuper = true)
 @TableName("T_CX_SCHEDULE_RESULT")
 @ApiModel(value = "成型排程结果对象", description = "成型排程结果表（单表）")
-public class CxScheduleResult extends ApsBaseEntity {
+public class CxScheduleResult extends BaseEntity {
 
     private static final long serialVersionUID = 1L;
 
