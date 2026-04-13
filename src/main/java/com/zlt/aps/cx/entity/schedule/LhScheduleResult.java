@@ -27,8 +27,6 @@ public class LhScheduleResult extends BaseEntity implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
-    /** ID字段（BaseEntity中的id） */
-
     /**
      * 分厂编号
      */

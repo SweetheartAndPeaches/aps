@@ -10,8 +10,6 @@ import com.zlt.aps.mp.api.domain.entity.MdmMaterialInfo;
 import com.zlt.aps.mp.api.domain.entity.MdmMonthSurplus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.slf4j.Logger;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -45,9 +43,6 @@ import java.util.Set;
 @Service
 @RequiredArgsConstructor
 public class TaskGroupService {
-
-    /** 备用日志对象 */
-    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(TaskGroupService.class);
 
     // ==================== 业务阈值常量 ====================
 
@@ -118,10 +113,10 @@ public class TaskGroupService {
     /** 施工阶段：量试 */
     private static final String STAGE_PRODUCTION_TRIAL = "02";
 
+    // ==================== 依赖注入 ====================
+
     private final ProductionCalculator productionCalculator;
     private final ScheduleDayTypeHelper scheduleDayTypeHelper;
-
-    /** 构造函数（由Lombok @RequiredArgsConstructor生成） */
 
     // ==================== 内部类 ====================
 
@@ -169,7 +164,6 @@ public class TaskGroupService {
             log.warn("硫化排程结果为空，无法分组任务");
             return result;
         }
-        
         log.info("任务分组开始：共 {} 条硫化记录", lhScheduleResults.size());
 
         // 构建基础映射
@@ -248,7 +242,6 @@ public class TaskGroupService {
                 result.getTrialTasks().size(),
                 result.getNewTasks().size(),
                 skippedNullEmbryo, skippedNullTask);
-        
         return result;
     }
 
@@ -411,28 +404,39 @@ public class TaskGroupService {
 
     /**
      * 构建物料映射（双索引：materialCode + embryoCode）
-     * 注：ScheduleContextVo 暂无物料列表，此方法暂不启用
      *
      * @param context 排程上下文
      * @return 物料编码/胎胚编码 → 物料信息
      */
     private Map<String, MdmMaterialInfo> buildMaterialMap(ScheduleContextVo context) {
         Map<String, MdmMaterialInfo> map = new HashMap<>();
-        // TODO: ScheduleContextVo 需要添加物料列表字段，此功能暂不启用
+        if (context.getMaterials() != null) {
+            for (MdmMaterialInfo material : context.getMaterials()) {
+                if (material.getMaterialCode() != null) {
+                    map.put(material.getMaterialCode(), material);
+                }
+                if (material.getEmbryoCode() != null) {
+                    map.put(material.getEmbryoCode(), material);
+                }
+            }
+        }
         log.debug("物料映射构建完成，共 {} 条物料信息", map.size());
         return map;
     }
 
     /**
      * 构建库存映射
-     * 注：ScheduleContextVo 暂无库存列表，此方法暂不启用
      *
      * @param context 排程上下文
      * @return 胎胚编码 → 库存信息
      */
     private Map<String, CxStock> buildStockMap(ScheduleContextVo context) {
         Map<String, CxStock> map = new HashMap<>();
-        // TODO: ScheduleContextVo 需要添加库存列表字段，此功能暂不启用
+        if (context.getStocks() != null) {
+            for (CxStock stock : context.getStocks()) {
+                map.put(stock.getEmbryoCode(), stock);
+            }
+        }
         return map;
     }
 
