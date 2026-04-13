@@ -6,11 +6,12 @@ import com.zlt.aps.cx.entity.schedule.CxScheduleDetail;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
 import com.zlt.aps.cx.service.engine.*;
+import com.zlt.aps.cx.vo.MonthPlanProductLhCapacityVo;
 import com.zlt.aps.cx.vo.ScheduleContextVo;
 import com.zlt.aps.mp.api.domain.entity.MdmMaterialInfo;
 import com.zlt.aps.mp.api.domain.entity.MdmMoldingMachine;
 import com.zlt.aps.mp.api.domain.entity.MdmMonthSurplus;
-import lombok.RequiredArgsConstructor;
+import com.zlt.aps.mp.api.domain.entity.MdmStructureLhRatio;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
@@ -49,7 +50,6 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmService {
 
     /** taskGroupService 使用 @Lazy 延迟注入，打破循环依赖 */
@@ -63,6 +63,25 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     private final ProductionCalculator productionCalculator;
     private final ScheduleDayTypeHelper scheduleDayTypeHelper;
     private final BalancingService balancingService;
+
+    /** 构造函数注入 */
+    @Autowired
+    public CoreScheduleAlgorithmServiceImpl(
+            @Lazy ContinueTaskProcessor continueTaskProcessor,
+            @Lazy TrialTaskProcessor trialTaskProcessor,
+            @Lazy NewTaskProcessor newTaskProcessor,
+            @Lazy ShiftScheduleService shiftScheduleService,
+            @Lazy ProductionCalculator productionCalculator,
+            ScheduleDayTypeHelper scheduleDayTypeHelper,
+            @Lazy BalancingService balancingService) {
+        this.continueTaskProcessor = continueTaskProcessor;
+        this.trialTaskProcessor = trialTaskProcessor;
+        this.newTaskProcessor = newTaskProcessor;
+        this.shiftScheduleService = shiftScheduleService;
+        this.productionCalculator = productionCalculator;
+        this.scheduleDayTypeHelper = scheduleDayTypeHelper;
+        this.balancingService = balancingService;
+    }
 
     /** 默认排程天数 */
     private static final int DEFAULT_SCHEDULE_DAYS = 3;
@@ -78,7 +97,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         LocalDate scheduleDate = context.getScheduleDate();
         int scheduleDays = context.getScheduleDays() != null ? context.getScheduleDays() : DEFAULT_SCHEDULE_DAYS;
         if (scheduleDate != null) {
-            dayTypeHelper.preloadCache(scheduleDate, scheduleDate.plusDays(scheduleDays - 1));
+            scheduleDayTypeHelper.preloadCache(scheduleDate, scheduleDate.plusDays(scheduleDays - 1));
         }
 
         // 使用 ScheduleServiceImpl.buildScheduleContext 中已加载的班次配置
@@ -93,8 +112,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 .filter(c -> c.getScheduleDay() != null)
                 .collect(Collectors.groupingBy(CxShiftConfig::getScheduleDay));
 
-        // 获取排程天数
-        int scheduleDays = context.getScheduleDays() != null ? context.getScheduleDays() : DEFAULT_SCHEDULE_DAYS;
+        // 获取排程天数（已在前面定义）
+        int days = context.getScheduleDays() != null ? context.getScheduleDays() : DEFAULT_SCHEDULE_DAYS;
 
         // 收集每天的排产结果
         List<DayScheduleResult> dayResults = new ArrayList<>();
