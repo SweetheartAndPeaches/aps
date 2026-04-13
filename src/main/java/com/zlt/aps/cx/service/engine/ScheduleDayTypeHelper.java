@@ -7,8 +7,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -47,6 +49,21 @@ public class ScheduleDayTypeHelper {
      * 缓存数据的天数范围（前后各扩展几天，防止边界问题）
      */
     private static final int CACHE_EXTRA_DAYS = 5;
+
+    /**
+     * 日期格式化工具
+     */
+    private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd");
+
+    /**
+     * 将 Date 转换为 yyyy-MM-dd 格式的字符串作为缓存 key
+     */
+    private String formatDateKey(java.util.Date date) {
+        if (date == null) {
+            return null;
+        }
+        return DATE_FORMAT.format(date);
+    }
 
     /**
      * 最近工作日历标识信息
@@ -91,7 +108,7 @@ public class ScheduleDayTypeHelper {
             calendarCache.clear();
             for (MdmWorkCalendar calendar : list) {
                 if (calendar.getProductionDate() != null) {
-                    String key = calendar.getProductionDate().toLocalDate().toString();
+                    String key = formatDateKey(calendar.getProductionDate());
                     calendarCache.put(key, calendar);
                 }
             }
@@ -168,7 +185,7 @@ public class ScheduleDayTypeHelper {
 
                 for (MdmWorkCalendar calendar : list) {
                     if (calendar.getProductionDate() != null) {
-                        String key = calendar.getProductionDate().toLocalDate().toString();
+                        String key = formatDateKey(calendar.getProductionDate());
                         calendarCache.put(key, calendar);
                     }
                 }
