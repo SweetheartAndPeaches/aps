@@ -85,7 +85,7 @@ public class ScheduleDayTypeHelper {
                    .ge(MdmWorkCalendar::getProductionDate, java.sql.Date.valueOf(actualStart))
                    .le(MdmWorkCalendar::getProductionDate, java.sql.Date.valueOf(actualEnd));
 
-            var list = workCalendarMapper.selectList(wrapper);
+            List<MdmWorkCalendar> list = workCalendarMapper.selectList(wrapper);
 
             // 写入缓存
             calendarCache.clear();
@@ -164,7 +164,7 @@ public class ScheduleDayTypeHelper {
                        .ge(MdmWorkCalendar::getProductionDate, java.sql.Date.valueOf(newStart))
                        .le(MdmWorkCalendar::getProductionDate, java.sql.Date.valueOf(newEnd));
 
-                var list = workCalendarMapper.selectList(wrapper);
+                List<MdmWorkCalendar> list = workCalendarMapper.selectList(wrapper);
 
                 for (MdmWorkCalendar calendar : list) {
                     if (calendar.getProductionDate() != null) {
