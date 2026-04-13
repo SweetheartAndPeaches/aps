@@ -171,10 +171,38 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
         // ==================== 构建子表：按"胎胚+整车"维度拆分车次，计算库存可供硫化时长和顺序 ====================
         List<CxScheduleDetail> allDetails = buildScheduleDetails(context, dayResults, allShiftConfigs);
-        log.debug("子表记录构建完成，共 {} 条", allDetails.size());
+        log.info("子表记录构建完成，共 {} 条", allDetails.size());
+
+        // ==================== 将子表明细关联到主表 ====================
+        associateDetailsToResults(allResults, allDetails);
 
         log.info("排程算法执行完成，共 {} 天，总机台数: {}", scheduleDays, allResults.size());
         return allResults;
+    }
+
+    /**
+     * 将子表明细关联到主表结果
+     * <p>匹配规则：机台编码 + 胎胚代码 一致
+     */
+    private void associateDetailsToResults(List<CxScheduleResult> allResults, List<CxScheduleDetail> allDetails) {
+        if (allDetails.isEmpty()) {
+            return;
+        }
+
+        // 按 机台+胎胚 分组子表
+        Map<String, List<CxScheduleDetail>> detailGroupMap = allDetails.stream()
+                .collect(Collectors.groupingBy(d -> d.getCxMachineCode() + "|" + d.getEmbryoCode()));
+
+        int matched = 0;
+        for (CxScheduleResult result : allResults) {
+            String key = result.getCxMachineCode() + "|" + result.getEmbryoCode();
+            List<CxScheduleDetail> details = detailGroupMap.get(key);
+            if (details != null) {
+                result.setDetails(details);
+                matched += details.size();
+            }
+        }
+        log.info("子表关联主表完成：子表 {} 条，成功关联 {} 条", allDetails.size(), matched);
     }
 
     /**

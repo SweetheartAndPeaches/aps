@@ -11,6 +11,7 @@ import lombok.EqualsAndHashCode;
 
 import java.math.BigDecimal;
 import java.util.Date;
+import java.util.List;
 
 /**
  * 成型排程结果表（单表结构）
@@ -384,4 +385,9 @@ public class CxScheduleResult extends BaseEntity {
     @ApiModelProperty(value = "硫化班产")
     @TableField("LH_CLASS_QTY")
     private BigDecimal lhClassQty;
+
+    // ==================== 非持久化字段 ====================
+    @ApiModelProperty(value = "子表明细列表")
+    @TableField(exist = false)
+    private List<CxScheduleDetail> details;
 }
