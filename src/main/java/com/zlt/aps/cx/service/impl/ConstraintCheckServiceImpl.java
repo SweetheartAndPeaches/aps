@@ -53,10 +53,11 @@ public class ConstraintCheckServiceImpl implements ConstraintCheckService {
         List<String> violations = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
 
-        // 获取机台信息
+        // 获取机台信息（可能有多个工厂有相同机台代码，取第一条）
         MdmMoldingMachine machine = moldingMachineMapper.selectOne(
                 new LambdaQueryWrapper<MdmMoldingMachine>()
-                        .eq(MdmMoldingMachine::getCxMachineCode, scheduleResult.getCxMachineCode()));
+                        .eq(MdmMoldingMachine::getCxMachineCode, scheduleResult.getCxMachineCode())
+                        .last("LIMIT 1"));
 
         // 获取物料信息
         MdmMaterialInfo material = materialInfoMapper.selectOne(
