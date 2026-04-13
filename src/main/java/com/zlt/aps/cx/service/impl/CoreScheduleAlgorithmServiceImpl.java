@@ -74,6 +74,13 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     public List<CxScheduleResult> executeSchedule(ScheduleContextVo context) {
         log.info("开始执行排程算法，日期: {}", context.getScheduleDate());
 
+        // 预加载工作日历缓存，避免后续频繁数据库查询
+        LocalDate scheduleDate = context.getScheduleDate();
+        int scheduleDays = context.getScheduleDays() != null ? context.getScheduleDays() : DEFAULT_SCHEDULE_DAYS;
+        if (scheduleDate != null) {
+            dayTypeHelper.preloadCache(scheduleDate, scheduleDate.plusDays(scheduleDays - 1));
+        }
+
         // 使用 ScheduleServiceImpl.buildScheduleContext 中已加载的班次配置
         List<CxShiftConfig> allShiftConfigs = context.getShiftConfigList();
         if (allShiftConfigs == null || allShiftConfigs.isEmpty()) {
