@@ -63,7 +63,6 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     private final ProductionCalculator productionCalculator;
     private final ScheduleDayTypeHelper scheduleDayTypeHelper;
     private final BalancingService balancingService;
-    private final CxAlgorithmLogRecorder logRecorder;
 
     /** 构造函数注入 */
     @Autowired
@@ -74,8 +73,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             @Lazy ShiftScheduleService shiftScheduleService,
             @Lazy ProductionCalculator productionCalculator,
             ScheduleDayTypeHelper scheduleDayTypeHelper,
-            @Lazy BalancingService balancingService,
-            CxAlgorithmLogRecorder logRecorder) {
+            @Lazy BalancingService balancingService) {
         this.continueTaskProcessor = continueTaskProcessor;
         this.trialTaskProcessor = trialTaskProcessor;
         this.newTaskProcessor = newTaskProcessor;
@@ -83,7 +81,6 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         this.productionCalculator = productionCalculator;
         this.scheduleDayTypeHelper = scheduleDayTypeHelper;
         this.balancingService = balancingService;
-        this.logRecorder = logRecorder;
     }
 
     /** 默认排程天数 */
@@ -94,12 +91,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
     @Override
     public List<CxScheduleResult> executeSchedule(ScheduleContextVo context) {
-        // 生成批次号
-        String batchNo = "BATCH_" + System.currentTimeMillis();
-        log.info("开始执行排程算法，批次号: {}, 日期: {}", batchNo, context.getScheduleDate());
-        
-        // 开始新的日志批次
-        logRecorder.startNewBatch(batchNo);
+        log.info("开始执行排程算法，日期: {}", context.getScheduleDate());
 
         // 预加载工作日历缓存，避免后续频繁数据库查询
         LocalDate scheduleDate = context.getScheduleDate();
@@ -182,10 +174,6 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         log.debug("子表记录构建完成，共 {} 条", allDetails.size());
 
         log.info("排程算法执行完成，共 {} 天，总机台数: {}", scheduleDays, allResults.size());
-        
-        // 打印日志汇总
-        String logSummary = logRecorder.getBatchSummary();
-        log.info("算法日志汇总: {}", logSummary);
         
         return allResults;
     }
