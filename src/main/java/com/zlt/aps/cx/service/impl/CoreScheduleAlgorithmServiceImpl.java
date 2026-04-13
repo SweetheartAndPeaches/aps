@@ -122,7 +122,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         Map<String, Set<String>> dailyMachineOnlineEmbryoMap = null;
 
         // 连续执行多天排程
-        for (int day = 1; day <= scheduleDays; day++) {
+        for (int day = 1; day <= days; day++) {
             List<CxShiftConfig> dayShifts = dayShiftMap.get(day);
             if (CollectionUtils.isEmpty(dayShifts)) {
                 log.warn("第 {} 天没有配置班次，跳过", day);
@@ -261,6 +261,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 task.setMainMaterialDesc(taskAlloc.getMainMaterialDesc());
                 task.setStructureName(taskAlloc.getStructureName());
                 task.setPlannedProduction(taskAlloc.getQuantity());
+                task.setEndingExtraInventory(taskAlloc.getQuantity()); // 用于班次精排判断
                 task.setIsTrialTask(taskAlloc.getIsTrialTask());
                 task.setIsEndingTask(taskAlloc.getIsEndingTask());
                 task.setIsContinueTask(taskAlloc.getIsContinueTask());
@@ -273,6 +274,10 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 int tripCapacity = productionCalculator.getTripCapacity(taskAlloc.getStructureName(), context);
                 int cars = tripCapacity > 0 ? (int) Math.ceil((double) taskAlloc.getQuantity() / tripCapacity) : 0;
                 task.setRequiredCars(cars);
+
+                // 调试日志
+                log.info("班次精排调试: embryo={}, quantity={}, tripCapacity={}, cars={}, endingExtra={}",
+                        taskAlloc.getEmbryoCode(), taskAlloc.getQuantity(), tripCapacity, cars, task.getEndingExtraInventory());
 
                 List<ShiftScheduleService.ShiftProductionResult> taskShiftResults =
                         shiftScheduleService.scheduleTaskToShifts(task, machineCode, context, dayShifts, scheduleDateForShift);

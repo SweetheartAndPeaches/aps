@@ -124,6 +124,11 @@ public class ShiftScheduleService {
 
         int tripCapacity = getTripCapacity(task.getStructureName(), context);
 
+        // 调试日志
+        log.info("scheduleTaskToShifts 调试: embryo={}, endingExtra={}, tripCapacity={}, isOpeningDay={}, dayShifts.size={}",
+                task.getEmbryoCode(), endingExtraInventory, tripCapacity, task.getIsOpeningDayTask(),
+                dayShifts != null ? dayShifts.size() : "null");
+
         // 判断任务类型，按优先级从高到低
         boolean isTrial = Boolean.TRUE.equals(task.getIsTrialTask());
         boolean isClosingDay = Boolean.TRUE.equals(task.getIsClosingDayTask());
@@ -648,12 +653,15 @@ public class ShiftScheduleService {
 
         List<ShiftProductionResult> results = new ArrayList<>();
         int totalQty = task.getEndingExtraInventory();
+        log.info("scheduleNormalTask: embryo={}, totalQty={}, tripCapacity={}, dayShifts.size={}",
+                task.getEmbryoCode(), totalQty, tripCapacity, dayShifts != null ? dayShifts.size() : "null");
         if (totalQty <= 0) {
             return results;
         }
 
         int requiredCars = tripCapacity > 0 ? (totalQty + tripCapacity - 1) / tripCapacity : 1;
         int[] shiftCars = calculateWaveCars(requiredCars, dayShifts);
+        log.info("scheduleNormalTask: requiredCars={}, shiftCars={}", requiredCars, Arrays.toString(shiftCars));
 
         int hourlyCapacity = getMachineHourlyCapacity(machineCode, task.getMaterialCode(), task.getStructureName(), context);
         int remainingCars = requiredCars;
@@ -676,7 +684,7 @@ public class ShiftScheduleService {
 
             // 班次结束时间检查
             LocalDateTime shiftEndTime = calculateShiftEndTime(shiftConfig, scheduleDate);
-            if (endTime.isAfter(shiftEndTime)) {
+            if (shiftEndTime != null && endTime.isAfter(shiftEndTime)) {
                 long availableMinutes = Duration.between(startTime, shiftEndTime).toMinutes();
                 availableMinutes -= getMachinePrepareMinutes(machineCode, context);
                 int availableQty = (int) (availableMinutes * hourlyCapacity / 60);
@@ -690,9 +698,12 @@ public class ShiftScheduleService {
             }
 
             if (batchQty <= 0) {
+                log.info("scheduleNormalTask: 跳过 batchQty=0, carsForShift={}, remainingCars={}", carsForShift, remainingCars);
                 continue;
             }
 
+            log.info("scheduleNormalTask: 添加结果 embryo={}, shift={}, batchQty={}, carsForShift={}",
+                    task.getEmbryoCode(), shiftConfig.getShiftCode(), batchQty, carsForShift);
             ShiftProductionResult result = buildResult(machineCode, shiftConfig, task, batchQty,
                     tripCapacity, carsForShift, startTime, endTime, false, false, task.getIsContinueTask());
 
@@ -1119,6 +1130,10 @@ public class ShiftScheduleService {
      */
     private LocalDateTime calculateShiftEndTime(CxShiftConfig shiftConfig, LocalDate scheduleDate) {
         LocalTime shiftEnd = shiftConfig.getShiftEndTime();
+        if (shiftEnd == null) {
+            log.warn("calculateShiftEndTime: shiftEnd is null, shiftCode={}", shiftConfig.getShiftCode());
+            return null;
+        }
         LocalDateTime endTime = LocalDateTime.of(scheduleDate, shiftEnd);
 
         // 夜班跨天
@@ -1182,7 +1197,7 @@ public class ShiftScheduleService {
                 int hourlyCapacity = BigDecimal.valueOf(SECONDS_PER_HOUR)
                         .divide(timePerTire, 0, RoundingMode.FLOOR)
                         .intValue();
-                log.debug("机台 {} 物料 {} 小时产能计算: 日硫化量={}, 配比={}, 单条耗时={}s, 产能={}条/h",
+                log.info("机台 {} 物料 {} 小时产能计算: 日硫化量={}, 配比={}, 单条耗时={}s, 产能={}条/h",
                         machineCode, materialCode, dailyLhCapacity, ratio, timePerTire, hourlyCapacity);
                 return hourlyCapacity;
             }
