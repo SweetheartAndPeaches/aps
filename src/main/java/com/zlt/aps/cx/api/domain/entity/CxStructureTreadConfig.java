@@ -1,4 +1,4 @@
-package com.zlt.aps.cx.entity.config;
+package com.zlt.aps.cx.api.domain.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
 import io.swagger.annotations.ApiModel;
@@ -14,7 +14,7 @@ import com.ruoyi.common.core.web.domain.BaseEntity;
  * @author APS Team
  */
 @Data
-@TableName("t_mdm_structure_tread_config")
+@TableName("T_CX_STRUCTURE_TREAD_CONFIG")
 @ApiModel(value = "结构整车配置")
 public class CxStructureTreadConfig extends BaseEntity {
 
