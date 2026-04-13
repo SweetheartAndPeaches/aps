@@ -81,7 +81,7 @@ public class ScheduleDayTypeHelper {
         try {
             // 一次性查询所有数据
             LambdaQueryWrapper<MdmWorkCalendar> wrapper = new LambdaQueryWrapper<>();
-            wrapper.eq(MdmWorkCalendar::getProcCode, "CX")
+            wrapper.eq(MdmWorkCalendar::getProcCode, "01")
                    .ge(MdmWorkCalendar::getProductionDate, java.sql.Date.valueOf(actualStart))
                    .le(MdmWorkCalendar::getProductionDate, java.sql.Date.valueOf(actualEnd));
 
@@ -160,7 +160,7 @@ public class ScheduleDayTypeHelper {
 
                 // 查询新增范围的数据
                 LambdaQueryWrapper<MdmWorkCalendar> wrapper = new LambdaQueryWrapper<>();
-                wrapper.eq(MdmWorkCalendar::getProcCode, "CX")
+                wrapper.eq(MdmWorkCalendar::getProcCode, "01")
                        .ge(MdmWorkCalendar::getProductionDate, java.sql.Date.valueOf(newStart))
                        .le(MdmWorkCalendar::getProductionDate, java.sql.Date.valueOf(newEnd));
 
