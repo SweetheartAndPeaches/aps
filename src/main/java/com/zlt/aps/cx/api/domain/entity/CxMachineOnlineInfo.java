@@ -1,4 +1,4 @@
-package com.zlt.aps.mp.api.domain.entity;
+package com.zlt.aps.cx.api.domain.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
 import com.fasterxml.jackson.annotation.JsonFormat;
@@ -19,9 +19,9 @@ import java.time.LocalDateTime;
  * @author APS Team
  */
 @Data
-@TableName("T_MDM_CX_MACHINE_ONLINE_INFO")
+@TableName("T_CX_MACHINE_ONLINE_INFO")
 @ApiModel(value = "成型在机信息")
-public class MdmCxMachineOnlineInfo implements Serializable {
+public class CxMachineOnlineInfo implements Serializable {
 
     private static final long serialVersionUID = 1L;
 

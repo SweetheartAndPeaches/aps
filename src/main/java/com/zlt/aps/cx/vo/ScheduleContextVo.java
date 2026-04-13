@@ -7,6 +7,7 @@ import com.zlt.aps.cx.entity.config.CxParamConfig;
 import com.zlt.aps.cx.entity.config.CxShiftConfig;
 import com.zlt.aps.cx.entity.config.CxStructurePriority;
 import com.zlt.aps.mdm.api.domain.entity.CxPrecisionPlan;
+import com.zlt.aps.cx.api.domain.entity.CxMachineOnlineInfo;
 import com.zlt.aps.cx.api.domain.entity.CxStructureTreadConfig;
 import com.zlt.aps.mp.api.domain.entity.MdmDevicePlanShut;
 import com.zlt.aps.mp.api.domain.entity.*;
@@ -100,7 +101,7 @@ public class ScheduleContextVo {
      * 成型在机信息列表（续作判断）
      * 从T_MDM_CX_MACHINE_ONLINE_INFO获取当前机台正在做的胎胚
      */
-    private List<MdmCxMachineOnlineInfo> onlineInfos;
+    private List<CxMachineOnlineInfo> onlineInfos;
 
     /**
      * 机台在机胎胚映射（快速查询用）

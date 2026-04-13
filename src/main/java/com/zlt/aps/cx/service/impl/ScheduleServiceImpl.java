@@ -22,6 +22,7 @@ import com.zlt.aps.cx.service.impl.validation.ScheduleDataValidator;
 import com.zlt.aps.cx.vo.MonthPlanProductLhCapacityVo;
 import com.zlt.aps.cx.vo.ScheduleContextVo;
 import com.zlt.aps.cx.vo.ScheduleRequestVo;
+import com.zlt.aps.cx.api.domain.entity.CxMachineOnlineInfo;
 import com.zlt.aps.cx.api.domain.entity.CxStructureTreadConfig;
 import com.zlt.aps.cx.mapper.CxStructureTreadConfigMapper;
 import com.zlt.aps.mp.api.domain.entity.*;
@@ -113,7 +114,7 @@ public class ScheduleServiceImpl implements ScheduleService {
     private final CxStructureTreadConfigMapper structureShiftCapacityMapper;
     private final CxKeyProductMapper keyProductMapper;
     private final LhScheduleResultMapper lhScheduleResultMapper;
-    private final MdmCxMachineOnlineInfoMapper onlineInfoMapper;
+    private final CxMachineOnlineInfoMapper onlineInfoMapper;
     private final CxShiftConfigMapper shiftConfigMapper;
     private final FactoryMonthPlanProductionFinalResultMapper monthPlanMapper;
     private final CxMaterialEndingMapper materialEndingMapper;
@@ -548,7 +549,7 @@ public class ScheduleServiceImpl implements ScheduleService {
      * 加载成型在机信息
      */
     private void loadOnlineInfos(ScheduleContextVo context, LocalDate scheduleDate) {
-        List<MdmCxMachineOnlineInfo> onlineInfos = onlineInfoMapper.selectByDateRange(
+        List<CxMachineOnlineInfo> onlineInfos = onlineInfoMapper.selectByDateRange(
                 scheduleDate, scheduleDate.minusDays(1));
         context.setOnlineInfos(onlineInfos);
         log.info("加载成型在机信息 {} 条", onlineInfos.size());
@@ -563,7 +564,7 @@ public class ScheduleServiceImpl implements ScheduleService {
      */
     private void buildMachineOnlineEmbryoMap(ScheduleContextVo context) {
         Map<String, Set<String>> machineOnlineEmbryoMap = new HashMap<>();
-        for (MdmCxMachineOnlineInfo onlineInfo : context.getOnlineInfos()) {
+        for (CxMachineOnlineInfo onlineInfo : context.getOnlineInfos()) {
             String cxCode = onlineInfo.getCxCode();
             // 组合物料编码和胎胚编码作为唯一键
             String materialCode = onlineInfo.getMesMaterialCode();
@@ -1385,7 +1386,7 @@ public class ScheduleServiceImpl implements ScheduleService {
                 }
             }
 
-            List<MdmCxMachineOnlineInfo> filteredOnlineInfos = context.getOnlineInfos().stream()
+            List<CxMachineOnlineInfo> filteredOnlineInfos = context.getOnlineInfos().stream()
                     .filter(info -> {
                         // 使用物料编码 + 胎胚编码组合键
                         String materialCode = info.getMesMaterialCode();
@@ -1409,7 +1410,7 @@ public class ScheduleServiceImpl implements ScheduleService {
         // 使用物料编码 + 胎胚编码组合键
         if (context.getOnlineInfos() != null) {
             Map<String, Set<String>> machineOnlineEmbryoMap = new HashMap<>();
-            for (MdmCxMachineOnlineInfo onlineInfo : context.getOnlineInfos()) {
+            for (CxMachineOnlineInfo onlineInfo : context.getOnlineInfos()) {
                 String cxCode = onlineInfo.getCxCode();
                 String materialCode = onlineInfo.getMesMaterialCode();
                 String embryoSpec = onlineInfo.getEmbryoSpec();

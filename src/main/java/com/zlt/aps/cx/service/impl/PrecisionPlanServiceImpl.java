@@ -341,7 +341,7 @@ public class PrecisionPlanServiceImpl extends ServiceImpl<CxPrecisionPlanMapper,
         plan.setStatus("PLANNED");
         plan.setArrangeReason("SCHEDULED");
 
-        // 获取机台当前在产结构的胎胚（需要从 MdmCxMachineOnlineInfo 获取）
+        // 获取机台当前在产结构的胎胚（需要从 CxMachineOnlineInfo 获取）
         // 暂时不设置 embryoCode，由排程时动态获取
 
         // 设置上次精度日期（需要查询）
