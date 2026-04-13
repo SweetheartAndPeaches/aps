@@ -373,7 +373,6 @@ public class ScheduleServiceImpl implements ScheduleService {
                 new LambdaQueryWrapper<CxShiftConfig>()
                         .eq(CxShiftConfig::getFactoryCode, factoryCode)
                         .eq(CxShiftConfig::getIsActive, ACTIVE_STATUS)
-                        .eq(CxShiftConfig::getIsActive, "0")
                         .orderByAsc(CxShiftConfig::getScheduleDay)
                         .orderByAsc(CxShiftConfig::getDayShiftOrder)
         );
