@@ -85,9 +85,11 @@ public class NewTaskProcessor {
 
             log.info("--- 处理结构 {}，共 {} 个新增任务 ---", structureName, newTasksForStructure.size());
 
-            // Step 3.1: 获取该结构可安排的机台
+            // Step 3.1: 获取该结构可安排的机台（按 PRODUCTION_VERSION 过滤）
+            // 同一结构下所有任务的 productionVersion 应一致，取第一个
+            String productionVersion = newTasksForStructure.get(0).getProductionVersion();
             List<MpCxCapacityConfiguration> availableMachines =
-                    getAvailableMachinesForStructure(structureName, day, context);
+                    getAvailableMachinesForStructure(structureName, day, context, productionVersion);
             if (availableMachines.isEmpty()) {
                 log.warn("结构 {} 没有可安排的机台，跳过", structureName);
                 continue;
@@ -284,10 +286,11 @@ public class NewTaskProcessor {
     }
 
     /**
-     * 获取指定结构在当前日期可安排的机台配置
+     * 获取指定结构在当前日期可安排的机台配置（按 PRODUCTION_VERSION 过滤）
      */
     private List<MpCxCapacityConfiguration> getAvailableMachinesForStructure(
-            String structureName, int day, ScheduleContextVo context) {
+            String structureName, int day, ScheduleContextVo context,
+            String productionVersion) {
         if (context.getStructureAllocationMap() != null) {
             List<MpCxCapacityConfiguration> configs =
                     context.getStructureAllocationMap().get(structureName);
@@ -295,6 +298,8 @@ public class NewTaskProcessor {
                 return configs.stream()
                         .filter(c -> c.getBeginDay() != null && c.getEndDay() != null)
                         .filter(c -> c.getBeginDay() <= day && c.getEndDay() >= day)
+                        .filter(c -> productionVersion == null
+                                || productionVersion.equals(c.getProductionVersion()))
                         .collect(Collectors.toList());
             }
         }

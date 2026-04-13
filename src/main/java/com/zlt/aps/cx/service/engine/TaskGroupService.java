@@ -512,6 +512,7 @@ public class TaskGroupService {
         task.setEmbryoCode(embryoCode);
         task.setVulcanizeDemand(vulcanizeDemand);
         task.setCurrentStock(currentStock);
+        task.setProductionVersion(lhResult.getProductionVersion());
 
         if (material != null) {
             task.setMaterialDesc(material.getMaterialDesc());

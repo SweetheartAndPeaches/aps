@@ -407,6 +407,12 @@ public class ScheduleContextVo {
     private Map<String, List<MpCxCapacityConfiguration>> structureAllocationMap;
 
     /**
+     * 月计划排产版本
+     * 从硫化排程结果中提取，用于过滤结构排产配置
+     */
+    private String productionVersion;
+
+    /**
      * 是否强制保留历史任务
      * 从 CxParamConfig 获取，控制续作任务是否优先保留在原机台
      */

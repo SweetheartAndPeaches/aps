@@ -85,9 +85,11 @@ public class TrialTaskProcessor {
 
             log.info("--- 处理结构 {}，共 {} 个试制胎胚 ---", structureName, tasks.size());
 
-            // Step 3.1: 获取该结构可安排的机台
+            // Step 3.1: 获取该结构可安排的机台（按 PRODUCTION_VERSION 过滤）
+            // 同一结构下所有任务的 productionVersion 应一致，取第一个
+            String productionVersion = tasks.get(0).getProductionVersion();
             List<MpCxCapacityConfiguration> structMachines = getAvailableMachinesForStructure(
-                    structureName, scheduleDate, context);
+                    structureName, scheduleDate, context, productionVersion);
             if (structMachines.isEmpty()) {
                 log.warn("结构 {} 没有可安排的机台，跳过", structureName);
                 continue;
@@ -251,7 +253,8 @@ public class TrialTaskProcessor {
      * 获取指定结构在当前日期可安排的机台配置
      */
     private List<MpCxCapacityConfiguration> getAvailableMachinesForStructure(
-            String structureName, LocalDate scheduleDate, ScheduleContextVo context) {
+            String structureName, LocalDate scheduleDate, ScheduleContextVo context,
+            String productionVersion) {
         if (context.getStructureAllocationMap() != null) {
             List<MpCxCapacityConfiguration> configs =
                     context.getStructureAllocationMap().get(structureName);
@@ -260,6 +263,8 @@ public class TrialTaskProcessor {
                 return configs.stream()
                         .filter(c -> c.getBeginDay() != null && c.getEndDay() != null)
                         .filter(c -> c.getBeginDay() <= day && c.getEndDay() >= day)
+                        .filter(c -> productionVersion == null
+                                || productionVersion.equals(c.getProductionVersion()))
                         .collect(Collectors.toList());
             }
         }

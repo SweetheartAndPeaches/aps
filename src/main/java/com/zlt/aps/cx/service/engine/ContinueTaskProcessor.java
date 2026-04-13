@@ -102,9 +102,11 @@ public class ContinueTaskProcessor {
 
             log.info("--- 处理结构 {}，共 {} 个胎胚 ---", structureName, tasks.size());
 
-            // 获取该结构可分配的机台列表
+            // 获取该结构可分配的机台列表（按 PRODUCTION_VERSION 过滤）
+            // 同一结构下所有任务的 productionVersion 应一致，取第一个
+            String productionVersion = tasks.get(0).getProductionVersion();
             List<MpCxCapacityConfiguration> availableMachines = getAvailableMachinesForStructure(
-                    structureName, scheduleDate, context);
+                    structureName, scheduleDate, context, productionVersion);
             
             if (availableMachines.isEmpty()) {
                 log.warn("结构 {} 没有可分配的机台，跳过", structureName);
@@ -182,14 +184,18 @@ public class ContinueTaskProcessor {
     }
 
     private List<MpCxCapacityConfiguration> getAvailableMachinesForStructure(
-            String structureName, LocalDate scheduleDate, ScheduleContextVo context) {
+            String structureName, LocalDate scheduleDate, ScheduleContextVo context,
+            String productionVersion) {
         if (context.getStructureAllocationMap() != null) {
             List<MpCxCapacityConfiguration> configs = context.getStructureAllocationMap().get(structureName);
             if (configs != null && !configs.isEmpty()) {
                 int day = scheduleDate.getDayOfMonth();
+                // 过滤日期范围 + PRODUCTION_VERSION
                 return configs.stream()
                         .filter(c -> c.getBeginDay() != null && c.getEndDay() != null)
                         .filter(c -> c.getBeginDay() <= day && c.getEndDay() >= day)
+                        .filter(c -> productionVersion == null
+                                || productionVersion.equals(c.getProductionVersion()))
                         .collect(Collectors.toList());
             }
         }

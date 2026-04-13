@@ -274,6 +274,8 @@ public class ScheduleServiceImpl implements ScheduleService {
             try {
                 loadLhScheduleResults(context, scheduleDate);
                 log.info("硫化排程结果加载完成");
+                // 从硫化排程结果中提取排产版本
+                extractProductionVersion(context);
             } catch (Exception e) {
                 log.warn("加载硫化排程结果失败，继续执行：{}", e.getMessage());
             }
@@ -491,6 +493,36 @@ public class ScheduleServiceImpl implements ScheduleService {
     }
 
     /**
+     * 从硫化排程结果中提取排产版本
+     * <p>取所有硫化排程结果中不重复的 PRODUCTION_VERSION，通常只有一个版本
+     * <p>用于后续过滤结构排产配置（T_MP_STRUCTURE_ALLOCATION）
+     */
+    private void extractProductionVersion(ScheduleContextVo context) {
+        List<LhScheduleResult> lhScheduleResults = context.getLhScheduleResults();
+        if (lhScheduleResults == null || lhScheduleResults.isEmpty()) {
+            log.info("硫化排程结果为空，无法提取排产版本");
+            return;
+        }
+
+        Set<String> versions = lhScheduleResults.stream()
+                .map(LhScheduleResult::getProductionVersion)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        if (versions.size() == 1) {
+            String version = versions.iterator().next();
+            context.setProductionVersion(version);
+            log.info("从硫化排程结果提取排产版本: {}", version);
+        } else if (versions.size() > 1) {
+            String version = versions.iterator().next();
+            context.setProductionVersion(version);
+            log.warn("硫化排程结果包含多个排产版本: {}，使用第一个: {}", versions, version);
+        } else {
+            log.warn("硫化排程结果中排产版本均为空");
+        }
+    }
+
+    /**
      * 加载物料信息
      */
     private void loadMaterials(ScheduleContextVo context) {
@@ -646,6 +678,19 @@ public class ScheduleServiceImpl implements ScheduleService {
 
         // 查询当月的结构排产配置（添加is_delete和工厂过滤）
         List<MpCxCapacityConfiguration> allocations = capacityConfigurationMapper.selectByYearAndMonth(factoryCode, year, month);
+
+        // 按排产版本过滤：只保留与硫化排程相同版本的数据
+        String productionVersion = context.getProductionVersion();
+        if (productionVersion != null && !allocations.isEmpty()) {
+            int before = allocations.size();
+            allocations = allocations.stream()
+                    .filter(a -> productionVersion.equals(a.getProductionVersion()))
+                    .collect(Collectors.toList());
+            log.info("结构排产配置按排产版本 {} 过滤: {} 条 -> {} 条", productionVersion, before, allocations.size());
+        } else {
+            log.warn("排产版本为空，结构排产配置未按版本过滤，共 {} 条", allocations.size());
+        }
+
         context.setStructureAllocations(allocations);
 
         // 按结构分组
