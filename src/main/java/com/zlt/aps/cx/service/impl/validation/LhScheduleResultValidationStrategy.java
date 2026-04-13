@@ -27,6 +27,7 @@ import java.util.stream.Collectors;
  *   <li>SINGLE_MOULD_SHIFT_QTY - 单班硫化量</li>
  *   <li>CONSTRUCTION_STAGE - 施工阶段</li>
  *   <li>EMBRYO_NO - 制造示方书号</li>
+ *   <li>PRODUCTION_VERSION - 月计划排产版本</li>
  * </ul>
  *
  * <p>校验关联配置完整性：
@@ -53,7 +54,8 @@ public class LhScheduleResultValidationStrategy extends BaseValidationStrategy {
             "MOULD_QTY",          // 使用模数
             "SINGLE_MOULD_SHIFT_QTY", // 单班硫化量
             "CONSTRUCTION_STAGE", // 施工阶段
-            "EMBRYO_NO"           // 制造示方书号
+            "EMBRYO_NO",          // 制造示方书号
+            "PRODUCTION_VERSION"  // 月计划排产版本
     ));
 
     /** 字段中文名称映射 */
@@ -69,6 +71,7 @@ public class LhScheduleResultValidationStrategy extends BaseValidationStrategy {
         FIELD_NAMES.put("SINGLE_MOULD_SHIFT_QTY", "单班硫化量");
         FIELD_NAMES.put("CONSTRUCTION_STAGE", "施工阶段");
         FIELD_NAMES.put("EMBRYO_NO", "制造示方书号");
+        FIELD_NAMES.put("PRODUCTION_VERSION", "月计划排产版本");
     }
 
     @Override
@@ -159,6 +162,9 @@ public class LhScheduleResultValidationStrategy extends BaseValidationStrategy {
 
             // 检查 EMBRYO_NO
             checkField(r.getEmbryoNo(), "EMBRYO_NO", materialCode, missingCountMap, missingSampleMap);
+
+            // 检查 PRODUCTION_VERSION
+            checkField(r.getProductionVersion(), "PRODUCTION_VERSION", materialCode, missingCountMap, missingSampleMap);
         }
 
         // 汇总校验结果
@@ -184,7 +190,7 @@ public class LhScheduleResultValidationStrategy extends BaseValidationStrategy {
         // 数据完整，校验通过
         if (!hasError) {
             addInfo(result,
-                    String.format("硫化排程结果数据完整，共 %d 条记录，10个必填字段均已配置", totalCount),
+                    String.format("硫化排程结果数据完整，共 %d 条记录，11个必填字段均已配置", totalCount),
                     null);
         } else {
             // 添加汇总信息
