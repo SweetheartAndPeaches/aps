@@ -3,7 +3,7 @@ package com.zlt.aps.cx.service.impl.validation;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
 import com.zlt.aps.cx.vo.ScheduleContextVo;
 import com.zlt.aps.mp.api.domain.entity.MdmMaterialInfo;
-import com.zlt.aps.mdm.api.domain.entity.MdmStructureTreadConfig;
+import com.zlt.aps.cx.entity.config.CxStructureTreadConfig;
 import com.zlt.aps.mp.api.domain.entity.MpCxCapacityConfiguration;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -310,7 +310,7 @@ public class LhScheduleResultValidationStrategy extends BaseValidationStrategy {
     private void validateStructureTreadConfig(ScheduleContextVo context, List<LhScheduleResult> lhResults,
                                              ScheduleDataValidationResult result) {
         // 获取已配置的结构集合
-        List<MdmStructureTreadConfig> structureTreadConfigs = context.getStructureTreadConfigs();
+        List<CxStructureTreadConfig> structureTreadConfigs = context.getStructureTreadConfigs();
 
         if (structureTreadConfigs == null || structureTreadConfigs.isEmpty()) {
             addError(result,
@@ -321,7 +321,7 @@ public class LhScheduleResultValidationStrategy extends BaseValidationStrategy {
 
         // 构建结构名称集合（支持STRUCTURE_CODE和STRUCTURE_NAME两种方式匹配）
         Set<String> configuredStructures = structureTreadConfigs.stream()
-                .map(MdmStructureTreadConfig::getStructureCode)
+                .map(CxStructureTreadConfig::getStructureCode)
                 .filter(Objects::nonNull)
                 .filter(s -> !s.trim().isEmpty())
                 .collect(Collectors.toSet());

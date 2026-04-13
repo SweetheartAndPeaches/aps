@@ -20,7 +20,7 @@ import java.time.LocalDateTime;
  * - 小时产能：用于计算精度计划产能扣减
  * - 班次产能：用于计算单班最大产量
  * 
- * 注：整车条数由 MdmStructureTreadConfig 表配置
+ * 注：整车条数由 CxStructureTreadConfig 表配置
  *
  * @author APS Team
  */

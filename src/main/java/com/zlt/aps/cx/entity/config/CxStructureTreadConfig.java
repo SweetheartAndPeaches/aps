@@ -1,4 +1,4 @@
-package com.zlt.aps.mdm.api.domain.entity;
+package com.zlt.aps.cx.entity.config;
 
 import com.baomidou.mybatisplus.annotation.*;
 import io.swagger.annotations.ApiModel;
@@ -16,7 +16,7 @@ import com.ruoyi.common.core.web.domain.BaseEntity;
 @Data
 @TableName("t_mdm_structure_tread_config")
 @ApiModel(value = "结构整车配置")
-public class MdmStructureTreadConfig extends BaseEntity {
+public class CxStructureTreadConfig extends BaseEntity {
 
     @ApiModelProperty(value = "结构")
     @TableField(value = "STRUCTURE_CODE")

@@ -22,7 +22,8 @@ import com.zlt.aps.cx.service.impl.validation.ScheduleDataValidator;
 import com.zlt.aps.cx.vo.MonthPlanProductLhCapacityVo;
 import com.zlt.aps.cx.vo.ScheduleContextVo;
 import com.zlt.aps.cx.vo.ScheduleRequestVo;
-import com.zlt.aps.mdm.api.domain.entity.MdmStructureTreadConfig;
+import com.zlt.aps.cx.entity.config.CxStructureTreadConfig;
+import com.zlt.aps.cx.mapper.CxStructureTreadConfigMapper;
 import com.zlt.aps.mp.api.domain.entity.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -109,7 +110,7 @@ public class ScheduleServiceImpl implements ScheduleService {
     private final CxScheduleResultMapper scheduleResultMapper;
     private final CxScheduleDetailService scheduleDetailService;
     private final CxParamConfigMapper paramConfigMapper;
-    private final MdmStructureTreadConfigMapper structureShiftCapacityMapper;
+    private final CxStructureTreadConfigMapper structureShiftCapacityMapper;
     private final CxKeyProductMapper keyProductMapper;
     private final LhScheduleResultMapper lhScheduleResultMapper;
     private final MdmCxMachineOnlineInfoMapper onlineInfoMapper;
@@ -605,9 +606,9 @@ public class ScheduleServiceImpl implements ScheduleService {
      * 加载结构整车配置
      */
     private void loadStructureShiftCapacities(ScheduleContextVo context) {
-        List<MdmStructureTreadConfig> structureShiftCapacities = structureShiftCapacityMapper.selectList(
-                new LambdaQueryWrapper<MdmStructureTreadConfig>()
-                        .eq(MdmStructureTreadConfig::getIsDelete, "0"));
+        List<CxStructureTreadConfig> structureShiftCapacities = structureShiftCapacityMapper.selectList(
+                new LambdaQueryWrapper<CxStructureTreadConfig>()
+                        .eq(CxStructureTreadConfig::getIsDelete, "0"));
         context.setStructureShiftCapacities(structureShiftCapacities);
         log.info("加载结构班次产能配置 {} 条", structureShiftCapacities.size());
     }
@@ -665,14 +666,14 @@ public class ScheduleServiceImpl implements ScheduleService {
      * <p>用于按车分配的计算：需要的车数 = 待排产量 / 胎面整车条数
      */
     private void loadStructureTreadConfigs(ScheduleContextVo context) {
-        List<MdmStructureTreadConfig> treadConfigs = structureShiftCapacityMapper.selectList(
-                new LambdaQueryWrapper<MdmStructureTreadConfig>()
-                        .eq(MdmStructureTreadConfig::getIsDelete, "0"));
+        List<CxStructureTreadConfig> treadConfigs = structureShiftCapacityMapper.selectList(
+                new LambdaQueryWrapper<CxStructureTreadConfig>()
+                        .eq(CxStructureTreadConfig::getIsDelete, "0"));
         context.setStructureTreadConfigs(treadConfigs);
 
         // 构建结构-整车条数映射
         Map<String, Integer> structureTreadCountMap = new HashMap<>();
-        for (MdmStructureTreadConfig config : treadConfigs) {
+        for (CxStructureTreadConfig config : treadConfigs) {
             if (config.getStructureCode() != null && config.getTreadCount() != null) {
                 structureTreadCountMap.put(config.getStructureCode(), config.getTreadCount());
             }

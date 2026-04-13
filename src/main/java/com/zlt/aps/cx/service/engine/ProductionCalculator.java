@@ -8,7 +8,7 @@ import com.zlt.aps.cx.service.engine.ScheduleDayTypeHelper;
 import com.zlt.aps.cx.vo.ScheduleContextVo;
 
 import com.zlt.aps.mp.api.domain.entity.MdmMoldingMachine;
-import com.zlt.aps.mdm.api.domain.entity.MdmStructureTreadConfig;
+import com.zlt.aps.cx.entity.config.CxStructureTreadConfig;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -639,7 +639,7 @@ public class ProductionCalculator {
      */
     public int getTripCapacity(String structureName, ScheduleContextVo context) {
         if (context.getStructureShiftCapacities() != null && structureName != null) {
-            for (MdmStructureTreadConfig capacity : context.getStructureShiftCapacities()) {
+            for (CxStructureTreadConfig capacity : context.getStructureShiftCapacities()) {
                 if (structureName.equals(capacity.getStructureCode())) {
                     if (capacity.getTreadCount() != null && capacity.getTreadCount() > 0) {
                         return capacity.getTreadCount();
