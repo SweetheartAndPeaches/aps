@@ -4,12 +4,14 @@ import com.zlt.aps.cx.api.domain.entity.CxStock;
 import com.zlt.aps.cx.entity.CxMaterialEnding;
 import com.zlt.aps.cx.entity.config.CxShiftConfig;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
+import com.zlt.aps.cx.service.CxAlgorithmLogRecorder;
 import com.zlt.aps.cx.vo.MonthPlanProductLhCapacityVo;
 import com.zlt.aps.cx.vo.ScheduleContextVo;
 import com.zlt.aps.mp.api.domain.entity.MdmMaterialInfo;
 import com.zlt.aps.mp.api.domain.entity.MdmMonthSurplus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -41,8 +43,11 @@ import java.util.Set;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class TaskGroupService {
+
+    /** 算法日志记录器 */
+    @Autowired
+    private CxAlgorithmLogRecorder logRecorder;
 
     // ==================== 业务阈值常量 ====================
 
@@ -159,11 +164,19 @@ public class TaskGroupService {
 
         TaskGroupResult result = new TaskGroupResult();
 
+        // 记录日志：任务分组开始
+        logRecorder.logStart("自动调整");
+
         List<LhScheduleResult> lhScheduleResults = context.getLhScheduleResults();
         if (lhScheduleResults == null || lhScheduleResults.isEmpty()) {
             log.warn("硫化排程结果为空，无法分组任务");
+            logRecorder.logError("任务分组", "硫化排程结果为空");
+            logRecorder.logEnd("自动调整", null);
             return result;
         }
+        
+        // 记录日志：硫化记录数量
+        logRecorder.logDetail("任务分组", String.format("硫化记录数量:%d", lhScheduleResults.size()));
         log.info("任务分组开始：共 {} 条硫化记录", lhScheduleResults.size());
 
         // 构建基础映射
@@ -242,6 +255,15 @@ public class TaskGroupService {
                 result.getTrialTasks().size(),
                 result.getNewTasks().size(),
                 skippedNullEmbryo, skippedNullTask);
+        
+        // 记录日志：任务分组完成
+        logRecorder.logDetail("任务分组", 
+                String.format("续作:%d,试制:%d,新增:%d", 
+                        result.getContinueTasks().size(),
+                        result.getTrialTasks().size(),
+                        result.getNewTasks().size()));
+        logRecorder.logEnd("自动调整", null);
+        
         return result;
     }
 
