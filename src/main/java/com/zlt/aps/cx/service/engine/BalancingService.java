@@ -516,6 +516,15 @@ public class BalancingService {
                     continue;
                 }
                 
+                // 检查胎胚种类数是否已达上限
+                boolean isNewTypeForHistory = !state.getAssignedEmbryos().stream()
+                        .anyMatch(e -> e.getEmbryoCode().equals(embryoCode));
+                if (isNewTypeForHistory && state.getCurrentTypes() >= state.getMaxTypes()) {
+                    log.warn("机台 {} 胎胚种类已达上限 ({}/{})，无法保底预留胎胚 {}",
+                            state.getMachineCode(), state.getCurrentTypes(), state.getMaxTypes(), embryoCode);
+                    continue;
+                }
+                
                 // 保底预留1个硫化机台数
                 int reservedCount = 1;
                 
@@ -629,6 +638,12 @@ public class BalancingService {
                         newTypes++;
                     }
                     
+                    // 剪枝条件0：超过机台最大胎胚种类数限制
+                    if (newTypes > candidate.getMaxTypes()) {
+                        searchResult.pruneCount++;
+                        continue;
+                    }
+                    
                     // 计算分配后各机台的种类数
                     int minTypes = Integer.MAX_VALUE;
                     int maxTypes = 0;
@@ -717,11 +732,10 @@ public class BalancingService {
     }
 
     /**
-     * 找出可以分配胎胚的候选机台（支持拆分）
-    /**
      * 查找可以将胎胚分配到该机台的候选机台列表
      *
      * <p>候选条件：机台当前负荷 < 最大容量（即还有剩余硫化机台数）
+     * <p>胎胚种类数未达上限（已有该胎胚或还有空余种类位）
      * <p>胎胚可以拆分：一个胎胚的硫化机台数可以分配到多台候选机台
      *
      * @param embryoCode       胎胚编码
@@ -737,13 +751,21 @@ public class BalancingService {
         List<MachineState> candidates = new ArrayList<>();
         
         for (MachineState state : machineStates) {
-            // 只要有剩余容量就可以作为候选
-            if (state.getCurrentLoad() < state.getMaxCapacity()) {
-                candidates.add(state);
-            } else {
+            // 容量已满，跳过
+            if (state.getCurrentLoad() >= state.getMaxCapacity()) {
                 log.debug("  机台 {} 已满载 ({}/{})，跳过胎胚 {} 的候选",
                         state.getMachineCode(), state.getCurrentLoad(), state.getMaxCapacity(), embryoCode);
+                continue;
             }
+            // 胎胚种类数已达上限，且当前胎胚是新种类，跳过
+            boolean isNewType = !state.getAssignedEmbryos().stream()
+                    .anyMatch(e -> e.getEmbryoCode().equals(embryoCode));
+            if (isNewType && state.getCurrentTypes() >= state.getMaxTypes()) {
+                log.debug("  机台 {} 胎胚种类已达上限 ({}/{})，跳过新胎胚 {}",
+                        state.getMachineCode(), state.getCurrentTypes(), state.getMaxTypes(), embryoCode);
+                continue;
+            }
+            candidates.add(state);
         }
         
         log.debug("胎胚 {} 找到 {} 个候选机台（总机台 {}）", embryoCode, candidates.size(), machineStates.size());
