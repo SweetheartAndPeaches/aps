@@ -425,17 +425,18 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 String materialCode = spr.getMaterialCode() != null ? spr.getMaterialCode() : "";
 
                 // 优先使用从 ShiftScheduleResult 获取的 classField
-                String effectiveClassField = classField;
-                if (effectiveClassField == null) {
+                String effectiveClassFieldTmp = classField;
+                if (effectiveClassFieldTmp == null) {
                     String shiftCode = spr.getShiftCode();
                     String shiftKey = shiftCode + "_" + day;
-                    effectiveClassField = shiftClassFieldMap.get(shiftKey);
+                    effectiveClassFieldTmp = shiftClassFieldMap.get(shiftKey);
                 }
 
-                if (effectiveClassField == null) {
+                if (effectiveClassFieldTmp == null) {
                     log.warn("未找到班次映射: shiftCode={}, day={}", spr.getShiftCode(), day);
                     continue;
                 }
+                final String effectiveClassField = effectiveClassFieldTmp;
 
                 String taskKey = machineCode + "|" + embryoCode + "|" + materialCode;
                 taskClassSprMap.computeIfAbsent(taskKey, k -> new LinkedHashMap<>())
@@ -844,6 +845,9 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         log.info("子表构建完成（按班次）：共 {} 条车次记录", allDetails.size());
         return allDetails;
     }
+
+    /**
+     * 计算库存可供硫化时长（小时）
      *
      * <p>公式：库存可供硫化时长 = (当前库存 + 成型累计计划量) / 硫化机数 / 单台模数
      *
