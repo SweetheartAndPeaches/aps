@@ -34,7 +34,7 @@ import java.util.stream.Collectors;
  * <ul>
  *   <li>硫化任务中的物料必须在 T_MDM_MATERIAL_INFO 中有配置</li>
  *   <li>硫化任务中的结构必须在 T_MP_STRUCTURE_ALLOCATION 中有配置</li>
- *   <li>硫化任务中的结构必须在 T_MDM_STRUCTURE_TREAD_CONFIG 中有配置</li>
+ *   <li>硫化任务中的结构必须在 T_CX_STRUCTURE_TREAD_CONFIG 中有配置</li>
  * </ul>
  *
  * @author APS Team
@@ -311,7 +311,7 @@ public class LhScheduleResultValidationStrategy extends BaseValidationStrategy {
 
     /**
      * 校验结构整车配置完整性
-     * 硫化任务中的结构必须在 T_MDM_STRUCTURE_TREAD_CONFIG 中有配置
+     * 硫化任务中的结构必须在 T_CX_STRUCTURE_TREAD_CONFIG 中有配置
      */
     private void validateStructureTreadConfig(ScheduleContextVo context, List<LhScheduleResult> lhResults,
                                              ScheduleDataValidationResult result) {
@@ -320,8 +320,8 @@ public class LhScheduleResultValidationStrategy extends BaseValidationStrategy {
 
         if (structureTreadConfigs == null || structureTreadConfigs.isEmpty()) {
             addError(result,
-                    "结构整车配置为空（T_MDM_STRUCTURE_TREAD_CONFIG）",
-                    "请检查 T_MDM_STRUCTURE_TREAD_CONFIG 表中是否存在结构配置");
+                    "结构整车配置为空（T_CX_STRUCTURE_TREAD_CONFIG）",
+                    "请检查 T_CX_STRUCTURE_TREAD_CONFIG 表中是否存在结构配置");
             return;
         }
 
@@ -350,10 +350,10 @@ public class LhScheduleResultValidationStrategy extends BaseValidationStrategy {
 
         if (!missingStructures.isEmpty()) {
             String message = String.format(
-                    "硫化排程结果中有 %d 个结构在【T_MDM_STRUCTURE_TREAD_CONFIG】表中没有配置：%s",
+                    "硫化排程结果中有 %d 个结构在【T_CX_STRUCTURE_TREAD_CONFIG】表中没有配置：%s",
                     missingStructures.size(), String.join(", ", missingStructures));
             addError(result, message,
-                    "请在 T_MDM_STRUCTURE_TREAD_CONFIG 表中为这些结构添加配置（STRUCTURE_CODE、TREAD_COUNT）");
+                    "请在 T_CX_STRUCTURE_TREAD_CONFIG 表中为这些结构添加配置（STRUCTURE_CODE、TREAD_COUNT）");
         } else {
             addInfo(result,
                     String.format("结构整车配置完整，共 %d 个配置，硫化任务中的 %d 个结构均有配置",
