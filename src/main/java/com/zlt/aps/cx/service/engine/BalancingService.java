@@ -432,6 +432,14 @@ public class BalancingService {
 
         List<CoreScheduleAlgorithmService.DailyEmbryoTask> remainingTasks = getRemainingTasks(sortedTasks);
         
+        // 打印 DFS 任务列表（排序后）
+        if (!remainingTasks.isEmpty()) {
+            List<String> taskList = remainingTasks.stream()
+                    .map(t -> t.getEmbryoCode() + "(" + (t.getVulcanizeMachineCount() != null ? t.getVulcanizeMachineCount() : 0) + ")")
+                    .collect(Collectors.toList());
+            log.info("DFS任务列表（排序后，共{}个）：{}", remainingTasks.size(), taskList);
+        }
+        
         // 初始化：从第一个任务开始，remainingCount 为第一个任务的硫化机台数
         int initialRemainingCount = remainingTasks.isEmpty() ? 0 
                 : (remainingTasks.get(0).getVulcanizeMachineCount() != null 
@@ -440,8 +448,9 @@ public class BalancingService {
         dfsAssign(remainingTasks, 0, initialRemainingCount, machineStates, forceKeepHistory,
                 typeDiffThreshold, loadDiffThreshold, searchResult);
 
-        log.info("DFS搜索统计：总搜索次数={}, 剪枝次数={}, 最优分数={}",
-                searchResult.searchCount, searchResult.pruneCount, searchResult.bestScore);
+        log.info("DFS搜索统计：总搜索次数={}, 剪枝次数={}, 最优分数={}, 最优已分配={}/{}",
+                searchResult.searchCount, searchResult.pruneCount, searchResult.bestScore,
+                searchResult.bestAssignedCount, totalDemand);
 
         // Step 8: 构建结果
         BalancingResult result;
@@ -820,19 +829,20 @@ public class BalancingService {
                 }
             }
         } else {
-            // 当前胎胚已分配完毕，处理下一个任务
-            int nextLhCount = taskIndex + 1 < tasks.size() 
-                    ? (tasks.get(taskIndex + 1).getVulcanizeMachineCount() != null 
-                       ? tasks.get(taskIndex + 1).getVulcanizeMachineCount() : 0)
+            // remainingCount=0：当前任务刚完成或刚被跳过，需要处理 taskIndex 处的任务
+            // 注意：调用方传入 taskIndex 时已指向下一个待处理任务，remainingCount=0 表示该任务还未开始分配
+            int currentLhCount = taskIndex < tasks.size()
+                    ? (tasks.get(taskIndex).getVulcanizeMachineCount() != null
+                       ? tasks.get(taskIndex).getVulcanizeMachineCount() : 0)
                     : 0;
-            
-            if (nextLhCount <= 0) {
-                // 下一个任务不需要分配，直接跳过
+
+            if (currentLhCount <= 0) {
+                // 当前任务不需要分配，跳到下一个
                 dfsAssign(tasks, taskIndex + 1, 0, machineStates, forceKeepHistory,
                         typeDiffThreshold, loadDiffThreshold, searchResult);
             } else {
-                // 开始分配下一个任务
-                dfsAssign(tasks, taskIndex + 1, nextLhCount, machineStates, forceKeepHistory,
+                // 开始处理当前任务（传入其完整需求量）
+                dfsAssign(tasks, taskIndex, currentLhCount, machineStates, forceKeepHistory,
                         typeDiffThreshold, loadDiffThreshold, searchResult);
             }
         }
