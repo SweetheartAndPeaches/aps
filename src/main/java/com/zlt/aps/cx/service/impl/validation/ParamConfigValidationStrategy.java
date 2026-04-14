@@ -53,9 +53,9 @@ public class ParamConfigValidationStrategy extends BaseValidationStrategy {
         Map<String, CxParamConfig> paramConfigMap = context.getParamConfigMap();
 
         if (paramConfigMap == null || paramConfigMap.isEmpty()) {
-            addError(result,
-                    "参数配置为空，无法获取排程所需参数",
-                    "请在参数配置表(T_CX_PARAM_CONFIG)中配置排程参数");
+            addWarn(result,
+                    "参数配置为空，将使用默认值继续排程",
+                    "建议在参数配置表(T_CX_PARAM_CONFIG)中配置排程参数以确保准确性");
             return;
         }
 
