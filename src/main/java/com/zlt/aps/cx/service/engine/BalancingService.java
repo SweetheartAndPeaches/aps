@@ -47,7 +47,7 @@ public class BalancingService {
     /** 机台最大胎胚种类数上限（默认4种） */
     public static final int DEFAULT_MAX_TYPES_PER_MACHINE = 4;
 
-    /** 参数编码：强制保留历史任务 */
+    /** 参数编码：强制保留历史任务  */
     private static final String PARAM_FORCE_KEEP_HISTORY = "FORCE_KEEP_HISTORY_TASK";
     
     /** 参数编码：胎胚种类数允许差额（均衡阈值） */
