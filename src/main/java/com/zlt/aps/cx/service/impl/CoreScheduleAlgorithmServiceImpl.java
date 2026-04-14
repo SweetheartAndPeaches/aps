@@ -805,7 +805,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 String classField = shiftToClassField.getOrDefault(spr.getShiftCode(), spr.getShiftCode());
                 int vulcanizeClassIndex = getClassIndex(classField);
                 int vulcanizeClassConsumption = lhResult != null
-                        ? getClassPlanQtyByIndex(lhResult, vulcanizeClassIndex) : 0;
+                        ? (getClassPlanQtyByIndex(lhResult, vulcanizeClassIndex) != null
+                        ? getClassPlanQtyByIndex(lhResult, vulcanizeClassIndex) : 0) : 0;
 
                 // 生成每个车次记录
                 int cumulativeTripPlan = 0;
