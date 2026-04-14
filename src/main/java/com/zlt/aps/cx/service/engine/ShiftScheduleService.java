@@ -147,6 +147,25 @@ public class ShiftScheduleService {
 
         // ---- 3. 开产任务：首班6小时产能，关键产品从第二班开始 ----
         if (isOpeningDay) {
+            // 按班次排程时，需要区分开产首班和非首班
+            if (dayShifts.size() == 1) {
+                // 单班次模式：根据 dayShiftOrder 判断是否为开产首班
+                CxShiftConfig singleShift = dayShifts.get(0);
+                int shiftOrder = singleShift.getDayShiftOrder() != null ? singleShift.getDayShiftOrder() : 1;
+                if (shiftOrder <= 1) {
+                    // 开产首班：关键产品不排产，非关键产品用6小时产能
+                    if (isKeyProduct(task, context)) {
+                        log.info("开产首班关键产品 {} 不排产，等待第二班", task.getEmbryoCode());
+                        return results;
+                    }
+                    return scheduleOpeningTask(task, machineCode, context, dayShifts, scheduleDate, tripCapacity);
+                } else {
+                    // 开产非首班：按普通任务全产能排产
+                    log.info("开产非首班，任务 {} 按普通任务排产（shiftOrder={}）", task.getEmbryoCode(), shiftOrder);
+                    return scheduleNormalTask(task, machineCode, context, dayShifts, scheduleDate, tripCapacity);
+                }
+            }
+            // 多班次模式（兼容旧逻辑）：走 scheduleOpeningTask
             return scheduleOpeningTask(task, machineCode, context, dayShifts, scheduleDate, tripCapacity);
         }
 
