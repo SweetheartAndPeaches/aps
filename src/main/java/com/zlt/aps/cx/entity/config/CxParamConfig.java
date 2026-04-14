@@ -4,7 +4,6 @@ import com.baomidou.mybatisplus.annotation.*;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.ruoyi.common.core.web.domain.BaseEntity;
 import io.swagger.annotations.ApiModel;
-import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -40,27 +39,15 @@ public class CxParamConfig extends BaseEntity {
     @TableField("PARAM_VALUE")
     private String paramValue;
 
-    @ApiModelProperty(value = "参数类型：STRING-字符串 NUMBER-数字 BOOLEAN-布尔")
-    @TableField("PARAM_TYPE")
-    private String paramType;
-
-    @ApiModelProperty(value = "参数描述")
-    @TableField("PARAM_DESC")
-    private String paramDesc;
-
-    @ApiModelProperty(value = "分组编码")
-    @TableField("GROUP_CODE")
-    private String groupCode;
-
-    @ApiModelProperty(value = "分组名称")
-    @TableField("GROUP_NAME")
-    private String groupName;
-
-    @ApiModelProperty(value = "排序号")
-    @TableField("SORT_ORDER")
-    private Integer sortOrder;
-
     @ApiModelProperty(value = "是否启用：0-禁用 1-启用")
     @TableField("IS_ACTIVE")
     private Integer isActive;
+
+    @ApiModelProperty(value = "正则表达式校验")
+    @TableField("REGULAR_EXPRESSION")
+    private String regularExpression;
+
+    @ApiModelProperty(value = "校验错误提示")
+    @TableField("ERROR_TIPS")
+    private String errorTips;
 }
