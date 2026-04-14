@@ -640,55 +640,49 @@ public class BalancingService {
                         newTypes++;
                     }
                     
-                    // 剪枝条件0：超过机台最大胎胚种类数限制
+                    // 剪枝条件1：超过机台最大胎胚种类数限制（硬约束，必须剪枝）
                     if (newTypes > candidate.getMaxTypes()) {
                         searchResult.pruneCount++;
                         continue;
                     }
                     
-                    // 计算分配后各机台的种类数
-                    int minTypes = Integer.MAX_VALUE;
-                    int maxTypes = 0;
+                    // 注意：种类均衡和负荷均衡不做中间剪枝！
+                    // 原因：DFS中间状态不可能均衡，只有最终分配结果才能判断均衡性
+                    // 均衡性通过 calculateBalancingScore 在终点评估
+                    
+                    // 可行性剪枝：计算剩余机台种类容量，判断是否还能容纳剩余未分配的胎胚种类
+                    int remainingTypeCapacity = 0;
                     for (MachineState state : machineStates) {
-                        int types = state.getCurrentTypes();
-                        if (state == candidate) {
-                            types = newTypes;
-                        }
-                        if (types > 0) {
-                            minTypes = Math.min(minTypes, types);
-                            maxTypes = Math.max(maxTypes, types);
+                        remainingTypeCapacity += state.getMaxTypes() - state.getCurrentTypes();
+                        if (state == candidate && isNewType) {
+                            remainingTypeCapacity--; // 当前分配已占1个
                         }
                     }
-                    
-                    // 剪枝条件：种类数差额超过阈值
-                    if (minTypes != Integer.MAX_VALUE && maxTypes - minTypes > typeDiffThreshold) {
-                        searchResult.pruneCount++;
-                        continue;
-                    }
-                    
-                    // 检查2：是否会导致负荷差额超过阈值
-                    int newLoad = candidate.getCurrentLoad() + assignQty;
-                    
-                    int minLoad = Integer.MAX_VALUE;
-                    int maxLoad = 0;
+                    // 统计剩余未分配的胎胚种类数（当前任务之后的）
+                    int remainingDistinctTypes = 0;
+                    Set<String> assignedEmbryoSet = new HashSet<>();
                     for (MachineState state : machineStates) {
-                        int load = state.getCurrentLoad();
-                        if (state == candidate) {
-                            load = newLoad;
-                        }
-                        if (load > 0) {
-                            minLoad = Math.min(minLoad, load);
-                            maxLoad = Math.max(maxLoad, load);
+                        for (EmbryoAssignment ea : state.getAssignedEmbryos()) {
+                            assignedEmbryoSet.add(ea.getEmbryoCode());
                         }
                     }
-                    
-                    // 剪枝条件：负荷差额超过阈值
-                    if (minLoad != Integer.MAX_VALUE && maxLoad - minLoad > loadDiffThreshold) {
+                    if (isNewType) {
+                        assignedEmbryoSet.add(embryoCode);
+                    }
+                    for (int i = taskIndex; i < tasks.size(); i++) {
+                        String nextEmbryo = tasks.get(i).getEmbryoCode();
+                        if (!assignedEmbryoSet.contains(nextEmbryo)) {
+                            remainingDistinctTypes++;
+                            assignedEmbryoSet.add(nextEmbryo);
+                        }
+                    }
+                    if (remainingDistinctTypes > remainingTypeCapacity) {
                         searchResult.pruneCount++;
                         continue;
                     }
                     
                     // === 分配并递归 ===
+                    int newLoad = candidate.getCurrentLoad() + assignQty;
                     candidate.getAssignedEmbryos().add(new EmbryoAssignment(embryoCode, task, assignQty));
                     candidate.setCurrentLoad(newLoad);
                     if (isNewType) {
