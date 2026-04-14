@@ -1,7 +1,7 @@
 package com.zlt.aps.cx.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
-import com.zlt.aps.mdm.api.domain.entity.CxPrecisionPlan;
+import com.zlt.aps.cx.api.domain.entity.CxPrecisionPlan;
 import com.zlt.aps.mp.api.domain.entity.MdmMoldingMachine;
 
 import java.time.LocalDate;
