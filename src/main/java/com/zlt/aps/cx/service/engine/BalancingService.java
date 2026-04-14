@@ -574,6 +574,7 @@ public class BalancingService {
             DfsSearchResult searchResult) {
 
         searchResult.searchCount++;
+        searchResult.callCount++;
 
         // 安全限制：搜索次数超过 100 万次后停止（防止极端情况卡死）
         if (searchResult.searchCount > 1000000) {
@@ -607,8 +608,9 @@ public class BalancingService {
         // 如果当前胎胚还有剩余未分配的硫化机数
         if (remainingCount > 0) {
             // 找出可以分配的候选机台（只要有剩余容量即可）
+            // isFirstCall=true 时打印日志，避免重复噪音
             List<MachineState> candidates = findCandidateMachinesForSplit(
-                    embryoCode, machineStates, forceKeepHistory);
+                    embryoCode, machineStates, forceKeepHistory, searchResult.searchCount == 1);
             
             if (candidates.isEmpty()) {
                 // 没有可用机台，此分支无效
@@ -746,29 +748,52 @@ public class BalancingService {
     private List<MachineState> findCandidateMachinesForSplit(
             String embryoCode,
             List<MachineState> machineStates,
-            boolean forceKeepHistory) {
+            boolean forceKeepHistory,
+            boolean isFirstCall) {
         
         List<MachineState> candidates = new ArrayList<>();
         
         for (MachineState state : machineStates) {
             // 容量已满，跳过
             if (state.getCurrentLoad() >= state.getMaxCapacity()) {
-                log.debug("  机台 {} 已满载 ({}/{})，跳过胎胚 {} 的候选",
-                        state.getMachineCode(), state.getCurrentLoad(), state.getMaxCapacity(), embryoCode);
+                log.trace("  [-满载] 机台 {}", state.getMachineCode());
                 continue;
             }
             // 胎胚种类数已达上限，且当前胎胚是新种类，跳过
             boolean isNewType = !state.getAssignedEmbryos().stream()
                     .anyMatch(e -> e.getEmbryoCode().equals(embryoCode));
             if (isNewType && state.getCurrentTypes() >= state.getMaxTypes()) {
-                log.debug("  机台 {} 胎胚种类已达上限 ({}/{})，跳过新胎胚 {}",
-                        state.getMachineCode(), state.getCurrentTypes(), state.getMaxTypes(), embryoCode);
+                log.trace("  [-种类满] 机台 {}", state.getMachineCode());
                 continue;
             }
             candidates.add(state);
         }
         
-        log.debug("胎胚 {} 找到 {} 个候选机台（总机台 {}）", embryoCode, candidates.size(), machineStates.size());
+        // 仅在候选为空或首次搜索时打印，避免重复噪音
+        if (candidates.isEmpty() || isFirstCall) {
+            String skipInfo = "";
+            for (MachineState s : machineStates) {
+                if (!candidates.contains(s)) {
+                    if (s.getCurrentLoad() >= s.getMaxCapacity()) {
+                        skipInfo += String.format("满载(%d/%d)/", s.getCurrentLoad(), s.getMaxCapacity());
+                    } else {
+                        boolean isNew = !s.getAssignedEmbryos().stream()
+                                .anyMatch(e -> e.getEmbryoCode().equals(embryoCode));
+                        if (isNew) {
+                            skipInfo += String.format("种类满(%d/%d)/", s.getCurrentTypes(), s.getMaxTypes());
+                        }
+                    }
+                }
+            }
+            if (candidates.isEmpty()) {
+                log.warn("胎胚 {} 无候选机台！已跳过: {}", embryoCode, skipInfo);
+            } else {
+                log.info("胎胚 {} 候选机台({}): [{}] | 跳过: {}",
+                        embryoCode, candidates.size(),
+                        candidates.stream().map(MachineState::getMachineCode).collect(Collectors.joining(",")),
+                        skipInfo);
+            }
+        }
         
         return candidates;
     }
@@ -926,7 +951,7 @@ public class BalancingService {
             // 支持拆分：逐个分配硫化机台数
             while (remainingCount > 0) {
                 List<MachineState> candidates = findCandidateMachinesForSplit(
-                        embryoCode, machineStates, forceKeepHistory);
+                        embryoCode, machineStates, forceKeepHistory, true);
                 
                 if (candidates.isEmpty()) {
                     log.warn("胎胚 {} 剩余 {} 个硫化机无法分配到任何机台", embryoCode, remainingCount);
@@ -1429,8 +1454,9 @@ public class BalancingService {
     private static class DfsSearchResult {
         int bestScore;
         Map<String, List<EmbryoAssignment>> bestAssignments;
-        int searchCount;
-        int pruneCount;
+        int searchCount;  // DFS搜索次数
+        int pruneCount;   // 剪枝次数
+        int callCount;    // findCandidate调用次数（用于日志控制）
     }
 
     /**
