@@ -413,6 +413,7 @@ public class BalancingService {
         // Step 7: DFS + 剪枝搜索最优方案
         DfsSearchResult searchResult = new DfsSearchResult();
         searchResult.bestScore = Integer.MAX_VALUE;
+        searchResult.bestAssignedCount = 0;
         searchResult.bestAssignments = null;
         searchResult.searchCount = 0;
         searchResult.pruneCount = 0;
@@ -640,17 +641,23 @@ public class BalancingService {
                     .sum();
             
             if (totalAssigned == totalRequired) {
-                // 完整解：更新最优均衡分数
+                // 完整解：完整解总是优于部分解；同为完整解则比较均衡分数
                 int score = calculateBalancingScore(machineStates);
-                if (score < searchResult.bestScore) {
+                boolean currentIsComplete = (searchResult.bestAssignedCount == totalRequired);
+                if (!currentIsComplete || score < searchResult.bestScore) {
                     searchResult.bestScore = score;
+                    searchResult.bestAssignedCount = totalAssigned;
                     searchResult.bestAssignments = copyAssignments(machineStates);
                 }
             } else {
-                // 部分解：记录最优部分解（用于约束冲突场景）
+                // 部分解：完整度优先（分配更多优于更均衡），同等完整度比较均衡分数
                 int partialScore = calculateBalancingScore(machineStates);
-                if (partialScore < searchResult.bestScore || searchResult.bestAssignments == null) {
+                boolean currentIsComplete = (searchResult.bestAssignedCount == totalRequired);
+                if (!currentIsComplete && 
+                        (totalAssigned > searchResult.bestAssignedCount ||
+                        (totalAssigned == searchResult.bestAssignedCount && partialScore < searchResult.bestScore))) {
                     searchResult.bestScore = partialScore;
+                    searchResult.bestAssignedCount = totalAssigned;
                     searchResult.bestAssignments = copyAssignments(machineStates);
                 }
             }
@@ -669,9 +676,17 @@ public class BalancingService {
             
             if (candidates.isEmpty()) {
                 // 没有可用机台，跳过当前任务，继续处理后续任务（记录部分解）
+                int totalAssignedNow = machineStates.stream().mapToInt(MachineState::getCurrentLoad).sum();
+                int totalRequiredAll = tasks.stream()
+                        .mapToInt(t -> t.getVulcanizeMachineCount() != null ? t.getVulcanizeMachineCount() : 0)
+                        .sum();
                 int partialScore = calculateBalancingScore(machineStates);
-                if (partialScore < searchResult.bestScore || searchResult.bestAssignments == null) {
+                boolean currentIsComplete = (searchResult.bestAssignedCount == totalRequiredAll);
+                if (!currentIsComplete &&
+                        (totalAssignedNow > searchResult.bestAssignedCount ||
+                        (totalAssignedNow == searchResult.bestAssignedCount && partialScore < searchResult.bestScore))) {
                     searchResult.bestScore = partialScore;
+                    searchResult.bestAssignedCount = totalAssignedNow;
                     searchResult.bestAssignments = copyAssignments(machineStates);
                 }
                 // 跳过当前任务，递归处理下一个
@@ -1689,6 +1704,7 @@ public class BalancingService {
     @lombok.Data
     private static class DfsSearchResult {
         int bestScore;
+        int bestAssignedCount;  // 最优解的已分配数量（完整度优先于均衡分数）
         Map<String, List<EmbryoAssignment>> bestAssignments;
         int searchCount;  // DFS搜索次数
         int pruneCount;   // 剪枝次数
