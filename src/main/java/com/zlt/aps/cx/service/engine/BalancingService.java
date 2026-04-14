@@ -668,7 +668,15 @@ public class BalancingService {
                     embryoCode, machineStates, forceKeepHistory, searchResult.searchCount == 1);
             
             if (candidates.isEmpty()) {
-                // 没有可用机台，此分支无效
+                // 没有可用机台，跳过当前任务，继续处理后续任务（记录部分解）
+                int partialScore = calculateBalancingScore(machineStates);
+                if (partialScore < searchResult.bestScore || searchResult.bestAssignments == null) {
+                    searchResult.bestScore = partialScore;
+                    searchResult.bestAssignments = copyAssignments(machineStates);
+                }
+                // 跳过当前任务，递归处理下一个
+                dfsAssign(tasks, taskIndex + 1, 0, machineStates, forceKeepHistory,
+                        typeDiffThreshold, loadDiffThreshold, searchResult);
                 return;
             }
             
@@ -1245,8 +1253,13 @@ public class BalancingService {
         int maxTypes = 0, minTypes = Integer.MAX_VALUE;
         
         for (MachineAssignment assignment : result.getAssignments()) {
-            List<String> embryos = assignment.getEmbryoAssignments().stream()
-                    .map(e -> e.getEmbryoCode() + "(" + e.getAssignedQty() + ")")
+            // 合并相同胚子代码的条目
+            Map<String, Integer> embryoQtyMap = new LinkedHashMap<>();
+            for (EmbryoAssignment e : assignment.getEmbryoAssignments()) {
+                embryoQtyMap.merge(e.getEmbryoCode(), e.getAssignedQty(), Integer::sum);
+            }
+            List<String> embryos = embryoQtyMap.entrySet().stream()
+                    .map(e -> e.getKey() + "(" + e.getValue() + ")")
                     .collect(Collectors.toList());
             log.info("  机台 {}: {}", assignment.getMachineCode(), embryos);
             
