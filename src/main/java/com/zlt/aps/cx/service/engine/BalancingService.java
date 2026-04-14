@@ -344,6 +344,18 @@ public class BalancingService {
         log.info("均衡分配计算：总需求（硫化机台数）={}, 总产能（各机台最大硫化机数之和）={}, 机台数={}",
                 totalDemand, totalCapacity, availableMachines.size());
 
+        // 打印任务需求明细（合并同胚子代码）
+        Map<String, Integer> taskDetailMap = new LinkedHashMap<>();
+        for (CoreScheduleAlgorithmService.DailyEmbryoTask task : tasks) {
+            String code = task.getEmbryoCode();
+            int cnt = task.getVulcanizeMachineCount() != null ? task.getVulcanizeMachineCount() : 0;
+            taskDetailMap.merge(code, cnt, Integer::sum);
+        }
+        List<String> taskDetails = taskDetailMap.entrySet().stream()
+                .map(e -> e.getKey() + "(" + e.getValue() + ")")
+                .collect(Collectors.toList());
+        log.info("任务需求明细：{}", taskDetails);
+
         // Step 4: 双重排序胎胚任务
         // 第一排序：硫化机台数降序（大任务优先，确保胚子21/22(7+4)先处理）
         // 第二排序：候选机台数升序（受限任务优先）
