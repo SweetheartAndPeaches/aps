@@ -1,4 +1,4 @@
-package com.zlt.aps.mdm.api.domain.entity;
+package com.zlt.aps.cx.api.domain.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
 import com.fasterxml.jackson.annotation.JsonFormat;
