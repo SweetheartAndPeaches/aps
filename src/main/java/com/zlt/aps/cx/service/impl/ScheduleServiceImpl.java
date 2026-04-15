@@ -74,6 +74,12 @@ public class ScheduleServiceImpl implements ScheduleService {
     /** 参数编码：损耗率 */
     private static final String PARAM_CODE_LOSS_RATE = "LOSS_RATE";
 
+    /** 参数编码：机台种类上限 */
+    private static final String PARAM_CODE_MAX_TYPES_PER_MACHINE = "MAX_TYPES_PER_MACHINE";
+
+    /** 参数编码：机台默认最大硫化机数 */
+    private static final String PARAM_CODE_MAX_LH_MACHINE_QTY = "MAX_LH_MACHINE_QTY";
+
     /** 默认损耗率 */
     private static final BigDecimal DEFAULT_LOSS_RATE = new BigDecimal("0.02");
 
@@ -633,6 +639,28 @@ public class ScheduleServiceImpl implements ScheduleService {
                 ? new BigDecimal(lossRateConfig.getParamValue())
                 : DEFAULT_LOSS_RATE;
         context.setLossRate(lossRate);
+
+        // 加载机台种类上限
+        CxParamConfig maxTypesConfig = paramConfigMap.get(PARAM_CODE_MAX_TYPES_PER_MACHINE);
+        if (maxTypesConfig != null && maxTypesConfig.getParamValue() != null) {
+            try {
+                context.setMaxTypesPerMachine(Integer.parseInt(maxTypesConfig.getParamValue()));
+                log.info("机台种类上限配置：{}", maxTypesConfig.getParamValue());
+            } catch (NumberFormatException e) {
+                log.warn("解析机台种类上限配置失败: {}", maxTypesConfig.getParamValue());
+            }
+        }
+
+        // 加载机台默认最大硫化机数
+        CxParamConfig maxLhConfig = paramConfigMap.get(PARAM_CODE_MAX_LH_MACHINE_QTY);
+        if (maxLhConfig != null && maxLhConfig.getParamValue() != null) {
+            try {
+                context.setMaxLhMachineQty(Integer.parseInt(maxLhConfig.getParamValue()));
+                log.info("机台默认最大硫化机数配置：{}", maxLhConfig.getParamValue());
+            } catch (NumberFormatException e) {
+                log.warn("解析机台默认最大硫化机数配置失败: {}", maxLhConfig.getParamValue());
+            }
+        }
     }
 
     /**

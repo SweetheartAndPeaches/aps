@@ -47,6 +47,12 @@ public class BalancingService {
     /** 机台最大胎胚种类数上限（默认4种） */
     public static final int DEFAULT_MAX_TYPES_PER_MACHINE = 4;
 
+    /** 机台默认最大硫化机数（配比配置缺失时的兜底值） */
+    public static final int DEFAULT_MAX_LH_MACHINE_QTY = 10;
+
+    /** 参数编码：机台最大硫化机数 */
+    private static final String PARAM_MAX_LH_MACHINE_QTY = "MAX_LH_MACHINE_QTY";
+
     /** 参数编码：强制保留历史任务  */
     private static final String PARAM_FORCE_KEEP_HISTORY = "FORCE_KEEP_HISTORY_TASK";
     
@@ -220,7 +226,8 @@ public class BalancingService {
 
             // 如果找不到，使用机台本身的硫化机上限
             if (maxLh == null) {
-                maxLh = machine.getLhMachineMaxQty() != null ? machine.getLhMachineMaxQty() : 10;
+                int defaultMaxLh = context.getMaxLhMachineQty() != null ? context.getMaxLhMachineQty() : DEFAULT_MAX_LH_MACHINE_QTY;
+                maxLh = machine.getLhMachineMaxQty() != null ? machine.getLhMachineMaxQty() : defaultMaxLh;
                 log.info("  机台 {} 机型 {} 未找到配比，使用默认值 {}", machineCode, machineType, maxLh);
                 fallbackCount++;
             }
@@ -338,7 +345,7 @@ public class BalancingService {
         int totalCapacity = 0;
         for (MpCxCapacityConfiguration config : availableMachines) {
             Integer maxLh = machineMaxLhMap.get(config.getCxMachineCode());
-            totalCapacity += (maxLh != null ? maxLh : 10);
+            totalCapacity += (maxLh != null ? maxLh : DEFAULT_MAX_LH_MACHINE_QTY);
         }
 
         log.info("均衡分配计算：总需求（硫化机台数）={}, 总产能（各机台最大硫化机数之和）={}, 机台数={}",
@@ -388,7 +395,7 @@ public class BalancingService {
 
             // 从映射中获取该机台的最大硫化机数
             Integer maxLh = machineMaxLhMap.get(config.getCxMachineCode());
-            state.setMaxCapacity(maxLh != null ? maxLh : 10);
+            state.setMaxCapacity(maxLh != null ? maxLh : DEFAULT_MAX_LH_MACHINE_QTY);
 
             // 从映射中获取该机台的最大胎胚种类数
             Integer maxTypes = machineMaxEmbryoTypesMap.get(config.getCxMachineCode());

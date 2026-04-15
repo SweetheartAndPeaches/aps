@@ -283,6 +283,12 @@ public class ScheduleContextVo {
     private Integer maxTypesPerMachine;
 
     /**
+     * 机台默认最大硫化机数
+     * 当机台配比配置缺失时的兜底值，默认10
+     */
+    private Integer maxLhMachineQty;
+
+    /**
      * 默认整车容量（条）
      * 当结构班产配置中没有该结构时使用
      */
