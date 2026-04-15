@@ -263,6 +263,21 @@ public class NewTaskProcessor {
                 targetResult.getTaskAllocations().add(taskAlloc);
                 log.info("固定量试任务 {} → 机台 {}", fixedTask.getEmbryoCode(), targetMachine);
             }
+
+            // 固定后输出更新后的机台分配结果
+            if (!fixedVolumeTrials.isEmpty()) {
+                log.info("固定后机台分配结果：");
+                for (CoreScheduleAlgorithmService.MachineAllocationResult mr : allResults) {
+                    Map<String, Integer> embryoQtyMap = new java.util.LinkedHashMap<>();
+                    for (CoreScheduleAlgorithmService.TaskAllocation ta : mr.getTaskAllocations()) {
+                        embryoQtyMap.merge(ta.getEmbryoCode(), ta.getQuantity(), Integer::sum);
+                    }
+                    List<String> embryos = embryoQtyMap.entrySet().stream()
+                            .map(e -> e.getKey() + "(" + e.getValue() + ")")
+                            .collect(java.util.stream.Collectors.toList());
+                    log.info("  机台 {}: {}", mr.getMachineCode(), embryos);
+                }
+            }
         }
 
         log.info("========== 新增任务处理完成，共 {} 个机台分配 ==========", allResults.size());
