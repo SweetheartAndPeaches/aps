@@ -232,8 +232,7 @@ public class NewTaskProcessor {
                     for (CoreScheduleAlgorithmService.MachineAllocationResult mr : allResults) {
                         if (mr.getMachineCode().equals(ct.getConstrainedMachineCode())) {
                             for (CoreScheduleAlgorithmService.TaskAllocation ta : mr.getTaskAllocations()) {
-                                if (ta.getEmbryoCode().equals(ct.getEmbryoCode())
-                                        && ta.getIsTrialTask() != null && ta.getIsTrialTask()) {
+                                if (ta.getEmbryoCode().equals(ct.getEmbryoCode())) {
                                     trialAssigned = true;
                                     break;
                                 }
