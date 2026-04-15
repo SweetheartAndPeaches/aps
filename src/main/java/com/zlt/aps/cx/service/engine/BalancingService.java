@@ -24,11 +24,21 @@ import java.util.stream.Collectors;
 /**
  * 均衡分配服务
  * 
- * <p>负责胎胚到机台的均衡分配，使用 DFS + 剪枝算法：
+ * <p>负责胎胚到机台的均衡分配，使用 DFS + 剪枝算法。
+ * <p><b>优先级原则</b>：满排优先 > 均衡尽量满足
  * <ul>
- *   <li>目标：胎胚种类数均衡，硫化机台数配比均衡</li>
- *   <li>约束：机台最大硫化机数上限、胎胚种类数上限</li>
- *   <li>策略：深度优先搜索 + 剪枝，超过均衡阈值的分支直接舍弃</li>
+ *   <li>硬约束：maxCapacity（机台最大硫化机数）、maxTypes（机台最大种类数）一定不能超过</li>
+ *   <li>第一优先：所有任务全部排上（满排）</li>
+ *   <li>第二优先：在满排前提下尽量满足均衡指标</li>
+ *   <li>均衡指标：负荷差距 ≤ loadDiffThreshold 且 种类差距 ≤ typeDiffThreshold 为均衡解</li>
+ *   <li>选择优先级：满排均衡解 > 满排不均衡解 > 非满排解</li>
+ * </ul>
+ *
+ * <p>剪枝策略：
+ * <ul>
+ *   <li>剩余负荷可行性剪枝：剩余机台总产能 < 剩余总需求，剪枝</li>
+ *   <li>贪心上界剪枝：找到均衡完整解后，当前分支不可能满足均衡阈值时剪枝</li>
+ *   <li>搜索限制：100万次，防止极端情况卡死</li>
  * </ul>
  *
  * <p>被以下处理器复用：
@@ -438,6 +448,7 @@ public class BalancingService {
         DfsSearchResult searchResult = new DfsSearchResult();
         searchResult.bestScore = Integer.MAX_VALUE;
         searchResult.bestAssignedCount = 0;
+        searchResult.bestIsBalanced = false;
         searchResult.bestAssignments = null;
         searchResult.searchCount = 0;
         searchResult.pruneCount = 0;
@@ -460,8 +471,9 @@ public class BalancingService {
         dfsAssign(remainingTasks, 0, initialRemainingCount, machineStates, forceKeepHistory,
                 typeDiffThreshold, loadDiffThreshold, totalDemand, searchResult);
 
-        log.info("DFS搜索统计：总搜索次数={}, 剪枝次数={}, 最优分数={}, 最优已分配={}/{}",
+        log.info("DFS搜索统计：总搜索次数={}, 剪枝次数={}, 最优分数={}, 均衡={}, 最优已分配={}/{}",
                 searchResult.searchCount, searchResult.pruneCount, searchResult.bestScore,
+                searchResult.bestIsBalanced ? "满足" : "不满足",
                 searchResult.bestAssignedCount, totalDemand);
 
         // 输出未被分配的任务（区分正式/量试）
@@ -687,8 +699,8 @@ public class BalancingService {
 
         // 【贪心上界剪枝】：只在已找到完整解后才启用均衡剪枝
         // 满排优先：没找到完整解时不剪枝，确保优先探索满排方案
-        // 贪心解的负荷分布：每个机台负荷尽量均衡（最大差距=1）
-        if (searchResult.bestAssignedCount >= totalDemand) {
+        // 找到均衡完整解后：当前负荷差不可能满足阈值时剪枝（加速收敛）
+        if (searchResult.bestAssignedCount >= totalDemand && searchResult.bestIsBalanced) {
             int curMaxLoad = 0;
             for (MachineState s : machineStates) {
                 if (s.getCurrentLoad() > curMaxLoad) {
@@ -697,8 +709,8 @@ public class BalancingService {
             }
             // 贪心解的负荷下界：(totalAssigned + remainingDemand) / numMachines
             int greedyLoadLowerBound = (allCurrentLoad + allRemainingDemand) / machineStates.size();
-            // 如果当前最大负荷 > 贪心下界 + 1，剪枝（因为负荷差距必然 > 贪心）
-            if (curMaxLoad > greedyLoadLowerBound + 1) {
+            // 如果当前最大负荷 - 贪心下界 > 负荷阈值，说明此分支不可能满足均衡条件
+            if (curMaxLoad - greedyLoadLowerBound > loadDiffThreshold) {
                 searchResult.pruneCount++;
                 return;
             }
@@ -714,23 +726,39 @@ public class BalancingService {
                     .sum();
             
             if (totalAssigned == totalRequired) {
-                // 完整解：完整解总是优于部分解；同为完整解则比较均衡分数
+                // 完整解：优先级 = 满排均衡 > 满排不均衡
                 int score = calculateBalancingScore(machineStates);
-                boolean currentIsComplete = (searchResult.bestAssignedCount == totalRequired);
-                if (!currentIsComplete || score < searchResult.bestScore) {
+                boolean currentIsBalanced = isBalanced(machineStates, typeDiffThreshold, loadDiffThreshold);
+                boolean currentBestIsComplete = (searchResult.bestAssignedCount == totalRequired);
+                
+                boolean shouldReplace = false;
+                if (!currentBestIsComplete) {
+                    // 之前是部分解，当前完整解更优
+                    shouldReplace = true;
+                } else if (currentIsBalanced && !searchResult.bestIsBalanced) {
+                    // 之前是不均衡完整解，当前是均衡完整解 → 替换
+                    shouldReplace = true;
+                } else if (currentIsBalanced == searchResult.bestIsBalanced && score < searchResult.bestScore) {
+                    // 同等均衡等级，分数更优 → 替换
+                    shouldReplace = true;
+                }
+                
+                if (shouldReplace) {
                     searchResult.bestScore = score;
                     searchResult.bestAssignedCount = totalAssigned;
+                    searchResult.bestIsBalanced = currentIsBalanced;
                     searchResult.bestAssignments = copyAssignments(machineStates);
                 }
             } else {
                 // 部分解：完整度优先（分配更多优于更均衡），同等完整度比较均衡分数
                 int partialScore = calculateBalancingScore(machineStates);
-                boolean currentIsComplete = (searchResult.bestAssignedCount == totalRequired);
-                if (!currentIsComplete && 
+                boolean currentBestIsComplete = (searchResult.bestAssignedCount == totalRequired);
+                if (!currentBestIsComplete && 
                         (totalAssigned > searchResult.bestAssignedCount ||
                         (totalAssigned == searchResult.bestAssignedCount && partialScore < searchResult.bestScore))) {
                     searchResult.bestScore = partialScore;
                     searchResult.bestAssignedCount = totalAssigned;
+                    searchResult.bestIsBalanced = isBalanced(machineStates, typeDiffThreshold, loadDiffThreshold);
                     searchResult.bestAssignments = copyAssignments(machineStates);
                 }
             }
@@ -755,12 +783,13 @@ public class BalancingService {
                         .mapToInt(t -> t.getVulcanizeMachineCount() != null ? t.getVulcanizeMachineCount() : 0)
                         .sum();
                 int partialScore = calculateBalancingScore(machineStates);
-                boolean currentIsComplete = (searchResult.bestAssignedCount == totalRequiredAll);
-                if (!currentIsComplete &&
+                boolean currentBestIsComplete = (searchResult.bestAssignedCount == totalRequiredAll);
+                if (!currentBestIsComplete &&
                         (totalAssignedNow > searchResult.bestAssignedCount ||
                         (totalAssignedNow == searchResult.bestAssignedCount && partialScore < searchResult.bestScore))) {
                     searchResult.bestScore = partialScore;
                     searchResult.bestAssignedCount = totalAssignedNow;
+                    searchResult.bestIsBalanced = isBalanced(machineStates, typeDiffThreshold, loadDiffThreshold);
                     searchResult.bestAssignments = copyAssignments(machineStates);
                 }
                 // 跳过当前任务，递归处理下一个
@@ -1086,6 +1115,43 @@ public class BalancingService {
      *   <li>种类差额 = max(各机台胎胚种类数) − min(各机台胎胚种类数)</li>
      * </ul>
      * 只统计负荷>0 或种类>0 的机台。
+     *
+     * @param machineStates 所有机台状态
+     * @return 均衡分数
+     */
+    /**
+     * 判断当前分配结果是否满足均衡阈值
+     *
+     * <p>均衡条件：负荷差距 ≤ loadDiffThreshold 且 种类差距 ≤ typeDiffThreshold
+     *
+     * @param machineStates     所有机台状态
+     * @param typeDiffThreshold 种类数允许差额
+     * @param loadDiffThreshold 负荷允许差额
+     * @return true=均衡，false=不均衡
+     */
+    private boolean isBalanced(List<MachineState> machineStates, int typeDiffThreshold, int loadDiffThreshold) {
+        if (machineStates.isEmpty()) {
+            return true;
+        }
+        int maxLoad = 0, minLoad = Integer.MAX_VALUE;
+        int maxTypes = 0, minTypes = Integer.MAX_VALUE;
+        for (MachineState state : machineStates) {
+            if (state.getCurrentLoad() > 0) {
+                maxLoad = Math.max(maxLoad, state.getCurrentLoad());
+                minLoad = Math.min(minLoad, state.getCurrentLoad());
+                maxTypes = Math.max(maxTypes, state.getCurrentTypes());
+                minTypes = Math.min(minTypes, state.getCurrentTypes());
+            }
+        }
+        int loadGap = maxLoad - (minLoad == Integer.MAX_VALUE ? 0 : minLoad);
+        int typeGap = maxTypes - (minTypes == Integer.MAX_VALUE ? 0 : minTypes);
+        return loadGap <= loadDiffThreshold && typeGap <= typeDiffThreshold;
+    }
+
+    /**
+     * 计算均衡分数（仅在同等均衡等级内用于比较优劣）
+     *
+     * <p>分数 = 负荷差距 * 10 + 种类差距 * 100，越小越优。
      *
      * @param machineStates 所有机台状态
      * @return 均衡分数
@@ -1785,6 +1851,7 @@ public class BalancingService {
     private static class DfsSearchResult {
         int bestScore;
         int bestAssignedCount;  // 最优解的已分配数量（完整度优先于均衡分数）
+        boolean bestIsBalanced; // 最优解是否满足均衡阈值
         Map<String, List<EmbryoAssignment>> bestAssignments;
         int searchCount;  // DFS搜索次数
         int pruneCount;   // 剪枝次数
