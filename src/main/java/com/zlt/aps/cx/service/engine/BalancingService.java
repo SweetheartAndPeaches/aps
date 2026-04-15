@@ -459,6 +459,42 @@ public class BalancingService {
                 searchResult.searchCount, searchResult.pruneCount, searchResult.bestScore,
                 searchResult.bestAssignedCount, totalDemand);
 
+        // 输出未被分配的任务（区分正式/量试）
+        if (searchResult.bestAssignedCount < totalDemand) {
+            log.info("检测到分配不足：已分配={}/总需求={}, bestAssignments={}",
+                    searchResult.bestAssignedCount, totalDemand, searchResult.bestAssignments != null ? "存在" : "null");
+            // 统计每个embryoCode的已分配总量
+            Map<String, Integer> assignedQtyMap = new java.util.HashMap<>();
+            for (List<EmbryoAssignment> assignments : searchResult.bestAssignments.values()) {
+                for (EmbryoAssignment ea : assignments) {
+                    assignedQtyMap.merge(ea.getEmbryoCode(), ea.getAssignedQty(), Integer::sum);
+                }
+            }
+            // 按 embryoCode 统计原始需求
+            Map<String, Integer> demandQtyMap = new java.util.LinkedHashMap<>();
+            for (CoreScheduleAlgorithmService.DailyEmbryoTask t : remainingTasks) {
+                String key = t.getEmbryoCode()
+                        + (t.getIsProductionTrial() != null && t.getIsProductionTrial() ? "(量试)" : "(正式)")
+                        + (t.getConstrainedMachineCode() != null ? "[约束:" + t.getConstrainedMachineCode() + "]" : "");
+                demandQtyMap.merge(key, t.getVulcanizeMachineCount() != null ? t.getVulcanizeMachineCount() : 1, Integer::sum);
+            }
+            // 对比：同embryoCode总需求 vs 总已分配
+            Map<String, Integer> demandByEmbryo = new java.util.HashMap<>();
+            for (CoreScheduleAlgorithmService.DailyEmbryoTask t : remainingTasks) {
+                demandByEmbryo.merge(t.getEmbryoCode(), t.getVulcanizeMachineCount() != null ? t.getVulcanizeMachineCount() : 1, Integer::sum);
+            }
+            List<String> shortageItems = new java.util.ArrayList<>();
+            for (Map.Entry<String, Integer> e : demandByEmbryo.entrySet()) {
+                int assigned = assignedQtyMap.getOrDefault(e.getKey(), 0);
+                if (assigned < e.getValue()) {
+                    shortageItems.add(e.getKey() + "(" + assigned + "/" + e.getValue() + ")");
+                }
+            }
+            if (!shortageItems.isEmpty()) {
+                log.warn("分配不足的胎胚：{}，各任务明细：{}", shortageItems, demandQtyMap);
+            }
+        }
+
         // Step 8: 构建结果
         BalancingResult result;
         if (searchResult.bestAssignments != null) {

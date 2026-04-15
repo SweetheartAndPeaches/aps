@@ -225,11 +225,27 @@ public class NewTaskProcessor {
                 allResults.add(result);
             }
 
-            // 输出约束量试任务分配结果
+            // 输出约束量试任务分配结果，检查是否被成功分配
             if (!constrainedTrials.isEmpty()) {
-                log.info("约束量试任务分配结果：");
                 for (CoreScheduleAlgorithmService.DailyEmbryoTask ct : constrainedTrials) {
-                    log.info("  量试任务 {} → 约束机台 {}", ct.getEmbryoCode(), ct.getConstrainedMachineCode());
+                    boolean trialAssigned = false;
+                    for (CoreScheduleAlgorithmService.MachineAllocationResult mr : allResults) {
+                        if (mr.getMachineCode().equals(ct.getConstrainedMachineCode())) {
+                            for (CoreScheduleAlgorithmService.TaskAllocation ta : mr.getTaskAllocations()) {
+                                if (ta.getEmbryoCode().equals(ct.getEmbryoCode())
+                                        && ta.getIsTrialTask() != null && ta.getIsTrialTask()) {
+                                    trialAssigned = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if (trialAssigned) break;
+                    }
+                    if (trialAssigned) {
+                        log.info("约束量试任务 {} → 机台 {} (已分配)", ct.getEmbryoCode(), ct.getConstrainedMachineCode());
+                    } else {
+                        log.warn("约束量试任务 {} → 机台 {} (未分配，约束冲突)", ct.getEmbryoCode(), ct.getConstrainedMachineCode());
+                    }
                 }
                 log.info("均衡后机台分配结果：");
                 for (CoreScheduleAlgorithmService.MachineAllocationResult mr : allResults) {
