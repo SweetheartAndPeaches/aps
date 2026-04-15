@@ -207,6 +207,7 @@ public class NewTaskProcessor {
                     taskAlloc.setMainMaterialDesc(task.getMainMaterialDesc());
                     taskAlloc.setStructureName(task.getStructureName());
                     taskAlloc.setQuantity(task.getPlannedProduction() != null ? task.getPlannedProduction() : 0);
+                    taskAlloc.setVulcanizeMachineCount(assignedQty);
                     taskAlloc.setPriority(task.getPriority());
                     taskAlloc.setStockHours(task.getStockHours());
                     taskAlloc.setIsTrialTask(task.getIsTrialTask());
@@ -251,6 +252,7 @@ public class NewTaskProcessor {
                 taskAlloc.setMainMaterialDesc(fixedTask.getMainMaterialDesc());
                 taskAlloc.setStructureName(fixedTask.getStructureName());
                 taskAlloc.setQuantity(fixedTask.getPlannedProduction() != null ? fixedTask.getPlannedProduction() : 0);
+                taskAlloc.setVulcanizeMachineCount(fixedTask.getVulcanizeMachineCount() != null ? fixedTask.getVulcanizeMachineCount() : 1);
                 taskAlloc.setPriority(fixedTask.getPriority());
                 taskAlloc.setStockHours(fixedTask.getStockHours());
                 taskAlloc.setIsTrialTask(fixedTask.getIsTrialTask());
@@ -264,13 +266,14 @@ public class NewTaskProcessor {
                 log.info("固定量试任务 {} → 机台 {}", fixedTask.getEmbryoCode(), targetMachine);
             }
 
-            // 固定后输出更新后的机台分配结果
+            // 固定后输出更新后的机台分配结果（显示硫化机台数）
             if (!fixedVolumeTrials.isEmpty()) {
                 log.info("固定后机台分配结果：");
                 for (CoreScheduleAlgorithmService.MachineAllocationResult mr : allResults) {
                     Map<String, Integer> embryoQtyMap = new java.util.LinkedHashMap<>();
                     for (CoreScheduleAlgorithmService.TaskAllocation ta : mr.getTaskAllocations()) {
-                        embryoQtyMap.merge(ta.getEmbryoCode(), ta.getQuantity(), Integer::sum);
+                        int lhCount = ta.getVulcanizeMachineCount() > 0 ? ta.getVulcanizeMachineCount() : 1;
+                        embryoQtyMap.merge(ta.getEmbryoCode(), lhCount, Integer::sum);
                     }
                     List<String> embryos = embryoQtyMap.entrySet().stream()
                             .map(e -> e.getKey() + "(" + e.getValue() + ")")

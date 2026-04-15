@@ -194,6 +194,8 @@ public interface CoreScheduleAlgorithmService {
         private String structureName;
         /** 计划数量 */
         private Integer quantity;
+        /** 硫化机台数 */
+        private Integer vulcanizeMachineCount;
         /** 优先级 */
         private Integer priority;
         /** 库存可供时长（小时） */

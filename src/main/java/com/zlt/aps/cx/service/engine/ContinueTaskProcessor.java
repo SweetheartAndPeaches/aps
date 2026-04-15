@@ -582,6 +582,7 @@ public class ContinueTaskProcessor {
         taskAllocation.setMainMaterialDesc(task.getMainMaterialDesc());
         taskAllocation.setStructureName(task.getStructureName());
         taskAllocation.setQuantity(quantity);
+        taskAllocation.setVulcanizeMachineCount(task.getVulcanizeMachineCount() != null ? task.getVulcanizeMachineCount() : 1);
         taskAllocation.setPriority(task.getPriority());
         taskAllocation.setStockHours(task.getStockHours());
         taskAllocation.setIsTrialTask(task.getIsTrialTask());
