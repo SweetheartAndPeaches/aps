@@ -90,6 +90,8 @@ public interface CoreScheduleAlgorithmService {
         private Boolean isContinueTask;
         /** 是否量试任务（施工阶段为02-量试） */
         private Boolean isProductionTrial;
+        /** 量试约束机台编码（量试任务只能分配到该机台，来自试制分配结果） */
+        private String constrainedMachineCode;
         /** 续作机台列表 */
         private List<String> continueMachineCodes;
         /** 硫化需求量（来自硫化排程） */

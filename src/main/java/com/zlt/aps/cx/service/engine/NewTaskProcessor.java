@@ -127,35 +127,36 @@ public class NewTaskProcessor {
             Map<String, String> trialMachineMap = buildTrialMachineMap(trialAllocations, structureName);
 
             // Step 3.4: 分类新增任务 - 固定量试 vs 参与均衡
-            // 固定量试：量试任务 + 同胎胚有试制任务 → 固定到试制机台
-            // 参与均衡：其余新增任务（含无量试约束的量试任务）
-            List<CoreScheduleAlgorithmService.DailyEmbryoTask> fixedVolumeTrials = new ArrayList<>();
+            // 量试约束任务：量试任务 + 同胎胚有试制任务 → 设置约束机台，参与均衡
+            // 参与均衡：所有新增任务（量试约束任务也参与，但限制候选机台）
+            List<CoreScheduleAlgorithmService.DailyEmbryoTask> constrainedTrials = new ArrayList<>();
             List<CoreScheduleAlgorithmService.DailyEmbryoTask> balancedTasks = new ArrayList<>();
 
             for (CoreScheduleAlgorithmService.DailyEmbryoTask task : newTasksForStructure) {
                 task.setIsContinueTask(false);
                 if (isVolumeTrialConstrained(task, trialMachineMap)) {
-                    fixedVolumeTrials.add(task);
-                } else {
-                    balancedTasks.add(task);
+                    // 设置约束机台，参与均衡时只能分配到该机台
+                    task.setConstrainedMachineCode(trialMachineMap.get(task.getEmbryoCode()));
+                    constrainedTrials.add(task);
                 }
+                balancedTasks.add(task);
             }
 
-            // 固定量试预占机台：加入 machineHistoryMap
-            for (CoreScheduleAlgorithmService.DailyEmbryoTask fixedTask : fixedVolumeTrials) {
-                String targetMachine = trialMachineMap.get(fixedTask.getEmbryoCode());
+            // 约束量试预占机台：加入 machineHistoryMap（保证DFS优先保留历史种类）
+            for (CoreScheduleAlgorithmService.DailyEmbryoTask constrainedTask : constrainedTrials) {
+                String targetMachine = constrainedTask.getConstrainedMachineCode();
                 machineHistoryMap.computeIfAbsent(targetMachine, k -> new HashSet<>())
-                        .add(fixedTask.getEmbryoCode());
+                        .add(constrainedTask.getEmbryoCode());
             }
 
-            // Step 3.5: 合并续作任务和参与均衡的新增任务
+            // Step 3.5: 合并续作任务和参与均衡的新增任务（含约束量试）
             List<CoreScheduleAlgorithmService.DailyEmbryoTask> allTasksForStructure = new ArrayList<>();
             allTasksForStructure.addAll(continueTasksForStructure);
             allTasksForStructure.addAll(balancedTasks);
 
-            log.info("结构 {} 合并后：续作={}, 均衡新增={}, 固定量试={}",
+            log.info("结构 {} 合并后：续作={}, 均衡新增={}, 约束量试={}",
                     structureName, continueTasksForStructure.size(),
-                    balancedTasks.size(), fixedVolumeTrials.size());
+                    balancedTasks.size(), constrainedTrials.size());
 
             // Step 3.6: 构建机台最大硫化机数映射
             Map<String, Integer> machineMaxLhMap = buildMachineMaxLhMap(
@@ -224,51 +225,13 @@ public class NewTaskProcessor {
                 allResults.add(result);
             }
 
-            // Step 3.10: 固定量试任务追加到对应机台结果
-            for (CoreScheduleAlgorithmService.DailyEmbryoTask fixedTask : fixedVolumeTrials) {
-                String targetMachine = trialMachineMap.get(fixedTask.getEmbryoCode());
-                // 找到对应机台的结果
-                CoreScheduleAlgorithmService.MachineAllocationResult targetResult = null;
-                for (CoreScheduleAlgorithmService.MachineAllocationResult r : allResults) {
-                    if (r.getMachineCode().equals(targetMachine)) {
-                        targetResult = r;
-                        break;
-                    }
+            // 输出约束量试任务分配结果
+            if (!constrainedTrials.isEmpty()) {
+                log.info("约束量试任务分配结果：");
+                for (CoreScheduleAlgorithmService.DailyEmbryoTask ct : constrainedTrials) {
+                    log.info("  量试任务 {} → 约束机台 {}", ct.getEmbryoCode(), ct.getConstrainedMachineCode());
                 }
-                // 如果没找到，新建一个
-                if (targetResult == null) {
-                    targetResult = new CoreScheduleAlgorithmService.MachineAllocationResult();
-                    targetResult.setMachineCode(targetMachine);
-                    targetResult.setTaskAllocations(new ArrayList<>());
-                    targetResult.setUsedCapacity(0);
-                    allResults.add(targetResult);
-                }
-
-                CoreScheduleAlgorithmService.TaskAllocation taskAlloc =
-                        new CoreScheduleAlgorithmService.TaskAllocation();
-                taskAlloc.setEmbryoCode(fixedTask.getEmbryoCode());
-                taskAlloc.setMaterialCode(fixedTask.getMaterialCode());
-                taskAlloc.setMaterialDesc(fixedTask.getMaterialDesc());
-                taskAlloc.setMainMaterialDesc(fixedTask.getMainMaterialDesc());
-                taskAlloc.setStructureName(fixedTask.getStructureName());
-                taskAlloc.setQuantity(fixedTask.getPlannedProduction() != null ? fixedTask.getPlannedProduction() : 0);
-                taskAlloc.setVulcanizeMachineCount(fixedTask.getVulcanizeMachineCount() != null ? fixedTask.getVulcanizeMachineCount() : 1);
-                taskAlloc.setPriority(fixedTask.getPriority());
-                taskAlloc.setStockHours(fixedTask.getStockHours());
-                taskAlloc.setIsTrialTask(fixedTask.getIsTrialTask());
-                taskAlloc.setIsContinueTask(false);
-                taskAlloc.setIsEndingTask(fixedTask.getIsEndingTask());
-                taskAlloc.setEndingSurplusQty(fixedTask.getEndingSurplusQty());
-                taskAlloc.setIsMainProduct(fixedTask.getIsMainProduct());
-                taskAlloc.setLhId(fixedTask.getLhId());
-
-                targetResult.getTaskAllocations().add(taskAlloc);
-                log.info("固定量试任务 {} → 机台 {}", fixedTask.getEmbryoCode(), targetMachine);
-            }
-
-            // 固定后输出更新后的机台分配结果（显示硫化机台数）
-            if (!fixedVolumeTrials.isEmpty()) {
-                log.info("固定后机台分配结果：");
+                log.info("均衡后机台分配结果：");
                 for (CoreScheduleAlgorithmService.MachineAllocationResult mr : allResults) {
                     Map<String, Integer> embryoQtyMap = new java.util.LinkedHashMap<>();
                     for (CoreScheduleAlgorithmService.TaskAllocation ta : mr.getTaskAllocations()) {

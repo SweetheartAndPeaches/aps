@@ -700,7 +700,8 @@ public class BalancingService {
             // 找出可以分配的候选机台（只要有剩余容量即可）
             // isFirstCall=true 时打印日志，避免重复噪音
             List<MachineState> candidates = findCandidateMachinesForSplit(
-                    embryoCode, machineStates, forceKeepHistory, searchResult.searchCount == 1);
+                    embryoCode, machineStates, forceKeepHistory, searchResult.searchCount == 1,
+                    task.getConstrainedMachineCode());
             
             if (candidates.isEmpty()) {
                 // 没有可用机台，跳过当前任务，继续处理后续任务（记录部分解）
@@ -916,11 +917,17 @@ public class BalancingService {
             String embryoCode,
             List<MachineState> machineStates,
             boolean forceKeepHistory,
-            boolean isFirstCall) {
+            boolean isFirstCall,
+            String constrainedMachineCode) {
         
         List<MachineState> candidates = new ArrayList<>();
         
         for (MachineState state : machineStates) {
+            // 约束机台过滤：如果该胎胚有约束机台，只能分配到指定机台
+            if (constrainedMachineCode != null && !constrainedMachineCode.isEmpty()
+                    && !state.getMachineCode().equals(constrainedMachineCode)) {
+                continue;
+            }
             // 容量已满，跳过
             if (state.getCurrentLoad() >= state.getMaxCapacity()) {
                 log.trace("  [-满载] 机台 {}", state.getMachineCode());
@@ -1177,7 +1184,8 @@ public class BalancingService {
                 
                 while (remainingCount > 0) {
                     List<MachineState> candidates = findCandidateMachinesForSplit(
-                            embryoCode, machineStates, forceKeepHistory, true);
+                            embryoCode, machineStates, forceKeepHistory, true,
+                            task.getConstrainedMachineCode());
                     
                     if (candidates.isEmpty()) {
                         if (failedEmbryo == null) {
