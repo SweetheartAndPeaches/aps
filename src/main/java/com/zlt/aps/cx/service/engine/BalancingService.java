@@ -952,9 +952,7 @@ public class BalancingService {
                     }
                 }
             }
-            if (candidates.isEmpty()) {
-                log.warn("胎胚 {} 无候选机台！已跳过: {}", embryoCode, skipInfo);
-            } else {
+            if (!candidates.isEmpty()) {
                 log.info("胎胚 {} 候选机台({}): [{}] | 跳过: {}",
                         embryoCode, candidates.size(),
                         candidates.stream().map(MachineState::getMachineCode).collect(Collectors.joining(",")),
