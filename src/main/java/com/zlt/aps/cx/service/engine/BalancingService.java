@@ -379,8 +379,17 @@ public class BalancingService {
                 .collect(Collectors.toList());
         log.info("任务需求明细：{}", taskDetails);
 
-        // Step 4: 双重排序胎胚任务
-        // 第一排序：硫化机台数降序（大任务优先，确保胚子21/22(7+4)先处理）
+        // Step 4: 排序胎胚任务
+        // 先计算每个胎胚编码的总需求量（同编码的任务已拆成(1)单元，需汇总）
+        Map<String, Integer> embryoTotalDemand = new HashMap<>();
+        for (CoreScheduleAlgorithmService.DailyEmbryoTask task : tasks) {
+            embryoTotalDemand.merge(task.getEmbryoCode(),
+                    task.getVulcanizeMachineCount() != null ? task.getVulcanizeMachineCount() : 0,
+                    Integer::sum);
+        }
+
+        // 第零排序：约束量试任务优先（候选机台最少，必须先安排）
+        // 第一排序：胎胚总需求量降序（大需求优先占种类槽，产能不足时丢弃小需求更划算）
         // 第二排序：候选机台数升序（受限任务优先）
         final Set<String> availableMachineCodes = availableMachines.stream()
                 .map(MpCxCapacityConfiguration::getCxMachineCode)
@@ -388,16 +397,16 @@ public class BalancingService {
         
         List<CoreScheduleAlgorithmService.DailyEmbryoTask> sortedTasks = tasks.stream()
                 .sorted((a, b) -> {
-                    // 第零排序：约束量试任务优先（候选机台最少，必须先安排）
+                    // 第零排序：约束量试任务优先
                     boolean aConstrained = a.getConstrainedMachineCode() != null && !a.getConstrainedMachineCode().isEmpty();
                     boolean bConstrained = b.getConstrainedMachineCode() != null && !b.getConstrainedMachineCode().isEmpty();
                     if (aConstrained != bConstrained) return aConstrained ? -1 : 1;
 
-                    // 第一排序：硫化机台数降序（大任务优先，让胚子21/22先处理）
-                    int countA = a.getVulcanizeMachineCount() != null ? a.getVulcanizeMachineCount() : 0;
-                    int countB = b.getVulcanizeMachineCount() != null ? b.getVulcanizeMachineCount() : 0;
-                    int loadCompare = Integer.compare(countB, countA);
-                    if (loadCompare != 0) return loadCompare;
+                    // 第一排序：胎胚总需求量降序（大需求优先占种类槽）
+                    int totalA = embryoTotalDemand.getOrDefault(a.getEmbryoCode(), 0);
+                    int totalB = embryoTotalDemand.getOrDefault(b.getEmbryoCode(), 0);
+                    int demandCompare = Integer.compare(totalB, totalA);
+                    if (demandCompare != 0) return demandCompare;
                     
                     // 第二排序：候选机台数升序（受限任务优先）
                     MachineState tmpA = createTempMachineState(availableMachineCodes);
