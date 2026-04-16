@@ -1325,7 +1325,7 @@ public class BalancingService {
             for (Map.Entry<String, Integer> e : demandByEmbryo.entrySet()) {
                 int assigned = assignedQtyMap.getOrDefault(e.getKey(), 0);
                 if (assigned < e.getValue()) {
-                    unassignedItems.add(e.getKey() + "(未排上" + (e.getValue() - assigned) + "/" + e.getValue() + ")");
+                    unassignedItems.add(e.getKey() + "(" + (e.getValue() - assigned) + ")");
                 }
             }
             if (!unassignedItems.isEmpty()) {
