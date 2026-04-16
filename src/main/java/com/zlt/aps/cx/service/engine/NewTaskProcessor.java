@@ -44,7 +44,7 @@ public class NewTaskProcessor {
      * @param context           排程上下文
      * @param scheduleDate      排程日期
      * @param dayShifts         当天班次配置
-     * @param day               排程日（day of month）
+     * @param dayShifts         当天班次配置
      * @param existAllocations  续作任务分配结果
      * @param trialAllocations 试制任务分配结果（用于量试约束）
      * @return 均衡分配结果
@@ -54,7 +54,6 @@ public class NewTaskProcessor {
             ScheduleContextVo context,
             LocalDate scheduleDate,
             List<CxShiftConfig> dayShifts,
-            int day,
             List<CoreScheduleAlgorithmService.DailyEmbryoTask> continueTasks,
             List<CoreScheduleAlgorithmService.MachineAllocationResult> existAllocations,
             List<CoreScheduleAlgorithmService.MachineAllocationResult> trialAllocations) {
@@ -89,7 +88,7 @@ public class NewTaskProcessor {
             // 同一结构下所有任务的 productionVersion 应一致，取第一个
             String productionVersion = newTasksForStructure.get(0).getProductionVersion();
             List<MpCxCapacityConfiguration> availableMachines =
-                    getAvailableMachinesForStructure(structureName, day, context, productionVersion);
+                    getAvailableMachinesForStructure(structureName, scheduleDate, context, productionVersion);
             if (availableMachines.isEmpty()) {
                 log.warn("结构 {} 没有可安排的机台，跳过", structureName);
                 continue;
@@ -283,17 +282,20 @@ public class NewTaskProcessor {
 
     /**
      * 获取指定结构在当前日期可安排的机台配置（按 PRODUCTION_VERSION 过滤）
+     *
+     * <p>beginDay/endDay 是月内天数(1-31)，用 scheduleDate.getDayOfMonth() 过滤
      */
     private List<MpCxCapacityConfiguration> getAvailableMachinesForStructure(
-            String structureName, int day, ScheduleContextVo context,
+            String structureName, LocalDate scheduleDate, ScheduleContextVo context,
             String productionVersion) {
         if (context.getStructureAllocationMap() != null) {
             List<MpCxCapacityConfiguration> configs =
                     context.getStructureAllocationMap().get(structureName);
             if (configs != null && !configs.isEmpty()) {
+                int dayOfMonth = scheduleDate.getDayOfMonth();
                 return configs.stream()
                         .filter(c -> c.getBeginDay() != null && c.getEndDay() != null)
-                        .filter(c -> c.getBeginDay() <= day && c.getEndDay() >= day)
+                        .filter(c -> c.getBeginDay() <= dayOfMonth && c.getEndDay() >= dayOfMonth)
                         .filter(c -> productionVersion == null
                                 || productionVersion.equals(c.getProductionVersion()))
                         .collect(Collectors.toList());

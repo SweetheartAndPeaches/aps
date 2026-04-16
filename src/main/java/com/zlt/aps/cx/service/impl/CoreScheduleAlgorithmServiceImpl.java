@@ -256,7 +256,6 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 context,
                 scheduleDate,
                 singleShiftList,
-                day,
                 taskGroup.getContinueTasks(),
                 continueAllocations,
                 trialAllocations);
