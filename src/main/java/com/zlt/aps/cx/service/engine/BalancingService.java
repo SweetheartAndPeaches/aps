@@ -358,8 +358,14 @@ public class BalancingService {
             totalCapacity += (maxLh != null ? maxLh : DEFAULT_MAX_LH_MACHINE_QTY);
         }
 
-        log.info("均衡分配计算：总需求（硫化机台数）={}, 总产能（各机台最大硫化机数之和）={}, 机台数={}",
-                totalDemand, totalCapacity, availableMachines.size());
+        // 计算种类数（去重）
+        long totalTypes = tasks.stream()
+                .map(CoreScheduleAlgorithmService.DailyEmbryoTask::getEmbryoCode)
+                .distinct()
+                .count();
+
+        log.info("均衡分配计算：总需求（硫化机台数）={}, 种类数={}, 总产能（各机台最大硫化机数之和）={}, 机台数={}",
+                totalDemand, totalTypes, totalCapacity, availableMachines.size());
 
         // 打印任务需求明细（合并同胚子代码）
         Map<String, Integer> taskDetailMap = new LinkedHashMap<>();
