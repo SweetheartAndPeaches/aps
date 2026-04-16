@@ -605,7 +605,7 @@ public class ScheduleServiceImpl implements ScheduleService {
         for (CxMachineOnlineInfo onlineInfo : context.getOnlineInfos()) {
             String cxCode = onlineInfo.getCxCode();
             // 组合物料编码和胎胚编码作为唯一键
-            String materialCode = onlineInfo.getMesMaterialCode();
+            String materialCode = onlineInfo.getMaterialCode();
             String embryoSpec = onlineInfo.getEmbryoSpec();
             String combinedKey = materialCode + "|" + embryoSpec;
             if (cxCode != null && combinedKey != null && !combinedKey.equals("|")) {
