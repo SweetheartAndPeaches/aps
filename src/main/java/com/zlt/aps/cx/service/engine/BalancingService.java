@@ -1230,10 +1230,16 @@ public class BalancingService {
         // 最多重试 N 次贪心
         int maxRetries = 5;
         
-        int totalAssigned = 0;
         int totalRequired = tasks.stream()
                 .mapToInt(t -> t.getVulcanizeMachineCount() != null ? t.getVulcanizeMachineCount() : 0)
                 .sum();
+
+        // 记录所有重试中的最优解（满排均衡 > 满排不均衡 > 非满排）
+        Map<String, List<EmbryoAssignment>> bestAssignments = null;
+        int bestAssignedCount = 0;
+        boolean bestIsBalanced = false;
+        int bestScore = Integer.MAX_VALUE;
+        int bestRetry = -1;
         
         for (int retry = 0; retry <= maxRetries; retry++) {
             // 重置机台状态
@@ -1243,24 +1249,30 @@ public class BalancingService {
                 state.getAssignedEmbryos().clear();
             }
             
-            // 对任务列表重新排序（每次重试使用不同的排序策略）
+            // 对任务列表重新排序（与DFS一致：约束量试优先 + 多种策略）
             List<CoreScheduleAlgorithmService.DailyEmbryoTask> sortedTasks = new ArrayList<>(tasks);
             if (retry == 0) {
-                // 第一次：按硫化机台数降序（大任务优先，让胚子21/22先处理）
+                // 第一次：约束量试优先 + 硫化机台数降序（大任务优先）
                 sortedTasks.sort((a, b) -> {
+                    boolean aConstrained = a.getConstrainedMachineCode() != null && !a.getConstrainedMachineCode().isEmpty();
+                    boolean bConstrained = b.getConstrainedMachineCode() != null && !b.getConstrainedMachineCode().isEmpty();
+                    if (aConstrained != bConstrained) return aConstrained ? -1 : 1;
                     int cntA = a.getVulcanizeMachineCount() != null ? a.getVulcanizeMachineCount() : 0;
                     int cntB = b.getVulcanizeMachineCount() != null ? b.getVulcanizeMachineCount() : 0;
                     return Integer.compare(cntB, cntA);
                 });
             } else if (retry == 1) {
-                // 第二次：按硫化机台数升序（小任务优先）
+                // 第二次：约束量试优先 + 硫化机台数升序（小任务优先）
                 sortedTasks.sort((a, b) -> {
+                    boolean aConstrained = a.getConstrainedMachineCode() != null && !a.getConstrainedMachineCode().isEmpty();
+                    boolean bConstrained = b.getConstrainedMachineCode() != null && !b.getConstrainedMachineCode().isEmpty();
+                    if (aConstrained != bConstrained) return aConstrained ? -1 : 1;
                     int cntA = a.getVulcanizeMachineCount() != null ? a.getVulcanizeMachineCount() : 0;
                     int cntB = b.getVulcanizeMachineCount() != null ? b.getVulcanizeMachineCount() : 0;
                     return Integer.compare(cntA, cntB);
                 });
             } else {
-                // 第三次及之后：把失败的胚子排在前面
+                // 第三次及之后：失败胚子优先 + 约束量试优先
                 final Set<String> currentFailed = new HashSet<>(failedEmbryos);
                 sortedTasks.sort((a, b) -> {
                     String cA = a.getEmbryoCode();
@@ -1269,7 +1281,9 @@ public class BalancingService {
                     boolean bFailed = currentFailed.contains(cB);
                     if (aFailed && !bFailed) return -1;
                     if (!aFailed && bFailed) return 1;
-                    // 失败胚子之间，按硫化机台数降序
+                    boolean aConstrained = a.getConstrainedMachineCode() != null && !a.getConstrainedMachineCode().isEmpty();
+                    boolean bConstrained = b.getConstrainedMachineCode() != null && !b.getConstrainedMachineCode().isEmpty();
+                    if (aConstrained != bConstrained) return aConstrained ? -1 : 1;
                     int cntA = a.getVulcanizeMachineCount() != null ? a.getVulcanizeMachineCount() : 0;
                     int cntB = b.getVulcanizeMachineCount() != null ? b.getVulcanizeMachineCount() : 0;
                     return Integer.compare(cntB, cntA);
@@ -1358,11 +1372,47 @@ public class BalancingService {
                 completedEmbryos.add(embryoCode);
             }
             
-            // 检查是否完整
-            totalAssigned = machineStates.stream().mapToInt(MachineState::getCurrentLoad).sum();
+            // 评估本轮结果
+            int totalAssigned = machineStates.stream().mapToInt(MachineState::getCurrentLoad).sum();
+            int score = calculateBalancingScore(machineStates);
+            boolean currentIsBalanced = isBalanced(machineStates, typeDiffThreshold, loadDiffThreshold);
+            boolean currentIsComplete = (totalAssigned == totalRequired);
+            boolean bestIsComplete = (bestAssignedCount == totalRequired);
             
-            if (totalAssigned == totalRequired) {
-                log.info("贪心分配完成，找到完整解（重试 {} 次）", retry);
+            boolean shouldReplace = false;
+            if (!bestIsComplete && currentIsComplete) {
+                // 之前非满排，当前满排 → 替换
+                shouldReplace = true;
+            } else if (currentIsComplete && bestIsComplete) {
+                // 同为满排：满排均衡 > 满排不均衡 > 同等级比分数
+                if (currentIsBalanced && !bestIsBalanced) {
+                    shouldReplace = true;
+                } else if (currentIsBalanced == bestIsBalanced && score < bestScore) {
+                    shouldReplace = true;
+                }
+            } else if (!currentIsComplete && !bestIsComplete) {
+                // 同为非满排：分配数优先，同等分配数比分数
+                if (totalAssigned > bestAssignedCount) {
+                    shouldReplace = true;
+                } else if (totalAssigned == bestAssignedCount && score < bestScore) {
+                    shouldReplace = true;
+                }
+            }
+            
+            if (shouldReplace) {
+                bestAssignments = copyAssignments(machineStates);
+                bestAssignedCount = totalAssigned;
+                bestIsBalanced = currentIsBalanced;
+                bestScore = score;
+                bestRetry = retry;
+                log.info("贪心重试 {} 找到更优解：已分配={}/{}, 均衡={}, 分数={}",
+                        retry, totalAssigned, totalRequired, currentIsBalanced ? "满足" : "不满足", score);
+            }
+
+            // 满排且均衡 → 已是最优，提前终止
+            if (currentIsComplete && currentIsBalanced) {
+                log.info("贪心分配完成，找到满排均衡解（重试 {} 次）", retry);
+                restoreAssignments(machineStates, bestAssignments);
                 return convertToResult(machineStates, tasks);
             }
             
@@ -1370,14 +1420,48 @@ public class BalancingService {
                 failedEmbryos.add(failedEmbryo);
                 log.info("贪心分配不完整（{} / {}），重试 {} 次，已失败胚子: {}", 
                         totalAssigned, totalRequired, retry, failedEmbryos);
-            } else {
-                log.info("贪心分配不完整（{} / {}），重试 {} 次", 
-                        totalAssigned, totalRequired, retry);
             }
         }
         
-        log.warn("所有贪心重试均未能找到完整解（最优情况 {} / {}），使用最后一次结果", totalAssigned, totalRequired);
+        // 使用所有重试中的最优解
+        if (bestAssignments != null) {
+            restoreAssignments(machineStates, bestAssignments);
+            boolean isComplete = (bestAssignedCount == totalRequired);
+            log.warn("贪心重试结束，使用最优解（重试 {} 次）：已分配={}/{}, 满排={}, 均衡={}",
+                    bestRetry, bestAssignedCount, totalRequired,
+                    isComplete ? "是" : "否", bestIsBalanced ? "满足" : "不满足");
+        } else {
+            log.warn("所有贪心重试均无有效结果（需求 {}）", totalRequired);
+        }
         return convertToResult(machineStates, tasks);
+    }
+
+    /**
+     * 将保存的分配方案恢复到机台状态
+     */
+    private void restoreAssignments(List<MachineState> machineStates,
+                                    Map<String, List<EmbryoAssignment>> savedAssignments) {
+        // 先重置
+        for (MachineState state : machineStates) {
+            state.setCurrentLoad(0);
+            state.setCurrentTypes(0);
+            state.getAssignedEmbryos().clear();
+        }
+        // 恢复
+        for (MachineState state : machineStates) {
+            List<EmbryoAssignment> assignments = savedAssignments.get(state.getMachineCode());
+            if (assignments != null && !assignments.isEmpty()) {
+                state.getAssignedEmbryos().addAll(assignments);
+                Set<String> types = new HashSet<>();
+                int load = 0;
+                for (EmbryoAssignment ea : assignments) {
+                    load += ea.getAssignedQty();
+                    types.add(ea.getEmbryoCode());
+                }
+                state.setCurrentLoad(load);
+                state.setCurrentTypes(types.size());
+            }
+        }
     }
 
     /**
