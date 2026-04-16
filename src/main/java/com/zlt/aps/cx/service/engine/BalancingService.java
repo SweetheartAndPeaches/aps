@@ -551,7 +551,7 @@ public class BalancingService {
             result = emptyResult;
         }
 
-        logAllocationResult(result, machineStates);
+        logAllocationResult(result, machineStates, remainingTasks);
         return result;
     }
 
@@ -1272,17 +1272,22 @@ public class BalancingService {
     /**
      * 记录分配结果日志
      */
-    private void logAllocationResult(BalancingResult result, List<MachineState> machineStates) {
+    private void logAllocationResult(BalancingResult result, List<MachineState> machineStates,
+                                     List<CoreScheduleAlgorithmService.DailyEmbryoTask> originalTasks) {
         log.info("均衡分配结果：");
         
         int maxLoad = 0, minLoad = Integer.MAX_VALUE;
         int maxTypes = 0, minTypes = Integer.MAX_VALUE;
+        
+        // 统计已分配的胎胚数量
+        Map<String, Integer> assignedQtyMap = new LinkedHashMap<>();
         
         for (MachineAssignment assignment : result.getAssignments()) {
             // 合并相同胚子代码的条目
             Map<String, Integer> embryoQtyMap = new LinkedHashMap<>();
             for (EmbryoAssignment e : assignment.getEmbryoAssignments()) {
                 embryoQtyMap.merge(e.getEmbryoCode(), e.getAssignedQty(), Integer::sum);
+                assignedQtyMap.merge(e.getEmbryoCode(), e.getAssignedQty(), Integer::sum);
             }
             List<String> embryos = embryoQtyMap.entrySet().stream()
                     .map(e -> e.getKey() + "(" + e.getValue() + ")")
@@ -1307,6 +1312,25 @@ public class BalancingService {
         } else {
             log.info("均衡指标：负荷差距={}, 种类差距={}", 
                     maxLoad - minLoad, maxTypes - minTypes);
+        }
+        
+        // 打印未排上的胎胚
+        if (originalTasks != null && !originalTasks.isEmpty()) {
+            Map<String, Integer> demandByEmbryo = new LinkedHashMap<>();
+            for (CoreScheduleAlgorithmService.DailyEmbryoTask t : originalTasks) {
+                demandByEmbryo.merge(t.getEmbryoCode(),
+                        t.getVulcanizeMachineCount() != null ? t.getVulcanizeMachineCount() : 1, Integer::sum);
+            }
+            List<String> unassignedItems = new ArrayList<>();
+            for (Map.Entry<String, Integer> e : demandByEmbryo.entrySet()) {
+                int assigned = assignedQtyMap.getOrDefault(e.getKey(), 0);
+                if (assigned < e.getValue()) {
+                    unassignedItems.add(e.getKey() + "(未排上" + (e.getValue() - assigned) + "/" + e.getValue() + ")");
+                }
+            }
+            if (!unassignedItems.isEmpty()) {
+                log.warn("未排上的胎胚：{}", unassignedItems);
+            }
         }
     }
 
