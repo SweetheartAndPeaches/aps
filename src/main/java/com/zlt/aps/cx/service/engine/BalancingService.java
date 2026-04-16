@@ -469,6 +469,7 @@ public class BalancingService {
         searchResult.bestAssignedCount = 0;
         searchResult.bestIsBalanced = false;
         searchResult.bestAssignments = null;
+        searchResult.bestMachineCodes = null;
         searchResult.searchCount = 0;
         searchResult.pruneCount = 0;
 
@@ -501,7 +502,7 @@ public class BalancingService {
                     searchResult.bestAssignedCount, totalDemand, searchResult.bestAssignments != null ? "存在" : "null");
             // 统计每个embryoCode的已分配总量
             Map<String, Integer> assignedQtyMap = new java.util.HashMap<>();
-            for (List<EmbryoAssignment> assignments : searchResult.bestAssignments.values()) {
+            for (List<EmbryoAssignment> assignments : searchResult.bestAssignments) {
                 for (EmbryoAssignment ea : assignments) {
                     assignedQtyMap.merge(ea.getEmbryoCode(), ea.getAssignedQty(), Integer::sum);
                 }
@@ -534,18 +535,13 @@ public class BalancingService {
         // Step 8: 构建结果
         BalancingResult result;
         if (searchResult.bestAssignments != null) {
-            // 验证解是否完整
-            int totalAssigned = 0;
-            for (Map.Entry<String, List<EmbryoAssignment>> entry : searchResult.bestAssignments.entrySet()) {
-                totalAssigned += entry.getValue().stream().mapToInt(EmbryoAssignment::getAssignedQty).sum();
-            }
-            
-            if (totalAssigned == totalDemand) {
-                result = convertDfsResultToBalancingResult(searchResult.bestAssignments, machineStates, sortedTasks);
-                log.info("找到满足均衡条件的完整方案，已分配 {} 台硫化机", totalAssigned);
+            // 直接使用 bestAssignedCount 判断完整性（避免从 Map 统计因重复 key 导致数据丢失）
+            if (searchResult.bestAssignedCount == totalDemand) {
+                result = convertDfsResultToBalancingResult(searchResult.bestAssignments, searchResult.bestMachineCodes, machineStates, sortedTasks);
+                log.info("找到满足均衡条件的完整方案，已分配 {} 台硫化机", searchResult.bestAssignedCount);
             } else {
-                log.warn("DFS搜索完成：找到最优但不完备的解（已分配 {}/{}），这是约束系统允许的最大值，直接使用此结果", totalAssigned, totalDemand);
-                result = convertDfsResultToBalancingResult(searchResult.bestAssignments, machineStates, sortedTasks);
+                log.warn("DFS搜索完成：找到最优但不完备的解（已分配 {}/{}），这是约束系统允许的最大值，直接使用此结果", searchResult.bestAssignedCount, totalDemand);
+                result = convertDfsResultToBalancingResult(searchResult.bestAssignments, searchResult.bestMachineCodes, machineStates, sortedTasks);
             }
         } else {
             // DFS未找到任何方案（理论上不应发生，至少第一个任务的分配会形成部分解）
@@ -709,6 +705,45 @@ public class BalancingService {
         }
         int remainingCapacity = allCapacity - allCurrentLoad;
         if (remainingCapacity <= 0) {
+            // 产能已耗尽，先记录当前部分解，再剪枝
+            int totalAssignedNow = allCurrentLoad;
+            int totalRequiredAll = tasks.stream()
+                    .mapToInt(t -> t.getVulcanizeMachineCount() != null ? t.getVulcanizeMachineCount() : 0)
+                    .sum();
+            if (totalAssignedNow < totalRequiredAll) {
+                // 部分解评估
+                int partialScore = calculateBalancingScore(machineStates);
+                boolean currentBestIsComplete = (searchResult.bestAssignedCount == totalRequiredAll);
+                if (!currentBestIsComplete &&
+                        (totalAssignedNow > searchResult.bestAssignedCount ||
+                        (totalAssignedNow == searchResult.bestAssignedCount && partialScore < searchResult.bestScore))) {
+                    searchResult.bestScore = partialScore;
+                    searchResult.bestAssignedCount = totalAssignedNow;
+                    searchResult.bestIsBalanced = isBalanced(machineStates, typeDiffThreshold, loadDiffThreshold);
+                    searchResult.bestAssignments = copyAssignments(machineStates);
+                    searchResult.bestMachineCodes = copyMachineCodes(machineStates);
+                }
+            } else {
+                // 完整解评估（所有任务已分配，产能刚好耗尽）
+                int score = calculateBalancingScore(machineStates);
+                boolean currentIsBalanced = isBalanced(machineStates, typeDiffThreshold, loadDiffThreshold);
+                boolean currentBestIsComplete = (searchResult.bestAssignedCount == totalRequiredAll);
+                boolean shouldReplace = false;
+                if (!currentBestIsComplete) {
+                    shouldReplace = true;
+                } else if (currentIsBalanced && !searchResult.bestIsBalanced) {
+                    shouldReplace = true;
+                } else if (currentIsBalanced == searchResult.bestIsBalanced && score < searchResult.bestScore) {
+                    shouldReplace = true;
+                }
+                if (shouldReplace) {
+                    searchResult.bestScore = score;
+                    searchResult.bestAssignedCount = totalAssignedNow;
+                    searchResult.bestIsBalanced = currentIsBalanced;
+                    searchResult.bestAssignments = copyAssignments(machineStates);
+                    searchResult.bestMachineCodes = copyMachineCodes(machineStates);
+                }
+            }
             searchResult.pruneCount++;
             return;
         }
@@ -764,6 +799,7 @@ public class BalancingService {
                     searchResult.bestAssignedCount = totalAssigned;
                     searchResult.bestIsBalanced = currentIsBalanced;
                     searchResult.bestAssignments = copyAssignments(machineStates);
+                    searchResult.bestMachineCodes = copyMachineCodes(machineStates);
                 }
             } else {
                 // 部分解：完整度优先（分配更多优于更均衡），同等完整度比较均衡分数
@@ -776,6 +812,7 @@ public class BalancingService {
                     searchResult.bestAssignedCount = totalAssigned;
                     searchResult.bestIsBalanced = isBalanced(machineStates, typeDiffThreshold, loadDiffThreshold);
                     searchResult.bestAssignments = copyAssignments(machineStates);
+                    searchResult.bestMachineCodes = copyMachineCodes(machineStates);
                 }
             }
             return;
@@ -807,6 +844,7 @@ public class BalancingService {
                     searchResult.bestAssignedCount = totalAssignedNow;
                     searchResult.bestIsBalanced = isBalanced(machineStates, typeDiffThreshold, loadDiffThreshold);
                     searchResult.bestAssignments = copyAssignments(machineStates);
+                    searchResult.bestMachineCodes = copyMachineCodes(machineStates);
                 }
                 // 跳过当前任务，递归处理下一个
                 dfsAssign(tasks, taskIndex + 1, 0, machineStates, forceKeepHistory,
@@ -852,6 +890,7 @@ public class BalancingService {
                     // 均衡性通过 calculateBalancingScore 在终点评估
                     
                     // 可行性剪枝：计算剩余机台种类容量，判断是否还能容纳剩余未分配的胎胚种类
+                    // 注意：种类不足时仍需探索部分解（丢弃放不下的胎胚种类），所以只在满排可能时剪枝
                     int remainingTypeCapacity = 0;
                     for (MachineState state : machineStates) {
                         remainingTypeCapacity += state.getMaxTypes() - state.getCurrentTypes();
@@ -877,7 +916,10 @@ public class BalancingService {
                             assignedEmbryoSet.add(nextEmbryo);
                         }
                     }
-                    if (remainingDistinctTypes > remainingTypeCapacity) {
+                    // 只在已找到完整解后启用此剪枝（加速搜索收敛）
+                    // 未找到完整解时不剪枝，让DFS探索丢弃小需求种类、保大需求种类的部分解
+                    if (remainingDistinctTypes > remainingTypeCapacity
+                            && searchResult.bestAssignedCount >= totalDemand) {
                         searchResult.pruneCount++;
                         continue;
                     }
@@ -1097,12 +1139,26 @@ public class BalancingService {
      * @param machineStates 所有机台状态
      * @return machineCode → EmbryoAssignment列表 的深拷贝
      */
-    private Map<String, List<EmbryoAssignment>> copyAssignments(List<MachineState> machineStates) {
-        Map<String, List<EmbryoAssignment>> copy = new LinkedHashMap<>();
+    /**
+     * 深拷贝机台分配状态（按机台索引存储，避免重复编码覆盖）
+     */
+    private List<List<EmbryoAssignment>> copyAssignments(List<MachineState> machineStates) {
+        List<List<EmbryoAssignment>> copy = new ArrayList<>();
         for (MachineState state : machineStates) {
-            copy.put(state.getMachineCode(), new ArrayList<>(state.getAssignedEmbryos()));
+            copy.add(new ArrayList<>(state.getAssignedEmbryos()));
         }
         return copy;
+    }
+
+    /**
+     * 提取机台编码列表
+     */
+    private List<String> copyMachineCodes(List<MachineState> machineStates) {
+        List<String> codes = new ArrayList<>();
+        for (MachineState state : machineStates) {
+            codes.add(state.getMachineCode());
+        }
+        return codes;
     }
 
     /**
@@ -1190,21 +1246,23 @@ public class BalancingService {
      * @return 转换后的 BalancingResult
      */
     private BalancingResult convertDfsResultToBalancingResult(
-            Map<String, List<EmbryoAssignment>> assignments,
+            List<List<EmbryoAssignment>> assignments,
+            List<String> machineCodes,
             List<MachineState> machineStates,
             List<CoreScheduleAlgorithmService.DailyEmbryoTask> tasks) {
         
         BalancingResult result = new BalancingResult();
         result.setAssignments(new ArrayList<>());
         
-        for (Map.Entry<String, List<EmbryoAssignment>> entry : assignments.entrySet()) {
-            if (entry.getValue().isEmpty()) {
+        for (int i = 0; i < assignments.size(); i++) {
+            List<EmbryoAssignment> embryoAssignments = assignments.get(i);
+            if (embryoAssignments.isEmpty()) {
                 continue;
             }
             
             MachineAssignment assignment = new MachineAssignment();
-            assignment.setMachineCode(entry.getKey());
-            assignment.setEmbryoAssignments(entry.getValue());
+            assignment.setMachineCode(machineCodes.get(i));
+            assignment.setEmbryoAssignments(embryoAssignments);
             result.getAssignments().add(assignment);
         }
         
@@ -1659,7 +1717,8 @@ public class BalancingService {
         int bestScore;
         int bestAssignedCount;  // 最优解的已分配数量（完整度优先于均衡分数）
         boolean bestIsBalanced; // 最优解是否满足均衡阈值
-        Map<String, List<EmbryoAssignment>> bestAssignments;
+        List<List<EmbryoAssignment>> bestAssignments; // 按机台索引存储，避免重复编码覆盖
+        List<String> bestMachineCodes; // 对应的机台编码列表
         int searchCount;  // DFS搜索次数
         int pruneCount;   // 剪枝次数
         int callCount;    // findCandidate调用次数（用于日志控制）
