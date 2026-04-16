@@ -389,6 +389,7 @@ public class BalancingService {
         }
 
         // 第零排序：约束量试任务优先（候选机台最少，必须先安排）
+        // 新增排序：续作任务优先（候选机台受限，必须先保住）
         // 第一排序：胎胚总需求量降序（大需求优先占种类槽，产能不足时丢弃小需求更划算）
         // 第二排序：候选机台数升序（受限任务优先）
         final Set<String> availableMachineCodes = availableMachines.stream()
@@ -401,6 +402,13 @@ public class BalancingService {
                     boolean aConstrained = a.getConstrainedMachineCode() != null && !a.getConstrainedMachineCode().isEmpty();
                     boolean bConstrained = b.getConstrainedMachineCode() != null && !b.getConstrainedMachineCode().isEmpty();
                     if (aConstrained != bConstrained) return aConstrained ? -1 : 1;
+
+                    // 新增排序：续作任务优先（候选机台受限，必须先保住）
+                    boolean aContinue = a.getIsContinueTask() != null && a.getIsContinueTask()
+                            && a.getContinueMachineCodes() != null && !a.getContinueMachineCodes().isEmpty();
+                    boolean bContinue = b.getIsContinueTask() != null && b.getIsContinueTask()
+                            && b.getContinueMachineCodes() != null && !b.getContinueMachineCodes().isEmpty();
+                    if (aContinue != bContinue) return aContinue ? -1 : 1;
 
                     // 第一排序：胎胚总需求量降序（大需求优先占种类槽）
                     int totalA = embryoTotalDemand.getOrDefault(a.getEmbryoCode(), 0);
