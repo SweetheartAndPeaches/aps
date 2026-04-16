@@ -36,7 +36,7 @@ import java.util.stream.Collectors;
  *
  * <p>剪枝策略：
  * <ul>
- *   <li>剩余负荷可行性剪枝：剩余机台总产能 < 剩余总需求，剪枝</li>
+ *   <li>剩余产能为零剪枝：剩余机台总产能为0时剪枝（产能不足时继续探索部分解）</li>
  *   <li>贪心上界剪枝：找到均衡完整解后，当前分支不可能满足均衡阈值时剪枝</li>
  *   <li>搜索限制：100万次，防止极端情况卡死</li>
  * </ul>
@@ -479,7 +479,7 @@ public class BalancingService {
                 searchResult.bestAssignedCount, totalDemand);
 
         // 输出未被分配的任务（区分正式/量试）
-        if (searchResult.bestAssignedCount < totalDemand) {
+        if (searchResult.bestAssignedCount < totalDemand && searchResult.bestAssignments != null) {
             log.info("检测到分配不足：已分配={}/总需求={}, bestAssignments={}",
                     searchResult.bestAssignedCount, totalDemand, searchResult.bestAssignments != null ? "存在" : "null");
             // 统计每个embryoCode的已分配总量
@@ -682,21 +682,16 @@ public class BalancingService {
             return;
         }
 
-        // 【剩余负荷可行性剪枝】：检查剩余机台总产能是否能容纳剩余总需求
+        // 【剩余产能为零剪枝】：剩余产能为0时，无法再分配任何任务，剪枝
+        // 注意：产能不足（产能<需求）时不剪枝，DFS需要继续探索最优部分解
         int allCurrentLoad = 0;
         int allCapacity = 0;
         for (MachineState s : machineStates) {
             allCurrentLoad += s.getCurrentLoad();
             allCapacity += s.getMaxCapacity();
         }
-        // 剩余需求 = 当前任务剩余量 + 后续所有任务的需求量
-        int allRemainingDemand = remainingCount;
-        for (int i = taskIndex + 1; i < tasks.size(); i++) {
-            int cnt = tasks.get(i).getVulcanizeMachineCount() != null ? tasks.get(i).getVulcanizeMachineCount() : 0;
-            allRemainingDemand += cnt;
-        }
         int remainingCapacity = allCapacity - allCurrentLoad;
-        if (remainingCapacity < allRemainingDemand) {
+        if (remainingCapacity <= 0) {
             searchResult.pruneCount++;
             return;
         }
@@ -711,8 +706,8 @@ public class BalancingService {
                     curMaxLoad = s.getCurrentLoad();
                 }
             }
-            // 贪心解的负荷下界：(totalAssigned + remainingDemand) / numMachines
-            int greedyLoadLowerBound = (allCurrentLoad + allRemainingDemand) / machineStates.size();
+            // 贪心解的负荷下界：总已分配 / 机台数
+            int greedyLoadLowerBound = allCurrentLoad / machineStates.size();
             // 如果当前最大负荷 - 贪心下界 > 负荷阈值，说明此分支不可能满足均衡条件
             if (curMaxLoad - greedyLoadLowerBound > loadDiffThreshold) {
                 searchResult.pruneCount++;
@@ -831,25 +826,8 @@ public class BalancingService {
                         continue;
                     }
                     
-                    // 剪枝条件2：剩余负荷可行性剪枝（当前已分配 + 剩余产能 < 需求总量 → 提前剪枝）
-                    int totalAssignedNow = 0;
-                    int remainingCap = 0;
-                    for (MachineState s : machineStates) {
-                        totalAssignedNow += s.getCurrentLoad();
-                        remainingCap += s.getMaxCapacity() - s.getCurrentLoad();
-                    }
-                    // 加上本次分配
-                    totalAssignedNow += assignQty;
-                    remainingCap -= assignQty;
-                    int totalRequired = tasks.stream()
-                            .mapToInt(t -> t.getVulcanizeMachineCount() != null ? t.getVulcanizeMachineCount() : 0)
-                            .sum();
-                    // 还需要分配：totalRequired - currentTotalLoad
-                    // 还能分配：remainingCapacity
-                    if (remainingCap < totalRequired - totalAssignedNow) {
-                        searchResult.pruneCount++;
-                        continue;
-                    }
+                    // 剪枝条件2：当前分配后产能耗尽，无需尝试更小分配量
+                    // （DFS递归入口处会检查 remainingCapacity <= 0 剪枝）
                     
                     // 剪枝条件3：剩余种类可行性剪枝（已在下方实现）
                     // 注意：种类均衡和负荷均衡不做中间剪枝！
