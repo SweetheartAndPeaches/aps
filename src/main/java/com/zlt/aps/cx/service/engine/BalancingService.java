@@ -857,7 +857,7 @@ public class BalancingService {
             }
             
             // 按优先级排序候选机台
-            sortCandidatesForDfs(candidates, embryoCode, forceKeepHistory, capacitySufficient);
+            sortCandidatesForDfs(candidates, embryoCode, forceKeepHistory, capacitySufficient, loadDiffThreshold);
             
             // 尝试给每个候选机台分配 k 个硫化机台数（k从1到min(remainingCount, 机台剩余容量)）
             for (MachineState candidate : candidates) {
@@ -1102,27 +1102,40 @@ public class BalancingService {
             List<MachineState> candidates,
             String embryoCode,
             boolean forceKeepHistory,
-            boolean capacitySufficient) {
+            boolean capacitySufficient,
+            int loadDiffThreshold) {
         
         if (capacitySufficient) {
-            // ===== 产能充足策略：侧重均衡 =====
+            // ===== 产能充足策略：已有优先+负荷感知阈值，兼顾完整性和均衡 =====
+            // 阈值：已有机台负荷比未有机台负荷高出超过此值时，允许切换到未有机台
+            int loadAwareThreshold = loadDiffThreshold + 1;
+            
             candidates.sort((a, b) -> {
-                // 优先级1：负荷少的优先（均衡核心）
-                int loadCompare = Integer.compare(a.getCurrentLoad(), b.getCurrentLoad());
-                if (loadCompare != 0) {
-                    return loadCompare;
-                }
-                
-                // 优先级2：胎胚已在机台上优先（减少切换，但不绝对——均衡更重要）
                 boolean aAlreadyHas = a.getAssignedEmbryos().stream()
                         .anyMatch(e -> e.getEmbryoCode().equals(embryoCode));
                 boolean bAlreadyHas = b.getAssignedEmbryos().stream()
                         .anyMatch(e -> e.getEmbryoCode().equals(embryoCode));
+                
+                // 优先级1：已有优先，但加入负荷感知阈值
                 if (aAlreadyHas && !bAlreadyHas) {
+                    // a已有（节省种类槽），b未有
+                    // 若a负荷比b高出超过阈值 → 均衡更重要，b优先（也让胎胚扩展到第二台机台）
+                    if (a.getCurrentLoad() > b.getCurrentLoad() + loadAwareThreshold) {
+                        return 1;
+                    }
                     return -1;
                 }
                 if (!aAlreadyHas && bAlreadyHas) {
+                    if (b.getCurrentLoad() > a.getCurrentLoad() + loadAwareThreshold) {
+                        return -1;
+                    }
                     return 1;
+                }
+                
+                // 优先级2：同已有/同未有时，负荷少的优先（均衡）
+                int loadCompare = Integer.compare(a.getCurrentLoad(), b.getCurrentLoad());
+                if (loadCompare != 0) {
+                    return loadCompare;
                 }
                 
                 // 优先级3：历史胎胚优先
@@ -1135,12 +1148,14 @@ public class BalancingService {
                     return 1;
                 }
                 
-                // 优先级4：剩余种类容量大的优先
-                int aRemainingTypes = a.getMaxTypes() - a.getCurrentTypes();
-                int bRemainingTypes = b.getMaxTypes() - b.getCurrentTypes();
-                int remainingCompare = Integer.compare(bRemainingTypes, aRemainingTypes);
-                if (remainingCompare != 0) {
-                    return remainingCompare;
+                // 优先级4：同为未有时，剩余种类容量大的优先（保留稀缺种类槽）
+                if (!aAlreadyHas) {
+                    int aRemainingTypes = a.getMaxTypes() - a.getCurrentTypes();
+                    int bRemainingTypes = b.getMaxTypes() - b.getCurrentTypes();
+                    int remainingCompare = Integer.compare(bRemainingTypes, aRemainingTypes);
+                    if (remainingCompare != 0) {
+                        return remainingCompare;
+                    }
                 }
                 
                 // 优先级5：种类少的优先
