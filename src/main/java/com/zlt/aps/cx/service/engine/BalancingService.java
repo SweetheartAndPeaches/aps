@@ -457,9 +457,12 @@ public class BalancingService {
             reservedHistoryTasks(sortedTasks, machineStates, context);
         }
 
+        // 产能充足标记（影响DFS候选排序策略）
+        boolean capacitySufficient = (totalCapacity >= totalDemand);
+        
         // 产能不足提示（DFS仍可处理部分解，无需贪心兜底）
         int effectiveCapacity = totalCapacity;
-        if (effectiveCapacity < totalDemand) {
+        if (!capacitySufficient) {
             log.warn("产能不足（产能={}, 需求={}），DFS将尝试最优部分解", effectiveCapacity, totalDemand);
         }
 
@@ -489,7 +492,7 @@ public class BalancingService {
                    ? remainingTasks.get(0).getVulcanizeMachineCount() : 0);
         
         dfsAssign(remainingTasks, 0, initialRemainingCount, machineStates, forceKeepHistory,
-                typeDiffThreshold, loadDiffThreshold, totalDemand, searchResult);
+                typeDiffThreshold, loadDiffThreshold, totalDemand, searchResult, capacitySufficient);
 
         log.info("DFS搜索统计：总搜索次数={}, 剪枝次数={}, 最优分数={}, 均衡={}, 最优已分配={}/{}",
                 searchResult.searchCount, searchResult.pruneCount, searchResult.bestScore,
@@ -685,7 +688,8 @@ public class BalancingService {
             int typeDiffThreshold,
             int loadDiffThreshold,
             int totalDemand,
-            DfsSearchResult searchResult) {
+            DfsSearchResult searchResult,
+            boolean capacitySufficient) {
 
         searchResult.searchCount++;
         searchResult.callCount++;
@@ -848,12 +852,12 @@ public class BalancingService {
                 }
                 // 跳过当前任务，递归处理下一个
                 dfsAssign(tasks, taskIndex + 1, 0, machineStates, forceKeepHistory,
-                        typeDiffThreshold, loadDiffThreshold, totalDemand, searchResult);
+                        typeDiffThreshold, loadDiffThreshold, totalDemand, searchResult, capacitySufficient);
                 return;
             }
             
             // 按优先级排序候选机台
-            sortCandidatesForDfs(candidates, embryoCode, forceKeepHistory);
+            sortCandidatesForDfs(candidates, embryoCode, forceKeepHistory, capacitySufficient);
             
             // 尝试给每个候选机台分配 k 个硫化机台数（k从1到min(remainingCount, 机台剩余容量)）
             for (MachineState candidate : candidates) {
@@ -937,10 +941,10 @@ public class BalancingService {
                     // 如果当前胎胚还有剩余，继续分配；否则处理下一个任务
                     if (newRemainingCount > 0) {
                         dfsAssign(tasks, taskIndex, newRemainingCount, machineStates, forceKeepHistory,
-                                typeDiffThreshold, loadDiffThreshold, totalDemand, searchResult);
+                                typeDiffThreshold, loadDiffThreshold, totalDemand, searchResult, capacitySufficient);
                     } else {
                         dfsAssign(tasks, taskIndex + 1, 0, machineStates, forceKeepHistory,
-                                typeDiffThreshold, loadDiffThreshold, totalDemand, searchResult);
+                                typeDiffThreshold, loadDiffThreshold, totalDemand, searchResult, capacitySufficient);
                     }
                     
                     // === 回溯 ===
@@ -962,11 +966,11 @@ public class BalancingService {
             if (currentLhCount <= 0) {
                 // 当前任务不需要分配，跳到下一个
                 dfsAssign(tasks, taskIndex + 1, 0, machineStates, forceKeepHistory,
-                        typeDiffThreshold, loadDiffThreshold, totalDemand, searchResult);
+                        typeDiffThreshold, loadDiffThreshold, totalDemand, searchResult, capacitySufficient);
             } else {
                 // 开始处理当前任务（传入其完整需求量）
                 dfsAssign(tasks, taskIndex, currentLhCount, machineStates, forceKeepHistory,
-                        typeDiffThreshold, loadDiffThreshold, totalDemand, searchResult);
+                        typeDiffThreshold, loadDiffThreshold, totalDemand, searchResult, capacitySufficient);
             }
         }
     }
@@ -1088,60 +1092,103 @@ public class BalancingService {
     /**
      * 排序候选机台（DFS用）
      *
-     * <p>排序优先级：
-     * <ol>
-     *   <li>胎胚已在机台上优先（不消耗种类槽，保留种类灵活性）</li>
-     *   <li>历史胎胚优先（工人更熟悉，换品种成本低）</li>
-     *   <li>剩余种类容量大的优先（保留灵活性，避免过早耗尽种类限制）</li>
-     *   <li>负荷少的优先（均衡分配）</li>
-     *   <li>种类少的优先（均衡分配）</li>
-     * </ol>
+     * <p>根据产能是否充足，使用不同排序策略：
+     * <ul>
+     *   <li><b>产能充足</b>：目标是均衡分配，侧重负荷均衡</li>
+     *   <li><b>产能不足</b>：目标是尽量多排，侧重节省种类槽</li>
+     * </ul>
      */
     private void sortCandidatesForDfs(
             List<MachineState> candidates,
             String embryoCode,
-            boolean forceKeepHistory) {
+            boolean forceKeepHistory,
+            boolean capacitySufficient) {
         
-        candidates.sort((a, b) -> {
-            // 优先级1：胎胚已在机台上优先（不消耗种类槽）
-            boolean aAlreadyHas = a.getAssignedEmbryos().stream()
-                    .anyMatch(e -> e.getEmbryoCode().equals(embryoCode));
-            boolean bAlreadyHas = b.getAssignedEmbryos().stream()
-                    .anyMatch(e -> e.getEmbryoCode().equals(embryoCode));
-            if (aAlreadyHas && !bAlreadyHas) {
-                return -1;
-            }
-            if (!aAlreadyHas && bAlreadyHas) {
-                return 1;
-            }
-            
-            // 优先级2：历史胎胚优先
-            boolean aHasHistory = a.getHistoryEmbryos().contains(embryoCode);
-            boolean bHasHistory = b.getHistoryEmbryos().contains(embryoCode);
-            if (aHasHistory && !bHasHistory) {
-                return -1;
-            }
-            if (!aHasHistory && bHasHistory) {
-                return 1;
-            }
-            
-            // 优先级3：剩余种类容量大的优先（保留灵活性，避免过早耗尽种类限制）
-            int aRemainingTypes = a.getMaxTypes() - a.getCurrentTypes();
-            int bRemainingTypes = b.getMaxTypes() - b.getCurrentTypes();
-            int remainingCompare = Integer.compare(bRemainingTypes, aRemainingTypes);
-            if (remainingCompare != 0) {
-                return remainingCompare;
-            }
-            
-            // 优先级4：负荷少的优先
-            int loadCompare = Integer.compare(a.getCurrentLoad(), b.getCurrentLoad());
-            if (loadCompare != 0) {
-                return loadCompare;
-            }
-            
-            // 优先级5：种类少的优先
-            return Integer.compare(a.getCurrentTypes(), b.getCurrentTypes());
-        });
+        if (capacitySufficient) {
+            // ===== 产能充足策略：侧重均衡 =====
+            candidates.sort((a, b) -> {
+                // 优先级1：负荷少的优先（均衡核心）
+                int loadCompare = Integer.compare(a.getCurrentLoad(), b.getCurrentLoad());
+                if (loadCompare != 0) {
+                    return loadCompare;
+                }
+                
+                // 优先级2：胎胚已在机台上优先（减少切换，但不绝对——均衡更重要）
+                boolean aAlreadyHas = a.getAssignedEmbryos().stream()
+                        .anyMatch(e -> e.getEmbryoCode().equals(embryoCode));
+                boolean bAlreadyHas = b.getAssignedEmbryos().stream()
+                        .anyMatch(e -> e.getEmbryoCode().equals(embryoCode));
+                if (aAlreadyHas && !bAlreadyHas) {
+                    return -1;
+                }
+                if (!aAlreadyHas && bAlreadyHas) {
+                    return 1;
+                }
+                
+                // 优先级3：历史胎胚优先
+                boolean aHasHistory = a.getHistoryEmbryos().contains(embryoCode);
+                boolean bHasHistory = b.getHistoryEmbryos().contains(embryoCode);
+                if (aHasHistory && !bHasHistory) {
+                    return -1;
+                }
+                if (!aHasHistory && bHasHistory) {
+                    return 1;
+                }
+                
+                // 优先级4：剩余种类容量大的优先
+                int aRemainingTypes = a.getMaxTypes() - a.getCurrentTypes();
+                int bRemainingTypes = b.getMaxTypes() - b.getCurrentTypes();
+                int remainingCompare = Integer.compare(bRemainingTypes, aRemainingTypes);
+                if (remainingCompare != 0) {
+                    return remainingCompare;
+                }
+                
+                // 优先级5：种类少的优先
+                return Integer.compare(a.getCurrentTypes(), b.getCurrentTypes());
+            });
+        } else {
+            // ===== 产能不足策略：侧重节省种类槽、尽量多排 =====
+            candidates.sort((a, b) -> {
+                // 优先级1：胎胚已在机台上绝对优先（节省种类槽，多排任务）
+                boolean aAlreadyHas = a.getAssignedEmbryos().stream()
+                        .anyMatch(e -> e.getEmbryoCode().equals(embryoCode));
+                boolean bAlreadyHas = b.getAssignedEmbryos().stream()
+                        .anyMatch(e -> e.getEmbryoCode().equals(embryoCode));
+                if (aAlreadyHas && !bAlreadyHas) {
+                    return -1;
+                }
+                if (!aAlreadyHas && bAlreadyHas) {
+                    return 1;
+                }
+                
+                // 优先级2：历史胎胚优先
+                boolean aHasHistory = a.getHistoryEmbryos().contains(embryoCode);
+                boolean bHasHistory = b.getHistoryEmbryos().contains(embryoCode);
+                if (aHasHistory && !bHasHistory) {
+                    return -1;
+                }
+                if (!aHasHistory && bHasHistory) {
+                    return 1;
+                }
+                
+                // 优先级3：剩余种类容量大的优先（保留灵活性）
+                int aRemainingTypes = a.getMaxTypes() - a.getCurrentTypes();
+                int bRemainingTypes = b.getMaxTypes() - b.getCurrentTypes();
+                int remainingCompare = Integer.compare(bRemainingTypes, aRemainingTypes);
+                if (remainingCompare != 0) {
+                    return remainingCompare;
+                }
+                
+                // 优先级4：负荷少的优先
+                int loadCompare = Integer.compare(a.getCurrentLoad(), b.getCurrentLoad());
+                if (loadCompare != 0) {
+                    return loadCompare;
+                }
+                
+                // 优先级5：种类少的优先
+                return Integer.compare(a.getCurrentTypes(), b.getCurrentTypes());
+            });
+        }
     }
 
     /**
