@@ -1101,19 +1101,28 @@ public class ScheduleServiceImpl implements ScheduleService {
      */
     private int getShiftPlanQtyFromLhResult(LhScheduleResult lhResult, List<CxShiftConfig> dayShifts,
                                             LocalDate scheduleDate) {
-        // 获取排程日期范围内的日历信息，用于判断班次停产
-        List<MdmWorkCalendar> workCalendarList = workCalendarMapper.selectList(null);
-        return getShiftPlanQtyFromLhResult(lhResult, dayShifts, scheduleDate, workCalendarList);
+        return getShiftPlanQtyWithShiftName(lhResult, dayShifts, scheduleDate).planQty;
     }
 
     /**
-     * 从硫化记录中获取第一个非停产班次的计划量
+     * 从硫化记录中获取第一个非停产班次的计划量和班次名称
      * 按天遍历，遇到停产班次跳过，遇到停产天也跳过
      */
-    private int getShiftPlanQtyFromLhResult(LhScheduleResult lhResult, List<CxShiftConfig> dayShifts,
-                                            LocalDate scheduleDate, List<MdmWorkCalendar> workCalendarList) {
+    private ShiftPlanResult getShiftPlanQtyWithShiftName(LhScheduleResult lhResult, List<CxShiftConfig> dayShifts,
+                                                          LocalDate scheduleDate) {
+        List<MdmWorkCalendar> workCalendarList = workCalendarMapper.selectList(null);
+        return getShiftPlanQtyWithShiftName(lhResult, dayShifts, scheduleDate, workCalendarList);
+    }
+
+    /**
+     * 从硫化记录中获取第一个非停产班次的计划量和班次名称
+     * 按天遍历，遇到停产班次跳过，遇到停产天也跳过
+     */
+    private ShiftPlanResult getShiftPlanQtyWithShiftName(LhScheduleResult lhResult, List<CxShiftConfig> dayShifts,
+                                                          LocalDate scheduleDate, List<MdmWorkCalendar> workCalendarList) {
+        int defaultQty = lhResult.getDailyPlanQty() != null ? lhResult.getDailyPlanQty() : 0;
         if (dayShifts == null || dayShifts.isEmpty()) {
-            return lhResult.getDailyPlanQty() != null ? lhResult.getDailyPlanQty() : 0;
+            return new ShiftPlanResult(defaultQty, "未知");
         }
 
         // 排程起始日期
@@ -1171,7 +1180,9 @@ public class ScheduleServiceImpl implements ScheduleService {
                     int classIndex = Integer.parseInt(classField.substring(5));
                     Integer planQty = getClassPlanQtyByIndex(lhResult, classIndex);
                     if (planQty != null && planQty > 0) {
-                        return planQty;
+                        String shiftName = shiftConfig.getShiftCode() != null
+                                ? shiftConfig.getShiftCode() : classField;
+                        return new ShiftPlanResult(planQty, shiftName);
                     }
                 } catch (NumberFormatException e) {
                     log.warn("无法解析班次字段: {}", classField);
@@ -1179,7 +1190,7 @@ public class ScheduleServiceImpl implements ScheduleService {
             }
         }
 
-        return lhResult.getDailyPlanQty() != null ? lhResult.getDailyPlanQty() : 0;
+        return new ShiftPlanResult(defaultQty, "日计划");
     }
 
     /**
@@ -1278,9 +1289,9 @@ public class ScheduleServiceImpl implements ScheduleService {
                 int totalDemand = 0;
                 List<TaskDemand> taskDemands = new ArrayList<>();
                 for (LhScheduleResult lh : relatedTasks) {
-                    int demand = getShiftPlanQtyFromLhResult(lh, dayShifts, scheduleDate);
-                    taskDemands.add(new TaskDemand(lh.getId(), demand, lh.getMaterialCode()));
-                    totalDemand += demand;
+                    ShiftPlanResult shiftResult = getShiftPlanQtyWithShiftName(lh, dayShifts, scheduleDate);
+                    taskDemands.add(new TaskDemand(lh.getId(), shiftResult.planQty, lh.getMaterialCode(), shiftResult.shiftName));
+                    totalDemand += shiftResult.planQty;
                 }
 
                 if (totalDemand == 0) {
@@ -1309,8 +1320,8 @@ public class ScheduleServiceImpl implements ScheduleService {
                         materialStockMap.merge(td.taskKey, currentStock, Integer::sum);
                         allocatedTotal += currentStock;
 
-                        log.debug("胎胚 {} 共用分配：硫化任务 {} 需求 {}，分配库存 {}，物料编码 {}",
-                                embryoCode, td.taskKey, td.demand, currentStock, td.materialCode);
+                        log.debug("物料编码 {}，胎胚 {} 共用分配：硫化任务 {} 需求（{}班） {}，分配库存 {}",
+                                td.materialCode, embryoCode, td.taskKey, td.shiftName, td.demand, currentStock);
                     }
                 }
             }
@@ -1326,11 +1337,26 @@ public class ScheduleServiceImpl implements ScheduleService {
         String taskKey;    // 硫化任务唯一键：lhId
         int demand;
         String materialCode;  // 物料编码
+        String shiftName;     // 班次名称
 
-        TaskDemand(Long lhId, int demand, String materialCode) {
+        TaskDemand(Long lhId, int demand, String materialCode, String shiftName) {
             this.taskKey = String.valueOf(lhId);
             this.demand = demand;
             this.materialCode = materialCode;
+            this.shiftName = shiftName;
+        }
+    }
+
+    /**
+     * 班次计划量查询结果
+     */
+    private static class ShiftPlanResult {
+        int planQty;
+        String shiftName;
+
+        ShiftPlanResult(int planQty, String shiftName) {
+            this.planQty = planQty;
+            this.shiftName = shiftName;
         }
     }
 
