@@ -262,8 +262,6 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         log.info("新增任务处理完成，机台分配数: {}", newAllocations.size());
 
         // ==================== 第五步：合并分配结果 ====================
-        // 续作任务已和新增任务统一均衡分配，不再需要单独合并
-        // 新增阶段的结果已包含续作任务
         List<MachineAllocationResult> allAllocations = new ArrayList<>();
         allAllocations.addAll(newAllocations);
         allAllocations.addAll(trialAllocations);

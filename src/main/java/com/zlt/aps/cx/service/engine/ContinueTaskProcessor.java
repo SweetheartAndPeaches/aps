@@ -66,10 +66,6 @@ public class ContinueTaskProcessor {
 
     /**
      * 处理续作任务
-     * 
-     * 续作任务不再独立均衡分配，而是构建历史映射后返回空结果。
-     * 续作任务会和新增任务一起在 NewTaskProcessor 中统一均衡分配，
-     * 保证全局均衡，续作任务通过保底预留确保至少1个留在原机台。
      */
     public List<CoreScheduleAlgorithmService.MachineAllocationResult> processContinueTasks(
             List<CoreScheduleAlgorithmService.DailyEmbryoTask> continueTasks,
@@ -95,15 +91,60 @@ public class ContinueTaskProcessor {
         boolean forceKeepHistory = getForceKeepHistoryConfig(context);
         log.info("强制保留历史任务配置: {}", forceKeepHistory);
 
-        // Step 3: 构建历史任务映射（续作任务的在机信息作为均衡分配的历史约束）
+        // Step 3: 构建历史任务映射
         Map<String, Set<String>> machineHistoryMap = buildMachineHistoryMap(context);
         log.info("构建历史任务映射完成，共 {} 台机台有历史记录", machineHistoryMap.size());
 
-        // Step 4: 续作任务不独立均衡分配，由 NewTaskProcessor 统一均衡
-        // 续作任务保持完整需求量，将和新增任务一起参与全局均衡
-        log.info("续作任务将和新增任务统一均衡分配（保持完整需求量）");
+        // Step 4: 按结构处理每个分组
+        for (Map.Entry<String, List<CoreScheduleAlgorithmService.DailyEmbryoTask>> entry : structureTaskMap.entrySet()) {
+            String structureName = entry.getKey();
+            List<CoreScheduleAlgorithmService.DailyEmbryoTask> tasks = entry.getValue();
 
-        log.info("========== 续作任务处理完成（仅构建历史映射），共 {} 个任务待统一均衡 ==========", continueTasks.size());
+            log.info("--- 处理结构 {}，共 {} 个胎胚 ---", structureName, tasks.size());
+
+            // 获取该结构可分配的机台列表（按 PRODUCTION_VERSION 过滤）
+            // 同一结构下所有任务的 productionVersion 应一致，取第一个
+            String productionVersion = tasks.get(0).getProductionVersion();
+            List<MpCxCapacityConfiguration> availableMachines = getAvailableMachinesForStructure(
+                    structureName, scheduleDate, context, productionVersion);
+            
+            if (availableMachines.isEmpty()) {
+                log.warn("结构 {} 没有可分配的机台，跳过", structureName);
+                continue;
+            }
+
+            // 构建机台编码 -> 最大硫化机数 映射（根据每台机台的机型+结构获取）
+            Map<String, Integer> machineMaxLhMap = buildMachineMaxLhMap(availableMachines, structureName, context);
+
+            // 构建机台编码 -> 最大胎胚种类数 映射（根据每台机台的机型+结构获取）
+            Map<String, Integer> machineMaxEmbryoTypesMap = buildMachineMaxEmbryoTypesMap(availableMachines, structureName, context);
+
+            // Step 5: 使用 BalancingService 均衡分配（使用每台机台各自的最大硫化机数和最大胎胚种类数）
+            BalancingService.BalancingResult balancingResult = balancingService.balanceEmbryosToMachinesWithMachineCapacity(
+                    tasks, availableMachines, machineHistoryMap,
+                    machineMaxLhMap, machineMaxEmbryoTypesMap, forceKeepHistory, context);
+
+            // Step 6: 为每个机台分配计划量
+            for (BalancingService.MachineAssignment assignment : balancingResult.getAssignments()) {
+                CoreScheduleAlgorithmService.MachineAllocationResult allocation = createMachineAllocation(
+                        assignment.getMachineCode(), context);
+
+                for (BalancingService.EmbryoAssignment embryoAssignment : assignment.getEmbryoAssignments()) {
+                    CoreScheduleAlgorithmService.DailyEmbryoTask task = embryoAssignment.getTask();
+
+                    // S5.3.1~S5.3.4 均已在分组阶段计算完成，直接分配任务到机台
+                    if (task.getEndingExtraInventory() != null && task.getEndingExtraInventory() > 0) {
+                        allocateTaskToMachine(allocation, task, context);
+                    }
+                }
+
+                if (!allocation.getTaskAllocations().isEmpty()) {
+                    results.add(allocation);
+                }
+            }
+        }
+
+        log.info("========== 续作任务处理完成，共 {} 台机台分配任务 ==========", results.size());
         return results;
     }
 

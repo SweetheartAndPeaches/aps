@@ -547,27 +547,11 @@ public class BalancingService {
                 result = convertDfsResultToBalancingResult(searchResult.bestAssignments, searchResult.bestMachineCodes, machineStates, sortedTasks);
             }
         } else {
-            // DFS未找到任何方案，检查是否有保底预留的分配
-            boolean hasReservedAssignments = machineStates.stream()
-                    .anyMatch(s -> s.getCurrentLoad() > 0);
-            if (hasReservedAssignments) {
-                // 保底预留的分配仍在 machineStates 中，基于此构建结果
-                log.info("DFS未找到方案，但存在保底预留分配（共{}台机台），使用预留结果",
-                        machineStates.stream().filter(s -> s.getCurrentLoad() > 0).count());
-                // 将 machineStates 中的分配转为 bestAssignments 格式
-                List<List<EmbryoAssignment>> reservedAssignments = machineStates.stream()
-                        .map(MachineState::getAssignedEmbryos)
-                        .collect(Collectors.toList());
-                List<String> reservedMachineCodes = machineStates.stream()
-                        .map(MachineState::getMachineCode)
-                        .collect(Collectors.toList());
-                result = convertDfsResultToBalancingResult(reservedAssignments, reservedMachineCodes, machineStates, sortedTasks);
-            } else {
-                log.warn("DFS未找到任何方案，返回空结果");
-                BalancingResult emptyResult = new BalancingResult();
-                emptyResult.setAssignments(new ArrayList<>());
-                result = emptyResult;
-            }
+            // DFS未找到任何方案（理论上不应发生，至少第一个任务的分配会形成部分解）
+            log.warn("DFS未找到任何方案，返回空结果");
+            BalancingResult emptyResult = new BalancingResult();
+            emptyResult.setAssignments(new ArrayList<>());
+            result = emptyResult;
         }
 
         logAllocationResult(result, machineStates, remainingTasks);
@@ -606,8 +590,6 @@ public class BalancingService {
 
     /**
      * 保底预留历史任务
-     * 遍历机台历史胎胚，在任务列表中找到对应任务（embryoCode匹配），
-     * 预留1个需求量到该机台。一个胎胚可能对应多个任务，需要遍历查找。
      */
     private void reservedHistoryTasks(
             List<CoreScheduleAlgorithmService.DailyEmbryoTask> tasks,
@@ -615,6 +597,13 @@ public class BalancingService {
             ScheduleContextVo context) {
         
         log.info("开始保底预留历史任务...");
+        
+        // 构建胎胚编码 -> 任务 的映射
+        Map<String, CoreScheduleAlgorithmService.DailyEmbryoTask> taskMap = tasks.stream()
+                .collect(Collectors.toMap(
+                        CoreScheduleAlgorithmService.DailyEmbryoTask::getMaterialCode,
+                        t -> t,
+                        (a, b) -> a));
         
         int totalReserved = 0;
         
@@ -625,21 +614,15 @@ public class BalancingService {
             }
             
             for (String embryoCode : historyEmbryos) {
-                // 直接遍历任务列表，找到embryoCode匹配且有剩余需求的任务
-                CoreScheduleAlgorithmService.DailyEmbryoTask matchedTask = null;
-                int matchedRemaining = 0;
-                for (CoreScheduleAlgorithmService.DailyEmbryoTask task : tasks) {
-                    if (embryoCode.equals(task.getEmbryoCode())) {
-                        int demand = task.getVulcanizeMachineCount() != null ? task.getVulcanizeMachineCount() : 0;
-                        if (demand > 0) {
-                            matchedTask = task;
-                            matchedRemaining = demand;
-                            break;
-                        }
-                    }
+                CoreScheduleAlgorithmService.DailyEmbryoTask task = taskMap.get(embryoCode);
+                if (task == null) {
+                    continue;
                 }
                 
-                if (matchedTask == null || matchedRemaining <= 0) {
+                int remainingDemand = task.getVulcanizeMachineCount() != null 
+                        ? task.getVulcanizeMachineCount() : 0;
+                
+                if (remainingDemand <= 0) {
                     continue;
                 }
                 
@@ -661,11 +644,11 @@ public class BalancingService {
                 // 保底预留1个硫化机台数
                 int reservedCount = 1;
                 
-                state.getAssignedEmbryos().add(new EmbryoAssignment(embryoCode, matchedTask, reservedCount));
+                state.getAssignedEmbryos().add(new EmbryoAssignment(embryoCode, task, reservedCount));
                 state.setCurrentLoad(state.getCurrentLoad() + reservedCount);
                 state.setCurrentTypes(state.getCurrentTypes() + 1);
                 
-                matchedTask.setVulcanizeMachineCount(matchedRemaining - reservedCount);
+                task.setVulcanizeMachineCount(remainingDemand - reservedCount);
                 
                 totalReserved++;
                 log.debug("机台 {} 保底预留胎胚 {} 共 {} 个硫化机", 
