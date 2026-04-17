@@ -1151,8 +1151,8 @@ public class ScheduleServiceImpl implements ScheduleService {
             // 获取该天的日历信息
             MdmWorkCalendar calendar = calendarMap.get(currentDate);
 
-            // 如果整天停产，跳到下一天
-            if (calendar != null && "0".equals(calendar.getDayFlag())) {
+            // 如果整天停产（dayFlag=0 或 三个班次全部停产），跳到下一天
+            if (calendar != null && isFullDayStopped(calendar)) {
                 log.debug("日期 {} 整天停产，跳过", currentDate);
                 continue;
             }
@@ -1195,6 +1195,20 @@ public class ScheduleServiceImpl implements ScheduleService {
             case 3: return "0".equals(calendar.getThreeShiftFlag());
             default: return false;
         }
+    }
+
+    /**
+     * 判断是否整天停产（dayFlag=0 或 三个班次全部停产）
+     */
+    private boolean isFullDayStopped(MdmWorkCalendar calendar) {
+        if ("0".equals(calendar.getDayFlag())) {
+            return true;
+        }
+        // 三个班次全部停产也视为整天停产
+        boolean shift1Stopped = "0".equals(calendar.getOneShiftFlag());
+        boolean shift2Stopped = "0".equals(calendar.getTwoShiftFlag());
+        boolean shift3Stopped = "0".equals(calendar.getThreeShiftFlag());
+        return shift1Stopped && shift2Stopped && shift3Stopped;
     }
 
     /**
