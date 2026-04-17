@@ -1479,14 +1479,24 @@ public class ScheduleServiceImpl implements ScheduleService {
         }
 
         // 3. 重新构建机台在机胎胚映射（使用过滤后的在机信息）
-        // 使用物料编码 + 胎胚编码组合键
+        // machineOnlineEmbryoMap 存储格式：cxCode -> Set(物料编码|胎胚编码)
         if (context.getOnlineInfos() != null) {
+            // 先构建 materialCode -> embryoCode 的映射（用于在机信息）
+            Map<String, String> materialToEmbryoCodeMap = new HashMap<>();
+            if (context.getMaterials() != null) {
+                for (MdmMaterialInfo material : context.getMaterials()) {
+                    if (material.getMaterialCode() != null && material.getEmbryoCode() != null) {
+                        materialToEmbryoCodeMap.put(material.getMaterialCode(), material.getEmbryoCode());
+                    }
+                }
+            }
+
             Map<String, Set<String>> machineOnlineEmbryoMap = new HashMap<>();
             for (CxMachineOnlineInfo onlineInfo : context.getOnlineInfos()) {
                 String cxCode = onlineInfo.getCxCode();
                 String materialCode = onlineInfo.getMesMaterialCode();
-                String embryoSpec = onlineInfo.getEmbryoSpec();
-                String combinedKey = materialCode + "|" + embryoSpec;
+                String embryoCode = materialToEmbryoCodeMap.get(materialCode);
+                String combinedKey = materialCode + "|" + embryoCode;
                 if (cxCode != null && combinedKey != null && !combinedKey.equals("|")) {
                     machineOnlineEmbryoMap.computeIfAbsent(cxCode, k -> new HashSet<>()).add(combinedKey);
                 }
