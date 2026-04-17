@@ -191,7 +191,7 @@ public class TaskGroupService {
             }
 
             String materialCode = lhResult.getMaterialCode();
-              String embryoCode = lhResult.getMainMaterialDesc();
+              String embryoCode = lhResult.getEmbryoCode();
 
             // 判断任务类型
             List<String> continueMachineCodes = findContinueMachines(materialCode, embryoCode, machineOnlineEmbryoMap);
@@ -454,7 +454,7 @@ public class TaskGroupService {
     private List<String> findContinueMachines(String materialCode, String embryoCode,
                                                Map<String, Set<String>> machineOnlineEmbryoMap) {
         List<String> machineCodes = new ArrayList<>();
-        String combinedKey = materialCode + "|" + embryoCode;
+        String combinedKey = embryoCode;
         for (Map.Entry<String, Set<String>> entry : machineOnlineEmbryoMap.entrySet()) {
             if (entry.getValue().contains(combinedKey)) {
                 machineCodes.add(entry.getKey());
