@@ -598,10 +598,11 @@ public class BalancingService {
         
         log.info("开始保底预留历史任务...");
         
-        // 构建胎胚编码 -> 任务 的映射
+        // 构建胎胚编码 -> 任务 的映射（使用embryoCode，与historyEmbryos中的key一致）
         Map<String, CoreScheduleAlgorithmService.DailyEmbryoTask> taskMap = tasks.stream()
+                .filter(t -> t.getEmbryoCode() != null)
                 .collect(Collectors.toMap(
-                        CoreScheduleAlgorithmService.DailyEmbryoTask::getMaterialCode,
+                        CoreScheduleAlgorithmService.DailyEmbryoTask::getEmbryoCode,
                         t -> t,
                         (a, b) -> a));
         
@@ -1106,7 +1107,7 @@ public class BalancingService {
             int loadDiffThreshold) {
         
         if (capacitySufficient) {
-            // ===== 产能充足策略：已有优先+负荷感知阈值，兼顾完整性和均衡 =====
+            // ===== 产能充足策略：已有/历史优先+负荷感知阈值，兼顾完整性和均衡 =====
             // 阈值：已有机台负荷比未有机台负荷高出超过此值时，允许切换到未有机台
             int loadAwareThreshold = loadDiffThreshold + 1;
             
@@ -1116,16 +1117,20 @@ public class BalancingService {
                 boolean bAlreadyHas = b.getAssignedEmbryos().stream()
                         .anyMatch(e -> e.getEmbryoCode().equals(embryoCode));
                 
-                // 优先级1：已有优先，但加入负荷感知阈值
-                if (aAlreadyHas && !bAlreadyHas) {
-                    // a已有（节省种类槽），b未有
-                    // 若a负荷比b高出超过阈值 → 均衡更重要，b优先（也让胎胚扩展到第二台机台）
+                // 当forceKeepHistory=true时，历史胎胚与已有胎胚同等优先级
+                boolean aPreferred = aAlreadyHas || (forceKeepHistory && a.getHistoryEmbryos().contains(embryoCode));
+                boolean bPreferred = bAlreadyHas || (forceKeepHistory && b.getHistoryEmbryos().contains(embryoCode));
+                
+                // 优先级1：已有/历史优先，但加入负荷感知阈值
+                if (aPreferred && !bPreferred) {
+                    // a已有/历史（节省种类槽），b未有
+                    // 若a负荷比b高出超过阈值 → 均衡更重要，b优先
                     if (a.getCurrentLoad() > b.getCurrentLoad() + loadAwareThreshold) {
                         return 1;
                     }
                     return -1;
                 }
-                if (!aAlreadyHas && bAlreadyHas) {
+                if (!aPreferred && bPreferred) {
                     if (b.getCurrentLoad() > a.getCurrentLoad() + loadAwareThreshold) {
                         return -1;
                     }
@@ -1138,18 +1143,8 @@ public class BalancingService {
                     return loadCompare;
                 }
                 
-                // 优先级3：历史胎胚优先
-                boolean aHasHistory = a.getHistoryEmbryos().contains(embryoCode);
-                boolean bHasHistory = b.getHistoryEmbryos().contains(embryoCode);
-                if (aHasHistory && !bHasHistory) {
-                    return -1;
-                }
-                if (!aHasHistory && bHasHistory) {
-                    return 1;
-                }
-                
-                // 优先级4：同为未有时，剩余种类容量大的优先（保留稀缺种类槽）
-                if (!aAlreadyHas) {
+                // 优先级3：同为未有时，剩余种类容量大的优先（保留稀缺种类槽）
+                if (!aPreferred) {
                     int aRemainingTypes = a.getMaxTypes() - a.getCurrentTypes();
                     int bRemainingTypes = b.getMaxTypes() - b.getCurrentTypes();
                     int remainingCompare = Integer.compare(bRemainingTypes, aRemainingTypes);
@@ -1158,7 +1153,7 @@ public class BalancingService {
                     }
                 }
                 
-                // 优先级5：种类少的优先
+                // 优先级4：种类少的优先
                 return Integer.compare(a.getCurrentTypes(), b.getCurrentTypes());
             });
         } else {
@@ -1176,9 +1171,9 @@ public class BalancingService {
                     return 1;
                 }
                 
-                // 优先级2：历史胎胚优先
-                boolean aHasHistory = a.getHistoryEmbryos().contains(embryoCode);
-                boolean bHasHistory = b.getHistoryEmbryos().contains(embryoCode);
+                // 优先级2：当forceKeepHistory=true时，历史胎胚与已有胎胚同等优先级
+                boolean aHasHistory = forceKeepHistory && a.getHistoryEmbryos().contains(embryoCode);
+                boolean bHasHistory = forceKeepHistory && b.getHistoryEmbryos().contains(embryoCode);
                 if (aHasHistory && !bHasHistory) {
                     return -1;
                 }
