@@ -125,8 +125,17 @@ public class ShiftScheduleService {
         int tripCapacity = getTripCapacity(task.getStructureName(), context);
 
         // 调试日志
-        log.info("scheduleTaskToShifts 调试: embryo={}, endingExtra={}, tripCapacity={}, isOpeningDay={}, dayShifts.size={}",
-                task.getEmbryoCode(), endingExtraInventory, tripCapacity, task.getIsOpeningDayTask(),
+        log.info("scheduleTaskToShifts: embryoCode={}, materialCode={}, materialDesc={}, structureName={}, " +
+                        "endingExtraInventory(待排产量)={}, vulcanizeMachineCount(硫化机台数)={}, " +
+                        "tripCapacity(整车容量/每车条数)={}, " +
+                        "isTrial={}, isClosingDay={}, isOpeningDay={}, isEnding={}, isContinue={}, " +
+                        "stockHours(库存可供时长h)={}, isOpeningDayTask={}, dayShifts.size={}",
+                task.getEmbryoCode(), task.getMaterialCode(), task.getMaterialDesc(), task.getStructureName(),
+                endingExtraInventory, task.getVulcanizeMachineCount(),
+                tripCapacity,
+                task.getIsTrialTask(), task.getIsClosingDayTask(), task.getIsOpeningDayTask(),
+                task.getIsEndingTask(), task.getIsContinueTask(),
+                task.getStockHours(), task.getIsOpeningDayTask(),
                 dayShifts != null ? dayShifts.size() : "null");
 
         // 判断任务类型，按优先级从高到低
@@ -672,15 +681,15 @@ public class ShiftScheduleService {
 
         List<ShiftProductionResult> results = new ArrayList<>();
         int totalQty = task.getEndingExtraInventory();
-        log.info("scheduleNormalTask: embryo={}, totalQty={}, tripCapacity={}, dayShifts.size={}",
-                task.getEmbryoCode(), totalQty, tripCapacity, dayShifts != null ? dayShifts.size() : "null");
+        log.info("scheduleNormalTask: embryoCode={}, totalQty(待排产量)={}, tripCapacity(每车条数)={}, vulcanizeMachineCount(硫化机台数)={}, dayShifts.size={}",
+                task.getEmbryoCode(), totalQty, tripCapacity, task.getVulcanizeMachineCount(), dayShifts != null ? dayShifts.size() : "null");
         if (totalQty <= 0) {
             return results;
         }
 
         int requiredCars = tripCapacity > 0 ? (totalQty + tripCapacity - 1) / tripCapacity : 1;
         int[] shiftCars = calculateWaveCars(requiredCars, dayShifts);
-        log.info("scheduleNormalTask: requiredCars={}, shiftCars={}", requiredCars, Arrays.toString(shiftCars));
+        log.info("scheduleNormalTask: requiredCars(需要车数)={}, shiftCars(各班次分配车数)={}", requiredCars, Arrays.toString(shiftCars));
 
         int hourlyCapacity = getMachineHourlyCapacity(machineCode, task.getMaterialCode(), task.getStructureName(), context);
         int remainingCars = requiredCars;
@@ -721,7 +730,7 @@ public class ShiftScheduleService {
                 continue;
             }
 
-            log.info("scheduleNormalTask: 添加结果 embryo={}, shift={}, batchQty={}, carsForShift={}",
+            log.info("scheduleNormalTask: 添加结果 embryoCode={}, shift={}, batchQty(本班产量)={}, carsForShift(本班车数)={}",
                     task.getEmbryoCode(), shiftConfig.getShiftCode(), batchQty, carsForShift);
             ShiftProductionResult result = buildResult(machineCode, shiftConfig, task, batchQty,
                     tripCapacity, carsForShift, startTime, endTime, false, false, task.getIsContinueTask());

@@ -296,8 +296,14 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 int cars = tripCapacity > 0 ? (int) Math.ceil((double) taskAlloc.getQuantity() / tripCapacity) : 0;
                 task.setRequiredCars(cars);
 
-                log.info("班次精排调试: embryo={}, quantity={}, tripCapacity={}, cars={}, endingExtra={}",
-                        taskAlloc.getEmbryoCode(), taskAlloc.getQuantity(), tripCapacity, cars, task.getEndingExtraInventory());
+                log.info("班次精排: embryoCode={}, materialDesc={}, structureName={}, " +
+                                "quantity(均衡分配量)={}, tripCapacity(每车条数)={}, cars(车数)={}, " +
+                                "endingExtraInventory(待排产量)={}, vulcanizeMachineCount(硫化机台数)={}, " +
+                                "isContinueTask={}, isTrialTask={}",
+                        taskAlloc.getEmbryoCode(), taskAlloc.getMaterialDesc(), taskAlloc.getStructureName(),
+                        taskAlloc.getQuantity(), tripCapacity, cars, task.getEndingExtraInventory(),
+                        task.getVulcanizeMachineCount(),
+                        task.getIsContinueTask(), task.getIsTrialTask());
 
                 List<ShiftScheduleService.ShiftProductionResult> taskShiftResults =
                         shiftScheduleService.scheduleTaskToShifts(task, machineCode, context, singleShiftList, scheduleDateForShift);
