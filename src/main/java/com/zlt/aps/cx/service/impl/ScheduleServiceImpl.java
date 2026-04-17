@@ -1439,30 +1439,29 @@ public class ScheduleServiceImpl implements ScheduleService {
         // 2. 过滤在机信息
         int originalOnlineCount = context.getOnlineInfos() != null ? context.getOnlineInfos().size() : 0;
         if (context.getOnlineInfos() != null) {
-            // 需要先将物料编码转换为胎胚编码
-            Map<String, String> materialToEmbryoMap = new HashMap<>();
+            // 构建已收尾的组合键集合：物料编码 + 胎胚描述
+            // 在机信息的key格式是：物料编码|胎胚描述，需要保持一致
+            Map<String, String> materialToEmbryoDescMap = new HashMap<>();
             if (context.getMaterials() != null) {
                 for (MdmMaterialInfo material : context.getMaterials()) {
-                    if (material.getMaterialCode() != null && material.getEmbryoCode() != null) {
-                        materialToEmbryoMap.put(material.getMaterialCode(), material.getEmbryoCode());
+                    if (material.getMaterialCode() != null && material.getEmbryoDesc() != null) {
+                        materialToEmbryoDescMap.put(material.getMaterialCode(), material.getEmbryoDesc());
                     }
                 }
             }
 
-            // 构建已收尾的组合键集合：物料编码 + 胎胚编码
-            // 用于过滤在机信息
             Set<String> completedKeys = new HashSet<>();
             for (String materialCode : completedMaterialCodes) {
-                String embryoCode = materialToEmbryoMap.get(materialCode);
-                if (materialCode != null && embryoCode != null) {
-                    completedKeys.add(materialCode + "|" + embryoCode);
+                String embryoDesc = materialToEmbryoDescMap.get(materialCode);
+                if (materialCode != null && embryoDesc != null) {
+                    completedKeys.add(materialCode + "|" + embryoDesc);
                 }
             }
 
             List<CxMachineOnlineInfo> filteredOnlineInfos = context.getOnlineInfos().stream()
                     .filter(info -> {
-                        // 使用物料编码 + 胎胚编码组合键
-                        String materialCode = info.getMesMaterialCode();
+                        // 使用物料编码 + 胎胚描述组合键（与completedKeys保持一致）
+                        String materialCode = info.getMaterialCode();
                         String embryoSpec = info.getEmbryoSpec();
                         String combinedKey = materialCode + "|" + embryoSpec;
                         // 如果组合键在已收尾集合中，则过滤掉
