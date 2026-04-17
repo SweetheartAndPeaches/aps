@@ -445,15 +445,9 @@ public class BalancingService {
 
             Set<String> historyEmbryos = machineHistoryMap.get(config.getCxMachineCode());
             state.setHistoryEmbryos(historyEmbryos != null ? historyEmbryos : new HashSet<>());
-            
-            // 历史胎胚已占用种类槽（每种历史胎胚占1个type slot）
-            // 即使不在当前任务列表中，历史胎胚仍然在机台上生产，占用种类槽
-            int historyTypeCount = state.getHistoryEmbryos().size();
-            state.setCurrentTypes(historyTypeCount);
 
-            log.info("  初始化机台 {}: maxCapacity={}, maxTypes={}, 历史胎胚={}, 已占种类槽={}",
-                    config.getCxMachineCode(), state.getMaxCapacity(), state.getMaxTypes(), 
-                    state.getHistoryEmbryos(), historyTypeCount);
+            log.info("  初始化机台 {}: maxCapacity={}, maxTypes={}, 历史胎胚={}",
+                    config.getCxMachineCode(), state.getMaxCapacity(), state.getMaxTypes(), state.getHistoryEmbryos());
 
             machineStates.add(state);
         }
@@ -604,15 +598,12 @@ public class BalancingService {
         
         log.info("开始保底预留历史任务...");
         
-        // 构建胎胚编码 -> 任务 的映射（使用embryoCode，与historyEmbryos中的key一致）
+        // 构建胎胚编码 -> 任务 的映射
         Map<String, CoreScheduleAlgorithmService.DailyEmbryoTask> taskMap = tasks.stream()
-                .filter(t -> t.getEmbryoCode() != null)
                 .collect(Collectors.toMap(
-                        CoreScheduleAlgorithmService.DailyEmbryoTask::getEmbryoCode,
+                        CoreScheduleAlgorithmService.DailyEmbryoTask::getMaterialCode,
                         t -> t,
                         (a, b) -> a));
-        
-        log.info("保底预留 taskMap keys: {}", taskMap.keySet());
         
         int totalReserved = 0;
         
@@ -625,7 +616,6 @@ public class BalancingService {
             for (String embryoCode : historyEmbryos) {
                 CoreScheduleAlgorithmService.DailyEmbryoTask task = taskMap.get(embryoCode);
                 if (task == null) {
-                    log.warn("保底预留：机台 {} 历史胎胚 {} 在taskMap中未找到", state.getMachineCode(), embryoCode);
                     continue;
                 }
                 
@@ -656,10 +646,7 @@ public class BalancingService {
                 
                 state.getAssignedEmbryos().add(new EmbryoAssignment(embryoCode, task, reservedCount));
                 state.setCurrentLoad(state.getCurrentLoad() + reservedCount);
-                // 历史胎胚已在初始化时计入种类槽，只有非历史胎胚才需要新增种类
-                if (!state.getHistoryEmbryos().contains(embryoCode)) {
-                    state.setCurrentTypes(state.getCurrentTypes() + 1);
-                }
+                state.setCurrentTypes(state.getCurrentTypes() + 1);
                 
                 task.setVulcanizeMachineCount(remainingDemand - reservedCount);
                 
@@ -888,10 +875,6 @@ public class BalancingService {
                     int newTypes = candidate.getCurrentTypes();
                     boolean isNewType = !candidate.getAssignedEmbryos().stream()
                             .anyMatch(e -> e.getEmbryoCode().equals(embryoCode));
-                    // 历史胎胚已在初始化时计入种类槽，分配历史胎胚不增加种类
-                    if (isNewType && candidate.getHistoryEmbryos().contains(embryoCode)) {
-                        isNewType = false;
-                    }
                     if (isNewType) {
                         newTypes++;
                     }
@@ -1123,7 +1106,7 @@ public class BalancingService {
             int loadDiffThreshold) {
         
         if (capacitySufficient) {
-            // ===== 产能充足策略：确保历史机台→已有→均衡 =====
+            // ===== 产能充足策略：已有优先+负荷感知阈值，兼顾完整性和均衡 =====
             // 阈值：已有机台负荷比未有机台负荷高出超过此值时，允许切换到未有机台
             int loadAwareThreshold = loadDiffThreshold + 1;
             
@@ -1132,40 +1115,41 @@ public class BalancingService {
                         .anyMatch(e -> e.getEmbryoCode().equals(embryoCode));
                 boolean bAlreadyHas = b.getAssignedEmbryos().stream()
                         .anyMatch(e -> e.getEmbryoCode().equals(embryoCode));
-                boolean aHasHistory = forceKeepHistory && a.getHistoryEmbryos().contains(embryoCode);
-                boolean bHasHistory = forceKeepHistory && b.getHistoryEmbryos().contains(embryoCode);
                 
-                // 三级优先级：历史但未有 > 已有 > 无
-                // 历史但未有：需要确保每台历史机台至少分到1个（最优先）
-                // 已有：继续增加数量，不浪费额外种类槽（次优先）
-                // 无：最低优先级
-                int aLevel = aAlreadyHas ? 1 : (aHasHistory ? 0 : 2);
-                int bLevel = bAlreadyHas ? 1 : (bHasHistory ? 0 : 2);
-                
-                if (aLevel != bLevel) {
-                    // 高级别优先，但加入负荷感知阈值
-                    // 若高级别机台负荷比低级别高出超过阈值 → 均衡更重要，低级别优先
-                    if (aLevel < bLevel) {
-                        if (a.getCurrentLoad() > b.getCurrentLoad() + loadAwareThreshold) {
-                            return 1;
-                        }
-                        return -1;
-                    } else {
-                        if (b.getCurrentLoad() > a.getCurrentLoad() + loadAwareThreshold) {
-                            return -1;
-                        }
+                // 优先级1：已有优先，但加入负荷感知阈值
+                if (aAlreadyHas && !bAlreadyHas) {
+                    // a已有（节省种类槽），b未有
+                    // 若a负荷比b高出超过阈值 → 均衡更重要，b优先（也让胎胚扩展到第二台机台）
+                    if (a.getCurrentLoad() > b.getCurrentLoad() + loadAwareThreshold) {
                         return 1;
                     }
+                    return -1;
+                }
+                if (!aAlreadyHas && bAlreadyHas) {
+                    if (b.getCurrentLoad() > a.getCurrentLoad() + loadAwareThreshold) {
+                        return -1;
+                    }
+                    return 1;
                 }
                 
-                // 同级别时，负荷少的优先（均衡）
+                // 优先级2：同已有/同未有时，负荷少的优先（均衡）
                 int loadCompare = Integer.compare(a.getCurrentLoad(), b.getCurrentLoad());
                 if (loadCompare != 0) {
                     return loadCompare;
                 }
                 
-                // 同为"无"时，剩余种类容量大的优先（保留稀缺种类槽）
-                if (aLevel == 2) {
+                // 优先级3：历史胎胚优先
+                boolean aHasHistory = a.getHistoryEmbryos().contains(embryoCode);
+                boolean bHasHistory = b.getHistoryEmbryos().contains(embryoCode);
+                if (aHasHistory && !bHasHistory) {
+                    return -1;
+                }
+                if (!aHasHistory && bHasHistory) {
+                    return 1;
+                }
+                
+                // 优先级4：同为未有时，剩余种类容量大的优先（保留稀缺种类槽）
+                if (!aAlreadyHas) {
                     int aRemainingTypes = a.getMaxTypes() - a.getCurrentTypes();
                     int bRemainingTypes = b.getMaxTypes() - b.getCurrentTypes();
                     int remainingCompare = Integer.compare(bRemainingTypes, aRemainingTypes);
@@ -1174,29 +1158,35 @@ public class BalancingService {
                     }
                 }
                 
-                // 种类少的优先
+                // 优先级5：种类少的优先
                 return Integer.compare(a.getCurrentTypes(), b.getCurrentTypes());
             });
         } else {
             // ===== 产能不足策略：侧重节省种类槽、尽量多排 =====
             candidates.sort((a, b) -> {
+                // 优先级1：胎胚已在机台上绝对优先（节省种类槽，多排任务）
                 boolean aAlreadyHas = a.getAssignedEmbryos().stream()
                         .anyMatch(e -> e.getEmbryoCode().equals(embryoCode));
                 boolean bAlreadyHas = b.getAssignedEmbryos().stream()
                         .anyMatch(e -> e.getEmbryoCode().equals(embryoCode));
-                boolean aHasHistory = forceKeepHistory && a.getHistoryEmbryos().contains(embryoCode);
-                boolean bHasHistory = forceKeepHistory && b.getHistoryEmbryos().contains(embryoCode);
-                
-                // 三级优先级：已有 > 历史但未有 > 无
-                // 产能不足时，已有绝对优先（节省种类槽），历史次之
-                int aLevel = aAlreadyHas ? 0 : (aHasHistory ? 1 : 2);
-                int bLevel = bAlreadyHas ? 0 : (bHasHistory ? 1 : 2);
-                
-                if (aLevel != bLevel) {
-                    return Integer.compare(aLevel, bLevel);
+                if (aAlreadyHas && !bAlreadyHas) {
+                    return -1;
+                }
+                if (!aAlreadyHas && bAlreadyHas) {
+                    return 1;
                 }
                 
-                // 同级别时，剩余种类容量大的优先（保留灵活性）
+                // 优先级2：历史胎胚优先
+                boolean aHasHistory = a.getHistoryEmbryos().contains(embryoCode);
+                boolean bHasHistory = b.getHistoryEmbryos().contains(embryoCode);
+                if (aHasHistory && !bHasHistory) {
+                    return -1;
+                }
+                if (!aHasHistory && bHasHistory) {
+                    return 1;
+                }
+                
+                // 优先级3：剩余种类容量大的优先（保留灵活性）
                 int aRemainingTypes = a.getMaxTypes() - a.getCurrentTypes();
                 int bRemainingTypes = b.getMaxTypes() - b.getCurrentTypes();
                 int remainingCompare = Integer.compare(bRemainingTypes, aRemainingTypes);
@@ -1204,13 +1194,13 @@ public class BalancingService {
                     return remainingCompare;
                 }
                 
-                // 负荷少的优先
+                // 优先级4：负荷少的优先
                 int loadCompare = Integer.compare(a.getCurrentLoad(), b.getCurrentLoad());
                 if (loadCompare != 0) {
                     return loadCompare;
                 }
                 
-                // 种类少的优先
+                // 优先级5：种类少的优先
                 return Integer.compare(a.getCurrentTypes(), b.getCurrentTypes());
             });
         }
@@ -1277,13 +1267,15 @@ public class BalancingService {
         int maxLoad = 0, minLoad = Integer.MAX_VALUE;
         int maxTypes = 0, minTypes = Integer.MAX_VALUE;
         for (MachineState state : machineStates) {
-            maxLoad = Math.max(maxLoad, state.getCurrentLoad());
-            minLoad = Math.min(minLoad, state.getCurrentLoad());
-            maxTypes = Math.max(maxTypes, state.getCurrentTypes());
-            minTypes = Math.min(minTypes, state.getCurrentTypes());
+            if (state.getCurrentLoad() > 0) {
+                maxLoad = Math.max(maxLoad, state.getCurrentLoad());
+                minLoad = Math.min(minLoad, state.getCurrentLoad());
+                maxTypes = Math.max(maxTypes, state.getCurrentTypes());
+                minTypes = Math.min(minTypes, state.getCurrentTypes());
+            }
         }
-        int loadGap = maxLoad - minLoad;
-        int typeGap = maxTypes - minTypes;
+        int loadGap = maxLoad - (minLoad == Integer.MAX_VALUE ? 0 : minLoad);
+        int typeGap = maxTypes - (minTypes == Integer.MAX_VALUE ? 0 : minTypes);
         return loadGap <= loadDiffThreshold && typeGap <= typeDiffThreshold;
     }
 
@@ -1304,14 +1296,16 @@ public class BalancingService {
         int maxTypes = 0, minTypes = Integer.MAX_VALUE;
         
         for (MachineState state : machineStates) {
-            maxLoad = Math.max(maxLoad, state.getCurrentLoad());
-            minLoad = Math.min(minLoad, state.getCurrentLoad());
-            maxTypes = Math.max(maxTypes, state.getCurrentTypes());
-            minTypes = Math.min(minTypes, state.getCurrentTypes());
+            if (state.getCurrentLoad() > 0) {
+                maxLoad = Math.max(maxLoad, state.getCurrentLoad());
+                minLoad = Math.min(minLoad, state.getCurrentLoad());
+                maxTypes = Math.max(maxTypes, state.getCurrentTypes());
+                minTypes = Math.min(minTypes, state.getCurrentTypes());
+            }
         }
         
-        int loadGap = maxLoad - minLoad;
-        int typeGap = maxTypes - minTypes;
+        int loadGap = maxLoad - (minLoad == Integer.MAX_VALUE ? 0 : minLoad);
+        int typeGap = maxTypes - (minTypes == Integer.MAX_VALUE ? 0 : minTypes);
         
         return loadGap * 10 + typeGap * 100;
     }
