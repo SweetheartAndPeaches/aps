@@ -598,22 +598,11 @@ public class BalancingService {
         
         log.info("开始保底预留历史任务...");
         
-        // 构建胎胚编码 -> 任务 的映射（用 embryoCode 匹配历史胎胚）
-        // 同一 embryoCode 可能对应多个任务（正式+量试），合并需求量
-        Map<String, CoreScheduleAlgorithmService.DailyEmbryoTask> taskMap = new HashMap<>();
-        for (CoreScheduleAlgorithmService.DailyEmbryoTask task : tasks) {
-            String key = task.getEmbryoCode();
-            if (key == null) continue;
-            CoreScheduleAlgorithmService.DailyEmbryoTask existing = taskMap.get(key);
-            if (existing == null) {
-                taskMap.put(key, task);
-            } else {
-                // 合并需求量
-                int totalDemand = (existing.getVulcanizeMachineCount() != null ? existing.getVulcanizeMachineCount() : 0)
-                        + (task.getVulcanizeMachineCount() != null ? task.getVulcanizeMachineCount() : 0);
-                existing.setVulcanizeMachineCount(totalDemand);
-            }
-        }
+        // 构建胎胚编码 -> 任务列表 的映射（用 embryoCode 匹配历史胎胚）
+        // 同一 embryoCode 可能对应多个任务（正式+量试），不合并，保留原始需求量
+        Map<String, List<CoreScheduleAlgorithmService.DailyEmbryoTask>> taskMap = tasks.stream()
+                .filter(t -> t.getEmbryoCode() != null)
+                .collect(Collectors.groupingBy(CoreScheduleAlgorithmService.DailyEmbryoTask::getEmbryoCode));
         
         int totalReserved = 0;
         
@@ -624,15 +613,24 @@ public class BalancingService {
             }
             
             for (String embryoCode : historyEmbryos) {
-                CoreScheduleAlgorithmService.DailyEmbryoTask task = taskMap.get(embryoCode);
-                if (task == null) {
+                List<CoreScheduleAlgorithmService.DailyEmbryoTask> taskList = taskMap.get(embryoCode);
+                if (taskList == null || taskList.isEmpty()) {
                     continue;
                 }
                 
-                int remainingDemand = task.getVulcanizeMachineCount() != null 
-                        ? task.getVulcanizeMachineCount() : 0;
+                // 遍历同名胎胚的任务列表，找到还有剩余需求的任务
+                CoreScheduleAlgorithmService.DailyEmbryoTask task = null;
+                int remainingDemand = 0;
+                for (CoreScheduleAlgorithmService.DailyEmbryoTask t : taskList) {
+                    int demand = t.getVulcanizeMachineCount() != null ? t.getVulcanizeMachineCount() : 0;
+                    if (demand > 0) {
+                        task = t;
+                        remainingDemand = demand;
+                        break;
+                    }
+                }
                 
-                if (remainingDemand <= 0) {
+                if (task == null || remainingDemand <= 0) {
                     continue;
                 }
                 
