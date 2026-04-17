@@ -1107,7 +1107,7 @@ public class BalancingService {
             int loadDiffThreshold) {
         
         if (capacitySufficient) {
-            // ===== 产能充足策略：已有/历史优先+负荷感知阈值，兼顾完整性和均衡 =====
+            // ===== 产能充足策略：确保历史机台→已有→均衡 =====
             // 阈值：已有机台负荷比未有机台负荷高出超过此值时，允许切换到未有机台
             int loadAwareThreshold = loadDiffThreshold + 1;
             
@@ -1116,35 +1116,40 @@ public class BalancingService {
                         .anyMatch(e -> e.getEmbryoCode().equals(embryoCode));
                 boolean bAlreadyHas = b.getAssignedEmbryos().stream()
                         .anyMatch(e -> e.getEmbryoCode().equals(embryoCode));
+                boolean aHasHistory = forceKeepHistory && a.getHistoryEmbryos().contains(embryoCode);
+                boolean bHasHistory = forceKeepHistory && b.getHistoryEmbryos().contains(embryoCode);
                 
-                // 当forceKeepHistory=true时，历史胎胚与已有胎胚同等优先级
-                boolean aPreferred = aAlreadyHas || (forceKeepHistory && a.getHistoryEmbryos().contains(embryoCode));
-                boolean bPreferred = bAlreadyHas || (forceKeepHistory && b.getHistoryEmbryos().contains(embryoCode));
+                // 三级优先级：历史但未有 > 已有 > 无
+                // 历史但未有：需要确保每台历史机台至少分到1个（最优先）
+                // 已有：继续增加数量，不浪费额外种类槽（次优先）
+                // 无：最低优先级
+                int aLevel = aAlreadyHas ? 1 : (aHasHistory ? 0 : 2);
+                int bLevel = bAlreadyHas ? 1 : (bHasHistory ? 0 : 2);
                 
-                // 优先级1：已有/历史优先，但加入负荷感知阈值
-                if (aPreferred && !bPreferred) {
-                    // a已有/历史（节省种类槽），b未有
-                    // 若a负荷比b高出超过阈值 → 均衡更重要，b优先
-                    if (a.getCurrentLoad() > b.getCurrentLoad() + loadAwareThreshold) {
+                if (aLevel != bLevel) {
+                    // 高级别优先，但加入负荷感知阈值
+                    // 若高级别机台负荷比低级别高出超过阈值 → 均衡更重要，低级别优先
+                    if (aLevel < bLevel) {
+                        if (a.getCurrentLoad() > b.getCurrentLoad() + loadAwareThreshold) {
+                            return 1;
+                        }
+                        return -1;
+                    } else {
+                        if (b.getCurrentLoad() > a.getCurrentLoad() + loadAwareThreshold) {
+                            return -1;
+                        }
                         return 1;
                     }
-                    return -1;
-                }
-                if (!aPreferred && bPreferred) {
-                    if (b.getCurrentLoad() > a.getCurrentLoad() + loadAwareThreshold) {
-                        return -1;
-                    }
-                    return 1;
                 }
                 
-                // 优先级2：同已有/同未有时，负荷少的优先（均衡）
+                // 同级别时，负荷少的优先（均衡）
                 int loadCompare = Integer.compare(a.getCurrentLoad(), b.getCurrentLoad());
                 if (loadCompare != 0) {
                     return loadCompare;
                 }
                 
-                // 优先级3：同为未有时，剩余种类容量大的优先（保留稀缺种类槽）
-                if (!aPreferred) {
+                // 同为"无"时，剩余种类容量大的优先（保留稀缺种类槽）
+                if (aLevel == 2) {
                     int aRemainingTypes = a.getMaxTypes() - a.getCurrentTypes();
                     int bRemainingTypes = b.getMaxTypes() - b.getCurrentTypes();
                     int remainingCompare = Integer.compare(bRemainingTypes, aRemainingTypes);
@@ -1153,35 +1158,29 @@ public class BalancingService {
                     }
                 }
                 
-                // 优先级4：种类少的优先
+                // 种类少的优先
                 return Integer.compare(a.getCurrentTypes(), b.getCurrentTypes());
             });
         } else {
             // ===== 产能不足策略：侧重节省种类槽、尽量多排 =====
             candidates.sort((a, b) -> {
-                // 优先级1：胎胚已在机台上绝对优先（节省种类槽，多排任务）
                 boolean aAlreadyHas = a.getAssignedEmbryos().stream()
                         .anyMatch(e -> e.getEmbryoCode().equals(embryoCode));
                 boolean bAlreadyHas = b.getAssignedEmbryos().stream()
                         .anyMatch(e -> e.getEmbryoCode().equals(embryoCode));
-                if (aAlreadyHas && !bAlreadyHas) {
-                    return -1;
-                }
-                if (!aAlreadyHas && bAlreadyHas) {
-                    return 1;
-                }
-                
-                // 优先级2：当forceKeepHistory=true时，历史胎胚与已有胎胚同等优先级
                 boolean aHasHistory = forceKeepHistory && a.getHistoryEmbryos().contains(embryoCode);
                 boolean bHasHistory = forceKeepHistory && b.getHistoryEmbryos().contains(embryoCode);
-                if (aHasHistory && !bHasHistory) {
-                    return -1;
-                }
-                if (!aHasHistory && bHasHistory) {
-                    return 1;
+                
+                // 三级优先级：已有 > 历史但未有 > 无
+                // 产能不足时，已有绝对优先（节省种类槽），历史次之
+                int aLevel = aAlreadyHas ? 0 : (aHasHistory ? 1 : 2);
+                int bLevel = bAlreadyHas ? 0 : (bHasHistory ? 1 : 2);
+                
+                if (aLevel != bLevel) {
+                    return Integer.compare(aLevel, bLevel);
                 }
                 
-                // 优先级3：剩余种类容量大的优先（保留灵活性）
+                // 同级别时，剩余种类容量大的优先（保留灵活性）
                 int aRemainingTypes = a.getMaxTypes() - a.getCurrentTypes();
                 int bRemainingTypes = b.getMaxTypes() - b.getCurrentTypes();
                 int remainingCompare = Integer.compare(bRemainingTypes, aRemainingTypes);
@@ -1189,13 +1188,13 @@ public class BalancingService {
                     return remainingCompare;
                 }
                 
-                // 优先级4：负荷少的优先
+                // 负荷少的优先
                 int loadCompare = Integer.compare(a.getCurrentLoad(), b.getCurrentLoad());
                 if (loadCompare != 0) {
                     return loadCompare;
                 }
                 
-                // 优先级5：种类少的优先
+                // 种类少的优先
                 return Integer.compare(a.getCurrentTypes(), b.getCurrentTypes());
             });
         }
