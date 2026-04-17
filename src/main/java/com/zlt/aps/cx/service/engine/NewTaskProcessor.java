@@ -101,7 +101,11 @@ public class NewTaskProcessor {
             if (continueTasks != null) {
                 for (CoreScheduleAlgorithmService.DailyEmbryoTask task : continueTasks) {
                     if (structureName.equals(task.getStructureName())) {
-                        continueTasksForStructure.add(task);
+                        // 续作任务在续作阶段可能已全部分配（需求为0），跳过无需求的任务
+                        int demand = task.getVulcanizeMachineCount() != null ? task.getVulcanizeMachineCount() : 0;
+                        if (demand > 0) {
+                            continueTasksForStructure.add(task);
+                        }
                     }
                 }
             }
