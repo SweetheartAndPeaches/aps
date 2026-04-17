@@ -224,6 +224,12 @@ public class NewTaskProcessor {
                         : assignment.getEmbryoAssignments()) {
                     CoreScheduleAlgorithmService.DailyEmbryoTask task =
                             embryoAssignment.getTask();
+
+                    // 跳过续作预扣的条目（task=null，已在 ContinueTaskProcessor 中分配）
+                    if (task == null) {
+                        continue;
+                    }
+
                     int assignedQty = embryoAssignment.getAssignedQty();
                     usedCapacity += assignedQty;
 

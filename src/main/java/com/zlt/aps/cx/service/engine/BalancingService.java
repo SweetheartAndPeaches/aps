@@ -479,6 +479,10 @@ public class BalancingService {
                 state.setCurrentTypes(preTypes.size());
                 // 将续作已占种类加入 historyEmbryos（DFS排序偏好）
                 state.getHistoryEmbryos().addAll(preTypes);
+                // 将续作预扣的胚胎加入 assignedEmbryos（用于日志打印和结果追踪）
+                for (String embryoCode : preTypes) {
+                    state.getAssignedEmbryos().add(new EmbryoAssignment(embryoCode, null, 1));
+                }
                 log.info("  初始化机台 {}: maxCapacity={}, maxTypes={}, 续作预扣容量={}, 续作预扣种类={}, 历史胎胚={}",
                         config.getCxMachineCode(), state.getMaxCapacity(), state.getMaxTypes(),
                         preLoad, preTypes, state.getHistoryEmbryos());
@@ -1408,17 +1412,46 @@ public class BalancingService {
         // 统计已分配的胎胚数量
         Map<String, Integer> assignedQtyMap = new LinkedHashMap<>();
         
+        // 构建 machineStates 的预扣映射（机台编码 → 预扣信息）
+        Map<String, MachineState> stateMap = new LinkedHashMap<>();
+        for (MachineState state : machineStates) {
+            stateMap.put(state.getMachineCode(), state);
+        }
+        
         for (MachineAssignment assignment : result.getAssignments()) {
-            // 合并相同胚子代码的条目
+            String machineCode = assignment.getMachineCode();
+            
+            // 合并相同胚子代码的条目（DFS分配的）
             Map<String, Integer> embryoQtyMap = new LinkedHashMap<>();
             for (EmbryoAssignment e : assignment.getEmbryoAssignments()) {
                 embryoQtyMap.merge(e.getEmbryoCode(), e.getAssignedQty(), Integer::sum);
                 assignedQtyMap.merge(e.getEmbryoCode(), e.getAssignedQty(), Integer::sum);
             }
+            
+            // 加入续作预扣信息
+            MachineState state = stateMap.get(machineCode);
+            int preLoad = 0;
+            if (state != null && state.getCurrentLoad() > 0) {
+                // 预扣的种类可能和DFS分配的种类有重叠，需要区分
+                Set<String> dfsEmbryos = new HashSet<>(embryoQtyMap.keySet());
+                for (EmbryoAssignment e : state.getAssignedEmbryos()) {
+                    if (!dfsEmbryos.contains(e.getEmbryoCode())) {
+                        embryoQtyMap.merge(e.getEmbryoCode(), e.getAssignedQty(), Integer::sum);
+                    }
+                    assignedQtyMap.merge(e.getEmbryoCode(), e.getAssignedQty(), Integer::sum);
+                    preLoad += e.getAssignedQty();
+                }
+            }
+            
             List<String> embryos = embryoQtyMap.entrySet().stream()
                     .map(e -> e.getKey() + "(" + e.getValue() + ")")
                     .collect(Collectors.toList());
-            log.info("  机台 {}: {}", assignment.getMachineCode(), embryos);
+            
+            if (preLoad > 0) {
+                log.info("  机台 {}: {} (含续作预留{})", machineCode, embryos, preLoad);
+            } else {
+                log.info("  机台 {}: {}", machineCode, embryos);
+            }
             
             // 从 result 中计算均衡指标
             int load = assignment.getEmbryoAssignments().stream()
@@ -1430,6 +1463,22 @@ public class BalancingService {
             minLoad = Math.min(minLoad, load);
             maxTypes = Math.max(maxTypes, types);
             minTypes = Math.min(minTypes, types);
+        }
+        
+        // 也打印 machineStates 中有预扣但没有 DFS 分配的机台
+        for (MachineState state : machineStates) {
+            if (!state.getAssignedEmbryos().isEmpty() && 
+                result.getAssignments().stream().noneMatch(a -> a.getMachineCode().equals(state.getMachineCode()))) {
+                Map<String, Integer> preEmbryoMap = new LinkedHashMap<>();
+                for (EmbryoAssignment e : state.getAssignedEmbryos()) {
+                    preEmbryoMap.merge(e.getEmbryoCode(), e.getAssignedQty(), Integer::sum);
+                    assignedQtyMap.merge(e.getEmbryoCode(), e.getAssignedQty(), Integer::sum);
+                }
+                List<String> embryos = preEmbryoMap.entrySet().stream()
+                        .map(e -> e.getKey() + "(" + e.getValue() + ")")
+                        .collect(Collectors.toList());
+                log.info("  机台 {}: {} (仅续作预留)", state.getMachineCode(), embryos);
+            }
         }
         
         // 如果没有分配结果，避免打印错误指标
