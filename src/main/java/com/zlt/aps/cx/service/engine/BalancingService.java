@@ -598,13 +598,6 @@ public class BalancingService {
         
         log.info("开始保底预留历史任务...");
         
-        // 构建胎胚编码 -> 任务 的映射
-        Map<String, CoreScheduleAlgorithmService.DailyEmbryoTask> taskMap = tasks.stream()
-                .collect(Collectors.toMap(
-                        CoreScheduleAlgorithmService.DailyEmbryoTask::getMaterialCode,
-                        t -> t,
-                        (a, b) -> a));
-        
         int totalReserved = 0;
         
         for (MachineState state : machineStates) {
@@ -614,20 +607,28 @@ public class BalancingService {
             }
             
             for (String embryoCode : historyEmbryos) {
-                CoreScheduleAlgorithmService.DailyEmbryoTask task = taskMap.get(embryoCode);
-                if (task == null) {
+                // 直接遍历 tasks 列表按 embryoCode 匹配，避免 Map 去2重丢失多机台同胚胎的预留
+                CoreScheduleAlgorithmService.DailyEmbryoTask matchedTask = null;
+                for (CoreScheduleAlgorithmService.DailyEmbryoTask task : tasks) {
+                    if (embryoCode.equals(task.getEmbryoCode())) {
+                        int remainingDemand = task.getVulcanizeMachineCount() != null
+                                ? task.getVulcanizeMachineCount() : 0;
+                        if (remainingDemand > 0) {
+                            matchedTask = task;
+                            break;
+                        }
+                    }
+                }
+                
+                if (matchedTask == null) {
                     continue;
                 }
                 
-                int remainingDemand = task.getVulcanizeMachineCount() != null 
-                        ? task.getVulcanizeMachineCount() : 0;
-                
-                if (remainingDemand <= 0) {
-                    continue;
-                }
+                int remainingDemand = matchedTask.getVulcanizeMachineCount() != null
+                        ? matchedTask.getVulcanizeMachineCount() : 0;
                 
                 if (state.getCurrentLoad() >= state.getMaxCapacity()) {
-                    log.warn("机台 {} 容量已满，无法保底预留胎胚 {}", 
+                    log.warn("机台 {} 容量已满，无法保底预留胎胚 {}",
                             state.getMachineCode(), embryoCode);
                     continue;
                 }
@@ -644,14 +645,14 @@ public class BalancingService {
                 // 保底预留1个硫化机台数
                 int reservedCount = 1;
                 
-                state.getAssignedEmbryos().add(new EmbryoAssignment(embryoCode, task, reservedCount));
+                state.getAssignedEmbryos().add(new EmbryoAssignment(embryoCode, matchedTask, reservedCount));
                 state.setCurrentLoad(state.getCurrentLoad() + reservedCount);
                 state.setCurrentTypes(state.getCurrentTypes() + 1);
                 
-                task.setVulcanizeMachineCount(remainingDemand - reservedCount);
+                matchedTask.setVulcanizeMachineCount(remainingDemand - reservedCount);
                 
                 totalReserved++;
-                log.debug("机台 {} 保底预留胎胚 {} 共 {} 个硫化机", 
+                log.info("机台 {} 保底预留胎胚 {} 共 {} 个硫化机",
                         state.getMachineCode(), embryoCode, reservedCount);
             }
         }
