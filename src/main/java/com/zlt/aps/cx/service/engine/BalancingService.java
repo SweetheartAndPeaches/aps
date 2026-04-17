@@ -656,7 +656,10 @@ public class BalancingService {
                 
                 state.getAssignedEmbryos().add(new EmbryoAssignment(embryoCode, task, reservedCount));
                 state.setCurrentLoad(state.getCurrentLoad() + reservedCount);
-                state.setCurrentTypes(state.getCurrentTypes() + 1);
+                // 历史胎胚已在初始化时计入种类槽，只有非历史胎胚才需要新增种类
+                if (!state.getHistoryEmbryos().contains(embryoCode)) {
+                    state.setCurrentTypes(state.getCurrentTypes() + 1);
+                }
                 
                 task.setVulcanizeMachineCount(remainingDemand - reservedCount);
                 
@@ -885,6 +888,10 @@ public class BalancingService {
                     int newTypes = candidate.getCurrentTypes();
                     boolean isNewType = !candidate.getAssignedEmbryos().stream()
                             .anyMatch(e -> e.getEmbryoCode().equals(embryoCode));
+                    // 历史胎胚已在初始化时计入种类槽，分配历史胎胚不增加种类
+                    if (isNewType && candidate.getHistoryEmbryos().contains(embryoCode)) {
+                        isNewType = false;
+                    }
                     if (isNewType) {
                         newTypes++;
                     }
