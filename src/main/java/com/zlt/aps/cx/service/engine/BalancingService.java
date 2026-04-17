@@ -547,11 +547,27 @@ public class BalancingService {
                 result = convertDfsResultToBalancingResult(searchResult.bestAssignments, searchResult.bestMachineCodes, machineStates, sortedTasks);
             }
         } else {
-            // DFS未找到任何方案（理论上不应发生，至少第一个任务的分配会形成部分解）
-            log.warn("DFS未找到任何方案，返回空结果");
-            BalancingResult emptyResult = new BalancingResult();
-            emptyResult.setAssignments(new ArrayList<>());
-            result = emptyResult;
+            // DFS未找到任何方案，检查是否有保底预留的分配
+            boolean hasReservedAssignments = machineStates.stream()
+                    .anyMatch(s -> s.getCurrentLoad() > 0);
+            if (hasReservedAssignments) {
+                // 保底预留的分配仍在 machineStates 中，基于此构建结果
+                log.info("DFS未找到方案，但存在保底预留分配（共{}台机台），使用预留结果",
+                        machineStates.stream().filter(s -> s.getCurrentLoad() > 0).count());
+                // 将 machineStates 中的分配转为 bestAssignments 格式
+                List<List<EmbryoAssignment>> reservedAssignments = machineStates.stream()
+                        .map(MachineState::getAssignedEmbryos)
+                        .collect(Collectors.toList());
+                List<String> reservedMachineCodes = machineStates.stream()
+                        .map(MachineState::getMachineCode)
+                        .collect(Collectors.toList());
+                result = convertDfsResultToBalancingResult(reservedAssignments, reservedMachineCodes, machineStates, sortedTasks);
+            } else {
+                log.warn("DFS未找到任何方案，返回空结果");
+                BalancingResult emptyResult = new BalancingResult();
+                emptyResult.setAssignments(new ArrayList<>());
+                result = emptyResult;
+            }
         }
 
         logAllocationResult(result, machineStates, remainingTasks);
