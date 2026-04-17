@@ -12,8 +12,6 @@ import org.springframework.format.annotation.DateTimeFormat;
 
 import java.io.Serializable;
 import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.Date;
 
 /**
@@ -98,25 +96,20 @@ public class CxPrecisionPlan extends BaseEntity implements Serializable {
     private Date lastMaintenanceDate;
 
     /** 完成情况：0-未完成，1-已完成 */
-//    @Excel(name = "ui.data.column.cxPrecisionPlan.completionStatus", dictType = "lh_precision_completion_status")
     @ApiModelProperty(value = "完成情况：0-未完成，1-已完成")
     @TableField("COMPLETION_STATUS")
     private String completionStatus;
 
     /** 计划年度 */
-//    @Excel(name = "ui.data.column.cxPrecisionPlan.year")
-//    @ApiModelProperty(value = "计划年度")
     @TableField("YEAR")
     private BigDecimal year;
 
     /** 预警状态：0-未预警，1-已预警 */
-//    @Excel(name = "ui.data.column.cxPrecisionPlan.warningStatus", dictType = "lh_precision_warning_status")
     @ApiModelProperty(value = "预警状态：0-未预警，1-已预警")
     @TableField("WARNING_STATUS")
     private String warningStatus;
 
     /** 预警触发日期 */
-//    @Excel(name = "ui.data.column.cxPrecisionPlan.warningDate", dateFormat = "yyyy-MM-dd")
     @ApiModelProperty(value = "预警触发日期")
     @JsonFormat(pattern = "yyyy-MM-dd")
     @DateTimeFormat(pattern = "yyyy-MM-dd")
@@ -124,7 +117,6 @@ public class CxPrecisionPlan extends BaseEntity implements Serializable {
     private Date warningDate;
 
     /** 是否已发送预警：0-未发送，1-已发送 */
-//    @Excel(name = "ui.data.column.cxPrecisionPlan.isWarningSent", dictType = "lh_precision_warning_sent")
     @ApiModelProperty(value = "是否已发送预警：0-未发送，1-已发送")
     @TableField("IS_WARNING_SENT")
     private String isWarningSent;
@@ -146,7 +138,6 @@ public class CxPrecisionPlan extends BaseEntity implements Serializable {
     private String companyCode;
 
     /** 同步时间 */
-//    @Excel(name = "ui.data.column.cxPrecisionPlan.syncTime", dateFormat = "yyyy-MM-dd HH:mm:ss")
     @ApiModelProperty(value = "同步时间")
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss")
@@ -158,67 +149,6 @@ public class CxPrecisionPlan extends BaseEntity implements Serializable {
     @ApiModelProperty(value = "备注")
     @TableField("REMARK")
     private String remark;
-
-    /** 计划班次 */
-    @ApiModelProperty(value = "计划班次")
-    @TableField("PLAN_SHIFT")
-    private String planShift;
-
-    /** 预计时长（小时） */
-    @ApiModelProperty(value = "预计时长（小时）")
-    @TableField("ESTIMATED_HOURS")
-    private BigDecimal estimatedHours;
-
-    /** 计划开始时间 */
-    @ApiModelProperty(value = "计划开始时间")
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
-    @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss")
-    @TableField("PLAN_START_TIME")
-    private LocalDateTime planStartTime;
-
-    /** 计划结束时间 */
-    @ApiModelProperty(value = "计划结束时间")
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
-    @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss")
-    @TableField("PLAN_END_TIME")
-    private LocalDateTime planEndTime;
-
-    /** 状态：PLANNED-已计划，IN_PROGRESS-进行中，COMPLETED-已完成，CANCELLED-已取消 */
-    @ApiModelProperty(value = "状态：PLANNED-已计划，IN_PROGRESS-进行中，COMPLETED-已完成，CANCELLED-已取消")
-    @TableField("STATUS")
-    private String status;
-
-    /** 关联胎胚编码 */
-    @ApiModelProperty(value = "关联胎胚编码")
-    @TableField("EMBRYO_CODE")
-    private String embryoCode;
-
-    /** 安排原因 */
-    @ApiModelProperty(value = "安排原因")
-    @TableField("ARRANGE_REASON")
-    private String arrangeReason;
-
-    /** 机台名称 */
-    @ApiModelProperty(value = "机台名称")
-    @TableField("MACHINE_NAME")
-    private String machineName;
-
-    /** 硫化减产比例 */
-    @ApiModelProperty(value = "硫化减产比例")
-    @TableField("VULCANIZE_REDUCE_RATIO")
-    private BigDecimal vulcanizeReduceRatio;
-
-    /** 是否影响硫化：0-不影响，1-影响 */
-    @ApiModelProperty(value = "是否影响硫化：0-不影响，1-影响")
-    @TableField("AFFECT_VULCANIZE")
-    private Integer affectVulcanize;
-
-    /** 上次精度日期 */
-    @ApiModelProperty(value = "上次精度日期")
-    @JsonFormat(pattern = "yyyy-MM-dd")
-    @DateTimeFormat(pattern = "yyyy-MM-dd")
-    @TableField("LAST_PRECISION_DATE")
-    private LocalDate lastPrecisionDate;
 
     /** 计划日期开始（搜索用，非数据库列） */
     @ApiModelProperty(value = "计划日期开始（搜索用）")
@@ -248,4 +178,3 @@ public class CxPrecisionPlan extends BaseEntity implements Serializable {
     @DateTimeFormat(pattern = "yyyy-MM-dd")
     private Date actualDateEnd;
 }
-
