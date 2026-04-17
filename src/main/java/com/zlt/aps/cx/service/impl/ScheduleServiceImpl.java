@@ -34,6 +34,7 @@ import org.springframework.util.CollectionUtils;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -125,6 +126,7 @@ public class ScheduleServiceImpl implements ScheduleService {
     private final FactoryMonthPlanProductionFinalResultMapper monthPlanMapper;
     private final CxMaterialEndingMapper materialEndingMapper;
     private final MpCxCapacityConfigurationMapper capacityConfigurationMapper;
+    private final MdmWorkCalendarMapper workCalendarMapper;
 
     // ==================== 公共方法 ====================
 
@@ -799,7 +801,8 @@ public class ScheduleServiceImpl implements ScheduleService {
                 context.getStocks(),
                 context.getLhScheduleResults(),
                 currentDayShifts,
-                formingRemainderMap);
+                formingRemainderMap,
+                context.getScheduleDate());
         context.setFormingRemainderMap(formingRemainderMap);
         context.setMaterialStockMap(materialStockMap);
         log.info("计算成型余量映射 {} 条，物料库存分配 {} 条", formingRemainderMap.size(), materialStockMap.size());
@@ -1056,14 +1059,15 @@ public class ScheduleServiceImpl implements ScheduleService {
             List<CxStock> stocks,
             List<LhScheduleResult> lhScheduleResults,
             List<CxShiftConfig> dayShifts,
-            Map<String, Integer> formingRemainderMap) {
+            Map<String, Integer> formingRemainderMap,
+            LocalDate scheduleDate) {
 
         // 用于返回的物料库存映射
         Map<String, Integer> materialStockMap = new HashMap<>();
 
         try {
             // 按硫化任务维度分配库存，共用胎胚按硫化任务需求比例分配
-            materialStockMap = allocateStockByMaterialRatio(stocks, lhScheduleResults, dayShifts);
+            materialStockMap = allocateStockByMaterialRatio(stocks, lhScheduleResults, dayShifts, scheduleDate);
             log.debug("按硫化任务维度分配胎胚库存 {} 条", materialStockMap.size());
 
             // 计算成型余量
@@ -1095,14 +1099,74 @@ public class ScheduleServiceImpl implements ScheduleService {
      * @param dayShifts  当前天班次配置
      * @return 对应班次的硫化计划量
      */
-    private int getShiftPlanQtyFromLhResult(LhScheduleResult lhResult, List<CxShiftConfig> dayShifts) {
+    private int getShiftPlanQtyFromLhResult(LhScheduleResult lhResult, List<CxShiftConfig> dayShifts,
+                                            LocalDate scheduleDate) {
+        // 获取排程日期范围内的日历信息，用于判断班次停产
+        List<MdmWorkCalendar> workCalendarList = workCalendarMapper.selectList(null);
+        return getShiftPlanQtyFromLhResult(lhResult, dayShifts, scheduleDate, workCalendarList);
+    }
+
+    /**
+     * 从硫化记录中获取第一个非停产班次的计划量
+     * 按天遍历，遇到停产班次跳过，遇到停产天也跳过
+     */
+    private int getShiftPlanQtyFromLhResult(LhScheduleResult lhResult, List<CxShiftConfig> dayShifts,
+                                            LocalDate scheduleDate, List<MdmWorkCalendar> workCalendarList) {
         if (dayShifts == null || dayShifts.isEmpty()) {
             return lhResult.getDailyPlanQty() != null ? lhResult.getDailyPlanQty() : 0;
         }
 
-        for (CxShiftConfig shiftConfig : dayShifts) {
-            String classField = shiftConfig.getClassField();
-            if (classField != null && classField.startsWith("CLASS")) {
+        // 排程起始日期
+        LocalDate scheduleStartDate = scheduleDate;
+
+        // 构建 日期→WorkCalendar 映射
+        Map<LocalDate, MdmWorkCalendar> calendarMap = new HashMap<>();
+        if (workCalendarList != null) {
+            for (MdmWorkCalendar cal : workCalendarList) {
+                if (cal.getCalendarTime() != null) {
+                    LocalDate calDate = cal.getCalendarTime().toInstant()
+                            .atZone(ZoneId.systemDefault()).toLocalDate();
+                    calendarMap.put(calDate, cal);
+                }
+            }
+        }
+
+        // 按天遍历，找到第一个非停产班次
+        int scheduleDays = dayShifts.stream()
+                .mapToInt(s -> s.getScheduleDay() != null ? s.getScheduleDay() : 1)
+                .max().orElse(1);
+
+        for (int day = 1; day <= scheduleDays; day++) {
+            // 计算该天的日期
+            LocalDate currentDate = scheduleStartDate.plusDays(day - 1);
+
+            // 获取该天的班次配置
+            final int currentDay = day;
+            List<CxShiftConfig> dayConfigs = dayShifts.stream()
+                    .filter(s -> s.getScheduleDay() != null && s.getScheduleDay() == currentDay)
+                    .collect(Collectors.toList());
+
+            if (dayConfigs.isEmpty()) continue;
+
+            // 获取该天的日历信息
+            MdmWorkCalendar calendar = calendarMap.get(currentDate);
+
+            // 如果整天停产，跳到下一天
+            if (calendar != null && "0".equals(calendar.getDayFlag())) {
+                log.debug("日期 {} 整天停产，跳过", currentDate);
+                continue;
+            }
+
+            for (CxShiftConfig shiftConfig : dayConfigs) {
+                String classField = shiftConfig.getClassField();
+                if (classField == null || !classField.startsWith("CLASS")) continue;
+
+                // 检查该班次是否停产
+                if (calendar != null && isShiftStopped(calendar, shiftConfig)) {
+                    log.debug("日期 {} 班次 {} 停产，跳过", currentDate, classField);
+                    continue;
+                }
+
                 try {
                     int classIndex = Integer.parseInt(classField.substring(5));
                     Integer planQty = getClassPlanQtyByIndex(lhResult, classIndex);
@@ -1116,6 +1180,21 @@ public class ScheduleServiceImpl implements ScheduleService {
         }
 
         return lhResult.getDailyPlanQty() != null ? lhResult.getDailyPlanQty() : 0;
+    }
+
+    /**
+     * 判断班次是否停产
+     */
+    private boolean isShiftStopped(MdmWorkCalendar calendar, CxShiftConfig shiftConfig) {
+        Integer shiftOrder = shiftConfig.getDayShiftOrder();
+        if (shiftOrder == null) return false;
+
+        switch (shiftOrder) {
+            case 1: return "0".equals(calendar.getOneShiftFlag());
+            case 2: return "0".equals(calendar.getTwoShiftFlag());
+            case 3: return "0".equals(calendar.getThreeShiftFlag());
+            default: return false;
+        }
     }
 
     /**
@@ -1144,7 +1223,8 @@ public class ScheduleServiceImpl implements ScheduleService {
     private Map<String, Integer> allocateStockByMaterialRatio(
             List<CxStock> stocks,
             List<LhScheduleResult> lhScheduleResults,
-            List<CxShiftConfig> dayShifts) {
+            List<CxShiftConfig> dayShifts,
+            LocalDate scheduleDate) {
 
         Map<String, Integer> materialStockMap = new HashMap<>();
 
@@ -1184,7 +1264,7 @@ public class ScheduleServiceImpl implements ScheduleService {
                 int totalDemand = 0;
                 List<TaskDemand> taskDemands = new ArrayList<>();
                 for (LhScheduleResult lh : relatedTasks) {
-                    int demand = getShiftPlanQtyFromLhResult(lh, dayShifts);
+                    int demand = getShiftPlanQtyFromLhResult(lh, dayShifts, scheduleDate);
                     taskDemands.add(new TaskDemand(lh.getId(), demand));
                     totalDemand += demand;
                 }
