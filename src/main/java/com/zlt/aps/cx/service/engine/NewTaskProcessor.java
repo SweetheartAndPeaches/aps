@@ -122,20 +122,6 @@ public class NewTaskProcessor {
                 }
             }
 
-            // 合并在机信息到 machineHistoryMap（保证在机胎胚也能被保底预留）
-            if (context.getMachineOnlineEmbryoMap() != null) {
-                for (Map.Entry<String, Set<String>> onlineEntry : context.getMachineOnlineEmbryoMap().entrySet()) {
-                    String machineCode = onlineEntry.getKey();
-                    Set<String> onlineEmbryos = onlineEntry.getValue();
-                    if (onlineEmbryos != null && !onlineEmbryos.isEmpty()) {
-                        machineHistoryMap.merge(machineCode, onlineEmbryos, (existing, newOnes) -> {
-                            existing.addAll(newOnes);
-                            return existing;
-                        });
-                    }
-                }
-            }
-
             // Step 3.3: 构建试制机台映射 materialCode → machineCode（同结构下）
             Map<String, String> trialMachineMap = buildTrialMachineMap(trialAllocations, structureName);
 

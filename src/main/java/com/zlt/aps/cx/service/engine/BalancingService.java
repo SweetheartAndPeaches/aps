@@ -598,10 +598,10 @@ public class BalancingService {
         
         log.info("开始保底预留历史任务...");
         
-        // 构建胎胚编码 -> 任务 的映射（使用 embryoCode 作为 key，与 historyEmbryos 一致）
+        // 构建胎胚编码 -> 任务 的映射
         Map<String, CoreScheduleAlgorithmService.DailyEmbryoTask> taskMap = tasks.stream()
                 .collect(Collectors.toMap(
-                        CoreScheduleAlgorithmService.DailyEmbryoTask::getEmbryoCode,
+                        CoreScheduleAlgorithmService.DailyEmbryoTask::getMaterialCode,
                         t -> t,
                         (a, b) -> a));
         
