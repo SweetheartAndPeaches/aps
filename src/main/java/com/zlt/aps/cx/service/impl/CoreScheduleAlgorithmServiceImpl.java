@@ -262,50 +262,11 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         log.info("新增任务处理完成，机台分配数: {}", newAllocations.size());
 
         // ==================== 第五步：合并分配结果 ====================
-        // 续作、新增、试制可能分配到同一机台，需要按机台合并
-        Map<String, MachineAllocationResult> mergedAllocations = new LinkedHashMap<>();
-
-        // 先加入续作分配
-        for (MachineAllocationResult allocation : continueAllocations) {
-            mergedAllocations.put(allocation.getMachineCode(), allocation);
-        }
-
-        // 合并新增分配（同机台追加胎胚）
-        for (MachineAllocationResult allocation : newAllocations) {
-            MachineAllocationResult existing = mergedAllocations.get(allocation.getMachineCode());
-            if (existing != null) {
-                // 同机台：追加胎胚分配（去重，避免重复）
-                Set<String> existingEmbryos = existing.getTaskAllocations().stream()
-                        .map(TaskAllocation::getEmbryoCode)
-                        .collect(Collectors.toSet());
-                for (TaskAllocation taskAlloc : allocation.getTaskAllocations()) {
-                    if (!existingEmbryos.contains(taskAlloc.getEmbryoCode())) {
-                        existing.getTaskAllocations().add(taskAlloc);
-                    }
-                }
-            } else {
-                mergedAllocations.put(allocation.getMachineCode(), allocation);
-            }
-        }
-
-        // 合并试制分配
-        for (MachineAllocationResult allocation : trialAllocations) {
-            MachineAllocationResult existing = mergedAllocations.get(allocation.getMachineCode());
-            if (existing != null) {
-                Set<String> existingEmbryos = existing.getTaskAllocations().stream()
-                        .map(TaskAllocation::getEmbryoCode)
-                        .collect(Collectors.toSet());
-                for (TaskAllocation taskAlloc : allocation.getTaskAllocations()) {
-                    if (!existingEmbryos.contains(taskAlloc.getEmbryoCode())) {
-                        existing.getTaskAllocations().add(taskAlloc);
-                    }
-                }
-            } else {
-                mergedAllocations.put(allocation.getMachineCode(), allocation);
-            }
-        }
-
-        List<MachineAllocationResult> allAllocations = new ArrayList<>(mergedAllocations.values());
+        // 续作任务已和新增任务统一均衡分配，不再需要单独合并
+        // 新增阶段的结果已包含续作任务
+        List<MachineAllocationResult> allAllocations = new ArrayList<>();
+        allAllocations.addAll(newAllocations);
+        allAllocations.addAll(trialAllocations);
 
         log.info("班次分配前检查: 总分配数={}", allAllocations.size());
 

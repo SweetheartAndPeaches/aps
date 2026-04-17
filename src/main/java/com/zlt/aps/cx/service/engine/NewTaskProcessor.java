@@ -101,12 +101,19 @@ public class NewTaskProcessor {
             if (continueTasks != null) {
                 for (CoreScheduleAlgorithmService.DailyEmbryoTask task : continueTasks) {
                     if (structureName.equals(task.getStructureName())) {
+                        // 续作任务保持完整需求量，参与统一均衡
+                        task.setIsContinueTask(true);
                         continueTasksForStructure.add(task);
                     }
                 }
             }
 
-            // 从 existAllocations（续作第一轮均衡结果）构建 machineHistoryMap
+            // 从 context.getMachineOnlineEmbryoMap() 构建历史映射（续作在机信息）
+            if (context.getMachineOnlineEmbryoMap() != null) {
+                machineHistoryMap.putAll(context.getMachineOnlineEmbryoMap());
+            }
+
+            // 从 existAllocations 补充历史映射（如果有的话）
             if (existAllocations != null) {
                 for (CoreScheduleAlgorithmService.MachineAllocationResult allocation : existAllocations) {
                     String machineCode = allocation.getMachineCode();
@@ -117,7 +124,7 @@ public class NewTaskProcessor {
                         }
                     }
                     if (!embryos.isEmpty()) {
-                        machineHistoryMap.put(machineCode, embryos);
+                        machineHistoryMap.computeIfAbsent(machineCode, k -> new HashSet<>()).addAll(embryos);
                     }
                 }
             }
