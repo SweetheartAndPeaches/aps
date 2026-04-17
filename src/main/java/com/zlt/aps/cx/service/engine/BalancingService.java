@@ -445,9 +445,15 @@ public class BalancingService {
 
             Set<String> historyEmbryos = machineHistoryMap.get(config.getCxMachineCode());
             state.setHistoryEmbryos(historyEmbryos != null ? historyEmbryos : new HashSet<>());
+            
+            // 历史胎胚已占用种类槽（每种历史胎胚占1个type slot）
+            // 即使不在当前任务列表中，历史胎胚仍然在机台上生产，占用种类槽
+            int historyTypeCount = state.getHistoryEmbryos().size();
+            state.setCurrentTypes(historyTypeCount);
 
-            log.info("  初始化机台 {}: maxCapacity={}, maxTypes={}, 历史胎胚={}",
-                    config.getCxMachineCode(), state.getMaxCapacity(), state.getMaxTypes(), state.getHistoryEmbryos());
+            log.info("  初始化机台 {}: maxCapacity={}, maxTypes={}, 历史胎胚={}, 已占种类槽={}",
+                    config.getCxMachineCode(), state.getMaxCapacity(), state.getMaxTypes(), 
+                    state.getHistoryEmbryos(), historyTypeCount);
 
             machineStates.add(state);
         }
@@ -606,6 +612,8 @@ public class BalancingService {
                         t -> t,
                         (a, b) -> a));
         
+        log.info("保底预留 taskMap keys: {}", taskMap.keySet());
+        
         int totalReserved = 0;
         
         for (MachineState state : machineStates) {
@@ -617,6 +625,7 @@ public class BalancingService {
             for (String embryoCode : historyEmbryos) {
                 CoreScheduleAlgorithmService.DailyEmbryoTask task = taskMap.get(embryoCode);
                 if (task == null) {
+                    log.warn("保底预留：机台 {} 历史胎胚 {} 在taskMap中未找到", state.getMachineCode(), embryoCode);
                     continue;
                 }
                 
