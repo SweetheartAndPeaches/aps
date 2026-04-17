@@ -598,22 +598,12 @@ public class BalancingService {
         
         log.info("开始保底预留历史任务...");
         
-        // 构建胎胚编码 -> 任务 的映射（用 embryoCode 匹配历史胎胚）
-        // 同一 embryoCode 可能对应多个任务（正式+量试），合并需求量
-        Map<String, CoreScheduleAlgorithmService.DailyEmbryoTask> taskMap = new HashMap<>();
-        for (CoreScheduleAlgorithmService.DailyEmbryoTask task : tasks) {
-            String key = task.getEmbryoCode();
-            if (key == null) continue;
-            CoreScheduleAlgorithmService.DailyEmbryoTask existing = taskMap.get(key);
-            if (existing == null) {
-                taskMap.put(key, task);
-            } else {
-                // 合并需求量
-                int totalDemand = (existing.getVulcanizeMachineCount() != null ? existing.getVulcanizeMachineCount() : 0)
-                        + (task.getVulcanizeMachineCount() != null ? task.getVulcanizeMachineCount() : 0);
-                existing.setVulcanizeMachineCount(totalDemand);
-            }
-        }
+        // 构建胎胚编码 -> 任务 的映射
+        Map<String, CoreScheduleAlgorithmService.DailyEmbryoTask> taskMap = tasks.stream()
+                .collect(Collectors.toMap(
+                        CoreScheduleAlgorithmService.DailyEmbryoTask::getMaterialCode,
+                        t -> t,
+                        (a, b) -> a));
         
         int totalReserved = 0;
         
