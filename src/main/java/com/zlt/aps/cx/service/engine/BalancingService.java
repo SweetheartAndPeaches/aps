@@ -547,11 +547,18 @@ public class BalancingService {
                 result = convertDfsResultToBalancingResult(searchResult.bestAssignments, searchResult.bestMachineCodes, machineStates, sortedTasks);
             }
         } else {
-            // DFS未找到任何方案（理论上不应发生，至少第一个任务的分配会形成部分解）
-            log.warn("DFS未找到任何方案，返回空结果");
-            BalancingResult emptyResult = new BalancingResult();
-            emptyResult.setAssignments(new ArrayList<>());
-            result = emptyResult;
+            // DFS未找到任何方案，检查 machineStates 是否有保底预留的分配
+            boolean hasReservedAssignments = machineStates.stream()
+                    .anyMatch(s -> !s.getAssignedEmbryos().isEmpty());
+            if (hasReservedAssignments) {
+                log.info("DFS无剩余任务，但存在保底预留分配，收集预留结果");
+                result = buildResultFromMachineStates(machineStates);
+            } else {
+                log.warn("DFS未找到任何方案，返回空结果");
+                BalancingResult emptyResult = new BalancingResult();
+                emptyResult.setAssignments(new ArrayList<>());
+                result = emptyResult;
+            }
         }
 
         logAllocationResult(result, machineStates, remainingTasks);
@@ -1328,6 +1335,25 @@ public class BalancingService {
             result.getAssignments().add(assignment);
         }
         
+        return result;
+    }
+
+    /**
+     * 从 machineStates 构建分配结果（保底预留后 DFS 无剩余任务的场景）
+     */
+    private BalancingResult buildResultFromMachineStates(List<MachineState> machineStates) {
+        BalancingResult result = new BalancingResult();
+        result.setAssignments(new ArrayList<>());
+
+        for (MachineState state : machineStates) {
+            if (state.getAssignedEmbryos().isEmpty()) {
+                continue;
+            }
+            MachineAssignment assignment = new MachineAssignment();
+            assignment.setMachineCode(state.getMachineCode());
+            assignment.setEmbryoAssignments(new ArrayList<>(state.getAssignedEmbryos()));
+            result.getAssignments().add(assignment);
+        }
         return result;
     }
 
