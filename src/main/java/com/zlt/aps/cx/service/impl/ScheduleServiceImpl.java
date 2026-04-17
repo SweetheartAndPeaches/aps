@@ -1279,7 +1279,7 @@ public class ScheduleServiceImpl implements ScheduleService {
                 List<TaskDemand> taskDemands = new ArrayList<>();
                 for (LhScheduleResult lh : relatedTasks) {
                     int demand = getShiftPlanQtyFromLhResult(lh, dayShifts, scheduleDate);
-                    taskDemands.add(new TaskDemand(lh.getId(), demand));
+                    taskDemands.add(new TaskDemand(lh.getId(), demand, lh.getMaterialCode()));
                     totalDemand += demand;
                 }
 
@@ -1309,8 +1309,8 @@ public class ScheduleServiceImpl implements ScheduleService {
                         materialStockMap.merge(td.taskKey, currentStock, Integer::sum);
                         allocatedTotal += currentStock;
 
-                        log.debug("胎胚 {} 共用分配：硫化任务 {} 需求 {}，分配库存 {}",
-                                embryoCode, td.taskKey, td.demand, currentStock);
+                        log.debug("胎胚 {} 共用分配：硫化任务 {} 需求 {}，分配库存 {}，物料编码 {}",
+                                embryoCode, td.taskKey, td.demand, currentStock, td.materialCode);
                     }
                 }
             }
@@ -1325,10 +1325,12 @@ public class ScheduleServiceImpl implements ScheduleService {
     private static class TaskDemand {
         String taskKey;    // 硫化任务唯一键：lhId
         int demand;
+        String materialCode;  // 物料编码
 
-        TaskDemand(Long lhId, int demand) {
+        TaskDemand(Long lhId, int demand, String materialCode) {
             this.taskKey = String.valueOf(lhId);
             this.demand = demand;
+            this.materialCode = materialCode;
         }
     }
 
