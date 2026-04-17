@@ -20,6 +20,7 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -85,8 +86,8 @@ public class PrecisionPlanServiceImpl extends ServiceImpl<CxPrecisionPlanMapper,
     public List<CxPrecisionPlan> getByDate(LocalDate planDate) {
         LambdaQueryWrapper<CxPrecisionPlan> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(CxPrecisionPlan::getPlanDate, planDate)
-               .ne(CxPrecisionPlan::getStatus, "CANCELLED")
-               .orderByAsc(CxPrecisionPlan::getPlanStartTime);
+               .ne(CxPrecisionPlan::getCompletionStatus, "1")
+               .orderByAsc(CxPrecisionPlan::getPlanDate);
         return list(wrapper);
     }
 
@@ -95,7 +96,7 @@ public class PrecisionPlanServiceImpl extends ServiceImpl<CxPrecisionPlanMapper,
         LambdaQueryWrapper<CxPrecisionPlan> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(CxPrecisionPlan::getMachineCode, machineCode)
                .eq(CxPrecisionPlan::getPlanDate, planDate)
-               .ne(CxPrecisionPlan::getStatus, "CANCELLED")
+               .ne(CxPrecisionPlan::getCompletionStatus, "1")
                .last("LIMIT 1");
         return getOne(wrapper);
     }
@@ -130,8 +131,8 @@ public class PrecisionPlanServiceImpl extends ServiceImpl<CxPrecisionPlanMapper,
                     save(plan);
                     count++;
 
-                    log.info("自动生成精度计划：机台={}, 日期={}, 班次={}", 
-                            machine.getCxMachineCode(), date, plan.getPlanShift());
+                    log.info("自动生成精度计划：机台={}, 日期={}, 精度周期={}分钟", 
+                            machine.getCxMachineCode(), date, plan.getPrecisionCycle());
 
                     // 检查当天是否已达上限
                     if (countByDate(date) >= MAX_PLANS_PER_DAY) {
@@ -152,13 +153,18 @@ public class PrecisionPlanServiceImpl extends ServiceImpl<CxPrecisionPlanMapper,
             return false;
         }
 
+        // 将 planDate (java.util.Date) 转换为 LocalDate
+        LocalDate planLocalDate = plan.getPlanDate() != null
+                ? plan.getPlanDate().toInstant().atZone(ZoneId.systemDefault()).toLocalDate()
+                : LocalDate.now();
+
         // 获取该机台主要生产的胎胚库存
         String embryoCode = plan.getEmbryoCode();
         if (embryoCode == null) {
             // 如果没有关联胎胚，默认安排早班
-            plan.setPlanShift("SHIFT_DAY");
-            plan.setPlanStartTime(LocalDateTime.of(plan.getPlanDate(), MORNING_SHIFT_START));
-            plan.setPlanEndTime(LocalDateTime.of(plan.getPlanDate(), MORNING_SHIFT_END));
+            plan.setPlanShift("CLASS1");
+            plan.setPlanStartTime(LocalDateTime.of(planLocalDate, MORNING_SHIFT_START));
+            plan.setPlanEndTime(LocalDateTime.of(planLocalDate, MORNING_SHIFT_END));
         } else {
             // 根据胎胚库存判断
             CxStock stock = stockMapper.selectOne(
@@ -170,25 +176,26 @@ public class PrecisionPlanServiceImpl extends ServiceImpl<CxPrecisionPlanMapper,
 
             // 一个班次约8小时，如果库存够吃超过一个班，安排早班
             if (stockHours.compareTo(BigDecimal.valueOf(8)) > 0) {
-                plan.setPlanShift("SHIFT_DAY");
-                plan.setPlanStartTime(LocalDateTime.of(plan.getPlanDate(), MORNING_SHIFT_START));
-                plan.setPlanEndTime(LocalDateTime.of(plan.getPlanDate(), MORNING_SHIFT_END));
+                plan.setPlanShift("CLASS1");
+                plan.setPlanStartTime(LocalDateTime.of(planLocalDate, MORNING_SHIFT_START));
+                plan.setPlanEndTime(LocalDateTime.of(planLocalDate, MORNING_SHIFT_END));
             } else {
                 // 特殊情况安排中班
-                plan.setPlanShift("SHIFT_AFTERNOON");
-                plan.setPlanStartTime(LocalDateTime.of(plan.getPlanDate(), AFTERNOON_SHIFT_START));
-                plan.setPlanEndTime(LocalDateTime.of(plan.getPlanDate(), AFTERNOON_SHIFT_END));
+                plan.setPlanShift("CLASS2");
+                plan.setPlanStartTime(LocalDateTime.of(planLocalDate, AFTERNOON_SHIFT_START));
+                plan.setPlanEndTime(LocalDateTime.of(planLocalDate, AFTERNOON_SHIFT_END));
             }
 
             // 计算对硫化的影响
-            BigDecimal reduceRatio = calculateVulcanizeReduceRatio(plan.getMachineCode(), plan.getPlanDate());
+            BigDecimal reduceRatio = calculateVulcanizeReduceRatio(plan.getMachineCode(), planLocalDate);
             plan.setVulcanizeReduceRatio(reduceRatio);
             plan.setAffectVulcanize(reduceRatio.compareTo(BigDecimal.ZERO) > 0 ? 1 : 0);
         }
 
         plan.setStatus("PLANNED");
         plan.setArrangeReason("SCHEDULED");
-        plan.setUpdateTime(LocalDateTime.now());
+        plan.setCompletionStatus("0");
+        plan.setUpdateTime(new Date());
 
         return updateById(plan);
     }
@@ -229,6 +236,7 @@ public class PrecisionPlanServiceImpl extends ServiceImpl<CxPrecisionPlanMapper,
         return plans.stream()
                 .filter(p -> shiftCode == null || shiftCode.equals(p.getPlanShift()))
                 .filter(p -> "PLANNED".equals(p.getStatus()) || "IN_PROGRESS".equals(p.getStatus()))
+                .filter(p -> !"1".equals(p.getCompletionStatus()))
                 .map(CxPrecisionPlan::getMachineCode)
                 .collect(Collectors.toList());
     }
@@ -240,8 +248,20 @@ public class PrecisionPlanServiceImpl extends ServiceImpl<CxPrecisionPlanMapper,
         List<CxPrecisionPlan> plans = getByDate(planDate);
         for (CxPrecisionPlan plan : plans) {
             if ("PLANNED".equals(plan.getStatus()) || "IN_PROGRESS".equals(plan.getStatus())) {
+                if ("1".equals(plan.getCompletionStatus())) {
+                    continue;
+                }
                 // 计算扣减产能 = 精度时长 × 机台小时产能
-                int deduction = PRECISION_HOURS * DEFAULT_MACHINE_HOURLY_CAPACITY;
+                // 优先使用 estimatedHours，否则按 precisionCycle 计算
+                int precisionHours;
+                if (plan.getEstimatedHours() != null && plan.getEstimatedHours().intValue() > 0) {
+                    precisionHours = plan.getEstimatedHours().intValue();
+                } else if ("15".equals(plan.getPrecisionCycle())) {
+                    precisionHours = 1; // 15分钟约1小时产能扣减
+                } else {
+                    precisionHours = PRECISION_HOURS; // 默认60分钟=4小时
+                }
+                int deduction = precisionHours * DEFAULT_MACHINE_HOURLY_CAPACITY;
                 result.put(plan.getMachineCode(), deduction);
             }
         }
@@ -253,6 +273,11 @@ public class PrecisionPlanServiceImpl extends ServiceImpl<CxPrecisionPlanMapper,
     public boolean isInPrecisionPeriod(String machineCode, LocalDate planDate, String shiftCode) {
         CxPrecisionPlan plan = getByMachineAndDate(machineCode, planDate);
         if (plan == null) {
+            return false;
+        }
+
+        // 已完成的不影响
+        if ("1".equals(plan.getCompletionStatus())) {
             return false;
         }
 
@@ -277,7 +302,7 @@ public class PrecisionPlanServiceImpl extends ServiceImpl<CxPrecisionPlanMapper,
         boolean success = update(new LambdaUpdateWrapper<CxPrecisionPlan>()
                 .in(CxPrecisionPlan::getId, planIds)
                 .set(CxPrecisionPlan::getStatus, status)
-                .set(CxPrecisionPlan::getUpdateTime, LocalDateTime.now()));
+                .set(CxPrecisionPlan::getUpdateTime, new Date()));
         return success ? planIds.size() : 0;
     }
 
@@ -304,7 +329,7 @@ public class PrecisionPlanServiceImpl extends ServiceImpl<CxPrecisionPlanMapper,
         CxPrecisionPlan lastPlan = getOne(
                 new LambdaQueryWrapper<CxPrecisionPlan>()
                         .eq(CxPrecisionPlan::getMachineCode, machine.getCxMachineCode())
-                        .in(CxPrecisionPlan::getStatus, "PLANNED", "IN_PROGRESS", "COMPLETED")
+                        .ne(CxPrecisionPlan::getCompletionStatus, "1")
                         .orderByDesc(CxPrecisionPlan::getPlanDate)
                         .last("LIMIT 1"));
 
@@ -314,7 +339,13 @@ public class PrecisionPlanServiceImpl extends ServiceImpl<CxPrecisionPlanMapper,
         }
 
         // 检查是否已过精度周期
-        LocalDate nextDueDate = lastPlan.getPlanDate().plusMonths(PRECISION_CYCLE_MONTHS);
+        LocalDate lastPlanDate = lastPlan.getPlanDate() != null
+                ? lastPlan.getPlanDate().toInstant().atZone(ZoneId.systemDefault()).toLocalDate()
+                : null;
+        if (lastPlanDate == null) {
+            return true;
+        }
+        LocalDate nextDueDate = lastPlanDate.plusMonths(PRECISION_CYCLE_MONTHS);
         LocalDate arrangeDate = nextDueDate.minusDays(ADVANCE_DAYS);
 
         return !targetDate.isBefore(arrangeDate) && targetDate.isBefore(nextDueDate);
@@ -326,7 +357,7 @@ public class PrecisionPlanServiceImpl extends ServiceImpl<CxPrecisionPlanMapper,
     private long countByDate(LocalDate date) {
         return count(new LambdaQueryWrapper<CxPrecisionPlan>()
                 .eq(CxPrecisionPlan::getPlanDate, date)
-                .ne(CxPrecisionPlan::getStatus, "CANCELLED"));
+                .ne(CxPrecisionPlan::getCompletionStatus, "1"));
     }
 
     /**
@@ -336,34 +367,39 @@ public class PrecisionPlanServiceImpl extends ServiceImpl<CxPrecisionPlanMapper,
         CxPrecisionPlan plan = new CxPrecisionPlan();
         plan.setMachineCode(machine.getCxMachineCode());
         plan.setMachineName(machine.getMachineName());
-        plan.setPlanDate(planDate);
-        plan.setEstimatedHours(PRECISION_HOURS);
+        // planDate 是 java.util.Date 类型，需要从 LocalDate 转换
+        plan.setPlanDate(java.sql.Date.valueOf(planDate));
+        plan.setEstimatedHours(BigDecimal.valueOf(PRECISION_HOURS));
+        plan.setPrecisionCycle("60"); // 默认60分钟周期
         plan.setStatus("PLANNED");
+        plan.setCompletionStatus("0");
         plan.setArrangeReason("SCHEDULED");
-
-        // 获取机台当前在产结构的胎胚（需要从 CxMachineOnlineInfo 获取）
-        // 暂时不设置 embryoCode，由排程时动态获取
 
         // 设置上次精度日期（需要查询）
         CxPrecisionPlan lastPlan = getOne(
                 new LambdaQueryWrapper<CxPrecisionPlan>()
                         .eq(CxPrecisionPlan::getMachineCode, machine.getCxMachineCode())
-                        .eq(CxPrecisionPlan::getStatus, "COMPLETED")
+                        .eq(CxPrecisionPlan::getCompletionStatus, "1")
                         .orderByDesc(CxPrecisionPlan::getPlanDate)
                         .last("LIMIT 1"));
         if (lastPlan != null) {
-            plan.setLastPrecisionDate(lastPlan.getPlanDate());
+            LocalDate lastPlanDate = lastPlan.getPlanDate() != null
+                    ? lastPlan.getPlanDate().toInstant().atZone(ZoneId.systemDefault()).toLocalDate()
+                    : null;
+            plan.setLastPrecisionDate(lastPlanDate);
+            plan.setLastMaintenanceDate(lastPlan.getActualDate());
         }
 
         // 设置到期日期
-        if (lastPlan != null) {
-            plan.setDueDate(lastPlan.getPlanDate().plusMonths(PRECISION_CYCLE_MONTHS));
+        if (lastPlan != null && lastPlan.getPlanDate() != null) {
+            LocalDate lastPlanDate = lastPlan.getPlanDate().toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+            plan.setDueDate(java.sql.Date.valueOf(lastPlanDate.plusMonths(PRECISION_CYCLE_MONTHS)));
         } else {
-            plan.setDueDate(planDate.plusMonths(PRECISION_CYCLE_MONTHS));
+            plan.setDueDate(java.sql.Date.valueOf(planDate.plusMonths(PRECISION_CYCLE_MONTHS)));
         }
 
-        plan.setCreateTime(LocalDateTime.now());
-        plan.setUpdateTime(LocalDateTime.now());
+        plan.setCreateTime(new Date());
+        plan.setUpdateTime(new Date());
 
         return plan;
     }

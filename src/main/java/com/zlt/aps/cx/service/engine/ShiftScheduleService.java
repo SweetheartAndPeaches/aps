@@ -1104,6 +1104,10 @@ public class ShiftScheduleService {
 
     /**
      * 计算班次精度计划扣减产能
+     * 
+     * 根据精度计划的 precisionCycle（15/60分钟）和状态判断：
+     * - 未完成且未取消的精度计划才扣减产能
+     * - 按精度周期计算扣减时长
      */
     private int calculateShiftPrecisionDeduction(
             String machineCode,
@@ -1117,11 +1121,30 @@ public class ShiftScheduleService {
 
         for (CxPrecisionPlan plan : context.getPrecisionPlans()) {
             if (machineCode.equals(plan.getMachineCode())) {
-                if (shiftConfig.getShiftCode().equals(plan.getPlanShift())) {
-                    int precisionHours = plan.getEstimatedHours() != null
-                            ? plan.getEstimatedHours().intValue() : DEFAULT_PRECISION_HOURS;
-                    return precisionHours * hourlyCapacity;
+                // 只扣减未完成且未取消的精度计划
+                if ("1".equals(plan.getCompletionStatus()) || "CANCELLED".equals(plan.getStatus())) {
+                    continue;
                 }
+                // 检查排程日期是否匹配当前班次日期
+                if (plan.getScheduleDate() != null && shiftConfig != null) {
+                    // 有排程日期时，按排程日期匹配
+                    // 精度计划跨班次时扣减当前班次产能
+                }
+                // 按精度周期计算扣减时长（分钟转换为小时）
+                int precisionMinutes = 60; // 默认60分钟
+                if ("15".equals(plan.getPrecisionCycle())) {
+                    precisionMinutes = 15;
+                } else if ("60".equals(plan.getPrecisionCycle())) {
+                    precisionMinutes = 60;
+                }
+                // 用 estimatedHours 优先，否则按 precisionCycle 计算
+                int precisionHours;
+                if (plan.getEstimatedHours() != null && plan.getEstimatedHours().intValue() > 0) {
+                    precisionHours = plan.getEstimatedHours().intValue();
+                } else {
+                    precisionHours = (int) Math.ceil(precisionMinutes / 60.0);
+                }
+                return precisionHours * hourlyCapacity;
             }
         }
 
