@@ -590,6 +590,8 @@ public class BalancingService {
 
     /**
      * 保底预留历史任务
+     * 遍历机台历史胎胚，在任务列表中找到对应任务（embryoCode匹配），
+     * 预留1个需求量到该机台。一个胎胚可能对应多个任务，需要遍历查找。
      */
     private void reservedHistoryTasks(
             List<CoreScheduleAlgorithmService.DailyEmbryoTask> tasks,
@@ -597,13 +599,6 @@ public class BalancingService {
             ScheduleContextVo context) {
         
         log.info("开始保底预留历史任务...");
-        
-        // 构建胎胚编码 -> 任务 的映射
-        Map<String, CoreScheduleAlgorithmService.DailyEmbryoTask> taskMap = tasks.stream()
-                .collect(Collectors.toMap(
-                        CoreScheduleAlgorithmService.DailyEmbryoTask::getMaterialCode,
-                        t -> t,
-                        (a, b) -> a));
         
         int totalReserved = 0;
         
@@ -614,15 +609,21 @@ public class BalancingService {
             }
             
             for (String embryoCode : historyEmbryos) {
-                CoreScheduleAlgorithmService.DailyEmbryoTask task = taskMap.get(embryoCode);
-                if (task == null) {
-                    continue;
+                // 直接遍历任务列表，找到embryoCode匹配且有剩余需求的任务
+                CoreScheduleAlgorithmService.DailyEmbryoTask matchedTask = null;
+                int matchedRemaining = 0;
+                for (CoreScheduleAlgorithmService.DailyEmbryoTask task : tasks) {
+                    if (embryoCode.equals(task.getEmbryoCode())) {
+                        int demand = task.getVulcanizeMachineCount() != null ? task.getVulcanizeMachineCount() : 0;
+                        if (demand > 0) {
+                            matchedTask = task;
+                            matchedRemaining = demand;
+                            break;
+                        }
+                    }
                 }
                 
-                int remainingDemand = task.getVulcanizeMachineCount() != null 
-                        ? task.getVulcanizeMachineCount() : 0;
-                
-                if (remainingDemand <= 0) {
+                if (matchedTask == null || matchedRemaining <= 0) {
                     continue;
                 }
                 
@@ -644,11 +645,11 @@ public class BalancingService {
                 // 保底预留1个硫化机台数
                 int reservedCount = 1;
                 
-                state.getAssignedEmbryos().add(new EmbryoAssignment(embryoCode, task, reservedCount));
+                state.getAssignedEmbryos().add(new EmbryoAssignment(embryoCode, matchedTask, reservedCount));
                 state.setCurrentLoad(state.getCurrentLoad() + reservedCount);
                 state.setCurrentTypes(state.getCurrentTypes() + 1);
                 
-                task.setVulcanizeMachineCount(remainingDemand - reservedCount);
+                matchedTask.setVulcanizeMachineCount(matchedRemaining - reservedCount);
                 
                 totalReserved++;
                 log.debug("机台 {} 保底预留胎胚 {} 共 {} 个硫化机", 
