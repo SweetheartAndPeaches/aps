@@ -201,7 +201,9 @@ public class ContinueTaskProcessor {
         if (context.getParamConfigMap() != null) {
             CxParamConfig config = context.getParamConfigMap().get(PARAM_FORCE_KEEP_HISTORY);
             if (config != null && config.getParamValue() != null) {
-                return "1".equals(config.getParamValue()) || "true".equalsIgnoreCase(config.getParamValue());
+                boolean result = "1".equals(config.getParamValue()) || "true".equalsIgnoreCase(config.getParamValue());
+                log.info("FORCE_KEEP_HISTORY_TASK 数据库配置值: {}, 解析结果: {}", config.getParamValue(), result);
+                return result;
             }
         }
         return false;
