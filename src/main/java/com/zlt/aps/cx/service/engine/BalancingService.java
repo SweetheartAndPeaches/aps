@@ -1267,15 +1267,13 @@ public class BalancingService {
         int maxLoad = 0, minLoad = Integer.MAX_VALUE;
         int maxTypes = 0, minTypes = Integer.MAX_VALUE;
         for (MachineState state : machineStates) {
-            if (state.getCurrentLoad() > 0) {
-                maxLoad = Math.max(maxLoad, state.getCurrentLoad());
-                minLoad = Math.min(minLoad, state.getCurrentLoad());
-                maxTypes = Math.max(maxTypes, state.getCurrentTypes());
-                minTypes = Math.min(minTypes, state.getCurrentTypes());
-            }
+            maxLoad = Math.max(maxLoad, state.getCurrentLoad());
+            minLoad = Math.min(minLoad, state.getCurrentLoad());
+            maxTypes = Math.max(maxTypes, state.getCurrentTypes());
+            minTypes = Math.min(minTypes, state.getCurrentTypes());
         }
-        int loadGap = maxLoad - (minLoad == Integer.MAX_VALUE ? 0 : minLoad);
-        int typeGap = maxTypes - (minTypes == Integer.MAX_VALUE ? 0 : minTypes);
+        int loadGap = maxLoad - minLoad;
+        int typeGap = maxTypes - minTypes;
         return loadGap <= loadDiffThreshold && typeGap <= typeDiffThreshold;
     }
 
@@ -1296,16 +1294,14 @@ public class BalancingService {
         int maxTypes = 0, minTypes = Integer.MAX_VALUE;
         
         for (MachineState state : machineStates) {
-            if (state.getCurrentLoad() > 0) {
-                maxLoad = Math.max(maxLoad, state.getCurrentLoad());
-                minLoad = Math.min(minLoad, state.getCurrentLoad());
-                maxTypes = Math.max(maxTypes, state.getCurrentTypes());
-                minTypes = Math.min(minTypes, state.getCurrentTypes());
-            }
+            maxLoad = Math.max(maxLoad, state.getCurrentLoad());
+            minLoad = Math.min(minLoad, state.getCurrentLoad());
+            maxTypes = Math.max(maxTypes, state.getCurrentTypes());
+            minTypes = Math.min(minTypes, state.getCurrentTypes());
         }
         
-        int loadGap = maxLoad - (minLoad == Integer.MAX_VALUE ? 0 : minLoad);
-        int typeGap = maxTypes - (minTypes == Integer.MAX_VALUE ? 0 : minTypes);
+        int loadGap = maxLoad - minLoad;
+        int typeGap = maxTypes - minTypes;
         
         return loadGap * 10 + typeGap * 100;
     }
