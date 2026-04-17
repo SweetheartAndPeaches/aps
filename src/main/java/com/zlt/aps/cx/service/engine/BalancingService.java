@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -338,6 +339,30 @@ public class BalancingService {
             Map<String, Integer> machineMaxEmbryoTypesMap,
             boolean forceKeepHistory,
             ScheduleContextVo context) {
+        // 续作均衡场景：无续作预扣
+        return balanceEmbryosToMachinesWithMachineCapacity(
+                tasks, availableMachines, machineHistoryMap,
+                machineMaxLhMap, machineMaxEmbryoTypesMap,
+                forceKeepHistory, context,
+                null, null);
+    }
+
+    /**
+     * 均衡分配胎胚到机台（含续作预扣）
+     *
+     * @param continueLoadMap 续作已占容量（机台编码 → 已占硫化机数），可为null
+     * @param continueTypeMap 续作已占种类（机台编码 → 已占胎胚编码集合），可为null
+     */
+    public BalancingResult balanceEmbryosToMachinesWithMachineCapacity(
+            List<CoreScheduleAlgorithmService.DailyEmbryoTask> tasks,
+            List<MpCxCapacityConfiguration> availableMachines,
+            Map<String, Set<String>> machineHistoryMap,
+            Map<String, Integer> machineMaxLhMap,
+            Map<String, Integer> machineMaxEmbryoTypesMap,
+            boolean forceKeepHistory,
+            ScheduleContextVo context,
+            Map<String, Integer> continueLoadMap,
+            Map<String, Set<String>> continueTypeMap) {
 
         // Step 1: 获取均衡阈值配置
         int typeDiffThreshold = getTypeDiffThreshold(context);
@@ -446,8 +471,21 @@ public class BalancingService {
             Set<String> historyEmbryos = machineHistoryMap.get(config.getCxMachineCode());
             state.setHistoryEmbryos(historyEmbryos != null ? historyEmbryos : new HashSet<>());
 
-            log.info("  初始化机台 {}: maxCapacity={}, maxTypes={}, 历史胎胚={}",
-                    config.getCxMachineCode(), state.getMaxCapacity(), state.getMaxTypes(), state.getHistoryEmbryos());
+            // 预扣续作已占的容量和种类槽
+            int preLoad = (continueLoadMap != null) ? continueLoadMap.getOrDefault(config.getCxMachineCode(), 0) : 0;
+            Set<String> preTypes = (continueTypeMap != null) ? continueTypeMap.getOrDefault(config.getCxMachineCode(), Collections.emptySet()) : Collections.emptySet();
+            if (preLoad > 0 || !preTypes.isEmpty()) {
+                state.setCurrentLoad(preLoad);
+                state.setCurrentTypes(preTypes.size());
+                // 将续作已占种类加入 historyEmbryos（DFS排序偏好）
+                state.getHistoryEmbryos().addAll(preTypes);
+                log.info("  初始化机台 {}: maxCapacity={}, maxTypes={}, 续作预扣容量={}, 续作预扣种类={}, 历史胎胚={}",
+                        config.getCxMachineCode(), state.getMaxCapacity(), state.getMaxTypes(),
+                        preLoad, preTypes, state.getHistoryEmbryos());
+            } else {
+                log.info("  初始化机台 {}: maxCapacity={}, maxTypes={}, 历史胎胚={}",
+                        config.getCxMachineCode(), state.getMaxCapacity(), state.getMaxTypes(), state.getHistoryEmbryos());
+            }
 
             machineStates.add(state);
         }

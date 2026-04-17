@@ -82,25 +82,102 @@ public class ContinueTaskProcessor {
 
         log.info("========== 开始处理续作任务，共 {} 个任务 ==========", continueTasks.size());
 
-        // 续作任务不再独立均衡分配，由 NewTaskProcessor 统一均衡
-        // 此处只标记 isContinueTask=true 并记录日志
+        // 标记续作任务
         for (CoreScheduleAlgorithmService.DailyEmbryoTask task : continueTasks) {
             task.setIsContinueTask(true);
-            log.info("续作任务标记: embryoCode={}, materialCode={}, vulcanizeMachineCount={}, structureName={}",
-                    task.getEmbryoCode(), task.getMaterialCode(),
-                    task.getVulcanizeMachineCount(), task.getStructureName());
         }
 
-        // 构建历史任务映射日志（供排查使用）
+        // 检查是否强制保留历史任务
+        boolean forceKeepHistory = getForceKeepHistoryConfig(context);
+        log.info("强制保留历史任务配置: {}", forceKeepHistory);
+
+        if (!forceKeepHistory) {
+            // 不做保底预留，续作任务全部由 NewTaskProcessor 统一均衡
+            log.info("强制保留历史任务未开启，续作任务不保底预留，全部交给新增均衡处理");
+            log.info("========== 续作任务处理完成（仅标记），共 {} 个任务 ==========", continueTasks.size());
+            return results;
+        }
+
+        // 构建历史任务映射
         Map<String, Set<String>> machineHistoryMap = buildMachineHistoryMap(context);
         log.info("构建历史任务映射完成，共 {} 台机台有历史记录", machineHistoryMap.size());
-        for (Map.Entry<String, Set<String>> entry : machineHistoryMap.entrySet()) {
-            log.info("  机台 {} 历史胎胚: {}", entry.getKey(), entry.getValue());
+
+        // 保底预留：每个机台的每个历史胎胚至少预留1个在原机台
+        // 使用 Map<机台编码, MachineAllocationResult> 收集预留结果
+        Map<String, CoreScheduleAlgorithmService.MachineAllocationResult> allocationMap = new LinkedHashMap<>();
+
+        for (Map.Entry<String, Set<String>> historyEntry : machineHistoryMap.entrySet()) {
+            String machineCode = historyEntry.getKey();
+            Set<String> historyEmbryos = historyEntry.getValue();
+
+            for (String embryoCode : historyEmbryos) {
+                // 在续作任务列表中找到 demand > 0 的任务
+                CoreScheduleAlgorithmService.DailyEmbryoTask matchedTask = null;
+                for (CoreScheduleAlgorithmService.DailyEmbryoTask task : continueTasks) {
+                    if (embryoCode.equals(task.getEmbryoCode())) {
+                        int demand = task.getVulcanizeMachineCount() != null ? task.getVulcanizeMachineCount() : 0;
+                        if (demand > 0) {
+                            matchedTask = task;
+                            break;
+                        }
+                    }
+                }
+
+                if (matchedTask == null) {
+                    log.debug("机台 {} 的历史胎胚 {} 在续作任务中无剩余需求，跳过保底预留", machineCode, embryoCode);
+                    continue;
+                }
+
+                int demand = matchedTask.getVulcanizeMachineCount() != null ? matchedTask.getVulcanizeMachineCount() : 0;
+
+                // 保底预留1个硫化机
+                int reservedCount = 1;
+                matchedTask.setVulcanizeMachineCount(demand - reservedCount);
+
+                // 构建分配结果
+                CoreScheduleAlgorithmService.MachineAllocationResult allocation =
+                        allocationMap.computeIfAbsent(machineCode, code -> createMachineAllocation(code, context));
+
+                allocateContinueReservation(allocation, matchedTask, reservedCount, context);
+
+                log.info("机台 {} 保底预留胎胚 {} 共 {} 个硫化机", machineCode, embryoCode, reservedCount);
+            }
         }
 
-        // 返回空结果，续作任务由 NewTaskProcessor 统一均衡分配
-        log.info("========== 续作任务处理完成（仅标记，不独立均衡），共 {} 个任务 ==========", continueTasks.size());
+        results.addAll(allocationMap.values());
+        log.info("========== 续作任务保底预留完成，共 {} 台机台预留任务 ==========", results.size());
         return results;
+    }
+
+    /**
+     * 保底预留分配到机台（续作保底预留场景，只分配预留的硫化机数，不是全量）
+     */
+    private void allocateContinueReservation(
+            CoreScheduleAlgorithmService.MachineAllocationResult allocation,
+            CoreScheduleAlgorithmService.DailyEmbryoTask task,
+            int reservedVulcanizeCount,
+            ScheduleContextVo context) {
+
+        CoreScheduleAlgorithmService.TaskAllocation taskAllocation = new CoreScheduleAlgorithmService.TaskAllocation();
+        taskAllocation.setEmbryoCode(task.getEmbryoCode());
+        taskAllocation.setMaterialCode(task.getMaterialCode());
+        taskAllocation.setMaterialDesc(task.getMaterialDesc());
+        taskAllocation.setMainMaterialDesc(task.getMainMaterialDesc());
+        taskAllocation.setStructureName(task.getStructureName());
+        taskAllocation.setQuantity(reservedVulcanizeCount);  // 只记录预留量
+        taskAllocation.setVulcanizeMachineCount(reservedVulcanizeCount);
+        taskAllocation.setPriority(task.getPriority());
+        taskAllocation.setStockHours(task.getStockHours());
+        taskAllocation.setIsTrialTask(task.getIsTrialTask());
+        taskAllocation.setIsEndingTask(task.getIsEndingTask());
+        taskAllocation.setEndingSurplusQty(task.getEndingSurplusQty());
+        taskAllocation.setIsMainProduct(task.getIsMainProduct());
+        taskAllocation.setIsContinueTask(true);  // 标记为续作预留
+        taskAllocation.setLhId(task.getLhId());
+
+        allocation.getTaskAllocations().add(taskAllocation);
+        allocation.setUsedCapacity(allocation.getUsedCapacity() + reservedVulcanizeCount);
+        allocation.setRemainingCapacity(allocation.getRemainingCapacity() - reservedVulcanizeCount);
     }
 
     // ==================== 辅助方法 ====================

@@ -250,7 +250,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 taskGroup.getTrialTasks(), context, scheduleDate, singleShiftList, context.getAvailableMachines());
         log.info("试制任务处理完成，机台分配数: {}", trialAllocations.size());
 
-        // ==================== 第四步：S5.3 处理新增任务（合并续作+新增，重新均衡） ====================
+        // ==================== 第四步：S5.3 处理新增任务（续作剩余需求+新增统一均衡） ====================
         List<MachineAllocationResult> newAllocations = newTaskProcessor.processNewTasks(
                 taskGroup.getNewTasks(),
                 context,
@@ -263,6 +263,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
         // ==================== 第五步：合并分配结果 ====================
         List<MachineAllocationResult> allAllocations = new ArrayList<>();
+        allAllocations.addAll(continueAllocations);
         allAllocations.addAll(newAllocations);
         allAllocations.addAll(trialAllocations);
 

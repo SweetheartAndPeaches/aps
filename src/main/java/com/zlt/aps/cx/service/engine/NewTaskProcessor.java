@@ -60,22 +60,37 @@ public class NewTaskProcessor {
 
         List<CoreScheduleAlgorithmService.MachineAllocationResult> allResults = new ArrayList<>();
 
-        if (CollectionUtils.isEmpty(newTasks)) {
+        // 新增任务为空时，仍需处理续作剩余需求的均衡
+        log.info("========== 开始处理新增任务，新增={}，续作={} ==========",
+                CollectionUtils.isEmpty(newTasks) ? 0 : newTasks.size(),
+                CollectionUtils.isEmpty(continueTasks) ? 0 : continueTasks.size());
+
+        // Step 1: 按结构分组新增任务
+        Map<String, List<CoreScheduleAlgorithmService.DailyEmbryoTask>> structureTaskMap = new LinkedHashMap<>();
+        if (!CollectionUtils.isEmpty(newTasks)) {
+            for (CoreScheduleAlgorithmService.DailyEmbryoTask task : newTasks) {
+                structureTaskMap.computeIfAbsent(task.getStructureName(), k -> new ArrayList<>()).add(task);
+            }
+        }
+
+        // Step 1.1: 将续作剩余 demand > 0 的任务也加入结构分组（补上只有续作没有新增的结构）
+        if (!CollectionUtils.isEmpty(continueTasks)) {
+            for (CoreScheduleAlgorithmService.DailyEmbryoTask task : continueTasks) {
+                int demand = task.getVulcanizeMachineCount() != null ? task.getVulcanizeMachineCount() : 0;
+                if (demand > 0) {
+                    structureTaskMap.computeIfAbsent(task.getStructureName(), k -> new ArrayList<>()).add(task);
+                }
+            }
+        }
+
+        if (structureTaskMap.isEmpty()) {
+            log.info("无新增和续作剩余任务，跳过均衡");
             return allResults;
         }
 
-        log.info("========== 开始处理新增任务，共 {} 个任务 ==========", newTasks.size());
-
-        // Step 1: 按结构分组新增任务
-        Map<String, List<CoreScheduleAlgorithmService.DailyEmbryoTask>> structureTaskMap = newTasks.stream()
-                .filter(t -> t.getStructureName() != null)
-                .collect(Collectors.groupingBy(
-                        CoreScheduleAlgorithmService.DailyEmbryoTask::getStructureName,
-                        LinkedHashMap::new,
-                        Collectors.toList()));
-
-        // Step 2: 获取是否强制保留历史任务
-        boolean forceKeepHistory = getForceKeepHistoryConfig(context);
+        // Step 2: 保底预留已在 ContinueTaskProcessor 完成，此处不再做保底预留
+        // 传 false 给 BalancingService 避免重复预留
+        boolean forceKeepHistoryForBalancing = false;
 
         // Step 3: 按结构处理
         for (Map.Entry<String, List<CoreScheduleAlgorithmService.DailyEmbryoTask>> entry : structureTaskMap.entrySet()) {
@@ -94,30 +109,28 @@ public class NewTaskProcessor {
                 continue;
             }
 
-            // Step 3.2: 获取该结构的续作任务，构建 machineHistoryMap
-            List<CoreScheduleAlgorithmService.DailyEmbryoTask> continueTasksForStructure = new ArrayList<>();
+            // Step 3.2: 从 existAllocations（续作均衡结果）构建 machineHistoryMap 和机台已占容量/种类
             Map<String, Set<String>> machineHistoryMap = new HashMap<>();
+            Map<String, Integer> continueLoadMap = new HashMap<>();   // 续作已占容量
+            Map<String, Set<String>> continueTypeMap = new HashMap<>(); // 续作已占种类
 
-            if (continueTasks != null) {
-                for (CoreScheduleAlgorithmService.DailyEmbryoTask task : continueTasks) {
-                    if (structureName.equals(task.getStructureName())) {
-                        continueTasksForStructure.add(task);
-                    }
-                }
-            }
-
-            // 从 existAllocations（续作第一轮均衡结果）构建 machineHistoryMap
             if (existAllocations != null) {
                 for (CoreScheduleAlgorithmService.MachineAllocationResult allocation : existAllocations) {
                     String machineCode = allocation.getMachineCode();
                     Set<String> embryos = new HashSet<>();
+                    int load = 0;
+                    Set<String> types = new HashSet<>();
                     for (CoreScheduleAlgorithmService.TaskAllocation taskAlloc : allocation.getTaskAllocations()) {
                         if (structureName.equals(taskAlloc.getStructureName())) {
                             embryos.add(taskAlloc.getEmbryoCode());
+                            types.add(taskAlloc.getEmbryoCode());
+                            load += taskAlloc.getVulcanizeMachineCount() != null ? taskAlloc.getVulcanizeMachineCount() : 0;
                         }
                     }
                     if (!embryos.isEmpty()) {
                         machineHistoryMap.put(machineCode, embryos);
+                        continueLoadMap.put(machineCode, load);
+                        continueTypeMap.put(machineCode, types);
                     }
                 }
             }
@@ -148,14 +161,27 @@ public class NewTaskProcessor {
                         .add(constrainedTask.getEmbryoCode());
             }
 
-            // Step 3.5: 合并续作任务和参与均衡的新增任务（含约束量试）
-            List<CoreScheduleAlgorithmService.DailyEmbryoTask> allTasksForStructure = new ArrayList<>();
-            allTasksForStructure.addAll(continueTasksForStructure);
-            allTasksForStructure.addAll(balancedTasks);
+            // Step 3.5: 参与均衡的任务 = 新增任务 + 续作剩余需求（含约束量试）
+            // 续作保底预留已在 ContinueTaskProcessor 完成，剩余需求在此统一均衡
+            List<CoreScheduleAlgorithmService.DailyEmbryoTask> allTasksForStructure = new ArrayList<>(balancedTasks);
 
-            log.info("结构 {} 合并后：续作={}, 均衡新增={}, 约束量试={}",
-                    structureName, continueTasksForStructure.size(),
-                    balancedTasks.size(), constrainedTrials.size());
+            // 加入续作剩余 demand > 0 的任务
+            int continueRemaining = 0;
+            if (!CollectionUtils.isEmpty(continueTasks)) {
+                for (CoreScheduleAlgorithmService.DailyEmbryoTask task : continueTasks) {
+                    if (structureName.equals(task.getStructureName())) {
+                        int demand = task.getVulcanizeMachineCount() != null ? task.getVulcanizeMachineCount() : 0;
+                        if (demand > 0) {
+                            allTasksForStructure.add(task);
+                            continueRemaining++;
+                        }
+                    }
+                }
+            }
+
+            log.info("结构 {}：续作已占机台={}, 续作剩余={}, 均衡新增={}, 约束量试={}",
+                    structureName, continueLoadMap.size(), continueRemaining,
+                    balancedTasks.size() - constrainedTrials.size(), constrainedTrials.size());
 
             // Step 3.6: 构建机台最大硫化机数映射
             Map<String, Integer> machineMaxLhMap = buildMachineMaxLhMap(
@@ -173,8 +199,10 @@ public class NewTaskProcessor {
                             machineHistoryMap,
                             machineMaxLhMap,
                             machineMaxEmbryoTypesMap,
-                            forceKeepHistory,
-                            context);
+                            forceKeepHistoryForBalancing,
+                            context,
+                            continueLoadMap,
+                            continueTypeMap);
 
             if (balancingResult == null
                     || CollectionUtils.isEmpty(balancingResult.getAssignments())) {
