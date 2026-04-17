@@ -1106,36 +1106,25 @@ public class BalancingService {
             int loadDiffThreshold) {
         
         if (capacitySufficient) {
-            // ===== 产能充足策略：已有优先+负荷感知阈值，兼顾完整性和均衡 =====
-            // 阈值：已有机台负荷比未有机台负荷高出超过此值时，允许切换到未有机台
-            int loadAwareThreshold = loadDiffThreshold + 1;
-            
+            // ===== 产能充足策略：负荷均衡优先，已有胎胚为次要考量 =====
+            // 产能充足时目标是均衡分配，避免任务集中在少数机台
             candidates.sort((a, b) -> {
+                // 优先级1：负荷少的优先（均衡分配，避免集中）
+                int loadCompare = Integer.compare(a.getCurrentLoad(), b.getCurrentLoad());
+                if (loadCompare != 0) {
+                    return loadCompare;
+                }
+                
+                // 优先级2：负荷相同时，已有胎胚优先（节省种类槽）
                 boolean aAlreadyHas = a.getAssignedEmbryos().stream()
                         .anyMatch(e -> e.getEmbryoCode().equals(embryoCode));
                 boolean bAlreadyHas = b.getAssignedEmbryos().stream()
                         .anyMatch(e -> e.getEmbryoCode().equals(embryoCode));
-                
-                // 优先级1：已有优先，但加入负荷感知阈值
                 if (aAlreadyHas && !bAlreadyHas) {
-                    // a已有（节省种类槽），b未有
-                    // 若a负荷比b高出超过阈值 → 均衡更重要，b优先（也让胎胚扩展到第二台机台）
-                    if (a.getCurrentLoad() > b.getCurrentLoad() + loadAwareThreshold) {
-                        return 1;
-                    }
                     return -1;
                 }
                 if (!aAlreadyHas && bAlreadyHas) {
-                    if (b.getCurrentLoad() > a.getCurrentLoad() + loadAwareThreshold) {
-                        return -1;
-                    }
                     return 1;
-                }
-                
-                // 优先级2：同已有/同未有时，负荷少的优先（均衡）
-                int loadCompare = Integer.compare(a.getCurrentLoad(), b.getCurrentLoad());
-                if (loadCompare != 0) {
-                    return loadCompare;
                 }
                 
                 // 优先级3：历史胎胚优先
@@ -1267,15 +1256,13 @@ public class BalancingService {
         int maxLoad = 0, minLoad = Integer.MAX_VALUE;
         int maxTypes = 0, minTypes = Integer.MAX_VALUE;
         for (MachineState state : machineStates) {
-            if (state.getCurrentLoad() > 0) {
-                maxLoad = Math.max(maxLoad, state.getCurrentLoad());
-                minLoad = Math.min(minLoad, state.getCurrentLoad());
-                maxTypes = Math.max(maxTypes, state.getCurrentTypes());
-                minTypes = Math.min(minTypes, state.getCurrentTypes());
-            }
+            maxLoad = Math.max(maxLoad, state.getCurrentLoad());
+            minLoad = Math.min(minLoad, state.getCurrentLoad());
+            maxTypes = Math.max(maxTypes, state.getCurrentTypes());
+            minTypes = Math.min(minTypes, state.getCurrentTypes());
         }
-        int loadGap = maxLoad - (minLoad == Integer.MAX_VALUE ? 0 : minLoad);
-        int typeGap = maxTypes - (minTypes == Integer.MAX_VALUE ? 0 : minTypes);
+        int loadGap = maxLoad - minLoad;
+        int typeGap = maxTypes - minTypes;
         return loadGap <= loadDiffThreshold && typeGap <= typeDiffThreshold;
     }
 
@@ -1296,16 +1283,14 @@ public class BalancingService {
         int maxTypes = 0, minTypes = Integer.MAX_VALUE;
         
         for (MachineState state : machineStates) {
-            if (state.getCurrentLoad() > 0) {
-                maxLoad = Math.max(maxLoad, state.getCurrentLoad());
-                minLoad = Math.min(minLoad, state.getCurrentLoad());
-                maxTypes = Math.max(maxTypes, state.getCurrentTypes());
-                minTypes = Math.min(minTypes, state.getCurrentTypes());
-            }
+            maxLoad = Math.max(maxLoad, state.getCurrentLoad());
+            minLoad = Math.min(minLoad, state.getCurrentLoad());
+            maxTypes = Math.max(maxTypes, state.getCurrentTypes());
+            minTypes = Math.min(minTypes, state.getCurrentTypes());
         }
         
-        int loadGap = maxLoad - (minLoad == Integer.MAX_VALUE ? 0 : minLoad);
-        int typeGap = maxTypes - (minTypes == Integer.MAX_VALUE ? 0 : minTypes);
+        int loadGap = maxLoad - minLoad;
+        int typeGap = maxTypes - minTypes;
         
         return loadGap * 10 + typeGap * 100;
     }
