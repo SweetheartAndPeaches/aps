@@ -1494,11 +1494,11 @@ public class ScheduleServiceImpl implements ScheduleService {
             Map<String, Set<String>> machineOnlineEmbryoMap = new HashMap<>();
             for (CxMachineOnlineInfo onlineInfo : context.getOnlineInfos()) {
                 String cxCode = onlineInfo.getCxCode();
-                String materialCode = onlineInfo.getMesMaterialCode();
+                String materialCode = onlineInfo.getMaterialCode();
                 String embryoCode = materialToEmbryoCodeMap.get(materialCode);
                 String combinedKey = materialCode + "|" + embryoCode;
                 if (cxCode != null && combinedKey != null && !combinedKey.equals("|")) {
-                    machineOnlineEmbryoMap.computeIfAbsent(cxCode, k -> new HashSet<>()).add(combinedKey);
+                    machineOnlineEmbryoMap.computeIfAbsent(cxCode, k -> new HashSet<>()).add(embryoCode);
                 }
             }
             context.setMachineOnlineEmbryoMap(machineOnlineEmbryoMap);
