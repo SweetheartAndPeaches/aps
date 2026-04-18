@@ -135,9 +135,16 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             LocalDate currentScheduleDate = context.getScheduleDate()
                     .minusDays(SCHEDULE_START_OFFSET_DAYS).plusDays(day - 1);
 
-            // 检查当前天是否是停产日
-            if (isStopProductionDay(context, currentScheduleDate)) {
-                log.info("第 {} 天日期 {} 是停产日，跳过班次 {} 的排程", day, currentScheduleDate, shiftConfig.getShiftCode());
+            // 检查当前天是否是整天停产
+            if (scheduleDayTypeHelper.isFullDayStopped(currentScheduleDate)) {
+                log.info("第 {} 天日期 {} 整天停产，跳过班次 {} 的排程", day, currentScheduleDate, shiftConfig.getShiftCode());
+                continue;
+            }
+
+            // 检查当前班次是否停产
+            Integer dayShiftOrder = shiftConfig.getDayShiftOrder();
+            if (dayShiftOrder != null && scheduleDayTypeHelper.isShiftStopped(currentScheduleDate, dayShiftOrder)) {
+                log.info("第 {} 天日期 {} 班次 {} 停产，跳过该班次排程", day, currentScheduleDate, shiftConfig.getShiftCode());
                 continue;
             }
 

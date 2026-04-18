@@ -292,4 +292,46 @@ public class ScheduleDayTypeHelper {
         cacheStartDate = null;
         cacheEndDate = null;
     }
+
+    /**
+     * 判断某天某班次是否停产
+     *
+     * @param date 查询日期
+     * @param dayShiftOrder 班次顺序（1=一班, 2=二班, 3=三班）
+     * @return true 表示该班次停产
+     */
+    public boolean isShiftStopped(LocalDate date, int dayShiftOrder) {
+        ensureCacheLoaded(date);
+        MdmWorkCalendar calendar = calendarCache.get(date);
+        if (calendar == null) {
+            return false;
+        }
+        switch (dayShiftOrder) {
+            case 1: return "0".equals(calendar.getOneShiftFlag());
+            case 2: return "0".equals(calendar.getTwoShiftFlag());
+            case 3: return "0".equals(calendar.getThreeShiftFlag());
+            default: return false;
+        }
+    }
+
+    /**
+     * 判断某天是否整天停产（dayFlag=0 或 三个班次全部停产）
+     *
+     * @param date 查询日期
+     * @return true 表示整天停产
+     */
+    public boolean isFullDayStopped(LocalDate date) {
+        ensureCacheLoaded(date);
+        MdmWorkCalendar calendar = calendarCache.get(date);
+        if (calendar == null) {
+            return false;
+        }
+        if ("0".equals(calendar.getDayFlag())) {
+            return true;
+        }
+        boolean shift1Stopped = "0".equals(calendar.getOneShiftFlag());
+        boolean shift2Stopped = "0".equals(calendar.getTwoShiftFlag());
+        boolean shift3Stopped = "0".equals(calendar.getThreeShiftFlag());
+        return shift1Stopped && shift2Stopped && shift3Stopped;
+    }
 }
