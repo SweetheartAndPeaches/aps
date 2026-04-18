@@ -299,12 +299,23 @@ public class BalancingService {
             log.warn("  配比数据为空，所有机台将使用默认值");
         }
 
+        Integer h15MaxEmbryoTypes = context.getH15MaxEmbryoTypes();
+
         for (MdmMoldingMachine machine : machines) {
             String machineCode = machine.getCxMachineCode();
             String machineType = machineTypeMap.get(machineCode);
 
+            // H15开头机台：如果有专用配置则优先使用，否则走配比逻辑
+            Integer maxTypes = null;
+            if (h15MaxEmbryoTypes != null && machineCode != null && machineCode.startsWith("H15")) {
+                maxTypes = h15MaxEmbryoTypes;
+                log.info("  机台 {} (机型={}): 使用H15专用最大胎胚种类数={}", machineCode, machineType, maxTypes);
+                result.put(machineCode, maxTypes);
+                continue;
+            }
+
             String key = machineType + "_" + structureName;
-            Integer maxTypes = typeStructureMap.get(key);
+            maxTypes = typeStructureMap.get(key);
 
             // 如果找不到，使用默认值
             if (maxTypes == null) {

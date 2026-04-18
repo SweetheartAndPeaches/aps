@@ -381,6 +381,11 @@ public class ScheduleContextVo {
      */
     private String vulcanizingOpenTimeStr;
 
+    /**
+     * H15开头机台最大胎胚种类数（未配置则按配比默认值，配置后覆盖配比值）
+     */
+    private Integer h15MaxEmbryoTypes;
+
     // ==================== 收尾相关数据 ====================
 
     /**

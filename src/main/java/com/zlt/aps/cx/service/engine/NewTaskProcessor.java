@@ -419,15 +419,27 @@ public class NewTaskProcessor {
             }
         }
 
+        // H15开头机台：如果有专用配置则优先使用
+        Integer h15MaxEmbryoTypes = context.getH15MaxEmbryoTypes();
+
         for (MpCxCapacityConfiguration config : machineConfigs) {
             String machineCode = config.getCxMachineCode();
             String machineType = machineTypeMap.get(machineCode);
+
+            // H15开头机台：如果有专用配置则优先使用，否则走配比逻辑
+            if (h15MaxEmbryoTypes != null && machineCode != null && machineCode.startsWith("H15")) {
+                log.info("  机台 {} (机型={}): 使用H15专用最大胎胚种类数={}", machineCode, machineType, h15MaxEmbryoTypes);
+                result.put(machineCode, h15MaxEmbryoTypes);
+                continue;
+            }
+
             String key = machineType + "_" + structureName;
             Integer maxTypes = typeStructureMap.get(key);
             if (maxTypes == null) {
                 maxTypes = context.getMaxTypesPerMachine() != null
                         ? context.getMaxTypesPerMachine() : BalancingService.DEFAULT_MAX_TYPES_PER_MACHINE;
             }
+            log.info("  机台 {} (机型={}): 最大胎胚种类数={}", machineCode, machineType, maxTypes);
             result.put(machineCode, maxTypes);
         }
 

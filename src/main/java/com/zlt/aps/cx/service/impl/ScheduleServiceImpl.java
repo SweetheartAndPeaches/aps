@@ -90,6 +90,9 @@ public class ScheduleServiceImpl implements ScheduleService {
     /** 参数编码：预留消化时间（小时，成型停机早于硫化停锅的时长） */
     private static final String PARAM_CODE_RESERVED_DIGEST_HOURS = "RESERVED_DIGEST_HOURS";
 
+    /** 参数编码：H15开头机台最大胎胚种类数（未配置则按配比默认值） */
+    private static final String PARAM_CODE_H15_MAX_EMBRYO_TYPES = "H15_MAX_EMBRYO_TYPES";
+
     /** 默认损耗率 */
     private static final BigDecimal DEFAULT_LOSS_RATE = new BigDecimal("0.02");
 
@@ -695,6 +698,17 @@ public class ScheduleServiceImpl implements ScheduleService {
                 log.info("预留消化时间配置：{}小时", reservedDigestConfig.getParamValue());
             } catch (NumberFormatException e) {
                 log.warn("解析预留消化时间配置失败: {}", reservedDigestConfig.getParamValue());
+            }
+        }
+
+        // 加载H15开头机台最大胎胚种类数
+        CxParamConfig h15MaxTypesConfig = paramConfigMap.get(PARAM_CODE_H15_MAX_EMBRYO_TYPES);
+        if (h15MaxTypesConfig != null && h15MaxTypesConfig.getParamValue() != null) {
+            try {
+                context.setH15MaxEmbryoTypes(Integer.parseInt(h15MaxTypesConfig.getParamValue()));
+                log.info("H15机台最大胎胚种类数配置：{}", h15MaxTypesConfig.getParamValue());
+            } catch (NumberFormatException e) {
+                log.warn("解析H15机台最大胎胚种类数配置失败: {}", h15MaxTypesConfig.getParamValue());
             }
         }
     }

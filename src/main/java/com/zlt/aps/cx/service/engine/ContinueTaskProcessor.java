@@ -341,10 +341,20 @@ public class ContinueTaskProcessor {
             }
         }
 
+        // H15开头机台：如果有专用配置则优先使用
+        Integer h15MaxEmbryoTypes = context.getH15MaxEmbryoTypes();
+
         // 为每台机台获取对应的最大胎胚种类数
         for (MpCxCapacityConfiguration config : machineConfigs) {
             String machineCode = config.getCxMachineCode();
             String machineType = machineTypeMap.get(machineCode);
+
+            // H15开头机台：如果有专用配置则优先使用，否则走配比逻辑
+            if (h15MaxEmbryoTypes != null && machineCode != null && machineCode.startsWith("H15")) {
+                log.info("  机台 {} (机型={}): 使用H15专用最大胎胚种类数={}", machineCode, machineType, h15MaxEmbryoTypes);
+                result.put(machineCode, h15MaxEmbryoTypes);
+                continue;
+            }
 
             // 根据机型+结构查找
             String key = machineType + "_" + structureName;
