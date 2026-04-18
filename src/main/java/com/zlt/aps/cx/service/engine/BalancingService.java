@@ -895,7 +895,7 @@ public class BalancingService {
             
             if (candidates.isEmpty()) {
                 // 没有可用机台，跳过当前任务，继续处理后续任务（记录部分解）
-                int totalAssignedNow = machineStates.stream().mapToInt(MachineState::getCurrentLoad).sum();
+                int totalAssignedNow = machineStates.stream().mapToInt(MachineState::getCurrentLoad).sum() - preOccupiedLoad;
                 int totalRequiredAll = tasks.stream()
                         .mapToInt(t -> t.getVulcanizeMachineCount() != null ? t.getVulcanizeMachineCount() : 0)
                         .sum();
