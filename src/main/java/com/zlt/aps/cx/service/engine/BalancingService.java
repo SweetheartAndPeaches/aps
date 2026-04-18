@@ -509,6 +509,13 @@ public class BalancingService {
         }
 
         // Step 7: DFS + 剪枝搜索最优方案
+        // 计算续作预扣总负荷（用于DFS中正确计算新分配数 = allCurrentLoad - preOccupiedLoad）
+        int preOccupiedLoad = 0;
+        for (MachineState s : machineStates) {
+            preOccupiedLoad += s.getCurrentLoad();
+        }
+        log.info("续作预扣总负荷={}，DFS剩余任务总需求={}", preOccupiedLoad, totalDemand);
+
         DfsSearchResult searchResult = new DfsSearchResult();
         searchResult.bestScore = Integer.MAX_VALUE;
         searchResult.bestAssignedCount = 0;
@@ -534,7 +541,7 @@ public class BalancingService {
                    ? remainingTasks.get(0).getVulcanizeMachineCount() : 0);
         
         dfsAssign(remainingTasks, 0, initialRemainingCount, machineStates, forceKeepHistory,
-                typeDiffThreshold, loadDiffThreshold, totalDemand, searchResult, capacitySufficient);
+                typeDiffThreshold, loadDiffThreshold, totalDemand, searchResult, capacitySufficient, preOccupiedLoad);
 
         log.info("DFS搜索统计：总搜索次数={}, 剪枝次数={}, 最优分数={}, 均衡={}, 最优已分配={}/{}",
                 searchResult.searchCount, searchResult.pruneCount, searchResult.bestScore,
@@ -739,7 +746,8 @@ public class BalancingService {
             int loadDiffThreshold,
             int totalDemand,
             DfsSearchResult searchResult,
-            boolean capacitySufficient) {
+            boolean capacitySufficient,
+            int preOccupiedLoad) {
 
         searchResult.searchCount++;
         searchResult.callCount++;
@@ -760,7 +768,8 @@ public class BalancingService {
         int remainingCapacity = allCapacity - allCurrentLoad;
         if (remainingCapacity <= 0) {
             // 产能已耗尽，先记录当前部分解，再剪枝
-            int totalAssignedNow = allCurrentLoad;
+            // 实际新分配数 = 总负荷 - 续作预扣负荷
+            int totalAssignedNow = allCurrentLoad - preOccupiedLoad;
             int totalRequiredAll = tasks.stream()
                     .mapToInt(t -> t.getVulcanizeMachineCount() != null ? t.getVulcanizeMachineCount() : 0)
                     .sum();
@@ -824,8 +833,9 @@ public class BalancingService {
         // 终止条件：所有任务已分配
         if (taskIndex >= tasks.size()) {
             // 检查是否所有任务都已分配完毕
+            // 实际新分配数 = 总负荷 - 续作预扣负荷
             int totalAssigned = machineStates.stream()
-                    .mapToInt(MachineState::getCurrentLoad).sum();
+                    .mapToInt(MachineState::getCurrentLoad).sum() - preOccupiedLoad;
             int totalRequired = tasks.stream()
                     .mapToInt(t -> t.getVulcanizeMachineCount() != null ? t.getVulcanizeMachineCount() : 0)
                     .sum();
@@ -902,7 +912,7 @@ public class BalancingService {
                 }
                 // 跳过当前任务，递归处理下一个
                 dfsAssign(tasks, taskIndex + 1, 0, machineStates, forceKeepHistory,
-                        typeDiffThreshold, loadDiffThreshold, totalDemand, searchResult, capacitySufficient);
+                        typeDiffThreshold, loadDiffThreshold, totalDemand, searchResult, capacitySufficient, preOccupiedLoad);
                 return;
             }
             
@@ -991,10 +1001,10 @@ public class BalancingService {
                     // 如果当前胎胚还有剩余，继续分配；否则处理下一个任务
                     if (newRemainingCount > 0) {
                         dfsAssign(tasks, taskIndex, newRemainingCount, machineStates, forceKeepHistory,
-                                typeDiffThreshold, loadDiffThreshold, totalDemand, searchResult, capacitySufficient);
+                                typeDiffThreshold, loadDiffThreshold, totalDemand, searchResult, capacitySufficient, preOccupiedLoad);
                     } else {
                         dfsAssign(tasks, taskIndex + 1, 0, machineStates, forceKeepHistory,
-                                typeDiffThreshold, loadDiffThreshold, totalDemand, searchResult, capacitySufficient);
+                                typeDiffThreshold, loadDiffThreshold, totalDemand, searchResult, capacitySufficient, preOccupiedLoad);
                     }
                     
                     // === 回溯 ===
@@ -1016,11 +1026,11 @@ public class BalancingService {
             if (currentLhCount <= 0) {
                 // 当前任务不需要分配，跳到下一个
                 dfsAssign(tasks, taskIndex + 1, 0, machineStates, forceKeepHistory,
-                        typeDiffThreshold, loadDiffThreshold, totalDemand, searchResult, capacitySufficient);
+                        typeDiffThreshold, loadDiffThreshold, totalDemand, searchResult, capacitySufficient, preOccupiedLoad);
             } else {
                 // 开始处理当前任务（传入其完整需求量）
                 dfsAssign(tasks, taskIndex, currentLhCount, machineStates, forceKeepHistory,
-                        typeDiffThreshold, loadDiffThreshold, totalDemand, searchResult, capacitySufficient);
+                        typeDiffThreshold, loadDiffThreshold, totalDemand, searchResult, capacitySufficient, preOccupiedLoad);
             }
         }
     }
