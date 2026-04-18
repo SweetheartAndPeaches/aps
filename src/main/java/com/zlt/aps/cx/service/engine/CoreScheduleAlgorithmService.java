@@ -144,6 +144,18 @@ public interface CoreScheduleAlgorithmService {
         /** 班次分配结果（班次编码 -> 计划量） */
         private Map<String, Integer> shiftAllocation;
 
+        // ==================== 停产反推封顶新增字段 ====================
+        /** 停锅班次序号（dayShiftOrder，根据硫化机停锅时间和班次时间计算） */
+        private Integer closingShiftOrder;
+        /** 停产反推总量（从成型停机到硫化停锅期间需要消耗的胎胚总量） */
+        private Integer closingRequiredStock;
+
+        // ==================== 开产提前一班新增字段 ====================
+        /** 硫化开产班次序号（dayShiftOrder，根据硫化开模时间和班次时间计算） */
+        private Integer lhOpeningShiftOrder;
+        /** 成型开产班次序号（= 硫化开产班次 - 1，提前一个班次） */
+        private Integer formingOpeningShiftOrder;
+
         // ==================== 收尾处理新增字段 ====================
         /** 收尾是否被舍弃（非主销产品余量<=2条） */
         private Boolean endingAbandoned;

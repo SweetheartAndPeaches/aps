@@ -156,15 +156,22 @@ public class ShiftScheduleService {
 
         // ---- 3. 开产任务：首班6小时产能，关键产品从第二班开始 ----
         if (isOpeningDay) {
-            // 按班次排程时，需要区分开产首班和非首班
+            // 按班次排程时，根据 formingOpeningShiftOrder 判断是否为开产首班
             if (dayShifts.size() == 1) {
-                // 单班次模式：根据 dayShiftOrder 判断是否为开产首班
                 CxShiftConfig singleShift = dayShifts.get(0);
                 int shiftOrder = singleShift.getDayShiftOrder() != null ? singleShift.getDayShiftOrder() : 1;
-                if (shiftOrder <= 1) {
-                    // 开产首班：关键产品不排产，非关键产品用6小时产能
+                Integer formingOpeningShiftOrder = task.getFormingOpeningShiftOrder();
+                Integer lhOpeningShiftOrder = task.getLhOpeningShiftOrder();
+
+                // 用 formingOpeningShiftOrder 判断是否为成型开产首班
+                boolean isOpeningFirstShift = formingOpeningShiftOrder != null
+                        && shiftOrder == formingOpeningShiftOrder
+                        && formingOpeningShiftOrder < (lhOpeningShiftOrder != null ? lhOpeningShiftOrder : Integer.MAX_VALUE);
+
+                if (isOpeningFirstShift) {
+                    // 成型开产首班：关键产品不排产，非关键产品用6小时产能
                     if (isKeyProduct(task, context)) {
-                        log.info("开产首班关键产品 {} 不排产，等待第二班", task.getEmbryoCode());
+                        log.info("开产首班关键产品 {} 不排产，等待下一班次", task.getEmbryoCode());
                         return results;
                     }
                     return scheduleOpeningTask(task, machineCode, context, dayShifts, scheduleDate, tripCapacity);
@@ -293,14 +300,14 @@ public class ShiftScheduleService {
     // ==================== 2. 停产任务排产 ====================
 
     /**
-     * 停产任务排产：根据硫化EndTime反推，库存全部消耗
+     * 停产任务排产：endingExtraInventory已在TaskGroupService中通过反推封顶正确计算
      *
-     * <p>逻辑：
+     * <p>改造后逻辑（简化）：
      * <ol>
-     *   <li>从 LhScheduleResult 的 class*EndTime 获取硫化的结束时间</li>
-     *   <li>反推：在硫化结束时刻，需要多少胎胚库存供硫化消化</li>
-     *   <li>用可供硫化时长公式反推：需要库存 = 需要支撑的时长(秒) / 单胎单模硫化时长(秒) × 模数</li>
-     *   <li>最后一个班次的计划量使用反推出来的量</li>
+     *   <li>endingExtraInventory 已经是经过反推封顶后的正确值，不再需要重新反推</li>
+     *   <li>判断当前班次是否为停锅班次（task.closingShiftOrder）</li>
+     *   <li>停锅班次：不补整车，按实量下</li>
+     *   <li>停锅班次之前的班次：按普通任务排产（整车取整）</li>
      * </ol>
      */
     private List<ShiftProductionResult> scheduleClosingTask(
@@ -312,70 +319,38 @@ public class ShiftScheduleService {
             int tripCapacity) {
 
         List<ShiftProductionResult> results = new ArrayList<>();
-
-        // 获取该任务对应的硫化排程结果
-        LhScheduleResult lhResult = findLhScheduleResult(task.getLhId(), context);
-        if (lhResult == null) {
-            log.warn("停产任务 {} 无法找到硫化排程结果，退化为普通排产", task.getEmbryoCode());
-            return scheduleNormalTask(task, machineCode, context, dayShifts, scheduleDate, tripCapacity);
-        }
-
-        // 获取硫化结束时间（根据当天班次配置的classField确定用哪个EndTime）
-        LocalDateTime vulcanizingEndTime = findVulcanizingEndTime(lhResult, dayShifts, scheduleDate);
-        if (vulcanizingEndTime == null) {
-            log.warn("停产任务 {} 无法确定硫化结束时间，退化为普通排产", task.getEmbryoCode());
-            return scheduleNormalTask(task, machineCode, context, dayShifts, scheduleDate, tripCapacity);
-        }
-
-        // 计算成型停机时间（早于硫化停机时间）
-        LocalDateTime formingStopTime = calculateFormingStopTime(vulcanizingEndTime, context);
-
-        // 反推：从成型停机时间到硫化结束时间，需要多少胎胚库存
-        int requiredStockForVulcanizing = calculateRequiredStockForPeriod(
-                lhResult, formingStopTime, vulcanizingEndTime, context);
-
-        // 当前库存可支撑硫化时长对应条数
-        int currentStock = task.getCurrentStock() != null ? task.getCurrentStock() : 0;
-        // 需要额外生产的量 = 需要的库存 - 当前库存
-        int requiredProduction = Math.max(0, requiredStockForVulcanizing - currentStock);
-
-        // 如果反推量 > 计划量，使用反推量；否则使用原计划量
-        int totalQty = Math.min(task.getEndingExtraInventory(), Math.max(task.getEndingExtraInventory(), requiredProduction));
-        // 实际上：如果反推的量比原计划少，就用反推量（够消化就行）；如果反推量比原计划多，仍用原计划（产能上限）
-        totalQty = Math.min(task.getEndingExtraInventory(), requiredProduction > 0 ? requiredProduction : task.getEndingExtraInventory());
-
-        log.info("停产任务 {} 反推：硫化结束={}, 成型停机={}, 需库存={}, 当前库存={}, 需生产={}",
-                task.getEmbryoCode(), vulcanizingEndTime, formingStopTime,
-                requiredStockForVulcanizing, currentStock, totalQty);
-
+        int totalQty = task.getEndingExtraInventory();
         if (totalQty <= 0) {
             return results;
         }
 
-        // 按班次顺序分配，最后一个班次使用剩余量（不补整车）
-        int hourlyCapacity = getMachineHourlyCapacity(machineCode, task.getMaterialCode(), task.getStructureName(), context);
-        int remainingQty = totalQty;
+        Integer closingShiftOrder = task.getClosingShiftOrder();
+        int currentDayShiftOrder = dayShifts != null && dayShifts.size() == 1 && dayShifts.get(0).getDayShiftOrder() != null
+                ? dayShifts.get(0).getDayShiftOrder() : 0;
 
-        for (int i = 0; i < dayShifts.size() && remainingQty > 0; i++) {
-            CxShiftConfig shiftConfig = dayShifts.get(i);
-            boolean isLastShift = (i == dayShifts.size() - 1) || isLastProductiveShift(i, dayShifts, remainingQty, hourlyCapacity);
+        // 判断当前班次是否为停锅班次
+        boolean isClosingShift = closingShiftOrder != null && currentDayShiftOrder == closingShiftOrder;
+
+        int hourlyCapacity = getMachineHourlyCapacity(machineCode, task.getMaterialCode(), task.getStructureName(), context);
+
+        for (CxShiftConfig shiftConfig : dayShifts) {
+            if (totalQty <= 0) {
+                break;
+            }
 
             int shiftQty;
-            if (isLastShift) {
-                // 最后一个班次：使用剩余量，不补整车
-                shiftQty = remainingQty;
+            if (isClosingShift) {
+                // 停锅班次：不补整车，按实量下
+                shiftQty = totalQty;
             } else {
-                // 非最后班次：按整车分配
+                // 停锅班次之前的班次：整车取整
                 int shiftHours = calculateShiftHours(shiftConfig);
                 int shiftCapacity = shiftHours * hourlyCapacity;
-                // 扣减停机和精度计划
                 shiftCapacity -= calculateShiftShutdownDeduction(machineCode, shiftConfig, hourlyCapacity, context);
                 shiftCapacity -= calculateShiftPrecisionDeduction(machineCode, shiftConfig, hourlyCapacity, context);
                 shiftCapacity = Math.max(0, shiftCapacity);
-
-                // 整车取整
                 int cars = shiftCapacity / Math.max(tripCapacity, 1);
-                shiftQty = Math.min(cars * tripCapacity, remainingQty);
+                shiftQty = Math.min(cars * tripCapacity, totalQty);
             }
 
             if (shiftQty <= 0) {
@@ -392,6 +367,10 @@ public class ShiftScheduleService {
                 long availableMinutes = Duration.between(startTime, shiftEndTime).toMinutes();
                 availableMinutes -= getMachinePrepareMinutes(machineCode, context);
                 shiftQty = Math.max(0, (int) (availableMinutes * hourlyCapacity / 60));
+                // 停锅班次不补整车；非停锅班次整车取整
+                if (!isClosingShift && tripCapacity > 0) {
+                    shiftQty = (shiftQty / tripCapacity) * tripCapacity;
+                }
                 endTime = shiftEndTime;
             }
 
@@ -399,31 +378,35 @@ public class ShiftScheduleService {
                 continue;
             }
 
-            int cars = tripCapacity > 0 ? (shiftQty + tripCapacity - 1) / tripCapacity : 1;
+            int cars = isClosingShift
+                    ? (tripCapacity > 0 ? (shiftQty + tripCapacity - 1) / tripCapacity : 1)
+                    : (tripCapacity > 0 ? shiftQty / tripCapacity : 1);
 
             ShiftProductionResult result = buildResult(machineCode, shiftConfig, task, shiftQty,
                     tripCapacity, cars, startTime, endTime, false, false, task.getIsContinueTask());
 
             results.add(result);
-            remainingQty -= shiftQty;
+            totalQty -= shiftQty;
         }
 
+        log.info("停产任务 {} 班次排产完成: closingShiftOrder={}, isClosingShift={}, 已排={}",
+                task.getEmbryoCode(), closingShiftOrder, isClosingShift,
+                task.getEndingExtraInventory() - totalQty);
         return results;
     }
 
     // ==================== 3. 开产任务排产 ====================
 
     /**
-     * 开产任务排产：首班6小时产能，关键产品从第二班开始
+     * 开产任务排产：endingExtraInventory已在TaskGroupService中正确计算
      *
-     * <p>首班产量计算：
+     * <p>改造后逻辑（简化）：
      * <ol>
-     *   <li>从 materialLhCapacityMap 获取该物料的日硫化量</li>
-     *   <li>从 structureLhRatioMap 获取该结构硫化配比（机型+结构 → 配比）</li>
-     *   <li>成型一条胎的时间(s) = 24×3600 / (配比 × 日硫化量)</li>
-     *   <li>首班6小时产能 = 6×3600 / 成型一条胎的时间(s)</li>
+     *   <li>endingExtraInventory 已经是经过开产首班6h封顶后的正确值</li>
+     *   <li>判断当前班次是否为成型开产首班（task.formingOpeningShiftOrder）</li>
+     *   <li>成型开产首班：6小时产能封顶，不补整车</li>
+     *   <li>非首班：按普通任务全产能排产，整车取整</li>
      * </ol>
-     * 首班不补整车，后续班次正常整车取整。
      */
     private List<ShiftProductionResult> scheduleOpeningTask(
             CoreScheduleAlgorithmService.DailyEmbryoTask task,
@@ -439,38 +422,43 @@ public class ShiftScheduleService {
             return results;
         }
 
-        boolean isKeyProduct = isKeyProduct(task, context);
-        int startShiftIndex = isKeyProduct ? 1 : 0; // 关键产品从第二班开始
+        Integer formingOpeningShiftOrder = task.getFormingOpeningShiftOrder();
+        Integer lhOpeningShiftOrder = task.getLhOpeningShiftOrder();
+        int currentDayShiftOrder = dayShifts != null && dayShifts.size() == 1 && dayShifts.get(0).getDayShiftOrder() != null
+                ? dayShifts.get(0).getDayShiftOrder() : 0;
 
-        if (startShiftIndex >= dayShifts.size()) {
-            log.warn("开产任务 {} 关键产品但班次不足，从第一班开始", task.getEmbryoCode());
-            startShiftIndex = 0;
+        // 判断当前班次是否为成型开产首班
+        boolean isOpeningFirstShift = formingOpeningShiftOrder != null && currentDayShiftOrder == formingOpeningShiftOrder
+                && formingOpeningShiftOrder < (lhOpeningShiftOrder != null ? lhOpeningShiftOrder : Integer.MAX_VALUE);
+
+        boolean isKeyProduct = isKeyProduct(task, context);
+
+        // 开产首班且关键产品：不排
+        if (isOpeningFirstShift && isKeyProduct) {
+            log.info("开产首班关键产品 {} 不排产，等待下一班次", task.getEmbryoCode());
+            return results;
         }
 
-        // 计算首班6小时产能
-        int firstShiftCapacity = calculateOpeningFirstShiftCapacity(task, machineCode, context);
+        int hourlyCapacity = getMachineHourlyCapacity(machineCode, task.getMaterialCode(), task.getStructureName(), context);
 
-        int remainingQty = totalQty;
-
-        for (int i = startShiftIndex; i < dayShifts.size() && remainingQty > 0; i++) {
-            CxShiftConfig shiftConfig = dayShifts.get(i);
-            boolean isFirstProductiveShift = (i == startShiftIndex);
+        for (CxShiftConfig shiftConfig : dayShifts) {
+            if (totalQty <= 0) {
+                break;
+            }
 
             int shiftQty;
-            if (isFirstProductiveShift) {
-                // 首班：6小时产能，不补整车
-                shiftQty = Math.min(firstShiftCapacity, remainingQty);
+            if (isOpeningFirstShift) {
+                // 成型开产首班：endingExtraInventory已是6h封顶值，不补整车
+                shiftQty = totalQty;
             } else {
-                // 后续班次：按整车分配
+                // 非首班：按整车分配
                 int shiftHours = calculateShiftHours(shiftConfig);
-                int hourlyCapacity = getMachineHourlyCapacity(machineCode, task.getMaterialCode(), task.getStructureName(), context);
                 int shiftCapacity = shiftHours * hourlyCapacity;
                 shiftCapacity -= calculateShiftShutdownDeduction(machineCode, shiftConfig, hourlyCapacity, context);
                 shiftCapacity -= calculateShiftPrecisionDeduction(machineCode, shiftConfig, hourlyCapacity, context);
                 shiftCapacity = Math.max(0, shiftCapacity);
-
                 int cars = shiftCapacity / Math.max(tripCapacity, 1);
-                shiftQty = Math.min(cars * tripCapacity, remainingQty);
+                shiftQty = Math.min(cars * tripCapacity, totalQty);
             }
 
             if (shiftQty <= 0) {
@@ -478,7 +466,6 @@ public class ShiftScheduleService {
             }
 
             // 计算时间
-            int hourlyCapacity = getMachineHourlyCapacity(machineCode, task.getMaterialCode(), task.getStructureName(), context);
             LocalDateTime startTime = calculateStartTime(machineCode, shiftConfig, scheduleDate, context);
             double productionHours = (double) shiftQty / hourlyCapacity;
             LocalDateTime endTime = startTime.plusMinutes((long) (productionHours * 60));
@@ -488,7 +475,7 @@ public class ShiftScheduleService {
                 long availableMinutes = Duration.between(startTime, shiftEndTime).toMinutes();
                 availableMinutes -= getMachinePrepareMinutes(machineCode, context);
                 shiftQty = Math.max(0, (int) (availableMinutes * hourlyCapacity / 60));
-                if (!isFirstProductiveShift && tripCapacity > 0) {
+                if (!isOpeningFirstShift && tripCapacity > 0) {
                     // 非首班整车取整
                     shiftQty = (shiftQty / tripCapacity) * tripCapacity;
                 }
@@ -499,7 +486,7 @@ public class ShiftScheduleService {
                 continue;
             }
 
-            int cars = isFirstProductiveShift
+            int cars = isOpeningFirstShift
                     ? (tripCapacity > 0 ? (shiftQty + tripCapacity - 1) / tripCapacity : 1)
                     : (tripCapacity > 0 ? shiftQty / tripCapacity : 1);
 
@@ -507,12 +494,12 @@ public class ShiftScheduleService {
                     tripCapacity, cars, startTime, endTime, false, false, task.getIsContinueTask());
 
             results.add(result);
-            remainingQty -= shiftQty;
+            totalQty -= shiftQty;
         }
 
-        log.info("开产任务 {} 班次排产完成：首班产能={}，关键产品={}，总计划={}，已排={}",
-                task.getEmbryoCode(), firstShiftCapacity, isKeyProduct,
-                totalQty, totalQty - remainingQty);
+        log.info("开产任务 {} 班次排产完成: formingOpeningShiftOrder={}, isOpeningFirstShift={}, 关键产品={}, 已排={}",
+                task.getEmbryoCode(), formingOpeningShiftOrder, isOpeningFirstShift, isKeyProduct,
+                task.getEndingExtraInventory() - totalQty);
         return results;
     }
 

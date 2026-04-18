@@ -81,6 +81,15 @@ public class ScheduleServiceImpl implements ScheduleService {
     /** 参数编码：机台默认最大硫化机数 */
     private static final String PARAM_CODE_MAX_LH_MACHINE_QTY = "MAX_LH_MACHINE_QTY";
 
+    /** 参数编码：硫化机停锅时间（停产日硫化停止时刻，HH:mm格式） */
+    private static final String PARAM_CODE_VULCANIZING_STOP_TIME = "VULCANIZING_STOP_TIME";
+
+    /** 参数编码：硫化开模时间（开产日硫化开始时刻，HH:mm格式） */
+    private static final String PARAM_CODE_VULCANIZING_OPEN_TIME = "VULCANIZING_OPEN_TIME";
+
+    /** 参数编码：预留消化时间（小时，成型停机早于硫化停锅的时长） */
+    private static final String PARAM_CODE_RESERVED_DIGEST_HOURS = "RESERVED_DIGEST_HOURS";
+
     /** 默认损耗率 */
     private static final BigDecimal DEFAULT_LOSS_RATE = new BigDecimal("0.02");
 
@@ -661,6 +670,31 @@ public class ScheduleServiceImpl implements ScheduleService {
                 log.info("机台默认最大硫化机数配置：{}", maxLhConfig.getParamValue());
             } catch (NumberFormatException e) {
                 log.warn("解析机台默认最大硫化机数配置失败: {}", maxLhConfig.getParamValue());
+            }
+        }
+
+        // 加载硫化机停锅时间（停产日硫化停止时刻，HH:mm格式）
+        CxParamConfig vulcanizingStopTimeConfig = paramConfigMap.get(PARAM_CODE_VULCANIZING_STOP_TIME);
+        if (vulcanizingStopTimeConfig != null && vulcanizingStopTimeConfig.getParamValue() != null) {
+            context.setVulcanizingStopTimeStr(vulcanizingStopTimeConfig.getParamValue());
+            log.info("硫化机停锅时间配置：{}", vulcanizingStopTimeConfig.getParamValue());
+        }
+
+        // 加载硫化开模时间（开产日硫化开始时刻，HH:mm格式）
+        CxParamConfig vulcanizingOpenTimeConfig = paramConfigMap.get(PARAM_CODE_VULCANIZING_OPEN_TIME);
+        if (vulcanizingOpenTimeConfig != null && vulcanizingOpenTimeConfig.getParamValue() != null) {
+            context.setVulcanizingOpenTimeStr(vulcanizingOpenTimeConfig.getParamValue());
+            log.info("硫化开模时间配置：{}", vulcanizingOpenTimeConfig.getParamValue());
+        }
+
+        // 加载预留消化时间（小时）
+        CxParamConfig reservedDigestConfig = paramConfigMap.get(PARAM_CODE_RESERVED_DIGEST_HOURS);
+        if (reservedDigestConfig != null && reservedDigestConfig.getParamValue() != null) {
+            try {
+                context.setReservedDigestHours(Integer.parseInt(reservedDigestConfig.getParamValue()));
+                log.info("预留消化时间配置：{}小时", reservedDigestConfig.getParamValue());
+            } catch (NumberFormatException e) {
+                log.warn("解析预留消化时间配置失败: {}", reservedDigestConfig.getParamValue());
             }
         }
     }

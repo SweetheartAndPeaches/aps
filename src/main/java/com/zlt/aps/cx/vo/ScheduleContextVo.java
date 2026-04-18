@@ -371,6 +371,16 @@ public class ScheduleContextVo {
      */
     private Map<String, Integer> excessStockToConsume;
 
+    /**
+     * 硫化机停锅时间（停产日硫化停止时刻，HH:mm格式字符串，如 "08:00"）
+     */
+    private String vulcanizingStopTimeStr;
+
+    /**
+     * 硫化开模时间（开产日硫化开始时刻，HH:mm格式字符串，如 "08:00"）
+     */
+    private String vulcanizingOpenTimeStr;
+
     // ==================== 收尾相关数据 ====================
 
     /**
