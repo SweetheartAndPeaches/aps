@@ -151,6 +151,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             context.setCurrentScheduleDate(currentScheduleDate);
             context.setCurrentShiftConfigs(singleShiftList);
 
+
             // 执行该班次的排程
             ShiftScheduleResult shiftResult = executeShiftSchedule(
                     context, day, shiftConfig, currentScheduleDate, machineOnlineEmbryoMap);
