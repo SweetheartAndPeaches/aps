@@ -749,16 +749,23 @@ public class TaskGroupService {
         // Step 1: 与库存对冲，计算净需求
         int netDemand = Math.max(0, vulcanizeDemand - currentStock);
 
-        // Step 2: 乘以(1 + 损耗率)
-        BigDecimal lossRate = context.getLossRate() != null ? context.getLossRate() : BigDecimal.ZERO;
-        BigDecimal requiredProduction = new BigDecimal(netDemand)
-                .multiply(BigDecimal.ONE.add(lossRate))
-                .setScale(0, BigDecimal.ROUND_UP);
-        task.setPlannedProduction(requiredProduction.intValue());
+        // Step 2: 乘以(1 + 损耗率)，但试制任务不考虑损耗率
+        int requiredProductionValue;
+        if (Boolean.TRUE.equals(task.getIsTrialTask()) || Boolean.TRUE.equals(task.getIsProductionTrial())) {
+            // 试制任务不计算损耗率
+            requiredProductionValue = netDemand;
+        } else {
+            BigDecimal lossRate = context.getLossRate() != null ? context.getLossRate() : BigDecimal.ZERO;
+            BigDecimal requiredProduction = new BigDecimal(netDemand)
+                    .multiply(BigDecimal.ONE.add(lossRate))
+                    .setScale(0, BigDecimal.ROUND_UP);
+            requiredProductionValue = requiredProduction.intValue();
+        }
+        task.setPlannedProduction(requiredProductionValue);
 
         // Step 3: 整车取整
         int tripCapacity = getTripCapacity(task.getStructureName(), context);
-        int plannedProduction = productionCalculator.roundToVehicle(requiredProduction.intValue(), tripCapacity);
+        int plannedProduction = productionCalculator.roundToVehicle(requiredProductionValue, tripCapacity);
         task.setRequiredCars((plannedProduction + tripCapacity - 1) / Math.max(tripCapacity, 1));
         task.setEndingExtraInventory(plannedProduction);
     }
