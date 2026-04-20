@@ -65,7 +65,7 @@ public class NewTaskProcessor {
                 CollectionUtils.isEmpty(newTasks) ? 0 : newTasks.size(),
                 CollectionUtils.isEmpty(continueTasks) ? 0 : continueTasks.size());
 
-        // Step 1: 按结构分组新增任务
+        // Step 1: 按结构分组新增任务（续作剩余任务在 Step 3.5 中单独处理）
         Map<String, List<CoreScheduleAlgorithmService.DailyEmbryoTask>> structureTaskMap = new LinkedHashMap<>();
         if (!CollectionUtils.isEmpty(newTasks)) {
             for (CoreScheduleAlgorithmService.DailyEmbryoTask task : newTasks) {
@@ -73,15 +73,7 @@ public class NewTaskProcessor {
             }
         }
 
-        // Step 1.1: 将续作剩余 demand > 0 的任务也加入结构分组（补上只有续作没有新增的结构）
-        if (!CollectionUtils.isEmpty(continueTasks)) {
-            for (CoreScheduleAlgorithmService.DailyEmbryoTask task : continueTasks) {
-                int demand = task.getVulcanizeMachineCount() != null ? task.getVulcanizeMachineCount() : 0;
-                if (demand > 0) {
-                    structureTaskMap.computeIfAbsent(task.getStructureName(), k -> new ArrayList<>()).add(task);
-                }
-            }
-        }
+        // 注意：不要在这里添加续作任务！续作剩余 demand > 0 的任务在 Step 3.5 中处理
 
         if (structureTaskMap.isEmpty()) {
             log.info("无新增和续作剩余任务，跳过均衡");
