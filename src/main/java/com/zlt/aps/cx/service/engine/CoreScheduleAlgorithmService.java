@@ -206,7 +206,7 @@ public interface CoreScheduleAlgorithmService {
         private String mainMaterialDesc;
         /** 结构名称 */
         private String structureName;
-        /** 计划数量（天维度总量） */
+        /** 计划数量 */
         private Integer quantity;
         /** 硫化机台数 */
         private Integer vulcanizeMachineCount;
@@ -226,18 +226,6 @@ public interface CoreScheduleAlgorithmService {
         private Boolean isContinueTask;
         /** 硫化任务ID（关联LhScheduleResult） */
         private Long lhId;
-        /** 是否停产日任务 */
-        private Boolean isClosingDayTask;
-        /** 是否开产日任务 */
-        private Boolean isOpeningDayTask;
-        /** 停产班次序号 */
-        private Integer closingShiftOrder;
-        /** 成型开产首班序号 */
-        private Integer formingOpeningShiftOrder;
-        /** 硫化开产班次序号 */
-        private Integer lhOpeningShiftOrder;
-        /** 各班次预分配数量（班次序号 → 预分配量） */
-        private Map<Integer, Integer> shiftPreAllocatedQty;
     }
 
     /**
