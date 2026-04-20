@@ -168,6 +168,9 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             machineOnlineEmbryoMap = updateMachineOnlineStatus(
                     shiftResult.getAllAllocations(), machineOnlineEmbryoMap);
 
+            // 将更新后的机台在产状态存回 context，供下一个班次使用
+            context.setMachineOnlineEmbryoMap(new HashMap<>(machineOnlineEmbryoMap));
+
             // 更新库存和硫化余量，供下一个班次排程使用
             updateContextForNextShift(context, shiftResult.getAllAllocations(), singleShiftList);
 

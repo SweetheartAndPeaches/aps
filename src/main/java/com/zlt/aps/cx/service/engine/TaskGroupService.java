@@ -174,12 +174,22 @@ public class TaskGroupService {
             machineOnlineEmbryoMap = new HashMap<>();
         }
 
+        // 获取当前班次的排量（每个班次只处理自己班次有排量的任务）
+        final int currentClassIndex = getCurrentClassIndex(dayShifts);
+        
         // 直接遍历每条硫化记录，为每条记录创建独立的任务
         int skippedNullEmbryo = 0;
         int skippedNullTask = 0;
         for (LhScheduleResult lhResult : lhScheduleResults) {
             if (lhResult.getEmbryoCode() == null) {
                 skippedNullEmbryo++;
+                continue;
+            }
+            
+            // 每个班次只处理自己班次有排量的任务
+            // 如果当前班次没有排量，则跳过该任务（不创建任务）
+            if (currentClassIndex > 0 && getClassPlanQtyByIndex(lhResult, currentClassIndex) == null) {
+                skippedNullTask++;
                 continue;
             }
 
@@ -571,6 +581,32 @@ public class TaskGroupService {
                 } catch (NumberFormatException e) {
                     log.warn("无法解析班次字段: {}", classField);
                 }
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * 获取当前班次对应的硫化班次索引
+     *
+     * <p>从 dayShifts 中获取当前班次的 classField，然后提取班次索引。
+     * 例如：CLASS1 -> 1, CLASS2 -> 2, CLASS3 -> 3
+     *
+     * @param dayShifts 当前班次配置列表
+     * @return 班次索引 (1-8)，如果没有有效的班次配置则返回 0
+     */
+    private int getCurrentClassIndex(List<CxShiftConfig> dayShifts) {
+        if (dayShifts == null || dayShifts.isEmpty()) {
+            return 0;
+        }
+        // 获取第一个班次的 classField
+        CxShiftConfig shiftConfig = dayShifts.get(0);
+        String classField = shiftConfig.getClassField();
+        if (classField != null && classField.startsWith("CLASS")) {
+            try {
+                return Integer.parseInt(classField.replace("CLASS", ""));
+            } catch (NumberFormatException e) {
+                log.warn("无法解析班次字段: {}", classField);
             }
         }
         return 0;
