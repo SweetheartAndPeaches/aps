@@ -345,26 +345,55 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             List<MachineAllocationResult> allocations,
             Map<String, Set<String>> currentMachineOnlineMap) {
 
+        // 首先复制当前状态
         Map<String, Set<String>> newMap = new HashMap<>();
         for (Map.Entry<String, Set<String>> entry : currentMachineOnlineMap.entrySet()) {
             newMap.put(entry.getKey(), new HashSet<>(entry.getValue()));
         }
 
+        // 遍历 allocations，将每个机台的所有胚胎添加到 newMap 中（合并续作+新增分配）
+        // 注意：这里不是覆盖，而是合并（取并集）
         for (MachineAllocationResult allocation : allocations) {
             String machineCode = allocation.getMachineCode();
-            Set<String> embryos = new HashSet<>();
+            Set<String> existingEmbryos = newMap.get(machineCode);
+            if (existingEmbryos == null) {
+                existingEmbryos = new HashSet<>();
+                newMap.put(machineCode, existingEmbryos);
+            }
             for (TaskAllocation taskAlloc : allocation.getTaskAllocations()) {
                 if (taskAlloc.getEmbryoCode() != null) {
-                    embryos.add(taskAlloc.getEmbryoCode());
+                    existingEmbryos.add(taskAlloc.getEmbryoCode());
                 }
-            }
-            if (!embryos.isEmpty()) {
-                newMap.put(machineCode, embryos);
             }
         }
 
-        log.debug("更新机台在产状态完成，共 {} 台机台", newMap.size());
+        log.debug("更新机台在产状态完成，共 {} 台机台: {}", newMap.size(), formatMachineEmbryoMap(newMap));
         return newMap;
+    }
+    
+    /**
+     * 格式化机台胚胎映射用于日志输出
+     */
+    private String formatMachineEmbryoMap(Map<String, Set<String>> map) {
+        if (map == null || map.isEmpty()) {
+            return "{}";
+        }
+        StringBuilder sb = new StringBuilder("{");
+        boolean first = true;
+        for (Map.Entry<String, Set<String>> entry : map.entrySet()) {
+            if (!first) sb.append(", ");
+            sb.append(entry.getKey()).append("=[");
+            boolean firstEmbryo = true;
+            for (String embryo : entry.getValue()) {
+                if (!firstEmbryo) sb.append(",");
+                sb.append(embryo);
+                firstEmbryo = false;
+            }
+            sb.append("]");
+            first = false;
+        }
+        sb.append("}");
+        return sb.toString();
     }
 
     /**
