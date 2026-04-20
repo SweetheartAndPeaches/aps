@@ -107,16 +107,12 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             return new ArrayList<>();
         }
 
-        // 按排程天数和班次序号排序
+        // 按排程天数和班次序号排序，确保按 班次1→班次2→...→班次8 顺序处理
         List<CxShiftConfig> sortedShiftConfigs = allShiftConfigs.stream()
                 .filter(c -> c.getScheduleDay() != null)
                 .sorted(Comparator.comparingInt(CxShiftConfig::getScheduleDay)
                         .thenComparingInt(c -> c.getDayShiftOrder() != null ? c.getDayShiftOrder() : 0))
                 .collect(Collectors.toList());
-
-        // 按天分组班次
-        Map<Integer, List<CxShiftConfig>> dayShiftMap = sortedShiftConfigs.stream()
-                .collect(Collectors.groupingBy(CxShiftConfig::getScheduleDay, LinkedHashMap::new, Collectors.toList()));
 
         // 收集每个班次的排产结果
         List<ShiftScheduleResult> shiftResults = new ArrayList<>();
@@ -127,65 +123,69 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             machineOnlineEmbryoMap = new HashMap<>();
         }
 
-        // 按天执行排程
-        int dayIndex = 0;
-        for (Map.Entry<Integer, List<CxShiftConfig>> dayEntry : dayShiftMap.entrySet()) {
-            int day = dayEntry.getKey();
-            List<CxShiftConfig> dayShifts = dayEntry.getValue();
+        // 已处理的天的集合（用于判断是否需要做停产日检查）
+        Set<Integer> processedDays = new HashSet<>();
+        // 记录上一个班次的天数，用于判断是否跨天
+        int lastDay = 0;
+
+        // 按班次逐个执行排程
+        int shiftIndex = 0;
+        for (CxShiftConfig shiftConfig : sortedShiftConfigs) {
+            int day = shiftConfig.getScheduleDay();
             LocalDate currentScheduleDate = context.getScheduleDate()
                     .minusDays(SCHEDULE_START_OFFSET_DAYS).plusDays(day - 1);
 
             // 检查当前天是否是整天停产
             if (scheduleDayTypeHelper.isFullDayStopped(currentScheduleDate)) {
-                log.info("第 {} 天日期 {} 整天停产，跳过该天排程", day, currentScheduleDate);
+                log.info("第 {} 天日期 {} 整天停产，跳过班次 {} 的排程", day, currentScheduleDate, shiftConfig.getShiftCode());
                 continue;
             }
 
-            dayIndex++;
-            log.info("====== 开始执行第 {} 天排程，天={}, 日期={}, 可用班次数={} ======",
-                    dayIndex, day, currentScheduleDate, dayShifts.size());
-
-            // 过滤掉停产的班次
-            List<CxShiftConfig> activeShifts = dayShifts.stream()
-                    .filter(s -> !scheduleDayTypeHelper.isShiftStopped(currentScheduleDate, s.getDayShiftOrder()))
-                    .collect(Collectors.toList());
-
-            if (activeShifts.isEmpty()) {
-                log.info("第 {} 天日期 {} 所有班次均停产，跳过", day, currentScheduleDate);
+            // 检查当前班次是否停产
+            Integer dayShiftOrder = shiftConfig.getDayShiftOrder();
+            if (dayShiftOrder != null && scheduleDayTypeHelper.isShiftStopped(currentScheduleDate, dayShiftOrder)) {
+                log.info("第 {} 天日期 {} 班次 {} 停产，跳过该班次排程", day, currentScheduleDate, shiftConfig.getShiftCode());
                 continue;
             }
 
-            // 设置当前天的上下文
+            shiftIndex++;
+            log.info("===== 执行第 {} 个班次排程，天={}, 日期={}, 班次={}, classField={} =====",
+                    shiftIndex, day, currentScheduleDate, shiftConfig.getShiftCode(), shiftConfig.getClassField());
+
+            // 设置当前班次的上下文
+            List<CxShiftConfig> singleShiftList = Collections.singletonList(shiftConfig);
             context.setCurrentScheduleDay(day);
             context.setCurrentScheduleDate(currentScheduleDate);
-            context.setCurrentShiftConfigs(activeShifts);
+            context.setCurrentShiftConfigs(singleShiftList);
 
-            // 执行该天的排程（天维度分组 + DFS均衡 + 班次均衡分配 + 逐班次精排）
-            List<ShiftScheduleResult> dayResults = executeDaySchedule(
-                    context, day, activeShifts, currentScheduleDate, machineOnlineEmbryoMap);
-            shiftResults.addAll(dayResults);
 
-            // 更新机台在产状态（使用最后一个班次的结果）
-            if (!dayResults.isEmpty()) {
-                ShiftScheduleResult lastShiftResult = dayResults.get(dayResults.size() - 1);
-                machineOnlineEmbryoMap = updateMachineOnlineStatus(
-                        lastShiftResult.getAllAllocations(), machineOnlineEmbryoMap);
-            }
+            // 执行该班次的排程
+            ShiftScheduleResult shiftResult = executeShiftSchedule(
+                    context, day, shiftConfig, currentScheduleDate, machineOnlineEmbryoMap);
+            shiftResults.add(shiftResult);
 
-            log.info("====== 第 {} 天排程完成，天={}, 共 {} 个班次 ======\n", dayIndex, day, dayResults.size());
+            // 更新机台在产状态
+            machineOnlineEmbryoMap = updateMachineOnlineStatus(
+                    shiftResult.getAllAllocations(), machineOnlineEmbryoMap);
+
+            // 更新库存和硫化余量，供下一个班次排程使用
+            updateContextForNextShift(context, shiftResult.getAllAllocations(), singleShiftList);
+
+            lastDay = day;
+            processedDays.add(day);
         }
 
-        // ==================== 合并多班次结果 ====================
+        // ==================== 合并多班次结果：每个机台一条记录，8个班次映射到CLASS1~8 ====================
         List<CxScheduleResult> allResults = buildFinalScheduleResultsFromShifts(context, shiftResults, allShiftConfigs);
 
-        // ==================== 构建子表 ====================
+        // ==================== 构建子表：按"胎胚+整车"维度拆分车次，计算库存可供硫化时长和顺序 ====================
         List<CxScheduleDetail> allDetails = buildScheduleDetailsFromShifts(context, shiftResults, allShiftConfigs);
         log.info("子表记录构建完成，共 {} 条", allDetails.size());
 
         // ==================== 将子表明细关联到主表 ====================
         associateDetailsToResults(allResults, allDetails);
 
-        log.info("排程算法执行完成，共 {} 天，总机台数: {}", dayIndex, allResults.size());
+        log.info("排程算法执行完成，共 {} 个班次，总机台数: {}", shiftIndex, allResults.size());
         return allResults;
     }
 
@@ -215,54 +215,55 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     }
 
     /**
-     * 执行单天排程（天维度分组 + DFS均衡 + 班次均衡分配 + 逐班次精排）
+     * 执行单天排程
      *
      * <p>排程流程：
      * <ol>
-     *   <li>S5.2 任务分组：续作/试制/新增三类（天维度，含全天需求）</li>
-     *   <li>S5.3 处理续作任务（DFS均衡，天维度总量）</li>
-     *   <li>S5.3 处理试制任务</li>
-     *   <li>S5.3 处理新增任务（DFS均衡，天维度总量）</li>
-     *   <li>S5.3.6 天维度→班次均衡分配（将天总量按班次产能比例切分）</li>
-     *   <li>S5.3.7 逐班次精排（每个班次消耗预分配量，处理开产/停产/收尾等特殊逻辑）</li>
+     *   <li>S5.2 任务分组：续作/试制/新增三类</li>
+     *   <li>S5.3 处理续作任务</li>
+     *   <li>S5.3 处理试制任务（独立处理，特殊约束）</li>
+     *   <li>S5.3 处理新增任务（合并续作+新增，重新均衡）</li>
+     *   <li>S5.3.7 班次排产</li>
      * </ol>
      *
-     * @return 该天所有班次的排产结果列表
+     * @return 班次排产结果列表 + 机台分配结果列表
      */
-    private List<ShiftScheduleResult> executeDaySchedule(
+    private ShiftScheduleResult executeShiftSchedule(
             ScheduleContextVo context,
             int day,
-            List<CxShiftConfig> activeShifts,
+            CxShiftConfig shiftConfig,
             LocalDate scheduleDate,
             Map<String, Set<String>> machineOnlineEmbryoMap) {
 
-        log.info("========== 开始执行天排程，天={}, 日期={}, 班次数={} ==========",
-                day, scheduleDate, activeShifts.size());
+        List<CxShiftConfig> singleShiftList = Collections.singletonList(shiftConfig);
 
-        // ==================== 第一步：S5.2 任务分组（天维度，使用全天班次配置） ====================
+        log.info("========== 开始执行班次排程，天={}, 日期={}, 班次={} ==========",
+                day, scheduleDate, shiftConfig.getShiftCode());
+
+        // ==================== 第一步：S5.2 任务分组（单班次） ====================
         TaskGroupService.TaskGroupResult taskGroup = taskGroupService.groupTasks(
-                context, machineOnlineEmbryoMap, scheduleDate, activeShifts);
-        log.info("天维度任务分组完成：续作 {} 个，试制 {} 个，新增 {} 个",
+                context, machineOnlineEmbryoMap, scheduleDate, singleShiftList);
+        log.info("任务分组完成：续作 {} 个，试制 {} 个，新增 {} 个",
                 taskGroup.getContinueTasks().size(),
                 taskGroup.getTrialTasks().size(),
                 taskGroup.getNewTasks().size());
 
-        // ==================== 第二步：S5.3 处理续作任务（天维度总量） ====================
+        // ==================== 第二步：S5.3 处理续作任务 ====================
         List<MachineAllocationResult> continueAllocations = continueTaskProcessor.processContinueTasks(
-                taskGroup.getContinueTasks(), context, scheduleDate, activeShifts, day);
+                taskGroup.getContinueTasks(), context, scheduleDate, singleShiftList, day);
         log.info("续作任务处理完成，机台分配数: {}", continueAllocations.size());
 
-        // ==================== 第三步：S5.3 处理试制任务 ====================
+        // ==================== 第三步：S5.3 处理试制任务（独立处理） ====================
         List<MachineAllocationResult> trialAllocations = trialTaskProcessor.processTrialTasks(
-                taskGroup.getTrialTasks(), context, scheduleDate, activeShifts, context.getAvailableMachines());
+                taskGroup.getTrialTasks(), context, scheduleDate, singleShiftList, context.getAvailableMachines());
         log.info("试制任务处理完成，机台分配数: {}", trialAllocations.size());
 
-        // ==================== 第四步：S5.3 处理新增任务（天维度总量） ====================
+        // ==================== 第四步：S5.3 处理新增任务（续作剩余需求+新增统一均衡） ====================
         List<MachineAllocationResult> newAllocations = newTaskProcessor.processNewTasks(
                 taskGroup.getNewTasks(),
                 context,
                 scheduleDate,
-                activeShifts,
+                singleShiftList,
                 taskGroup.getContinueTasks(),
                 continueAllocations,
                 trialAllocations);
@@ -273,274 +274,67 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         allAllocations.addAll(continueAllocations);
         allAllocations.addAll(newAllocations);
         allAllocations.addAll(trialAllocations);
-        log.info("天维度分配结果合并完成，总分配数: {}", allAllocations.size());
 
-        // ==================== 第六步：S5.3.6 天维度→班次均衡分配 ====================
-        // 将每个TaskAllocation的天总量按班次产能比例切分到各班次
+        log.info("班次分配前检查: 总分配数={}", allAllocations.size());
+
+        // ==================== 第六步：S5.3.7 班次排产（单个班次，无需跨班次均衡） ====================
+        List<ShiftScheduleService.ShiftProductionResult> shiftProductionResults = new ArrayList<>();
+        LocalDate scheduleDateForShift = scheduleDate;
+
         for (MachineAllocationResult allocation : allAllocations) {
+            String machineCode = allocation.getMachineCode();
             for (TaskAllocation taskAlloc : allocation.getTaskAllocations()) {
-                // 从原始任务中复制停产/开产相关字段
-                copyTaskTypeFields(taskAlloc, taskGroup, context);
-                // 按班次产能比例均衡分配天总量
-                distributeQuantityToShifts(taskAlloc, activeShifts, scheduleDate);
+                CoreScheduleAlgorithmService.DailyEmbryoTask task = new CoreScheduleAlgorithmService.DailyEmbryoTask();
+                task.setEmbryoCode(taskAlloc.getEmbryoCode());
+                task.setMaterialCode(taskAlloc.getMaterialCode());
+                task.setMaterialDesc(taskAlloc.getMaterialDesc());
+                task.setMainMaterialDesc(taskAlloc.getMainMaterialDesc());
+                task.setStructureName(taskAlloc.getStructureName());
+                task.setPlannedProduction(taskAlloc.getQuantity());
+                task.setEndingExtraInventory(taskAlloc.getQuantity());
+                task.setIsTrialTask(taskAlloc.getIsTrialTask());
+                task.setIsEndingTask(taskAlloc.getIsEndingTask());
+                task.setIsContinueTask(taskAlloc.getIsContinueTask());
+                task.setIsOpeningDayTask(context.getIsOpeningDay());
+                task.setStockHours(taskAlloc.getStockHours());
+                task.setPriority(taskAlloc.getPriority());
+                task.setLhId(taskAlloc.getLhId());
+
+                int tripCapacity = productionCalculator.getTripCapacity(taskAlloc.getStructureName(), context);
+                int cars = tripCapacity > 0 ? (int) Math.ceil((double) taskAlloc.getQuantity() / tripCapacity) : 0;
+                task.setRequiredCars(cars);
+
+                log.info("班次精排: embryoCode={}, materialDesc={}, structureName={}, " +
+                                "quantity(均衡分配量)={}, tripCapacity(每车条数)={}, cars(车数)={}, " +
+                                "endingExtraInventory(待排产量)={}, vulcanizeMachineCount(硫化机台数)={}, " +
+                                "isContinueTask={}, isTrialTask={}",
+                        taskAlloc.getEmbryoCode(), taskAlloc.getMaterialDesc(), taskAlloc.getStructureName(),
+                        taskAlloc.getQuantity(), tripCapacity, cars, task.getEndingExtraInventory(),
+                        task.getVulcanizeMachineCount(),
+                        task.getIsContinueTask(), task.getIsTrialTask());
+
+                List<ShiftScheduleService.ShiftProductionResult> taskShiftResults =
+                        shiftScheduleService.scheduleTaskToShifts(task, machineCode, context, singleShiftList, scheduleDateForShift);
+                shiftProductionResults.addAll(taskShiftResults);
             }
         }
+        log.info("班次排产完成，共 {} 条班次排产记录", shiftProductionResults.size());
 
-        // ==================== 第七步：S5.3.7 逐班次精排 ====================
-        List<ShiftScheduleResult> shiftResults = new ArrayList<>();
+        // 注意：按班次排程时不需要跨班次均衡（balanceShiftQuantities），
+        // 因为每个班次独立 DFS 均衡，量已经按单班次需求分配
 
-        for (CxShiftConfig shiftConfig : activeShifts) {
-            List<CxShiftConfig> singleShiftList = Collections.singletonList(shiftConfig);
-            Integer dayShiftOrder = shiftConfig.getDayShiftOrder();
+        // 封装该班次排产结果
+        ShiftScheduleResult shiftResult = new ShiftScheduleResult();
+        shiftResult.setDay(day);
+        shiftResult.setScheduleDate(scheduleDate);
+        shiftResult.setShiftConfig(shiftConfig);
+        shiftResult.setAllAllocations(allAllocations);
+        shiftResult.setShiftProductionResults(shiftProductionResults);
 
-            log.info("----- 天={}, 日期={}, 班次={}, classField={} 精排开始 -----",
-                    day, scheduleDate, shiftConfig.getShiftCode(), shiftConfig.getClassField());
-
-            // 设置当前班次的上下文
-            context.setCurrentShiftConfigs(singleShiftList);
-
-            // 为当前班次构建精排任务列表（使用预分配量作为该班次的需求量）
-            List<ShiftScheduleService.ShiftProductionResult> shiftProductionResults = new ArrayList<>();
-
-            for (MachineAllocationResult allocation : allAllocations) {
-                String machineCode = allocation.getMachineCode();
-                for (TaskAllocation taskAlloc : allocation.getTaskAllocations()) {
-                    // 获取该班次的预分配量
-                    Integer shiftQty = taskAlloc.getShiftPreAllocatedQty() != null
-                            ? taskAlloc.getShiftPreAllocatedQty().get(dayShiftOrder) : null;
-                    if (shiftQty == null || shiftQty <= 0) {
-                        continue; // 该班次没有分配到量，跳过
-                    }
-
-                    // 构建精排任务（用天维度的TaskAllocation信息 + 该班次的预分配量）
-                    CoreScheduleAlgorithmService.DailyEmbryoTask task = buildShiftTask(taskAlloc, shiftQty, context);
-
-                    log.info("班次精排: embryoCode={}, materialDesc={}, structureName={}, " +
-                                    "dayQty(天总量)={}, shiftQty(本班预分配量)={}, shiftOrder={}, " +
-                                    "isContinue={}, isTrial={}, isClosingDay={}, isOpeningDay={}",
-                            taskAlloc.getEmbryoCode(), taskAlloc.getMaterialDesc(), taskAlloc.getStructureName(),
-                            taskAlloc.getQuantity(), shiftQty, dayShiftOrder,
-                            taskAlloc.getIsContinueTask(), taskAlloc.getIsTrialTask(),
-                            taskAlloc.getIsClosingDayTask(), taskAlloc.getIsOpeningDayTask());
-
-                    List<ShiftScheduleService.ShiftProductionResult> taskShiftResults =
-                            shiftScheduleService.scheduleTaskToShifts(task, machineCode, context, singleShiftList, scheduleDate);
-                    shiftProductionResults.addAll(taskShiftResults);
-                }
-            }
-            log.info("班次精排完成，共 {} 条班次排产记录", shiftProductionResults.size());
-
-            // 封装该班次排产结果
-            ShiftScheduleResult shiftResult = new ShiftScheduleResult();
-            shiftResult.setDay(day);
-            shiftResult.setScheduleDate(scheduleDate);
-            shiftResult.setShiftConfig(shiftConfig);
-            shiftResult.setAllAllocations(allAllocations);
-            shiftResult.setShiftProductionResults(shiftProductionResults);
-            shiftResults.add(shiftResult);
-
-            // 更新库存和硫化余量，供下一个班次精排使用
-            updateContextForNextShift(context, allAllocations, singleShiftList);
-
-            log.info("----- 天={}, 班次={} 精排结束 -----\n", day, shiftConfig.getShiftCode());
-        }
-
-        log.info("========== 天排程完成，天={}, 共 {} 个班次 ==========", day, shiftResults.size());
-        return shiftResults;
+        log.info("========== 班次排程完成，天={}, 班次={} ==========\n", day, shiftConfig.getShiftCode());
+        return shiftResult;
     }
 
-    /**
-     * 从TaskGroupResult中复制任务类型字段到TaskAllocation
-     * （停产/开产相关的字段在分组阶段设置，但TaskAllocation没有直接携带）
-     */
-    private void copyTaskTypeFields(TaskAllocation taskAlloc,
-                                    TaskGroupService.TaskGroupResult taskGroup,
-                                    ScheduleContextVo context) {
-        // 从原始分组结果中查找对应任务的停产/开产属性
-        List<CoreScheduleAlgorithmService.DailyEmbryoTask> allTasks = new ArrayList<>();
-        allTasks.addAll(taskGroup.getContinueTasks());
-        allTasks.addAll(taskGroup.getNewTasks());
-        allTasks.addAll(taskGroup.getTrialTasks());
-
-        for (CoreScheduleAlgorithmService.DailyEmbryoTask task : allTasks) {
-            if (task.getEmbryoCode() != null && task.getEmbryoCode().equals(taskAlloc.getEmbryoCode())) {
-                if (Boolean.TRUE.equals(task.getIsClosingDayTask())) {
-                    taskAlloc.setIsClosingDayTask(true);
-                    taskAlloc.setClosingShiftOrder(task.getClosingShiftOrder());
-                }
-                if (Boolean.TRUE.equals(task.getIsOpeningDayTask())) {
-                    taskAlloc.setIsOpeningDayTask(true);
-                    taskAlloc.setFormingOpeningShiftOrder(task.getFormingOpeningShiftOrder());
-                    taskAlloc.setLhOpeningShiftOrder(task.getLhOpeningShiftOrder());
-                }
-                break;
-            }
-        }
-    }
-
-    /**
-     * 将TaskAllocation的天维度总量按班次产能比例均衡分配到各班次
-     *
-     * <p>分配规则：
-     * <ul>
-     *   <li>试制任务：只在早班/中班排产</li>
-     *   <li>停产任务：停锅班次及之后不排，需求前移到停锅前的班次</li>
-     *   <li>开产任务：首班6h产能封顶</li>
-     *   <li>普通/续作/收尾任务：按班次产能比例均衡</li>
-     * </ul>
-     */
-    private void distributeQuantityToShifts(TaskAllocation taskAlloc,
-                                            List<CxShiftConfig> activeShifts,
-                                            LocalDate scheduleDate) {
-        int dayTotalQty = taskAlloc.getQuantity() != null ? taskAlloc.getQuantity() : 0;
-        if (dayTotalQty <= 0) {
-            taskAlloc.setShiftPreAllocatedQty(Collections.emptyMap());
-            return;
-        }
-
-        Map<Integer, Integer> shiftQtyMap = new LinkedHashMap<>();
-        boolean isTrial = Boolean.TRUE.equals(taskAlloc.getIsTrialTask());
-        boolean isClosingDay = Boolean.TRUE.equals(taskAlloc.getIsClosingDayTask());
-        boolean isOpeningDay = Boolean.TRUE.equals(taskAlloc.getIsOpeningDayTask());
-
-        // ---- 试制任务：只在早班/中班排产 ----
-        if (isTrial) {
-            for (CxShiftConfig shift : activeShifts) {
-                Integer order = shift.getDayShiftOrder();
-                // 试制只排在早班(order=2)和中班(order=3)
-                if (order != null && (order == 2 || order == 3)) {
-                    shiftQtyMap.put(order, dayTotalQty);
-                }
-            }
-            // 如果试制排的班次多于1个，均分
-            if (shiftQtyMap.size() > 1) {
-                int perShift = dayTotalQty / shiftQtyMap.size();
-                int remainder = dayTotalQty % shiftQtyMap.size();
-                int idx = 0;
-                for (Map.Entry<Integer, Integer> entry : shiftQtyMap.entrySet()) {
-                    entry.setValue(perShift + (idx < remainder ? 1 : 0));
-                    idx++;
-                }
-            }
-            taskAlloc.setShiftPreAllocatedQty(shiftQtyMap);
-            log.info("  试制任务 {} 天总量={} → 班次预分配: {}", taskAlloc.getEmbryoCode(), dayTotalQty, shiftQtyMap);
-            return;
-        }
-
-        // ---- 计算每个班次的产能比例 ----
-        int[] shiftCapacities = new int[activeShifts.size()];
-        int totalCapacity = 0;
-        for (int i = 0; i < activeShifts.size(); i++) {
-            CxShiftConfig shift = activeShifts.get(i);
-            // 每个班次8小时标准产能，开产首班6小时
-            Integer order = shift.getDayShiftOrder();
-            int hours = 8;
-            if (isOpeningDay) {
-                Integer formingOpeningShiftOrder = taskAlloc.getFormingOpeningShiftOrder();
-                if (formingOpeningShiftOrder != null && order != null && order.equals(formingOpeningShiftOrder)) {
-                    hours = 6; // 成型开产首班6小时
-                }
-            }
-            shiftCapacities[i] = hours;
-            totalCapacity += hours;
-        }
-
-        // ---- 按产能比例分配 ----
-        int remaining = dayTotalQty;
-        for (int i = 0; i < activeShifts.size(); i++) {
-            CxShiftConfig shift = activeShifts.get(i);
-            Integer order = shift.getDayShiftOrder();
-            if (order == null) continue;
-
-            int allocated;
-            if (i == activeShifts.size() - 1) {
-                // 最后一个班次分到剩余全部，避免取整损失
-                allocated = remaining;
-            } else {
-                allocated = (int) Math.round((double) dayTotalQty * shiftCapacities[i] / totalCapacity);
-                allocated = Math.min(allocated, remaining);
-            }
-            if (allocated > 0) {
-                shiftQtyMap.put(order, allocated);
-                remaining -= allocated;
-            }
-        }
-
-        // ---- 停产任务：停锅班次及之后不再排产，需求前移 ----
-        if (isClosingDay) {
-            Integer closingShiftOrder = taskAlloc.getClosingShiftOrder();
-            if (closingShiftOrder != null) {
-                // 收集停锅班次及之后的预分配量，前移到停锅前的班次
-                int removedQty = 0;
-                List<Integer> ordersToRemove = new ArrayList<>();
-                for (Map.Entry<Integer, Integer> entry : shiftQtyMap.entrySet()) {
-                    if (entry.getKey() >= closingShiftOrder) {
-                        removedQty += entry.getValue();
-                        ordersToRemove.add(entry.getKey());
-                    }
-                }
-                for (Integer order : ordersToRemove) {
-                    shiftQtyMap.remove(order);
-                }
-                // 将移除的量按比例加到停锅前的班次
-                if (removedQty > 0 && !shiftQtyMap.isEmpty()) {
-                    int totalPreQty = shiftQtyMap.values().stream().mapToInt(Integer::intValue).sum();
-                    int idx = 0;
-                    int size = shiftQtyMap.size();
-                    for (Map.Entry<Integer, Integer> entry : shiftQtyMap.entrySet()) {
-                        int addQty;
-                        if (idx == size - 1) {
-                            addQty = removedQty;
-                        } else {
-                            addQty = (int) Math.round((double) removedQty * entry.getValue() / totalPreQty);
-                        }
-                        entry.setValue(entry.getValue() + addQty);
-                        removedQty -= addQty;
-                        idx++;
-                    }
-                }
-            }
-        }
-
-        taskAlloc.setShiftPreAllocatedQty(shiftQtyMap);
-        log.info("  任务 {} 天总量={} → 班次预分配: {} (停产={}, 开产={}, closingShift={}, formingOpeningShift={})",
-                taskAlloc.getEmbryoCode(), dayTotalQty, shiftQtyMap,
-                isClosingDay, isOpeningDay,
-                taskAlloc.getClosingShiftOrder(), taskAlloc.getFormingOpeningShiftOrder());
-    }
-
-    /**
-     * 根据TaskAllocation和班次预分配量构建精排用的DailyEmbryoTask
-     */
-    private CoreScheduleAlgorithmService.DailyEmbryoTask buildShiftTask(
-            TaskAllocation taskAlloc, Integer shiftQty, ScheduleContextVo context) {
-
-        CoreScheduleAlgorithmService.DailyEmbryoTask task = new CoreScheduleAlgorithmService.DailyEmbryoTask();
-        task.setEmbryoCode(taskAlloc.getEmbryoCode());
-        task.setMaterialCode(taskAlloc.getMaterialCode());
-        task.setMaterialDesc(taskAlloc.getMaterialDesc());
-        task.setMainMaterialDesc(taskAlloc.getMainMaterialDesc());
-        task.setStructureName(taskAlloc.getStructureName());
-        task.setPlannedProduction(shiftQty); // 用该班次预分配量作为计划量
-        task.setEndingExtraInventory(shiftQty); // 精排时用预分配量
-        task.setIsTrialTask(taskAlloc.getIsTrialTask());
-        task.setIsEndingTask(taskAlloc.getIsEndingTask());
-        task.setIsContinueTask(taskAlloc.getIsContinueTask());
-        task.setIsClosingDayTask(taskAlloc.getIsClosingDayTask());
-        task.setIsOpeningDayTask(taskAlloc.getIsOpeningDayTask());
-        task.setClosingShiftOrder(taskAlloc.getClosingShiftOrder());
-        task.setFormingOpeningShiftOrder(taskAlloc.getFormingOpeningShiftOrder());
-        task.setLhOpeningShiftOrder(taskAlloc.getLhOpeningShiftOrder());
-        task.setStockHours(taskAlloc.getStockHours());
-        task.setPriority(taskAlloc.getPriority());
-        task.setLhId(taskAlloc.getLhId());
-
-        int tripCapacity = productionCalculator.getTripCapacity(taskAlloc.getStructureName(), context);
-        int cars = tripCapacity > 0 ? (int) Math.ceil((double) shiftQty / tripCapacity) : 0;
-        task.setRequiredCars(cars);
-
-        return task;
-    }
     /**
      * 更新机台在产状态
      */
