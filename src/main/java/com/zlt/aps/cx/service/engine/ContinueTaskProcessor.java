@@ -110,16 +110,33 @@ public class ContinueTaskProcessor {
             String machineCode = historyEntry.getKey();
             Set<String> historyEmbryos = historyEntry.getValue();
 
+            // 跳过无效数据
+            if (machineCode == null || historyEmbryos == null || historyEmbryos.isEmpty()) {
+                continue;
+            }
+
             for (String embryoCode : historyEmbryos) {
+                // 跳过 null 胎胚编码
+                if (embryoCode == null) {
+                    continue;
+                }
+                
                 // 在续作任务列表中找到 demand > 0 的任务
                 CoreScheduleAlgorithmService.DailyEmbryoTask matchedTask = null;
                 for (CoreScheduleAlgorithmService.DailyEmbryoTask task : continueTasks) {
-                    if (embryoCode.equals(task.getEmbryoCode())) {
-                        int demand = task.getVulcanizeMachineCount() != null ? task.getVulcanizeMachineCount() : 0;
-                        if (demand > 0) {
-                            matchedTask = task;
-                            break;
-                        }
+                    // 跳过 null 任务
+                    if (task == null) {
+                        continue;
+                    }
+                    String taskEmbryoCode = task.getEmbryoCode();
+                    // 跳过 null 胎胚编码比较
+                    if (taskEmbryoCode == null || !embryoCode.equals(taskEmbryoCode)) {
+                        continue;
+                    }
+                    int demand = task.getVulcanizeMachineCount() != null ? task.getVulcanizeMachineCount() : 0;
+                    if (demand > 0) {
+                        matchedTask = task;
+                        break;
                     }
                 }
 
