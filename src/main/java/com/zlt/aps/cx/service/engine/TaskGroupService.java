@@ -187,10 +187,13 @@ public class TaskGroupService {
             }
             
             // 每个班次只处理自己班次有排量的任务
-            // 如果当前班次没有排量，则跳过该任务（不创建任务）
-            if (currentClassIndex > 0 && getClassPlanQtyByIndex(lhResult, currentClassIndex) == null) {
-                skippedNullTask++;
-                continue;
+            // 如果当前班次没有排量（为null或<=0），则跳过该任务（不创建任务）
+            if (currentClassIndex > 0) {
+                Integer classPlanQty = getClassPlanQtyByIndex(lhResult, currentClassIndex);
+                if (classPlanQty == null || classPlanQty <= 0) {
+                    skippedNullTask++;
+                    continue;
+                }
             }
 
             CoreScheduleAlgorithmService.DailyEmbryoTask task = buildSingleTask(

@@ -114,30 +114,6 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
     }
 
     /**
-     * 班次类型枚举
-     */
-    public enum ShiftType {
-        /** 停产班：本班次=0(停产) */
-        CLOSED("停产班"),
-        /** 开产班（首个）：本班次=1(开产) 且 上个班次=0(停产) */
-        OPEN_START("开产首个班次"),
-        /** 停产前一天班（末个）：本班次=1(开产) 且 下个班次=0(停产) */
-        BEFORE_CLOSE("停产前一天班次"),
-        /** 正常班：本班次=1(开产) 且 上下班次都是开产 */
-        NORMAL("正常班");
-        
-        private final String desc;
-        
-        ShiftType(String desc) {
-            this.desc = desc;
-        }
-        
-        public String getDesc() {
-            return desc;
-        }
-    }
-
-    /**
      * 获取指定班次的开停产标志
      *
      * @param date       日期
