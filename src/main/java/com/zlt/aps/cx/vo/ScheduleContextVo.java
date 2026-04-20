@@ -37,6 +37,12 @@ public class ScheduleContextVo {
     private LocalDate scheduleDate;
 
     /**
+     * 班次序号（1=一班, 2=二班, 3=三班）
+     * 用于按班次级别判断开产/停产
+     */
+    private Integer shiftOrder;
+
+    /**
      * 工厂编号
      * 用于加载工厂特定的班次配置
      */

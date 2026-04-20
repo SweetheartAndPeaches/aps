@@ -28,6 +28,11 @@ import java.util.*;
 
 /**
  * 节假日处理服务实现类
+ * 
+ * 按班次级别判断开产/停产逻辑：
+ * - 停产班：本班次 = 0(停产)，不做处理
+ * - 开产班（首个）：本班次 = 1(开产) 且 上个班次 = 0(停产)，走开产逻辑
+ * - 停产前一天班（末个）：本班次 = 1(开产) 且 下个班次 = 0(停产)，走停产前一天逻辑
  *
  * @author APS Team
  */
@@ -65,50 +70,266 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
     /** 成型工序编码 */
     private static final String PROC_CODE_CX = "CX";
 
-    @Override
-    public boolean isHoliday(LocalDate date) {
-        // 使用工作日历判断是否停产（按工序CX查询）
-        // MdmWorkCalendar.dayFlag: 0-停,1-开
+    /** 班次停产标志：0-停 */
+    private static final String SHIFT_FLAG_STOP = "0";
+    
+    /** 班次开产标志：1-开 */
+    private static final String SHIFT_FLAG_START = "1";
+
+    /**
+     * 班次编码枚举（按顺序）
+     */
+    public enum ShiftOrder {
+        ONE(1, "一班"),
+        TWO(2, "二班"),
+        THREE(3, "三班");
+        
+        private final int order;
+        private final String name;
+        
+        ShiftOrder(int order, String name) {
+            this.order = order;
+            this.name = name;
+        }
+        
+        public int getOrder() {
+            return order;
+        }
+        
+        public String getName() {
+            return name;
+        }
+        
+        /**
+         * 根据序号获取班次枚举
+         */
+        public static ShiftOrder fromOrder(int order) {
+            for (ShiftOrder shift : values()) {
+                if (shift.order == order) {
+                    return shift;
+                }
+            }
+            return ONE;
+        }
+    }
+
+    /**
+     * 班次类型枚举
+     */
+    public enum ShiftType {
+        /** 停产班：本班次=0(停产) */
+        CLOSED("停产班"),
+        /** 开产班（首个）：本班次=1(开产) 且 上个班次=0(停产) */
+        OPEN_START("开产首个班次"),
+        /** 停产前一天班（末个）：本班次=1(开产) 且 下个班次=0(停产) */
+        BEFORE_CLOSE("停产前一天班次"),
+        /** 正常班：本班次=1(开产) 且 上下班次都是开产 */
+        NORMAL("正常班");
+        
+        private final String desc;
+        
+        ShiftType(String desc) {
+            this.desc = desc;
+        }
+        
+        public String getDesc() {
+            return desc;
+        }
+    }
+
+    /**
+     * 获取指定班次的开停产标志
+     *
+     * @param date       日期
+     * @param shiftOrder 班次序号（1,2,3）
+     * @return 开产标志（0-停, 1-开），默认返回"1"（开产）
+     */
+    private String getShiftFlag(LocalDate date, int shiftOrder) {
         Date queryDate = Date.valueOf(date);
         MdmWorkCalendar workCalendar = workCalendarMapper.selectOne(
                 new LambdaQueryWrapper<MdmWorkCalendar>()
                         .eq(MdmWorkCalendar::getProcCode, PROC_CODE_CX)
                         .eq(MdmWorkCalendar::getProductionDate, queryDate));
 
-        if (workCalendar != null) {
-            // dayFlag = '0' 表示停产
-            return "0".equals(workCalendar.getDayFlag());
+        if (workCalendar == null) {
+            log.warn("未找到工作日历配置，日期: {}，班次: {}，默认视为开产", date, shiftOrder);
+            return SHIFT_FLAG_START;
         }
 
-        // 如果工作日历中没有配置，默认为工作日（不再将周日判定为节假日）
-        return false;
+        switch (shiftOrder) {
+            case 1:
+                return workCalendar.getOneShiftFlag();
+            case 2:
+                return workCalendar.getTwoShiftFlag();
+            case 3:
+                return workCalendar.getThreeShiftFlag();
+            default:
+                log.warn("未知的班次序号: {}，默认视为开产", shiftOrder);
+                return SHIFT_FLAG_START;
+        }
+    }
+
+    /**
+     * 获取上一个班次的开停产标志
+     * 
+     * 班次顺序：一班 → 二班 → 三班 → 下一天一班
+     * 一班的"上一个班次" = 前一天的三班
+     *
+     * @param date       日期
+     * @param shiftOrder 班次序号（1,2,3）
+     * @return 上一个班次的开产标志（0-停, 1-开），默认返回"1"（开产）
+     */
+    private String getPreviousShiftFlag(LocalDate date, int shiftOrder) {
+        LocalDate prevDate = date;
+        int prevShiftOrder;
+        
+        switch (shiftOrder) {
+            case 1:
+                // 一班的"上一个班次" = 前一天的三班
+                prevDate = date.minusDays(1);
+                prevShiftOrder = 3;
+                break;
+            case 2:
+                // 二班的"上一个班次" = 当天的一班
+                prevShiftOrder = 1;
+                break;
+            case 3:
+                // 三班的"上一个班次" = 当天的二班
+                prevShiftOrder = 2;
+                break;
+            default:
+                log.warn("未知的班次序号: {}", shiftOrder);
+                return SHIFT_FLAG_START;
+        }
+        
+        String flag = getShiftFlag(prevDate, prevShiftOrder);
+        log.debug("获取上一个班次标志，日期: {}，班次: {} -> 日期: {}，班次: {}，标志: {}",
+                date, shiftOrder, prevDate, prevShiftOrder, flag);
+        return flag;
+    }
+
+    /**
+     * 获取下一个班次的开停产标志
+     * 
+     * 班次顺序：一班 → 二班 → 三班 → 下一天一班
+     * 三班的"下一个班次" = 下一天的一班
+     *
+     * @param date       日期
+     * @param shiftOrder 班次序号（1,2,3）
+     * @return 下一个班次的开产标志（0-停, 1-开），默认返回"1"（开产）
+     */
+    private String getNextShiftFlag(LocalDate date, int shiftOrder) {
+        LocalDate nextDate = date;
+        int nextShiftOrder;
+        
+        switch (shiftOrder) {
+            case 1:
+                // 一班的"下一个班次" = 当天的二班
+                nextShiftOrder = 2;
+                break;
+            case 2:
+                // 二班的"下一个班次" = 当天的三班
+                nextShiftOrder = 3;
+                break;
+            case 3:
+                // 三班的"下一个班次" = 下一天的一班
+                nextDate = date.plusDays(1);
+                nextShiftOrder = 1;
+                break;
+            default:
+                log.warn("未知的班次序号: {}", shiftOrder);
+                return SHIFT_FLAG_START;
+        }
+        
+        String flag = getShiftFlag(nextDate, nextShiftOrder);
+        log.debug("获取下一个班次标志，日期: {}，班次: {} -> 日期: {}，班次: {}，标志: {}",
+                date, shiftOrder, nextDate, nextShiftOrder, flag);
+        return flag;
+    }
+
+    /**
+     * 按班次级别判断班次类型
+     * 
+     * 判断逻辑：
+     * - 停产班：本班次 = 0(停产)，不做处理
+     * - 开产班（首个）：本班次 = 1(开产) 且 上个班次 = 0(停产)，走开产逻辑
+     * - 停产前一天班（末个）：本班次 = 1(开产) 且 下个班次 = 0(停产)，走停产前一天逻辑
+     *
+     * @param date       日期
+     * @param shiftOrder 班次序号（1,2,3）
+     * @return 班次类型
+     */
+    public ShiftType determineShiftType(LocalDate date, int shiftOrder) {
+        String currentFlag = getShiftFlag(date, shiftOrder);
+        
+        // 1. 判断是否为停产班
+        if (SHIFT_FLAG_STOP.equals(currentFlag)) {
+            log.info("班次类型判定：日期={}，班次={}，结果=停产班", 
+                    date, ShiftOrder.fromOrder(shiftOrder).getName());
+            return ShiftType.CLOSED;
+        }
+        
+        // 2. 本班次是开产，判断是开产首个班还是停产前一天班
+        String prevFlag = getPreviousShiftFlag(date, shiftOrder);
+        String nextFlag = getNextShiftFlag(date, shiftOrder);
+        
+        // 上个班次是停产 -> 开产首个班次
+        if (SHIFT_FLAG_STOP.equals(prevFlag)) {
+            log.info("班次类型判定：日期={}，班次={}，上个班次=停产，结果=开产首个班次", 
+                    date, ShiftOrder.fromOrder(shiftOrder).getName());
+            return ShiftType.OPEN_START;
+        }
+        
+        // 下个班次是停产 -> 停产前一天班次
+        if (SHIFT_FLAG_STOP.equals(nextFlag)) {
+            log.info("班次类型判定：日期={}，班次={}，下个班次=停产，结果=停产前一天班次", 
+                    date, ShiftOrder.fromOrder(shiftOrder).getName());
+            return ShiftType.BEFORE_CLOSE;
+        }
+        
+        // 正常班
+        log.info("班次类型判定：日期={}，班次={}，结果=正常班", 
+                date, ShiftOrder.fromOrder(shiftOrder).getName());
+        return ShiftType.NORMAL;
+    }
+
+    // ==================== 以下为原有方法兼容保留 ====================
+
+    @Override
+    public boolean isHoliday(LocalDate date) {
+        // 兼容原有逻辑：如果三个班次全部停产，则视为停产日
+        String flag1 = getShiftFlag(date, 1);
+        String flag2 = getShiftFlag(date, 2);
+        String flag3 = getShiftFlag(date, 3);
+        
+        return SHIFT_FLAG_STOP.equals(flag1) 
+            && SHIFT_FLAG_STOP.equals(flag2) 
+            && SHIFT_FLAG_STOP.equals(flag3);
     }
 
     @Override
     public boolean isStopProductionDay(LocalDate date) {
+        // 兼容原有逻辑：如果当天停产且前一天不是停产日
         if (!isHoliday(date)) {
             return false;
         }
-
-        // 检查前一天是否为工作日
         LocalDate previousDay = date.minusDays(1);
         return !isHoliday(previousDay);
     }
 
     @Override
     public boolean isStartProductionDay(LocalDate date) {
+        // 兼容原有逻辑：如果当天工作日且前一天是停产日
         if (isHoliday(date)) {
             return false;
         }
-
-        // 检查前一天是否为节假日
         LocalDate previousDay = date.minusDays(1);
         return isHoliday(previousDay);
     }
 
     @Override
     public boolean isBeforeHoliday(LocalDate date) {
-        // 检查明天是否为停产日
+        // 兼容原有逻辑：检查明天是否为停产日
         LocalDate nextDay = date.plusDays(1);
         return isStopProductionDay(nextDay);
     }
@@ -119,15 +340,14 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
         builder.isHoliday(isHoliday(date));
         builder.isBeforeHoliday(isBeforeHoliday(date));
 
-        // 使用工作日历获取节假日信息（按工序CX查询）
+        // 获取班次信息
         Date queryDate = Date.valueOf(date);
         MdmWorkCalendar workCalendar = workCalendarMapper.selectOne(
                 new LambdaQueryWrapper<MdmWorkCalendar>()
                         .eq(MdmWorkCalendar::getProcCode, PROC_CODE_CX)
                         .eq(MdmWorkCalendar::getProductionDate, queryDate));
 
-        if (workCalendar != null && "0".equals(workCalendar.getDayFlag())) {
-            // 停产日
+        if (workCalendar != null && SHIFT_FLAG_STOP.equals(workCalendar.getDayFlag())) {
             builder.holidayName("停产日")
                     .startDate(date)
                     .endDate(date)
@@ -152,15 +372,18 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
         result.setAdjustments(new ArrayList<>());
 
         LocalDate scheduleDate = context.getScheduleDate();
+        Integer shiftOrder = context.getShiftOrder();
 
-        if (!isBeforeHoliday(scheduleDate)) {
-            result.setMessage("非停产前一天，无需特殊处理");
+        // 班次级别判断：是否为停产前一天班次
+        ShiftType shiftType = determineShiftType(scheduleDate, shiftOrder != null ? shiftOrder : 1);
+        if (shiftType != ShiftType.BEFORE_CLOSE) {
+            result.setMessage("非停产前一天班次，无需特殊处理");
             return result;
         }
 
-        log.info("处理停产前一天排程调整: {}", scheduleDate);
+        log.info("处理停产前一天班次排程调整: {} {}", scheduleDate, ShiftOrder.fromOrder(shiftOrder).getName());
 
-        // 获取节假日信息
+        // 获取节假日信息（停产日信息）
         HolidayInfo holidayInfo = getHolidayInfo(scheduleDate.plusDays(1));
         int holidayDays = holidayInfo.getTotalDays() > 0 ? holidayInfo.getTotalDays() : 1;
 
@@ -181,17 +404,16 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
 
         // 4. 确定停机时间
         // 从硫化排程结果中获取硫化停机时间
-        // 一个胎胚可能对应多个硫化任务（通过物料编码关联），取所有硫化任务中最大的specEndTime
         LocalDateTime vulcanizingStopTime = determineVulcanizingStopTimeFromSchedule(scheduleDate);
         Integer reservedDigestHours = getReservedDigestHours();
         LocalDateTime formingStopTime = determineFormingStopTime(vulcanizingStopTime, reservedDigestHours);
         result.setFormingStopTime(formingStopTime);
 
         // 5. 计算成型可排产时长
-        // 从班次配置表获取第一个班次的开始时间
-        LocalTime firstShiftStartTime = getFirstShiftStartTime();
-        LocalDateTime shiftStartTime = LocalDateTime.of(scheduleDate, firstShiftStartTime);
-        Integer formingAvailableHours = calculateFormingAvailableHours(shiftStartTime, formingStopTime);
+        // 从班次配置表获取当前班次的开始时间
+        LocalTime shiftStartTime = getShiftStartTime(shiftOrder != null ? shiftOrder : 1);
+        LocalDateTime shiftStartDateTime = LocalDateTime.of(scheduleDate, shiftStartTime);
+        Integer formingAvailableHours = calculateFormingAvailableHours(shiftStartDateTime, formingStopTime);
         result.setFormingAvailableHours(formingAvailableHours);
 
         // 6. 检查胎胚停放时间约束
@@ -220,7 +442,7 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
         context.setExcessStockToConsume(excessStock);
 
         result.setAdjusted(!CollectionUtils.isEmpty(result.getAdjustments()));
-        result.setMessage(result.isAdjusted() ? "已完成停产前一天调整" : "无需调整");
+        result.setMessage(result.isAdjusted() ? "已完成停产前一天班次调整" : "无需调整");
 
         return result;
     }
@@ -232,13 +454,16 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
         result.setAdjustments(new ArrayList<>());
 
         LocalDate scheduleDate = context.getScheduleDate();
+        Integer shiftOrder = context.getShiftOrder();
 
-        if (!isStartProductionDay(scheduleDate)) {
-            result.setMessage("非开产日，无需特殊处理");
+        // 班次级别判断：是否为开产首个班次
+        ShiftType shiftType = determineShiftType(scheduleDate, shiftOrder != null ? shiftOrder : 1);
+        if (shiftType != ShiftType.OPEN_START) {
+            result.setMessage("非开产首个班次，无需特殊处理");
             return result;
         }
 
-        log.info("处理开产日排程调整: {}", scheduleDate);
+        log.info("处理开产首个班次排程调整: {} {}", scheduleDate, ShiftOrder.fromOrder(shiftOrder).getName());
 
         // 1. 确定成型开产班次和硫化开模班次
         // 假设班次顺序：夜班(0-8) -> 早班(8-16) -> 中班(16-24)
@@ -269,25 +494,15 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
         context.setVulcanizingStartShift(vulcanizingStartShift);
 
         result.setAdjusted(true);
-        result.setMessage("已完成开产日调整：成型早于硫化1个班开产，首班不排关键产品");
+        result.setMessage("已完成开产首个班次调整：成型早于硫化1个班开产，首班不排关键产品");
 
         return result;
     }
 
     /**
      * 从硫化排程结果中获取硫化停机时间
-     *
-     * 逻辑说明：
-     * 1. 一个胎胚(embryoCode)可能对应多个硫化任务（通过物料编码关联）
-     * 2. 每个硫化任务有各自的specEndTime（规格结束时间）
-     * 3. 按胎胚维度分组，找出每个胎胚对应的所有硫化任务中最大的specEndTime
-     * 4. 取所有胎胚中最大的停机时间作为最终的硫化停机时间
-     *
-     * @param scheduleDate 排程日期
-     * @return 硫化停机时间
      */
     private LocalDateTime determineVulcanizingStopTimeFromSchedule(LocalDate scheduleDate) {
-        // 获取该日期的硫化排程结果
         List<LhScheduleResult> lhResults = lhScheduleResultMapper.selectByDate(scheduleDate);
 
         if (CollectionUtils.isEmpty(lhResults)) {
@@ -295,8 +510,6 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
             return LocalDateTime.of(scheduleDate, LocalTime.of(22, 0));
         }
 
-        // 按胎胚编码(embryoCode)分组，找出每个胎胚的最大停机时间
-        // 然后取所有胎胚中最大的那个作为最终停机时间
         LocalDateTime maxStopTime = null;
 
         // 按胎胚分组
@@ -310,10 +523,8 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
 
         // 遍历每个胎胚组，找出该胎胚对应的所有硫化任务中最大的specEndTime
         for (Map.Entry<String, List<LhScheduleResult>> entry : embryoGroupMap.entrySet()) {
-            String embryoCode = entry.getKey();
             List<LhScheduleResult> embryoResults = entry.getValue();
 
-            // 找出该胎胚对应的所有硫化任务中最大的specEndTime
             LocalDateTime embryoMaxStopTime = null;
             for (LhScheduleResult result : embryoResults) {
                 LocalDateTime specEndTime = result.getSpecEndTime().toInstant()
@@ -327,11 +538,10 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
                 }
             }
 
-            // 取所有胎胚中最大的停机时间
             if (embryoMaxStopTime != null) {
                 if (maxStopTime == null || embryoMaxStopTime.isAfter(maxStopTime)) {
                     maxStopTime = embryoMaxStopTime;
-                    log.debug("胎胚 {} 的最大硫化停机时间: {}", embryoCode, embryoMaxStopTime);
+                    log.debug("胎胚 {} 的最大硫化停机时间: {}", entry.getKey(), embryoMaxStopTime);
                 }
             }
         }
@@ -346,46 +556,43 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
     }
 
     /**
-     * 从班次配置表获取第一个班次的开始时间
+     * 获取指定班次的开始时间
      *
-     * 逻辑说明：
-     * 1. 从 T_CX_SHIFT_CONFIG 表查询班次配置
-     * 2. 按班次序号(shiftOrder)排序，取第一个启用的班次
-     * 3. 解析其开始时间(startTime)，格式为 HH:mm:ss
-     *
-     * @return 第一个班次的开始时间
+     * @param shiftOrder 班次序号（1,2,3）
+     * @return 班次开始时间
      */
-    private LocalTime getFirstShiftStartTime() {
-        // 查询启用的班次配置，按序号排序取第一个
-        CxShiftConfig firstShift = shiftConfigMapper.selectOne(
+    private LocalTime getShiftStartTime(int shiftOrder) {
+        CxShiftConfig shiftConfig = shiftConfigMapper.selectOne(
                 new LambdaQueryWrapper<CxShiftConfig>()
                         .eq(CxShiftConfig::getIsActive, 1)
-                        .orderByAsc(CxShiftConfig::getShiftOrder)
+                        .eq(CxShiftConfig::getShiftOrder, shiftOrder)
                         .last("LIMIT 1"));
 
-        if (firstShift != null && firstShift.getStartTime() != null) {
-            String startTimeStr = firstShift.getStartTime();
-            log.info("从班次配置获取首个班次开始时间: {}，班次编码: {}", startTimeStr, firstShift.getShiftCode());
-            // 解析 HH:mm:ss 格式的时间
+        if (shiftConfig != null && shiftConfig.getStartTime() != null) {
+            String startTimeStr = shiftConfig.getStartTime();
+            log.info("从班次配置获取班次{}开始时间: {}", shiftOrder, startTimeStr);
             return LocalTime.parse(startTimeStr);
         }
 
-        log.warn("未找到有效的班次配置，使用默认开始时间08:00");
-        return LocalTime.of(8, 0);
+        log.warn("未找到班次{}的配置，使用默认开始时间", shiftOrder);
+        // 根据班次序号返回默认时间
+        switch (shiftOrder) {
+            case 1: return LocalTime.of(0, 0);   // 一班 00:00
+            case 2: return LocalTime.of(8, 0);   // 二班 08:00
+            case 3: return LocalTime.of(16, 0);  // 三班 16:00
+            default: return LocalTime.of(8, 0);
+        }
     }
 
     @Override
     public Map<String, Integer> calculateMinDemandForHoliday(LocalDate holidayStartDate, int holidayDays) {
         Map<String, Integer> minDemand = new HashMap<>();
 
-        // 获取损耗率配置
         BigDecimal lossRate = getLossRate();
 
-        // 从硫化排程结果表获取节假日期间的硫化计划
         for (int i = 0; i < holidayDays; i++) {
             LocalDate planDate = holidayStartDate.plusDays(i);
 
-            // 从硫化排程结果表获取该日期的计划
             List<LhScheduleResult> lhResults = lhScheduleResultMapper.selectByDate(planDate);
 
             if (lhResults != null && !lhResults.isEmpty()) {
@@ -394,7 +601,6 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
                     Integer dailyPlanQty = result.getDailyPlanQty();
 
                     if (embryoCode != null && dailyPlanQty != null && dailyPlanQty > 0) {
-                        // 累加该胎胚在节假日期间的需求
                         minDemand.merge(embryoCode, dailyPlanQty, Integer::sum);
                     }
                 }
@@ -451,21 +657,16 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
     public List<EmbryoConsumptionSuggestion> checkEmbryoParkingTime(LocalDate scheduleDate, LocalDateTime formingStopTime) {
         List<EmbryoConsumptionSuggestion> suggestions = new ArrayList<>();
 
-        // 获取胎胚停放时间配置
         int maxParkingHours = getMaxParkingHours();
         int reservedDigestHours = getReservedDigestHours();
 
-        // 获取所有胎胚库存
         List<CxStock> stocks = stockMapper.selectList(
                 new LambdaQueryWrapper<CxStock>().gt(CxStock::getStockNum, 0));
 
         for (CxStock stock : stocks) {
-            // 获取胎胚已停放时间（从生产时间计算）
-            // TODO: 需要从库存记录获取生产时间
             BigDecimal parkingHours = stock.getStockHours();
 
             if (parkingHours != null) {
-                // 预测停放时间 = 已停放时间 + 预留消化时间
                 BigDecimal predictedParkingHours = parkingHours.add(BigDecimal.valueOf(reservedDigestHours));
 
                 if (predictedParkingHours.compareTo(BigDecimal.valueOf(maxParkingHours)) > 0) {
@@ -485,50 +686,93 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
         return suggestions;
     }
 
+    /**
+     * 按班次级别调整排程
+     * 
+     * 核心判断逻辑（按班次）：
+     * - 停产班（本班次=0）：不排程，返回空
+     * - 开产首个班（本班次=1 且 上班次=0）：走开产逻辑
+     * - 停产前一天班（本班次=1 且 下班次=0）：走停产前一天逻辑
+     *
+     * @param scheduleDate  排程日期
+     * @param shiftOrder    班次序号（1,2,3）
+     * @param originalResult 原始排程结果
+     * @param context       排程上下文
+     * @return 调整后的排程结果
+     */
     @Override
-    public List<CxScheduleResult> adjustHolidaySchedule(LocalDate scheduleDate, List<CxScheduleResult> originalResult, ScheduleContextVo context) {
+    public List<CxScheduleResult> adjustHolidaySchedule(LocalDate scheduleDate, int shiftOrder, 
+            List<CxScheduleResult> originalResult, ScheduleContextVo context) {
+        
         if (CollectionUtils.isEmpty(originalResult)) {
             return originalResult;
         }
+        
+        // 设置上下文中的班次信息
+        context.setScheduleDate(scheduleDate);
+        context.setShiftOrder(shiftOrder);
 
-        // 检查是否需要特殊处理
-        if (isStopProductionDay(scheduleDate)) {
-            log.info("停产日 {} 不排程", scheduleDate);
-            return new ArrayList<>();
-        }
+        // 按班次级别判断类型
+        ShiftType shiftType = determineShiftType(scheduleDate, shiftOrder);
+        
+        log.info("班次级别排程调整，日期: {}，班次: {}，类型: {}",
+                scheduleDate, ShiftOrder.fromOrder(shiftOrder).getName(), shiftType.getDesc());
 
-        if (isBeforeHoliday(scheduleDate)) {
-            HolidayScheduleResult adjustResult = handleBeforeHoliday(context);
-            if (adjustResult.isAdjusted()) {
-                log.info("停产前一天 {} 已调整排程: {}", scheduleDate, adjustResult.getAdjustments());
-            }
-        }
-
-        if (isStartProductionDay(scheduleDate)) {
-            HolidayScheduleResult adjustResult = handleOpeningDay(context);
-            if (adjustResult.isAdjusted()) {
-                log.info("开产日 {} 已调整排程: {}", scheduleDate, adjustResult.getAdjustments());
-
-                // 首班不排关键产品
-                String firstShift = context.getFormingStartShift();
-                Set<String> keyProductCodes = context.getKeyProductCodes();
-
-                if (keyProductCodes != null && !keyProductCodes.isEmpty()) {
-                    for (CxScheduleResult result : originalResult) {
-                        // 一班=夜班，二班=早班，三班=中班
-                        // 成型开产班次默认为早班（二班）
-                        if ("SHIFT_DAY".equals(firstShift) &&
-                                result.getClass2PlanQty() != null &&
-                                result.getClass2PlanQty().compareTo(BigDecimal.ZERO) > 0) {
-                            // 标记早班需要排除关键产品
-                            result.setRemark("开产首班(早班) - 不排关键产品");
+        switch (shiftType) {
+            case CLOSED:
+                // 停产班，不排程
+                log.info("停产班次 {} {} 不排程", scheduleDate, ShiftOrder.fromOrder(shiftOrder).getName());
+                return new ArrayList<>();
+                
+            case OPEN_START:
+                // 开产首个班次，走开产逻辑
+                HolidayScheduleResult openResult = handleOpeningDay(context);
+                if (openResult.isAdjusted()) {
+                    log.info("开产首个班次 {} {} 已调整: {}", 
+                            scheduleDate, ShiftOrder.fromOrder(shiftOrder).getName(), 
+                            openResult.getAdjustments());
+                    
+                    // 首班不排关键产品
+                    String firstShift = context.getFormingStartShift();
+                    Set<String> keyProductCodes = context.getKeyProductCodes();
+                    
+                    if (keyProductCodes != null && !keyProductCodes.isEmpty()) {
+                        for (CxScheduleResult result : originalResult) {
+                            result.setRemark("开产首个班次(" + firstShift + ") - 不排关键产品");
                         }
                     }
                 }
-            }
+                break;
+                
+            case BEFORE_CLOSE:
+                // 停产前一天班次，走停产前一天逻辑
+                HolidayScheduleResult closeResult = handleBeforeHoliday(context);
+                if (closeResult.isAdjusted()) {
+                    log.info("停产前一天班次 {} {} 已调整: {}", 
+                            scheduleDate, ShiftOrder.fromOrder(shiftOrder).getName(),
+                            closeResult.getAdjustments());
+                }
+                break;
+                
+            case NORMAL:
+                // 正常班，不做特殊处理
+                log.info("正常班次 {} {} 无需特殊处理", 
+                        scheduleDate, ShiftOrder.fromOrder(shiftOrder).getName());
+                break;
         }
 
         return originalResult;
+    }
+
+    /**
+     * 兼容旧接口：按天调整排程（仅用于兼容保留）
+     */
+    @Override
+    @Deprecated
+    public List<CxScheduleResult> adjustHolidaySchedule(LocalDate scheduleDate, 
+            List<CxScheduleResult> originalResult, ScheduleContextVo context) {
+        // 默认处理当天的第一个班次
+        return adjustHolidaySchedule(scheduleDate, 1, originalResult, context);
     }
 
     /**
