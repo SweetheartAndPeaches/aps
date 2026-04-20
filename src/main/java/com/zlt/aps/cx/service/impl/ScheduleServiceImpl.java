@@ -300,7 +300,15 @@ public class ScheduleServiceImpl implements ScheduleService {
                 log.warn("加载硫化排程结果失败，继续执行：{}", e.getMessage());
             }
 
-            // 5. 根据硫化排程结果获取物料信息
+            // 5. 获取成型在机信息（需要在获取物料信息之前，以便补充物料来源）
+            try {
+                loadOnlineInfos(context, scheduleStartDate);
+                log.info("成型在机信息加载完成");
+            } catch (Exception e) {
+                log.warn("加载成型在机信息失败，继续执行：{}", e.getMessage());
+            }
+
+            // 6. 根据硫化排程结果和成型在机信息获取物料信息
             try {
                 loadMaterials(context);
                 log.info("物料信息加载完成");
@@ -308,20 +316,12 @@ public class ScheduleServiceImpl implements ScheduleService {
                 log.warn("加载物料信息失败，继续执行：{}", e.getMessage());
             }
 
-            // 6. 获取胎胚库存信息（根据排产起始日期获取早上6点的库存）
+            // 7. 获取胎胚库存信息（根据排产起始日期获取早上6点的库存）
             try {
                 loadStocks(context, scheduleStartDate);
                 log.info("胎胚库存信息加载完成");
             } catch (Exception e) {
                 log.warn("加载胎胚库存信息失败，继续执行：{}", e.getMessage());
-            }
-
-            // 7. 获取成型在机信息
-            try {
-                loadOnlineInfos(context, scheduleStartDate);
-                log.info("成型在机信息加载完成");
-            } catch (Exception e) {
-                log.warn("加载成型在机信息失败，继续执行：{}", e.getMessage());
             }
 
             // 8. 构建机台在机胎胚映射（后续会根据成型余量过滤）
