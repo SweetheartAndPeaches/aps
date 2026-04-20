@@ -946,6 +946,12 @@ public class ScheduleServiceImpl implements ScheduleService {
             return;
         }
 
+        // 统计有多少主表记录关联了明细
+        long resultsWithDetails = results.stream().filter(r -> r.getDetails() != null && !r.getDetails().isEmpty()).count();
+        log.info("保存排程结果：主表 {} 条，其中有关联明细的 {} 条，总明细 {} 条",
+                results.size(), resultsWithDetails,
+                results.stream().filter(r -> r.getDetails() != null).mapToInt(r -> r.getDetails().size()).sum());
+
         for (CxScheduleResult result : results) {
             result.setCreateTime(new Date());
             scheduleResultMapper.insert(result);
@@ -955,6 +961,7 @@ public class ScheduleServiceImpl implements ScheduleService {
             if (details != null && !details.isEmpty()) {
                 for (CxScheduleDetail detail : details) {
                     detail.setMainId(result.getId());
+                    detail.setScheduleDate(result.getScheduleDate() != null ? result.getScheduleDate().toInstant().atZone(ZoneId.systemDefault()).toLocalDate() : null);
                     detail.setCreateTime(new Date());
                 }
                 scheduleDetailService.batchSave(details);
