@@ -157,6 +157,28 @@ public class BalancingService {
                     task.getEmbryoCode(), task.getMaterialCode(),
                     task.getVulcanizeMachineCount(), task.getStructureName());
         }
+        
+        // 统计同胎胚不同物料的分布情况（关键诊断日志）
+        Map<String, Map<String, Integer>> embryoMaterialStats = new java.util.LinkedHashMap<>();
+        for (CoreScheduleAlgorithmService.DailyEmbryoTask task : tasks) {
+            String embryoCode = task.getEmbryoCode();
+            String materialCode = task.getMaterialCode() != null ? task.getMaterialCode() : "未知";
+            int count = task.getVulcanizeMachineCount() != null ? task.getVulcanizeMachineCount() : 0;
+            embryoMaterialStats.computeIfAbsent(embryoCode, k -> new java.util.HashMap<>())
+                    .merge(materialCode, count, Integer::sum);
+        }
+        
+        log.info("====== 胎胚物料分布统计 ======");
+        for (Map.Entry<String, Map<String, Integer>> entry : embryoMaterialStats.entrySet()) {
+            String embryoCode = entry.getKey();
+            Map<String, Integer> materialCounts = entry.getValue();
+            List<String> details = materialCounts.entrySet().stream()
+                    .map(e -> e.getKey() + "(" + e.getValue() + "台)")
+                    .collect(java.util.stream.Collectors.toList());
+            int totalCount = materialCounts.values().stream().mapToInt(Integer::intValue).sum();
+            log.info("  【胎胚 {}】共{}台，物料分布：{}", embryoCode, totalCount, details);
+        }
+        log.info("================================");
 
         // 转换为配置格式
         List<MpCxCapacityConfiguration> configs = availableMachines.stream()
@@ -374,6 +396,38 @@ public class BalancingService {
             ScheduleContextVo context,
             Map<String, Integer> continueLoadMap,
             Map<String, Set<String>> continueTypeMap) {
+
+        log.info("====== 均衡分配(含续作预扣)开始 ======");
+        log.info("任务数={}, 可用机台数={}", tasks.size(), availableMachines.size());
+        
+        // 打印每个胎胚任务详情（关键诊断）
+        for (CoreScheduleAlgorithmService.DailyEmbryoTask task : tasks) {
+            log.info("  胎胚任务: embryoCode={}, materialCode={}, vulcanizeMachineCount={}",
+                    task.getEmbryoCode(), task.getMaterialCode(),
+                    task.getVulcanizeMachineCount());
+        }
+        
+        // 统计同胎胚不同物料的分布情况（关键诊断日志）
+        Map<String, Map<String, Integer>> embryoMaterialStats = new java.util.LinkedHashMap<>();
+        for (CoreScheduleAlgorithmService.DailyEmbryoTask task : tasks) {
+            String embryoCode = task.getEmbryoCode();
+            String materialCode = task.getMaterialCode() != null ? task.getMaterialCode() : "未知";
+            int count = task.getVulcanizeMachineCount() != null ? task.getVulcanizeMachineCount() : 0;
+            embryoMaterialStats.computeIfAbsent(embryoCode, k -> new java.util.HashMap<>())
+                    .merge(materialCode, count, Integer::sum);
+        }
+        
+        log.info("====== 胎胚物料分布统计 ======");
+        for (Map.Entry<String, Map<String, Integer>> entry : embryoMaterialStats.entrySet()) {
+            String embryoCode = entry.getKey();
+            Map<String, Integer> materialCounts = entry.getValue();
+            List<String> details = materialCounts.entrySet().stream()
+                    .map(e -> e.getKey() + "(" + e.getValue() + "台)")
+                    .collect(java.util.stream.Collectors.toList());
+            int totalCount = materialCounts.values().stream().mapToInt(Integer::intValue).sum();
+            log.info("  【胎胚 {}】共{}台，物料分布：{}", embryoCode, totalCount, details);
+        }
+        log.info("================================");
 
         // Step 1: 获取均衡阈值配置
         int typeDiffThreshold = getTypeDiffThreshold(context);

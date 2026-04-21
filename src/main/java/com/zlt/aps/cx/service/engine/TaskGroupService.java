@@ -566,12 +566,30 @@ public class TaskGroupService {
                 embryoCode, vulcanizeDemand, currentStock);
 
         // 获取物料信息
+        // 重要：优先使用 lhResult 中的 materialCode，因为同一个 embryoCode 可能对应多个不同的物料
+        String materialCodeFromLh = lhResult.getMaterialCode();
         MdmMaterialInfo material = materialMap.get(embryoCode);
-        if (material == null) {
-            log.debug("buildSingleTask：物料信息为空，embryoCode={}", embryoCode);
+        
+        // 如果 lhResult 中有 materialCode，优先使用；否则从 materialMap 中获取
+        String finalMaterialCode = materialCodeFromLh;
+        String materialDesc = null;
+        String mainMaterialDesc = null;
+        String structureNameFromMaterial = null;
+        
+        if (finalMaterialCode == null && material != null) {
+            // lhResult 中没有 materialCode，从 materialMap 中获取
+            finalMaterialCode = material.getMaterialCode();
+            materialDesc = material.getMaterialDesc();
+            mainMaterialDesc = material.getEmbryoDesc();
+            structureNameFromMaterial = material.getStructureName();
+        } else if (material != null) {
+            // lhResult 中有 materialCode，但保留 material 的其他信息（如描述）
+            materialDesc = material.getMaterialDesc();
+            mainMaterialDesc = material.getEmbryoDesc();
+            structureNameFromMaterial = material.getStructureName();
         }
-
-        String structureName = material != null ? material.getStructureName() : lhResult.getStructureName();
+        
+        String structureName = structureNameFromMaterial != null ? structureNameFromMaterial : lhResult.getStructureName();
 
         // 构建任务
         CoreScheduleAlgorithmService.DailyEmbryoTask task = new CoreScheduleAlgorithmService.DailyEmbryoTask();
@@ -580,17 +598,21 @@ public class TaskGroupService {
         task.setVulcanizeDemand(vulcanizeDemand);
         task.setCurrentStock(currentStock);
         task.setProductionVersion(lhResult.getProductionVersion());
-
-        if (material != null) {
-            task.setMaterialDesc(material.getMaterialDesc());
-            task.setMainMaterialDesc(material.getEmbryoDesc());
-            task.setStructureName(material.getStructureName());
-            task.setMaterialCode(material.getMaterialCode());
+        task.setMaterialCode(finalMaterialCode);  // 直接使用 lhResult 或 materialMap 中的 materialCode
+        
+        if (materialDesc != null) {
+            task.setMaterialDesc(materialDesc);
         } else {
-            task.setMaterialDesc(embryoCode);
-            task.setMainMaterialDesc(embryoCode);
-            task.setStructureName(structureName);
+            task.setMaterialDesc(finalMaterialCode != null ? finalMaterialCode : embryoCode);
         }
+        
+        if (mainMaterialDesc != null) {
+            task.setMainMaterialDesc(mainMaterialDesc);
+        } else {
+            task.setMainMaterialDesc(embryoCode);
+        }
+        
+        task.setStructureName(structureName);
 
         task.setDemandQuantity(vulcanizeDemand);
         task.setAssignedQuantity(0);

@@ -217,6 +217,9 @@ public class NewTaskProcessor {
                 result.setTaskAllocations(new ArrayList<>());
 
                 int usedCapacity = 0;
+                
+                // 关键修复：不能简单遍历 embryoAssignments，因为同一个 embryoCode 可能对应多个不同的 task（不同物料）
+                // 需要保留每个独立的 EmbryoAssignment，而不是按 embryoCode 合并
                 for (BalancingService.EmbryoAssignment embryoAssignment
                         : assignment.getEmbryoAssignments()) {
                     CoreScheduleAlgorithmService.DailyEmbryoTask task =
@@ -232,6 +235,7 @@ public class NewTaskProcessor {
 
                     CoreScheduleAlgorithmService.TaskAllocation taskAlloc =
                             new CoreScheduleAlgorithmService.TaskAllocation();
+                    // 重要：直接使用当前 embryoAssignment 对应的 task 对象，确保物料信息正确
                     taskAlloc.setEmbryoCode(task.getEmbryoCode());
                     taskAlloc.setMaterialCode(task.getMaterialCode());
                     taskAlloc.setMaterialDesc(task.getMaterialDesc());
@@ -278,15 +282,13 @@ public class NewTaskProcessor {
                 }
                 log.info("均衡后机台分配结果：");
                 for (CoreScheduleAlgorithmService.MachineAllocationResult mr : allResults) {
-                    Map<String, Integer> embryoQtyMap = new java.util.LinkedHashMap<>();
+                    // 改进日志：显示每个任务的物料信息，避免误导
+                    List<String> taskDetails = new ArrayList<>();
                     for (CoreScheduleAlgorithmService.TaskAllocation ta : mr.getTaskAllocations()) {
-                        int lhCount = ta.getVulcanizeMachineCount() > 0 ? ta.getVulcanizeMachineCount() : 1;
-                        embryoQtyMap.merge(ta.getEmbryoCode(), lhCount, Integer::sum);
+                        String detail = ta.getEmbryoCode() + "[" + ta.getMaterialCode() + "]" + "(" + ta.getVulcanizeMachineCount() + ")";
+                        taskDetails.add(detail);
                     }
-                    List<String> embryos = embryoQtyMap.entrySet().stream()
-                            .map(e -> e.getKey() + "(" + e.getValue() + ")")
-                            .collect(java.util.stream.Collectors.toList());
-                    log.info("  机台 {}: {}", mr.getMachineCode(), embryos);
+                    log.info("  机台 {}: {}", mr.getMachineCode(), taskDetails);
                 }
             }
         }
