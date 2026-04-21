@@ -289,6 +289,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
         for (MachineAllocationResult allocation : allAllocations) {
             String machineCode = allocation.getMachineCode();
+            log.info("========== 对{}机台进行班次排量 ==========", machineCode);
             for (TaskAllocation taskAlloc : allocation.getTaskAllocations()) {
                 CoreScheduleAlgorithmService.DailyEmbryoTask task = new CoreScheduleAlgorithmService.DailyEmbryoTask();
                 task.setEmbryoCode(taskAlloc.getEmbryoCode());
