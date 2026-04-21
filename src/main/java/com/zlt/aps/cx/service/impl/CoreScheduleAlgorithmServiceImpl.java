@@ -314,16 +314,18 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 // 打印精排任务日志
                 String taskType;
                 if (Boolean.TRUE.equals(taskAlloc.getIsContinueTask())) {
-                    taskType = "续作";
+                    taskType = "续作任务";
                 } else if (Boolean.TRUE.equals(taskAlloc.getIsTrialTask())) {
-                    taskType = "试制";
+                    taskType = "试制任务";
                 } else {
-                    taskType = "新增";
+                    taskType = "新增任务";
                 }
-                log.info("  【{}】胎胚:{} | 物料:{} | 规格:{} | 数量:{}条 | 需{}车(每车{}条) | 库存可撑:{}h | 硫化机:{}台",
+                log.info("  【{}】物料编码:{} | 物料描述:{} | 胎胚:{} | 主物料:{} | 规格:{} | 数量:{}条 | 需{}车(每车{}条) | 库存可撑:{}h | 硫化机:{}台",
                         taskType,
+                        taskAlloc.getMaterialCode(),
+                        taskAlloc.getMaterialDesc(),
                         taskAlloc.getEmbryoCode(),
-                        taskAlloc.getMaterialDesc().length() > 30 ? taskAlloc.getMaterialDesc().substring(0, 30) + "..." : taskAlloc.getMaterialDesc(),
+                        taskAlloc.getMainMaterialDesc(),
                         taskAlloc.getStructureName(),
                         taskAlloc.getQuantity(),
                         cars,
