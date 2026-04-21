@@ -1458,7 +1458,9 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
         // Step 1: 减去每条硫化任务的当天硫化消耗
         for (LhScheduleResult lhResult : lhResults) {
-            if (lhResult.getId() == null) continue;
+            if (lhResult.getId() == null) {
+                continue;
+            }
             String taskKey = String.valueOf(lhResult.getId());
             Integer consumption = vulcanizingConsumptionByLhId.get(lhResult.getId());
             if (consumption != null && consumption > 0) {
@@ -1482,7 +1484,9 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         for (Map.Entry<String, Integer> entry : formingOutputMap.entrySet()) {
             String embryoCode = entry.getKey();
             int formingOutput = entry.getValue();
-            if (formingOutput <= 0) continue;
+            if (formingOutput <= 0) {
+                continue;
+            }
 
             List<LhScheduleResult> relatedTasks = embryoToLhMap.get(embryoCode);
             if (relatedTasks == null || relatedTasks.isEmpty()) {

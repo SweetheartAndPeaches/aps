@@ -65,7 +65,7 @@ public class NewTaskProcessor {
                 CollectionUtils.isEmpty(newTasks) ? 0 : newTasks.size(),
                 CollectionUtils.isEmpty(continueTasks) ? 0 : continueTasks.size());
 
-        // Step 1: 按结构分组新增任务（续作剩余任务在 Step 3.5 中单独处理）
+        // Step 1: 按结构分组新增任务
         Map<String, List<CoreScheduleAlgorithmService.DailyEmbryoTask>> structureTaskMap = new LinkedHashMap<>();
         if (!CollectionUtils.isEmpty(newTasks)) {
             for (CoreScheduleAlgorithmService.DailyEmbryoTask task : newTasks) {
@@ -75,8 +75,33 @@ public class NewTaskProcessor {
 
         // 注意：不要在这里添加续作任务！续作剩余 demand > 0 的任务在 Step 3.5 中处理
 
-        if (structureTaskMap.isEmpty()) {
+        // 如果没有新增任务和续作剩余需求，跳过均衡
+        boolean hasContinueTasks = false;
+        if (!CollectionUtils.isEmpty(continueTasks)) {
+            for (CoreScheduleAlgorithmService.DailyEmbryoTask task : continueTasks) {
+                int demand = task.getVulcanizeMachineCount() != null ? task.getVulcanizeMachineCount() : 0;
+                if (demand > 0) {
+                    hasContinueTasks = true;
+                    break;
+                }
+            }
+        }
+
+        if (structureTaskMap.isEmpty() && !hasContinueTasks) {
             log.info("无新增和续作剩余任务，跳过均衡");
+            log.info("原因分析: 新增任务={}, 续作任务总数={}", 
+                    newTasks == null ? 0 : newTasks.size(),
+                    continueTasks == null ? 0 : continueTasks.size());
+            if (!CollectionUtils.isEmpty(continueTasks)) {
+                int zeroDemandCount = 0;
+                for (CoreScheduleAlgorithmService.DailyEmbryoTask task : continueTasks) {
+                    int demand = task.getVulcanizeMachineCount() != null ? task.getVulcanizeMachineCount() : 0;
+                    if (demand <= 0) {
+                        zeroDemandCount++;
+                    }
+                }
+                log.info("续作任务中需求为0的任务数: {}/{}", zeroDemandCount, continueTasks.size());
+            }
             return allResults;
         }
 
@@ -85,15 +110,42 @@ public class NewTaskProcessor {
         boolean forceKeepHistoryForBalancing = false;
 
         // Step 3: 按结构处理
-        for (Map.Entry<String, List<CoreScheduleAlgorithmService.DailyEmbryoTask>> entry : structureTaskMap.entrySet()) {
-            String structureName = entry.getKey();
-            List<CoreScheduleAlgorithmService.DailyEmbryoTask> newTasksForStructure = entry.getValue();
+        // 如果没有新增任务但有续作任务，需要从续作任务中提取结构列表
+        Set<String> structureNames = new LinkedHashSet<>(structureTaskMap.keySet());
+        if (structureNames.isEmpty() && !CollectionUtils.isEmpty(continueTasks)) {
+            for (CoreScheduleAlgorithmService.DailyEmbryoTask task : continueTasks) {
+                int demand = task.getVulcanizeMachineCount() != null ? task.getVulcanizeMachineCount() : 0;
+                if (demand > 0 && task.getStructureName() != null) {
+                    structureNames.add(task.getStructureName());
+                }
+            }
+        }
+
+        for (String structureName : structureNames) {
+            List<CoreScheduleAlgorithmService.DailyEmbryoTask> newTasksForStructure = 
+                    structureTaskMap.getOrDefault(structureName, new ArrayList<>());
 
             log.info("--- 处理结构 {}，共 {} 个新增任务 ---", structureName, newTasksForStructure.size());
 
             // Step 3.1: 获取该结构可安排的机台（按 PRODUCTION_VERSION 过滤）
             // 同一结构下所有任务的 productionVersion 应一致，取第一个
-            String productionVersion = newTasksForStructure.get(0).getProductionVersion();
+            String productionVersion = null;
+            if (!newTasksForStructure.isEmpty()) {
+                productionVersion = newTasksForStructure.get(0).getProductionVersion();
+            } else if (!CollectionUtils.isEmpty(continueTasks)) {
+                // 如果没有新增任务，从续作任务中获取 productionVersion
+                for (CoreScheduleAlgorithmService.DailyEmbryoTask task : continueTasks) {
+                    if (structureName.equals(task.getStructureName()) && task.getProductionVersion() != null) {
+                        productionVersion = task.getProductionVersion();
+                        break;
+                    }
+                }
+            }
+            
+            if (productionVersion == null) {
+                log.warn("结构 {} 无法获取 productionVersion，跳过", structureName);
+                continue;
+            }
             List<MpCxCapacityConfiguration> availableMachines =
                     getAvailableMachinesForStructure(structureName, scheduleDate, context, productionVersion);
             if (availableMachines.isEmpty()) {
@@ -163,9 +215,13 @@ public class NewTaskProcessor {
                 for (CoreScheduleAlgorithmService.DailyEmbryoTask task : continueTasks) {
                     if (structureName.equals(task.getStructureName())) {
                         int demand = task.getVulcanizeMachineCount() != null ? task.getVulcanizeMachineCount() : 0;
+                        log.debug("续作任务检查: 胎胚={}, 结构={}, vulcanizeMachineCount={}",
+                                task.getEmbryoCode(), task.getStructureName(), demand);
                         if (demand > 0) {
                             allTasksForStructure.add(task);
                             continueRemaining++;
+                        } else {
+                            log.debug("续作任务 {} 需求为0，跳过均衡", task.getEmbryoCode());
                         }
                     }
                 }

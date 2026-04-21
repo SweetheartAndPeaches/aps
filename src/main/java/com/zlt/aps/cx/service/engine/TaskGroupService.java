@@ -196,6 +196,14 @@ public class TaskGroupService {
                 }
             }
 
+            // 判断成型余量，如果成型余量 < 0，说明已经超产，跳过该任务
+            Integer formingRemainder = getFormingRemainder(lhResult.getEmbryoCode(), context);
+            if (formingRemainder != null && formingRemainder < 0) {
+                log.debug("胎胚 {} 成型余量={} < 0，已超产，跳过该任务", lhResult.getEmbryoCode(), formingRemainder);
+                skippedNullTask++;
+                continue;
+            }
+
             CoreScheduleAlgorithmService.DailyEmbryoTask task = buildSingleTask(
                     lhResult, materialMap, stockMap, context, dayShifts);
             if (task == null) {
@@ -204,7 +212,7 @@ public class TaskGroupService {
             }
 
             String materialCode = lhResult.getMaterialCode();
-              String embryoCode = lhResult.getEmbryoCode();
+            String embryoCode = lhResult.getEmbryoCode();
 
             // 判断任务类型
             List<String> continueMachineCodes = findContinueMachines(materialCode, embryoCode, machineOnlineEmbryoMap);
@@ -414,6 +422,52 @@ public class TaskGroupService {
     }
 
     // ==================== 私有方法 ====================
+
+    /**
+     * 获取成型余量
+     *
+     * <p>从 context 的 formingRemainderMap 中获取，如果没有则根据硫化余量和库存计算。
+     *
+     * @param embryoCode 胎胚编码
+     * @param context    排程上下文
+     * @return 成型余量，无法计算时返回 null
+     */
+    private Integer getFormingRemainder(String embryoCode, ScheduleContextVo context) {
+        if (embryoCode == null) {
+            return null;
+        }
+
+        // 优先从预计算的映射中获取
+        Map<String, Integer> formingRemainderMap = context.getFormingRemainderMap();
+        if (formingRemainderMap != null && formingRemainderMap.containsKey(embryoCode)) {
+            return formingRemainderMap.get(embryoCode);
+        }
+
+        // 兜底：根据硫化余量和库存计算
+        Integer vulcanizeSurplusQty = null;
+        if (context.getMonthSurplusMap() != null) {
+            MdmMonthSurplus monthSurplus = context.getMonthSurplusMap().get(embryoCode);
+            if (monthSurplus != null && monthSurplus.getPlanSurplusQty() != null) {
+                vulcanizeSurplusQty = monthSurplus.getPlanSurplusQty().intValue();
+            }
+        }
+
+        if (vulcanizeSurplusQty != null) {
+            // 成型余量 = 硫化余量 - 胎胚库存
+            int currentStock = 0;
+            if (context.getStocks() != null) {
+                for (CxStock stock : context.getStocks()) {
+                    if (embryoCode.equals(stock.getEmbryoCode())) {
+                        currentStock = stock.getStockNum() != null ? stock.getStockNum() : 0;
+                        break;
+                    }
+                }
+            }
+            return vulcanizeSurplusQty - currentStock;
+        }
+
+        return null;
+    }
 
     /**
      * 构建物料映射（双索引：materialCode + embryoCode）

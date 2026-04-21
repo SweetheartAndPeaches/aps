@@ -102,7 +102,7 @@ public class ContinueTaskProcessor {
         Map<String, Set<String>> machineHistoryMap = buildMachineHistoryMap(context);
         log.info("构建历史任务映射完成，共 {} 台机台有历史记录", machineHistoryMap.size());
 
-        // 保底预留：每个机台的每个历史胎胚至少预留1个在原机台
+        // 保底预留：每个机台的每个历史胎胚至少预留1个硫化机在原机台
         // 使用 Map<机台编码, MachineAllocationResult> 收集预留结果
         Map<String, CoreScheduleAlgorithmService.MachineAllocationResult> allocationMap = new LinkedHashMap<>();
 
@@ -147,9 +147,13 @@ public class ContinueTaskProcessor {
 
                 int demand = matchedTask.getVulcanizeMachineCount() != null ? matchedTask.getVulcanizeMachineCount() : 0;
 
-                // 保底预留1个硫化机
+                // 保底预留1个硫化机，但不扣减原任务的需求
+                // 原任务的需求保持不变，交给 NewTaskProcessor 统一均衡
                 int reservedCount = 1;
-                matchedTask.setVulcanizeMachineCount(demand - reservedCount);
+                // 注释掉扣减逻辑，保留原始需求
+                // matchedTask.setVulcanizeMachineCount(demand - reservedCount);
+                log.debug("机台 {} 保底预留胎胚 {} 1台，原需求={}保持不变，交由DFS均衡",
+                        machineCode, embryoCode, demand);
 
                 // 构建分配结果
                 CoreScheduleAlgorithmService.MachineAllocationResult allocation =
