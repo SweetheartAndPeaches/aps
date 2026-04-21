@@ -316,7 +316,10 @@ public class NewTaskProcessor {
     /**
      * 获取指定结构在当前日期可安排的机台配置（按 PRODUCTION_VERSION 过滤）
      *
-     * <p>beginDay/endDay 是月内天数(1-31)，用 scheduleDate.getDayOfMonth() 过滤
+     * <p>过滤条件：
+     * 1. 日期范围 (beginDay/endDay 是月内天数 1-31)
+     * 2. 生产版本匹配
+     * 3. 机台必须在 availableMachines 中存在且可用
      */
     private List<MpCxCapacityConfiguration> getAvailableMachinesForStructure(
             String structureName, LocalDate scheduleDate, ScheduleContextVo context,
@@ -326,11 +329,22 @@ public class NewTaskProcessor {
                     context.getStructureAllocationMap().get(structureName);
             if (configs != null && !configs.isEmpty()) {
                 int dayOfMonth = scheduleDate.getDayOfMonth();
+                
+                // 获取可用成型机编码集合
+                Set<String> availableMachineCodes = new HashSet<>();
+                if (context.getAvailableMachines() != null) {
+                    for (MdmMoldingMachine machine : context.getAvailableMachines()) {
+                        availableMachineCodes.add(machine.getCxMachineCode());
+                    }
+                }
+                
                 return configs.stream()
                         .filter(c -> c.getBeginDay() != null && c.getEndDay() != null)
                         .filter(c -> c.getBeginDay() <= dayOfMonth && c.getEndDay() >= dayOfMonth)
                         .filter(c -> productionVersion == null
                                 || productionVersion.equals(c.getProductionVersion()))
+                        // 过滤：只保留存在于 availableMachines 中的机台
+                        .filter(c -> availableMachineCodes.contains(c.getCxMachineCode()))
                         .collect(Collectors.toList());
             }
         }
