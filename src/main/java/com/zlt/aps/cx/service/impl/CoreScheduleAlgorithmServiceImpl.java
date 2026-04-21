@@ -130,6 +130,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
         // 按班次逐个执行排程
         int shiftIndex = 0;
+        int totalShifts = sortedShiftConfigs.size();
         for (CxShiftConfig shiftConfig : sortedShiftConfigs) {
             int day = shiftConfig.getScheduleDay();
             LocalDate currentScheduleDate = context.getScheduleDate()
@@ -149,8 +150,10 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             }
 
             shiftIndex++;
-            log.info("===== 执行第 {} 个班次排程，天={}, 日期={}, 班次={}, classField={} =====",
-                    shiftIndex, day, currentScheduleDate, shiftConfig.getShiftCode(), shiftConfig.getClassField());
+            // 获取历史胎胚数量用于日志
+            int historyCount = machineOnlineEmbryoMap != null ? machineOnlineEmbryoMap.values().stream().mapToInt(Collection::size).sum() : 0;
+            log.info("【班次开始】#{}/{} | 日期:{} | 班次:{} | 历史胎胚数量:{}",
+                    shiftIndex, totalShifts, currentScheduleDate, shiftConfig.getShiftCode(), historyCount);
 
             // 设置当前班次的上下文
             List<CxShiftConfig> singleShiftList = Collections.singletonList(shiftConfig);
@@ -303,25 +306,37 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 task.setPriority(taskAlloc.getPriority());
                 task.setLhId(taskAlloc.getLhId());
 
+                // 计算需要的车数
                 int tripCapacity = productionCalculator.getTripCapacity(taskAlloc.getStructureName(), context);
                 int cars = tripCapacity > 0 ? (int) Math.ceil((double) taskAlloc.getQuantity() / tripCapacity) : 0;
                 task.setRequiredCars(cars);
 
-                log.info("班次精排: embryoCode={}, materialDesc={}, structureName={}, " +
-                                "quantity(均衡分配量)={}, tripCapacity(每车条数)={}, cars(车数)={}, " +
-                                "endingExtraInventory(待排产量)={}, vulcanizeMachineCount(硫化机台数)={}, " +
-                                "isContinueTask={}, isTrialTask={}",
-                        taskAlloc.getEmbryoCode(), taskAlloc.getMaterialDesc(), taskAlloc.getStructureName(),
-                        taskAlloc.getQuantity(), tripCapacity, cars, task.getEndingExtraInventory(),
-                        task.getVulcanizeMachineCount(),
-                        task.getIsContinueTask(), task.getIsTrialTask());
+                // 打印精排任务日志
+                String taskType;
+                if (Boolean.TRUE.equals(taskAlloc.getIsContinueTask())) {
+                    taskType = "续作";
+                } else if (Boolean.TRUE.equals(taskAlloc.getIsTrialTask())) {
+                    taskType = "试制";
+                } else {
+                    taskType = "新增";
+                }
+                log.info("  【{}】胎胚:{} | 物料:{} | 规格:{} | 数量:{}条 | 需{}车(每车{}条) | 库存可撑:{}h | 硫化机:{}台",
+                        taskType,
+                        taskAlloc.getEmbryoCode(),
+                        taskAlloc.getMaterialDesc().length() > 30 ? taskAlloc.getMaterialDesc().substring(0, 30) + "..." : taskAlloc.getMaterialDesc(),
+                        taskAlloc.getStructureName(),
+                        taskAlloc.getQuantity(),
+                        cars,
+                        tripCapacity,
+                        String.format("%.1f", taskAlloc.getStockHours()),
+                        task.getVulcanizeMachineCount() != null ? task.getVulcanizeMachineCount() : 0);
 
                 List<ShiftScheduleService.ShiftProductionResult> taskShiftResults =
                         shiftScheduleService.scheduleTaskToShifts(task, machineCode, context, singleShiftList, scheduleDateForShift);
                 shiftProductionResults.addAll(taskShiftResults);
             }
         }
-        log.info("班次排产完成，共 {} 条班次排产记录", shiftProductionResults.size());
+        log.info("【班次完成】共分配 {} 条排产记录", shiftProductionResults.size());
 
         // 注意：按班次排程时不需要跨班次均衡（balanceShiftQuantities），
         // 因为每个班次独立 DFS 均衡，量已经按单班次需求分配

@@ -164,7 +164,7 @@ public class TaskGroupService {
             log.warn("硫化排程结果为空，无法分组任务");
             return result;
         }
-        log.info("任务分组开始：共 {} 条硫化记录", lhScheduleResults.size());
+        log.info("【任务分组】收到 {} 条硫化记录", lhScheduleResults.size());
 
         // 构建基础映射
         Map<String, MdmMaterialInfo> materialMap = buildMaterialMap(context);
@@ -258,7 +258,7 @@ public class TaskGroupService {
             }
         }
 
-        log.info("任务分组完成：续作 {} 个，试制 {} 个，新增 {} 个，跳过无效胚胎 {} 个，跳过空任务 {} 个",
+        log.info("【任务分组结果】续作:{}个 | 试制:{}个 | 新增:{}个 | 跳过无效胚胎:{}个 | 跳过空任务:{}个",
                 result.getContinueTasks().size(),
                 result.getTrialTasks().size(),
                 result.getNewTasks().size(),

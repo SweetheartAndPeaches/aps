@@ -591,6 +591,8 @@ public class ShiftScheduleService {
         // 计算波浪分配
         int requiredCars = tripCapacity > 0 ? (totalQty + tripCapacity - 1) / tripCapacity : 1;
         int[] shiftCars = calculateWaveCars(requiredCars, dayShifts);
+        log.info("【波浪分配】胎胚={}, 待排={}条, 每车={}条, 需={}车, 各班分配={}", 
+                 task.getEmbryoCode(), totalQty, tripCapacity, requiredCars, Arrays.toString(shiftCars));
 
         // 收尾班次约束：只能在 maxShiftIndex 或之前的班次安排
         for (int i = maxShiftIndex + 1; i < shiftCars.length; i++) {
@@ -717,8 +719,8 @@ public class ShiftScheduleService {
                 continue;
             }
 
-            log.info("scheduleNormalTask: 添加结果 embryoCode={}, shift={}, batchQty(本班产量)={}, carsForShift(本班车数)={}",
-                    task.getEmbryoCode(), shiftConfig.getShiftCode(), batchQty, carsForShift);
+            log.info("【硫化排产完成】胎胚={}, 班次={}, 产量={}条, 车数={}", 
+                     task.getEmbryoCode(), shiftConfig.getShiftCode(), batchQty, carsForShift);
             ShiftProductionResult result = buildResult(machineCode, shiftConfig, task, batchQty,
                     tripCapacity, carsForShift, startTime, endTime, false, false, task.getIsContinueTask());
 

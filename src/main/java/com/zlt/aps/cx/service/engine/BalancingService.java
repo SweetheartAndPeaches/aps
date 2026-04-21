@@ -494,11 +494,11 @@ public class BalancingService {
                 for (String embryoCode : preTypes) {
                     state.getAssignedEmbryos().add(new EmbryoAssignment(embryoCode, null, 1));
                 }
-                log.info("  初始化机台 {}: maxCapacity={}, maxTypes={}, 续作预扣容量={}, 续作预扣种类={}, 历史胎胚={}",
+                log.info("  【初始化机台】{}: 剩余容量={}台, 剩余种类={}种, 历史胎胚={}",
                         config.getCxMachineCode(), state.getMaxCapacity(), state.getMaxTypes(),
                         preLoad, preTypes, state.getHistoryEmbryos());
             } else {
-                log.info("  初始化机台 {}: maxCapacity={}, maxTypes={}, 历史胎胚={}",
+                log.info("  【初始化机台】{}: 剩余容量={}台, 剩余种类={}种, 历史胎胚={}",
                         config.getCxMachineCode(), state.getMaxCapacity(), state.getMaxTypes(), state.getHistoryEmbryos());
             }
 
@@ -1425,7 +1425,7 @@ public class BalancingService {
      */
     private void logAllocationResult(BalancingResult result, List<MachineState> machineStates,
                                      List<CoreScheduleAlgorithmService.DailyEmbryoTask> originalTasks) {
-        log.info("均衡分配结果：");
+        log.info("【均衡分配结果】");
         
         int maxLoad = 0, minLoad = Integer.MAX_VALUE;
         int maxTypes = 0, minTypes = Integer.MAX_VALUE;
@@ -1469,9 +1469,9 @@ public class BalancingService {
                     .collect(Collectors.toList());
             
             if (preLoad > 0) {
-                log.info("  机台 {}: {} (含续作预留{})", machineCode, embryos, preLoad);
+                log.info("    分配->机台{}: {} (含续作预留{})", machineCode, embryos, preLoad);
             } else {
-                log.info("  机台 {}: {}", machineCode, embryos);
+                log.info("    分配->机台{}: {}", machineCode, embryos);
             }
             
             // 从 result 中计算均衡指标
@@ -1498,7 +1498,7 @@ public class BalancingService {
                 List<String> embryos = preEmbryoMap.entrySet().stream()
                         .map(e -> e.getKey() + "(" + e.getValue() + ")")
                         .collect(Collectors.toList());
-                log.info("  机台 {}: {} (仅续作预留)", state.getMachineCode(), embryos);
+                log.info("    续作->机台{}: {} (仅续作预留)", state.getMachineCode(), embryos);
             }
         }
         
@@ -1506,7 +1506,7 @@ public class BalancingService {
         if (minLoad == Integer.MAX_VALUE) {
             log.info("均衡指标：无有效分配");
         } else {
-            log.info("均衡指标：负荷差距={}, 种类差距={}", 
+            log.info("【均衡指标】机台负荷差距={}台, 胎胚种类差距={}种", 
                     maxLoad - minLoad, maxTypes - minTypes);
         }
         
@@ -1525,7 +1525,7 @@ public class BalancingService {
                 }
             }
             if (!unassignedItems.isEmpty()) {
-                log.warn("未排上的胎胚：{}", unassignedItems);
+                log.warn("【未排上】胎胚: {}", unassignedItems);
             }
         }
     }
