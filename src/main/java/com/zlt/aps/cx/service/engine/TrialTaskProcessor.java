@@ -334,6 +334,7 @@ public class TrialTaskProcessor {
         taskAllocation.setStructureName(task.getStructureName());
         taskAllocation.setQuantity(task.getPlannedProduction());
         taskAllocation.setVulcanizeMachineCount(task.getVulcanizeMachineCount() != null ? task.getVulcanizeMachineCount() : 1);
+        taskAllocation.setEndingExtraInventory(task.getEndingExtraInventory() != null ? task.getEndingExtraInventory() : task.getPlannedProduction());
         taskAllocation.setPriority(task.getPriority());
         taskAllocation.setStockHours(task.getStockHours());
         taskAllocation.setIsTrialTask(task.getIsTrialTask());

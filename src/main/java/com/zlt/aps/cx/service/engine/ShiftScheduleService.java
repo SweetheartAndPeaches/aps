@@ -18,7 +18,6 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
@@ -683,8 +682,9 @@ public class ShiftScheduleService {
 
         int hourlyCapacity = getMachineHourlyCapacity(machineCode, task.getMaterialCode(), task.getStructureName(), context);
         int remainingCars = requiredCars;
+        int remainingQty = totalQty;
 
-        for (int i = 0; i < dayShifts.size() && remainingCars > 0; i++) {
+        for (int i = 0; i < dayShifts.size() && remainingCars > 0 && remainingQty > 0; i++) {
             CxShiftConfig shiftConfig = dayShifts.get(i);
             int carsForShift = shiftCars[i];
 
@@ -693,7 +693,7 @@ public class ShiftScheduleService {
             }
 
             carsForShift = Math.min(carsForShift, remainingCars);
-            int batchQty = carsForShift * tripCapacity;
+            int batchQty = Math.min(carsForShift * tripCapacity, remainingQty);
 
             // 计算时间
             LocalDateTime startTime = calculateStartTime(machineCode, shiftConfig, scheduleDate, context);
@@ -706,12 +706,9 @@ public class ShiftScheduleService {
                 long availableMinutes = Duration.between(startTime, shiftEndTime).toMinutes();
                 availableMinutes -= getMachinePrepareMinutes(machineCode, context);
                 int availableQty = (int) (availableMinutes * hourlyCapacity / 60);
-                // 向下整车取整
-                if (tripCapacity > 0) {
-                    availableQty = (availableQty / tripCapacity) * tripCapacity;
-                }
-                batchQty = Math.max(0, availableQty);
-                carsForShift = tripCapacity > 0 ? batchQty / tripCapacity : 0;
+                // 产能不足时按实际可生产量下，不强制整车取整
+                batchQty = Math.min(Math.max(0, availableQty), remainingQty);
+                carsForShift = tripCapacity > 0 ? (batchQty + tripCapacity - 1) / tripCapacity : (batchQty > 0 ? 1 : 0);
                 endTime = shiftEndTime;
             }
 
@@ -720,6 +717,9 @@ public class ShiftScheduleService {
                 continue;
             }
 
+            // 根据 batchQty 重新计算实际车数（不足一车算1车）
+            carsForShift = tripCapacity > 0 ? (batchQty + tripCapacity - 1) / tripCapacity : 1;
+
             log.info("【硫化排产完成】胎胚={}, 班次={}, 产量={}条, 车数={}", 
                      task.getEmbryoCode(), shiftConfig.getShiftCode(), batchQty, carsForShift);
             ShiftProductionResult result = buildResult(machineCode, shiftConfig, task, batchQty,
@@ -727,10 +727,11 @@ public class ShiftScheduleService {
 
             results.add(result);
             remainingCars -= carsForShift;
+            remainingQty -= batchQty;
         }
 
-        if (remainingCars > 0) {
-            log.warn("普通任务 {} 还有 {} 车未排产，产能不足", task.getEmbryoCode(), remainingCars);
+        if (remainingQty > 0) {
+            log.warn("普通任务 {} 还有 {} 条未排产，产能不足", task.getEmbryoCode(), remainingQty);
         }
 
         return results;
@@ -855,149 +856,11 @@ public class ShiftScheduleService {
     }
 
     /**
-     * 根据班次配置的classField获取硫化的结束时间
-     *
-     * <p>遍历当天班次配置，找到最大的 classIndex 对应的 class*EndTime。
-     * 如果没有任何有效的EndTime，返回null。
-     */
-    private LocalDateTime findVulcanizingEndTime(LhScheduleResult lhResult,
-                                                  List<CxShiftConfig> dayShifts,
-                                                  LocalDate scheduleDate) {
-        Date latestEndTime = null;
-
-        for (CxShiftConfig shiftConfig : dayShifts) {
-            String classField = shiftConfig.getClassField();
-            if (classField == null || !classField.startsWith("CLASS")) {
-                continue;
-            }
-            try {
-                int classIndex = Integer.parseInt(classField.substring(5));
-                Date endTime = getClassEndTimeByIndex(lhResult, classIndex);
-                if (endTime != null) {
-                    if (latestEndTime == null || endTime.after(latestEndTime)) {
-                        latestEndTime = endTime;
-                    }
-                }
-            } catch (NumberFormatException e) {
-                log.warn("无法解析班次字段: {}", classField);
-            }
-        }
-
-        if (latestEndTime == null) {
-            return null;
-        }
-
-        return LocalDateTime.ofInstant(latestEndTime.toInstant(), ZoneId.systemDefault());
-    }
-
-    /**
-     * 根据班次索引获取硫化记录的结束时间
-     */
-    private Date getClassEndTimeByIndex(LhScheduleResult lhResult, int classIndex) {
-        switch (classIndex) {
-            case 1: return lhResult.getClass1EndTime();
-            case 2: return lhResult.getClass2EndTime();
-            case 3: return lhResult.getClass3EndTime();
-            case 4: return lhResult.getClass4EndTime();
-            case 5: return lhResult.getClass5EndTime();
-            case 6: return lhResult.getClass6EndTime();
-            case 7: return lhResult.getClass7EndTime();
-            case 8: return lhResult.getClass8EndTime();
-            default: return null;
-        }
-    }
-
-    /**
-     * 计算成型停机时间（早于硫化停机时间，预留消化时间）
-     *
-     * <p>成型停机 = 硫化停机 - 预留消化时间
-     * 如果 context 中有 formingStopTime 直接使用，否则默认提前1小时
-     */
-    private LocalDateTime calculateFormingStopTime(LocalDateTime vulcanizingEndTime, ScheduleContextVo context) {
-        if (context.getFormingStopTime() != null) {
-            return context.getFormingStopTime();
-        }
-        int reservedHours = context.getReservedDigestHours() != null ? context.getReservedDigestHours() : 1;
-        return vulcanizingEndTime.minusHours(reservedHours);
-    }
-
-    /**
-     * 反推：从成型停机时刻到硫化结束时刻，需要多少胎胚库存
-     *
-     * <p>计算逻辑（与 TaskGroupService.calculateStockHours 对称反推）：
-     * <pre>
-     *   需要支撑的时长(秒) = Duration.between(成型停机, 硫化结束).seconds
-     *   单胎单模硫化时长(s) = 24×3600 / 日硫化量
-     *   需要库存 = 需要支撑的时长(秒) / 单胎单模硫化时长(s) × 模数
-     * </pre>
-     */
-    private int calculateRequiredStockForPeriod(
-            LhScheduleResult lhResult,
-            LocalDateTime formingStopTime,
-            LocalDateTime vulcanizingEndTime,
-            ScheduleContextVo context) {
-
-        // 需要支撑的时长（秒）
-        long requiredSeconds = Duration.between(formingStopTime, vulcanizingEndTime).getSeconds();
-        if (requiredSeconds <= 0) {
-            return 0;
-        }
-
-        // 获取日硫化量（materialLhCapacityMap 的 key 是 materialCode）
-        Integer dailyLhCapacity = null;
-        Map<String, MonthPlanProductLhCapacityVo> lhCapacityMap = context.getMaterialLhCapacityMap();
-        String materialCode = lhResult.getMaterialCode();
-        if (lhCapacityMap != null && materialCode != null) {
-            MonthPlanProductLhCapacityVo capacityVo = lhCapacityMap.get(materialCode);
-            if (capacityVo != null) {
-                dailyLhCapacity = capacityVo.getDefaultDayVulcanizationQty();
-            }
-        }
-
-        if (dailyLhCapacity == null || dailyLhCapacity <= 0) {
-            log.warn("停产反推：无法获取物料 {} 的日硫化量", materialCode);
-            return 0;
-        }
-
-        // 单胎单模硫化时长(s)
-        BigDecimal singleTireMoldSeconds = BigDecimal.valueOf(SECONDS_PER_DAY)
-                .divide(BigDecimal.valueOf(dailyLhCapacity), 2, RoundingMode.HALF_UP);
-
-        // 模数
-        int moldQty = lhResult.getMouldQty() != null ? lhResult.getMouldQty() : 1;
-
-        // 需要库存 = 需要支撑的时长 / 单胎单模硫化时长 × 模数
-        int requiredStock = BigDecimal.valueOf(requiredSeconds)
-                .divide(singleTireMoldSeconds, 0, RoundingMode.CEILING)
-                .multiply(BigDecimal.valueOf(moldQty))
-                .intValue();
-
-        log.debug("停产反推：需要支撑={}s, 日硫化量={}, 单胎时间={}s, 模数={}, 需库存={}",
-                requiredSeconds, dailyLhCapacity, singleTireMoldSeconds, moldQty, requiredStock);
-
-        return requiredStock;
-    }
-
-    /**
      * 判断是否为最后一个有产量的班次
      */
     private boolean isLastShiftWithQty(int currentIndex, int[] shiftCars) {
         for (int i = currentIndex + 1; i < shiftCars.length; i++) {
             if (shiftCars[i] > 0) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    /**
-     * 判断当前班次是否为最后一个可排班次
-     */
-    private boolean isLastProductiveShift(int currentIndex, List<CxShiftConfig> dayShifts,
-                                           int remainingQty, int hourlyCapacity) {
-        for (int i = currentIndex + 1; i < dayShifts.size(); i++) {
-            int shiftHours = calculateShiftHours(dayShifts.get(i));
-            if (shiftHours * hourlyCapacity > 0) {
                 return false;
             }
         }

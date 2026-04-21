@@ -174,9 +174,10 @@ public class ScheduleServiceImpl implements ScheduleService {
             List<CxScheduleResult> scheduleResults = coreScheduleAlgorithmService.executeSchedule(context);
 
             // 3.1 删除该排程日期范围内已有的排程结果（主表+子表），避免重复数据
-            LocalDate startDate = request.getScheduleDate();
+            // 注意：排程从 scheduleDate 前2天开始（SCHEDULE_START_OFFSET_DAYS=2），需要一并清除
+            LocalDate startDate = request.getScheduleDate().minusDays(2);
             int days = request.getDays() != null ? request.getDays() : DEFAULT_SCHEDULE_DAYS;
-            for (int d = 0; d < days; d++) {
+            for (int d = 0; d < days + 2; d++) {
                 LocalDate date = startDate.plusDays(d);
                 deleteExistingScheduleResults(date);
             }

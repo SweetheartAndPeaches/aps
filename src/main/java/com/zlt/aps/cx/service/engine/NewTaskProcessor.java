@@ -241,8 +241,9 @@ public class NewTaskProcessor {
                     taskAlloc.setMaterialDesc(task.getMaterialDesc());
                     taskAlloc.setMainMaterialDesc(task.getMainMaterialDesc());
                     taskAlloc.setStructureName(task.getStructureName());
-                    taskAlloc.setQuantity(task.getPlannedProduction() != null ? task.getPlannedProduction() : 0);
+                    taskAlloc.setQuantity(assignedQty);  // 使用均衡分配的实际数量，而非 plannedProduction
                     taskAlloc.setVulcanizeMachineCount(assignedQty);
+                    taskAlloc.setEndingExtraInventory(assignedQty);  // 均衡分配量即为实际需排产量
                     taskAlloc.setPriority(task.getPriority());
                     taskAlloc.setStockHours(task.getStockHours());
                     taskAlloc.setIsTrialTask(task.getIsTrialTask());
@@ -457,19 +458,6 @@ public class NewTaskProcessor {
         }
 
         return result;
-    }
-
-    /**
-     * 获取是否强制保留历史任务配置
-     */
-    private boolean getForceKeepHistoryConfig(ScheduleContextVo context) {
-        if (context.getParamConfigMap() != null) {
-            CxParamConfig config = context.getParamConfigMap().get("FORCE_KEEP_HISTORY_TASK");
-            if (config != null && config.getParamValue() != null) {
-                return "1".equals(config.getParamValue()) || "true".equalsIgnoreCase(config.getParamValue());
-            }
-        }
-        return false;
     }
 
     /**
