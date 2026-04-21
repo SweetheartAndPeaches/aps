@@ -180,6 +180,12 @@ public class TaskGroupService {
         // 直接遍历每条硫化记录，为每条记录创建独立的任务
         int skippedNullEmbryo = 0;
         int skippedNullTask = 0;
+        int skippedVulcanizeSurplusZero = 0;  // 硫化余量<=0跳过的任务数
+        int skippedFormingRemainderZero = 0;  // 成型余量<=0跳过的任务数
+        
+        // 跟踪每个物料已使用的成型余量（用于多任务共享同一物料的场景）
+        Map<String, Integer> materialUsedFormingRemainder = new HashMap<>();
+        
         for (LhScheduleResult lhResult : lhScheduleResults) {
             if (lhResult.getEmbryoCode() == null) {
                 skippedNullEmbryo++;
@@ -196,11 +202,25 @@ public class TaskGroupService {
                 }
             }
 
-            // 判断成型余量，如果成型余量 < 0，说明已经超产，跳过该任务
-            Integer formingRemainder = getFormingRemainder(lhResult.getEmbryoCode(), context);
-            if (formingRemainder != null && formingRemainder < 0) {
-                log.debug("胎胚 {} 成型余量={} < 0，已超产，跳过该任务", lhResult.getEmbryoCode(), formingRemainder);
-                skippedNullTask++;
+            // 检查1：硫化余量 <= 0，说明该物料已超产，不再需要生产
+            String materialCode = lhResult.getMaterialCode();
+            if (context.getMonthSurplusMap() != null && materialCode != null) {
+                MdmMonthSurplus monthSurplus = context.getMonthSurplusMap().get(materialCode);
+                if (monthSurplus != null && monthSurplus.getPlanSurplusQty() != null) {
+                    int vulcanizeSurplus = monthSurplus.getPlanSurplusQty().intValue();
+                    if (vulcanizeSurplus <= 0) {
+                        log.debug("物料 {} 硫化余量={} <= 0，已超产，跳过该任务", materialCode, vulcanizeSurplus);
+                        skippedVulcanizeSurplusZero++;
+                        continue;
+                    }
+                }
+            }
+
+            // 检查2：成型余量 <= 0，说明胎胚库存已满足硫化需求，不再需要成型生产
+            Integer formingRemainder = getFormingRemainder(materialCode, context);
+            if (formingRemainder != null && formingRemainder <= 0) {
+                log.debug("物料 {} 成型余量={} <= 0，胎胚已满足，跳过该任务", materialCode, formingRemainder);
+                skippedFormingRemainderZero++;
                 continue;
             }
 
@@ -211,7 +231,6 @@ public class TaskGroupService {
                 continue;
             }
 
-            String materialCode = lhResult.getMaterialCode();
             String embryoCode = lhResult.getEmbryoCode();
 
             // 判断任务类型
@@ -229,13 +248,21 @@ public class TaskGroupService {
             task.setContinueMachineCodes(continueMachineCodes);
             task.setIsFirstTask(!isContinueTask && !isTrialTask && !isProductionTrial);
 
-            // S5.2.4 计算收尾属性
-            calculateEndingInfo(task, context, scheduleDate);
+            // S5.2.4 计算收尾属性（传入已使用的成型余量）
+            int usedRemainder = materialUsedFormingRemainder.getOrDefault(materialCode, 0);
+            calculateEndingInfo(task, context, scheduleDate, usedRemainder);
 
             // S5.2.5 计算待排产量
             calculatePlannedProduction(task, context, scheduleDate);
             // S5.2.6 收尾余量处理
             handleEndingRemainder(task, context);
+            
+            // 更新已使用的成型余量（累加当前任务的 endingExtraInventory）
+            if (task.getEndingExtraInventory() != null && task.getEndingExtraInventory() > 0) {
+                materialUsedFormingRemainder.merge(materialCode, task.getEndingExtraInventory(), Integer::sum);
+                log.debug("物料 {} 已使用成型余量累计: {}", materialCode, materialUsedFormingRemainder.get(materialCode));
+            }
+            
             // S5.2.7 停产特殊处理
             handleOpeningClosingDay(task, context, dayShifts);
             // S5.2.8 试制任务：产量必须是双数，不补整车
@@ -258,11 +285,11 @@ public class TaskGroupService {
             }
         }
 
-        log.info("【任务分组结果】续作:{}个 | 试制:{}个 | 新增:{}个 | 跳过无效胚胎:{}个 | 跳过空任务:{}个",
+        log.info("【任务分组结果】续作:{}个 | 试制:{}个 | 新增:{}个 | 跳过无效胚胎:{}个 | 跳过空任务:{}个 | 跳过硫化余量<=0:{}个 | 跳过成型余量<=0:{}个",
                 result.getContinueTasks().size(),
                 result.getTrialTasks().size(),
                 result.getNewTasks().size(),
-                skippedNullEmbryo, skippedNullTask);
+                skippedNullEmbryo, skippedNullTask, skippedVulcanizeSurplusZero, skippedFormingRemainderZero);
         return result;
     }
 
@@ -271,21 +298,23 @@ public class TaskGroupService {
      *
      * <p>包括：成型余量、是否收尾任务、是否10天内收尾、是否3天内收尾（紧急）、收尾日
      *
-     * @param task         胎胚任务
-     * @param context      排程上下文
-     * @param scheduleDate 排程日期
+     * @param task           胎胚任务
+     * @param context        排程上下文
+     * @param scheduleDate   排程日期
+     * @param usedRemainder  该物料已使用的成型余量（前面任务已排产的数量）
      */
     public void calculateEndingInfo(
             CoreScheduleAlgorithmService.DailyEmbryoTask task,
             ScheduleContextVo context,
-            LocalDate scheduleDate) {
+            LocalDate scheduleDate,
+            int usedRemainder) {
 
         String embryoCode = task.getEmbryoCode();
         String materialCode = task.getMaterialCode();
 
         // 获取成型余量（从预计算的映射中获取）
         Map<String, Integer> formingRemainderMap = context.getFormingRemainderMap();
-        Integer formingRemainder = null;
+        Integer totalFormingRemainder = null;
         Integer vulcanizeSurplusQty = null;
 
         // 从月计划余量获取硫化余量
@@ -296,20 +325,24 @@ public class TaskGroupService {
             }
         }
 
-        // 获取成型余量
+        // 获取总成型余量
         if (formingRemainderMap != null && formingRemainderMap.containsKey(materialCode)) {
-            formingRemainder = formingRemainderMap.get(materialCode);
-        } else if (vulcanizeSurplusQty != null) {
-            // 成型余量 = 硫化余量 - 胎胚库存
-            int currentStock = task.getCurrentStock() != null ? task.getCurrentStock() : 0;
-            formingRemainder = vulcanizeSurplusQty - currentStock;
+            totalFormingRemainder = formingRemainderMap.get(materialCode);
+        }
+
+        // 计算当前任务的剩余成型余量 = 总成型余量 - 已使用成型余量
+        Integer remainingFormingRemainder = null;
+        if (totalFormingRemainder != null) {
+            remainingFormingRemainder = Math.max(0, totalFormingRemainder - usedRemainder);
+            log.debug("物料 {} 总成型余量={}, 已使用={}, 剩余={}", 
+                    materialCode, totalFormingRemainder, usedRemainder, remainingFormingRemainder);
         }
 
         task.setVulcanizeSurplusQty(vulcanizeSurplusQty);
-        task.setEndingSurplusQty(formingRemainder);
+        task.setEndingSurplusQty(remainingFormingRemainder);  // 使用剩余成型余量
 
-        // 判断是否收尾任务（成型余量 <= 0）
-        boolean isEndingTask = formingRemainder != null && formingRemainder <= 0;
+        // 判断是否收尾任务（剩余成型余量 <= 0）
+        boolean isEndingTask = remainingFormingRemainder != null && remainingFormingRemainder <= 0;
         task.setIsEndingTask(isEndingTask);
 
         // 获取收尾日（从物料收尾管理表）
@@ -335,10 +368,10 @@ public class TaskGroupService {
         }
 
         // 成型余量小于阈值也标记为紧急收尾
-        if (formingRemainder != null && formingRemainder < ENDING_URGENT_FORMING_REMAINDER && formingRemainder > 0) {
+        if (remainingFormingRemainder != null && remainingFormingRemainder < ENDING_URGENT_FORMING_REMAINDER && remainingFormingRemainder > 0) {
             task.setIsUrgentEnding(true);
-            log.info("成型余量低于阈值的收尾任务：物料={}, 成型余量={}, 阈值={}",
-                    embryoCode, formingRemainder, ENDING_URGENT_FORMING_REMAINDER);
+            log.info("成型余量低于阈值的收尾任务：物料={}, 剩余成型余量={}, 阈值={}",
+                    embryoCode, remainingFormingRemainder, ENDING_URGENT_FORMING_REMAINDER);
         }
 
         // 计算优先级
@@ -427,47 +460,24 @@ public class TaskGroupService {
     /**
      * 获取成型余量
      *
-     * <p>从 context 的 formingRemainderMap 中获取，如果没有则根据硫化余量和库存计算。
+     * <p>从 context 的 formingRemainderMap 中获取（key 是物料编码），如果没有则根据硫化余量和库存计算。
      *
-     * @param embryoCode 胎胚编码
-     * @param context    排程上下文
+     * @param materialCode 物料编码
+     * @param context      排程上下文
      * @return 成型余量，无法计算时返回 null
      */
-    private Integer getFormingRemainder(String embryoCode, ScheduleContextVo context) {
-        if (embryoCode == null) {
+    private Integer getFormingRemainder(String materialCode, ScheduleContextVo context) {
+        if (materialCode == null) {
             return null;
         }
 
-        // 优先从预计算的映射中获取
+        // 从context.getFormingRemainderMap映射中获取（key 是物料编码）
         Map<String, Integer> formingRemainderMap = context.getFormingRemainderMap();
-        if (formingRemainderMap != null && formingRemainderMap.containsKey(embryoCode)) {
-            return formingRemainderMap.get(embryoCode);
+        if (formingRemainderMap != null && formingRemainderMap.containsKey(materialCode)) {
+            return formingRemainderMap.get(materialCode);
         }
 
-        // 兜底：根据硫化余量和库存计算
-        Integer vulcanizeSurplusQty = null;
-        if (context.getMonthSurplusMap() != null) {
-            MdmMonthSurplus monthSurplus = context.getMonthSurplusMap().get(embryoCode);
-            if (monthSurplus != null && monthSurplus.getPlanSurplusQty() != null) {
-                vulcanizeSurplusQty = monthSurplus.getPlanSurplusQty().intValue();
-            }
-        }
-
-        if (vulcanizeSurplusQty != null) {
-            // 成型余量 = 硫化余量 - 胎胚库存
-            int currentStock = 0;
-            if (context.getStocks() != null) {
-                for (CxStock stock : context.getStocks()) {
-                    if (embryoCode.equals(stock.getEmbryoCode())) {
-                        currentStock = stock.getStockNum() != null ? stock.getStockNum() : 0;
-                        break;
-                    }
-                }
-            }
-            return vulcanizeSurplusQty - currentStock;
-        }
-
-        return null;
+        return 0;
     }
 
     /**
