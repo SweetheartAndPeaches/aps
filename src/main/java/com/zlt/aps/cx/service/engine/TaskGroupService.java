@@ -281,6 +281,7 @@ public class TaskGroupService {
             LocalDate scheduleDate) {
 
         String embryoCode = task.getEmbryoCode();
+        String materialCode = task.getMaterialCode();
 
         // 获取成型余量（从预计算的映射中获取）
         Map<String, Integer> formingRemainderMap = context.getFormingRemainderMap();
@@ -289,15 +290,15 @@ public class TaskGroupService {
 
         // 从月计划余量获取硫化余量
         if (context.getMonthSurplusMap() != null) {
-            MdmMonthSurplus monthSurplus = context.getMonthSurplusMap().get(embryoCode);
+            MdmMonthSurplus monthSurplus = context.getMonthSurplusMap().get(materialCode);
             if (monthSurplus != null && monthSurplus.getPlanSurplusQty() != null) {
                 vulcanizeSurplusQty = monthSurplus.getPlanSurplusQty().intValue();
             }
         }
 
         // 获取成型余量
-        if (formingRemainderMap != null && formingRemainderMap.containsKey(embryoCode)) {
-            formingRemainder = formingRemainderMap.get(embryoCode);
+        if (formingRemainderMap != null && formingRemainderMap.containsKey(materialCode)) {
+            formingRemainder = formingRemainderMap.get(materialCode);
         } else if (vulcanizeSurplusQty != null) {
             // 成型余量 = 硫化余量 - 胎胚库存
             int currentStock = task.getCurrentStock() != null ? task.getCurrentStock() : 0;

@@ -175,7 +175,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             context.setMachineOnlineEmbryoMap(new HashMap<>(machineOnlineEmbryoMap));
 
             // 更新库存和硫化余量，供下一个班次排程使用
-            updateContextForNextShift(context, shiftResult.getAllAllocations(), singleShiftList);
+            updateContextForNextShift(context, shiftResult.getAllAllocations(), singleShiftList, shiftConfig, shiftResult.getShiftProductionResults());
 
             lastDay = day;
             processedDays.add(day);
@@ -1259,16 +1259,20 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
      * 更新一个班次排程后的库存和硫化余量，供下一个班次排程使用
      * <p>逻辑与 updateContextForNextDay 一致，只是按单个班次执行
      *
-     * @param context        排程上下文
-     * @param shiftAllocations 该班次的机台分配结果
-     * @param shiftConfigs   该班次的配置
+     * @param context                排程上下文
+     * @param shiftAllocations       该班次的机台分配结果
+     * @param shiftConfigs           该班次的配置
+     * @param currentShiftConfig     当前班次配置（用于确定取哪个 CLASS 字段）
+     * @param shiftProductionResults 当前班次的成型排产结果（用于计算成型产出）
      */
     private void updateContextForNextShift(
             ScheduleContextVo context,
             List<MachineAllocationResult> shiftAllocations,
-            List<CxShiftConfig> shiftConfigs) {
+            List<CxShiftConfig> shiftConfigs,
+            CxShiftConfig currentShiftConfig,
+            List<ShiftScheduleService.ShiftProductionResult> shiftProductionResults) {
         // 直接复用 updateContextForNextDay 逻辑，它已经按班次配置计算硫化消耗
-        updateContextForNextDay(context, shiftAllocations, shiftConfigs);
+        updateContextForNextDay(context, shiftAllocations, shiftConfigs, currentShiftConfig, shiftProductionResults);
     }
 
     /**
@@ -1276,72 +1280,125 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
      *
      * <p>更新逻辑：
      * <ol>
-     *   <li>计算当天成型产出（按胎胚编码汇总排程结果的productNum）</li>
+     *   <li>计算当天成型产出（按胎胚编码汇总 ShiftProductionResult.quantity）</li>
      *   <li>计算当天硫化消耗（按胎胚编码汇总，根据当天班次CLASS字段获取硫化计划量）</li>
      *   <li>更新materialStockMap：每条硫化任务的库存 = 原库存 - 硫化消耗 + 比例分配的成型产出</li>
      *   <li>更新monthSurplusMap：硫化余量 -= 当天硫化消耗</li>
      *   <li>重算formingRemainderMap：成型余量 = 硫化余量 - 库存</li>
      * </ol>
      *
-     * @param context    排程上下文
-     * @param dayResults 当天排程结果
-     * @param dayShifts  当天班次配置
+     * @param context                排程上下文
+     * @param dayAllocations         当天排程结果
+     * @param dayShifts              当天班次配置
+     * @param currentShiftConfig     当前班次配置（用于确定取哪个 CLASS 字段）
+     * @param shiftProductionResults 当前班次的成型排产结果（用于计算成型产出）
      */
     private void updateContextForNextDay(
             ScheduleContextVo context,
             List<MachineAllocationResult> dayAllocations,
-            List<CxShiftConfig> dayShifts) {
+            List<CxShiftConfig> dayShifts,
+            CxShiftConfig currentShiftConfig,
+            List<ShiftScheduleService.ShiftProductionResult> shiftProductionResults) {
 
         LocalDate scheduleDate = context.getCurrentScheduleDate();
-        log.info("========== 更新第 {} 天排程后的库存和硫化余量，日期: {} ==========",
-                context.getCurrentScheduleDay(), scheduleDate);
+        int currentDay = context.getCurrentScheduleDay();
+        
+        // 提取班次名称（如 DAY_D1, NIGHT_N1 等）
+        String shiftName = "未知";
+        if (dayShifts != null && !dayShifts.isEmpty()) {
+            CxShiftConfig firstShift = dayShifts.get(0);
+            if (firstShift.getShiftCode() != null) {
+                shiftName = firstShift.getShiftCode();
+            } else if (firstShift.getShiftName() != null) {
+                shiftName = firstShift.getShiftName();
+            }
+        }
+        
+        log.info("\n========== 第 {} 天 - {} 班排程后上下文更新 (日期: {}) ==========",
+                currentDay, shiftName, scheduleDate);
 
-        // 1. 计算当天成型产出（按胎胚编码汇总）
-        Map<String, Integer> formingOutputMap = calculateFormingOutputByEmbryo(dayAllocations);
-        log.info("成型产出汇总: {}", formingOutputMap);
+        // 1. 计算当天成型产出（按胎胚编码汇总，从 ShiftProductionResult.quantity 获取）
+        Map<String, Integer> formingOutputMap = calculateFormingOutputByEmbryo(dayAllocations, context, currentShiftConfig, shiftProductionResults);
+        log.info("【步骤1】成型产出汇总（胎胚 → 产出量，来自 ShiftProductionResult）:");
+        for (Map.Entry<String, Integer> entry : formingOutputMap.entrySet()) {
+            log.info("  - {}: {} 条", entry.getKey(), entry.getValue());
+        }
 
         // 2. 计算当天硫化消耗（按胎胚编码汇总，根据当天班次CLASS字段获取计划量）
         Map<String, Integer> vulcanizingConsumptionByEmbryo = new HashMap<>();
         Map<Long, Integer> vulcanizingConsumptionByLhId = new HashMap<>();
         calculateVulcanizingConsumption(context.getLhScheduleResults(), dayShifts,
                 vulcanizingConsumptionByEmbryo, vulcanizingConsumptionByLhId);
-        log.info("硫化消耗汇总(按胎胚): {}", vulcanizingConsumptionByEmbryo);
+        log.info("【步骤2】硫化消耗汇总（胎胚 → 消耗量）:");
+        for (Map.Entry<String, Integer> entry : vulcanizingConsumptionByEmbryo.entrySet()) {
+            log.info("  - {}: {} 条", entry.getKey(), entry.getValue());
+        }
 
-        // 3. 更新 materialStockMap（按硫化任务维度更新库存分配）
-        updateMaterialStockMap(context, formingOutputMap, vulcanizingConsumptionByEmbryo, vulcanizingConsumptionByLhId);
-
-        // 4. 更新 CxStock 实体中的 stockNum（供 buildStockMap 使用）
+        // 2.5. 先更新 CxStock 实体中的 stockNum（计算新库存 = 原库存 + 成型产出 - 硫化消耗）
+        log.info("【步骤2.5】更新胎胚库存表（CxStock），计算新库存...");
         updateCxStockEntities(context, formingOutputMap, vulcanizingConsumptionByEmbryo);
 
+        // 3. 重新按日硫化量比例分配库存给硫化任务（使用更新后的库存）
+        log.info("【步骤3】按日硫化量比例重新分配库存（materialStockMap）...");
+        reallocateStockByDayVulcanizationCapacity(context, dayShifts, scheduleDate);
+
         // 5. 更新 monthSurplusMap（硫化余量 -= 当天硫化消耗）
+        log.info("【步骤4】更新硫化余量（monthSurplusMap）...");
         updateMonthSurplus(context, vulcanizingConsumptionByEmbryo);
 
         // 6. 重算 formingRemainderMap（成型余量 = 硫化余量 - 库存）
+        log.info("【步骤5】重算成型余量（formingRemainderMap）...");
         recalculateFormingRemainder(context);
 
-        log.info("========== 库存和硫化余量更新完成 ==========");
+        log.info("========== 第 {} 天 - {} 班上下文更新完成 ==========\n",
+                currentDay, shiftName);
     }
 
     /**
      * 计算当天成型产出，按胎胚编码汇总
      *
-     * @param dayAllocations 当天机台分配结果
+     * <p>成型产出 = 从 ShiftProductionResult.quantity 汇总（这是成型机台实际生产的数量）
+     *
+     * @param dayAllocations         当天机台分配结果（未使用，保留参数兼容性）
+     * @param context                排程上下文
+     * @param currentShiftConfig     当前班次配置
+     * @param shiftProductionResults 当前班次的成型排产结果
      * @return 胎胚编码 → 成型产出量
      */
-    private Map<String, Integer> calculateFormingOutputByEmbryo(List<MachineAllocationResult> dayAllocations) {
+    private Map<String, Integer> calculateFormingOutputByEmbryo(List<MachineAllocationResult> dayAllocations,
+                                                                 ScheduleContextVo context,
+                                                                 CxShiftConfig currentShiftConfig,
+                                                                 List<ShiftScheduleService.ShiftProductionResult> shiftProductionResults) {
         Map<String, Integer> outputMap = new HashMap<>();
-        if (dayAllocations == null) {
+        
+        if (shiftProductionResults == null || shiftProductionResults.isEmpty()) {
+            log.warn("【调试】shiftProductionResults 为空，无法计算成型产出");
             return outputMap;
         }
-        for (MachineAllocationResult allocation : dayAllocations) {
-            for (TaskAllocation taskAlloc : allocation.getTaskAllocations()) {
-                String embryoCode = taskAlloc.getEmbryoCode();
-                Integer qty = taskAlloc.getQuantity();
-                if (embryoCode != null && qty != null && qty > 0) {
-                    outputMap.merge(embryoCode, qty, Integer::sum);
-                }
+        
+        log.debug("【调试】计算成型产出 - 当前班次={}, shiftProductionResults 数={}",
+                currentShiftConfig != null ? currentShiftConfig.getShiftCode() : "未知",
+                shiftProductionResults.size());
+        
+        // 从 ShiftProductionResult 中汇总成型产出
+        for (ShiftScheduleService.ShiftProductionResult spr : shiftProductionResults) {
+            String embryoCode = spr.getEmbryoCode();
+            Integer qty = spr.getQuantity();
+            
+            if (embryoCode != null && qty != null && qty > 0) {
+                log.debug("  - 胎胚={}, 物料={}, quantity={}, machineCode={}",
+                        embryoCode, spr.getMaterialCode(), qty, spr.getMachineCode());
+                outputMap.merge(embryoCode, qty, Integer::sum);
             }
         }
+        
+        // 打印汇总统计
+        log.info("【调试】成型产出汇总详情（来自 ShiftProductionResult，班次={}）:",
+                currentShiftConfig != null ? currentShiftConfig.getShiftCode() : "未知");
+        for (Map.Entry<String, Integer> entry : outputMap.entrySet()) {
+            log.info("  - {}: {} 条", entry.getKey(), entry.getValue());
+        }
+        
         return outputMap;
     }
 
@@ -1447,7 +1504,219 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     }
 
     /**
-     * 更新 materialStockMap（按硫化任务维度更新库存分配）
+     * 按日硫化量比例重新分配库存给硫化任务
+     *
+     * <p>流程：
+     * <ol>
+     *   <li>使用更新后的 CxStock（新库存 = 原库存 + 成型产出 - 硫化消耗）</li>
+     *   <li>调用 ScheduleServiceImpl.allocateStockByMaterialRatio 按日硫化量比例分配</li>
+     *   <li>更新 context.materialStockMap</li>
+     * </ol>
+     *
+     * @param context        排程上下文
+     * @param dayShifts      当天班次配置
+     * @param scheduleDate   排程日期
+     */
+    private void reallocateStockByDayVulcanizationCapacity(
+            ScheduleContextVo context,
+            List<CxShiftConfig> dayShifts,
+            LocalDate scheduleDate) {
+
+        // 获取更新后的库存列表
+        List<CxStock> stocks = context.getStocks();
+        if (stocks == null || stocks.isEmpty()) {
+            log.warn("【步骤3】CxStock 为空，无法重新分配库存");
+            return;
+        }
+
+        // 获取硫化排程结果
+        List<LhScheduleResult> lhScheduleResults = context.getLhScheduleResults();
+        if (lhScheduleResults == null || lhScheduleResults.isEmpty()) {
+            log.warn("【步骤3】LhScheduleResults 为空，无法重新分配库存");
+            return;
+        }
+
+        // 获取物料日硫化产能映射
+        Map<String, MonthPlanProductLhCapacityVo> materialLhCapacityMap = context.getMaterialLhCapacityMap();
+        if (materialLhCapacityMap == null || materialLhCapacityMap.isEmpty()) {
+            log.warn("【步骤3】materialLhCapacityMap 为空，无法按日硫化量比例分配");
+            return;
+        }
+
+        // 调用 ScheduleServiceImpl 的 allocateStockByMaterialRatio 方法
+        // 注意：这里需要通过反射或者将逻辑提取到工具类中
+        // 暂时先创建一个简化版本
+        Map<String, Integer> newMaterialStockMap = allocateStockByMaterialRatioSimple(
+                stocks, lhScheduleResults, dayShifts, scheduleDate, materialLhCapacityMap);
+
+        // 更新 context
+        context.setMaterialStockMap(newMaterialStockMap);
+        log.info("【步骤3】materialStockMap 重新分配完成，共 {} 条记录", newMaterialStockMap.size());
+    }
+
+    /**
+     * 简化的按日硫化量比例分配库存方法
+     * （从 ScheduleServiceImpl.allocateStockByMaterialRatio 复制而来）
+     */
+    private Map<String, Integer> allocateStockByMaterialRatioSimple(
+            List<CxStock> stocks,
+            List<LhScheduleResult> lhScheduleResults,
+            List<CxShiftConfig> dayShifts,
+            LocalDate scheduleDate,
+            Map<String, MonthPlanProductLhCapacityVo> materialLhCapacityMap) {
+
+        Map<String, Integer> materialStockMap = new HashMap<>();
+
+        for (CxStock stock : stocks) {
+            String embryoCode = stock.getEmbryoCode();
+            if (embryoCode == null) {
+                continue;
+            }
+
+            int totalStock = stock.getStockNum() != null ? stock.getStockNum() : 0;
+            if (totalStock <= 0) {
+                continue;
+            }
+
+            // 找到该胎胚对应的所有硫化任务
+            List<LhScheduleResult> relatedTasks = new ArrayList<>();
+            for (LhScheduleResult lh : lhScheduleResults) {
+                if (embryoCode.equals(lh.getEmbryoCode())) {
+                    relatedTasks.add(lh);
+                }
+            }
+
+            if (relatedTasks.isEmpty()) {
+                log.debug("胎胚 {} 没有对应的硫化任务，跳过", embryoCode);
+                continue;
+            }
+
+            if (relatedTasks.size() == 1) {
+                // 胎胚只对应一个硫化任务，直接分配全部库存
+                LhScheduleResult task = relatedTasks.get(0);
+                String taskKey = String.valueOf(task.getId());
+                materialStockMap.merge(taskKey, totalStock, Integer::sum);
+                log.debug("胎胚 {} 只对应硫化任务 {}，分配库存 {}", embryoCode, taskKey, totalStock);
+            } else {
+                // 胎胚对应多个硫化任务，按物料的日硫化量比例分配
+                int totalDemand = 0;
+                List<TaskDemandSimple> taskDemands = new ArrayList<>();
+
+                for (LhScheduleResult lh : relatedTasks) {
+                    String materialCode = lh.getMaterialCode();
+                    int dayVulcanizationQty = 0;
+
+                    // 从 materialLhCapacityMap 获取日硫化量
+                    if (materialLhCapacityMap != null && materialCode != null) {
+                        MonthPlanProductLhCapacityVo capacityVo = materialLhCapacityMap.get(materialCode);
+                        if (capacityVo != null) {
+                            // 使用默认日硫化量（优先标准产能，其次MES产能）
+                            dayVulcanizationQty = capacityVo.getDefaultDayVulcanizationQty() != null
+                                    ? capacityVo.getDefaultDayVulcanizationQty() : 0;
+                        }
+                    }
+
+                    // 如果日硫化量为0，使用班次计划量作为后备
+                    if (dayVulcanizationQty <= 0) {
+                        ShiftPlanResultSimple shiftResult = getShiftPlanQtyWithShiftNameSimple(lh, dayShifts, scheduleDate);
+                        dayVulcanizationQty = shiftResult.planQty;
+                    }
+
+                    taskDemands.add(new TaskDemandSimple(lh.getId(), dayVulcanizationQty, materialCode));
+                    totalDemand += dayVulcanizationQty;
+                }
+
+                if (totalDemand == 0) {
+                    // 总需求为0，平均分配
+                    int avgStock = totalStock / taskDemands.size();
+                    for (TaskDemandSimple td : taskDemands) {
+                        materialStockMap.merge(td.taskKey, avgStock, Integer::sum);
+                    }
+                    log.debug("胎胚 {} 对应多个硫化任务但总日硫化量为0，平均分配库存 {}", embryoCode, avgStock);
+                } else {
+                    // 按日硫化量比例分配，最后一条用倒扣
+                    int allocatedTotal = 0;
+
+                    for (int i = 0; i < taskDemands.size(); i++) {
+                        TaskDemandSimple td = taskDemands.get(i);
+                        int currentStock;
+
+                        if (i == taskDemands.size() - 1) {
+                            // 最后一个硫化任务分配剩余库存（倒扣）
+                            currentStock = totalStock - allocatedTotal;
+                        } else {
+                            // 按日硫化量比例分配
+                            currentStock = (int) ((long) totalStock * td.demand / totalDemand);
+                        }
+
+                        materialStockMap.merge(td.taskKey, currentStock, Integer::sum);
+                        allocatedTotal += currentStock;
+
+                        log.debug("物料编码 {}，胎胚 {} 共用分配：硫化任务 {} 日硫化量 {}，分配库存 {}",
+                                td.materialCode, embryoCode, td.taskKey, td.demand, currentStock);
+                    }
+                }
+            }
+        }
+
+        return materialStockMap;
+    }
+
+    /**
+     * 硫化任务需求（内部类）
+     */
+    private static class TaskDemandSimple {
+        String taskKey;
+        int demand;
+        String materialCode;
+
+        TaskDemandSimple(Long lhId, int demand, String materialCode) {
+            this.taskKey = String.valueOf(lhId);
+            this.demand = demand;
+            this.materialCode = materialCode;
+        }
+    }
+
+    /**
+     * 班次计划量查询结果（内部类）
+     */
+    private static class ShiftPlanResultSimple {
+        int planQty;
+
+        ShiftPlanResultSimple(int planQty) {
+            this.planQty = planQty;
+        }
+    }
+
+    /**
+     * 获取硫化任务的班次计划量（简化版）
+     */
+    private ShiftPlanResultSimple getShiftPlanQtyWithShiftNameSimple(
+            LhScheduleResult lhResult, List<CxShiftConfig> dayShifts, LocalDate scheduleDate) {
+        int defaultQty = lhResult.getDailyPlanQty() != null ? lhResult.getDailyPlanQty() : 0;
+        if (dayShifts == null || dayShifts.isEmpty()) {
+            return new ShiftPlanResultSimple(defaultQty);
+        }
+
+        // 简单返回第一个班次的计划量
+        for (CxShiftConfig shiftConfig : dayShifts) {
+            String classField = shiftConfig.getClassField();
+            if (classField != null && classField.startsWith("CLASS")) {
+                try {
+                    int classIndex = Integer.parseInt(classField.substring(5));
+                    Integer planQty = getClassPlanQtyByIndex(lhResult, classIndex);
+                    if (planQty != null && planQty > 0) {
+                        return new ShiftPlanResultSimple(planQty);
+                    }
+                } catch (NumberFormatException e) {
+                    log.warn("无法解析班次字段: {}", classField);
+                }
+            }
+        }
+
+        return new ShiftPlanResultSimple(defaultQty);
+    }
+     /*
      *
      * <p>逻辑：
      * <ol>
@@ -1475,6 +1744,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         List<LhScheduleResult> lhResults = context.getLhScheduleResults();
 
         // Step 1: 减去每条硫化任务的当天硫化消耗
+        log.info("  3.1 扣减硫化消耗（按硫化任务lhId）:");
         for (LhScheduleResult lhResult : lhResults) {
             if (lhResult.getId() == null) {
                 continue;
@@ -1485,8 +1755,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 int currentStock = materialStockMap.getOrDefault(taskKey, 0);
                 int newStock = Math.max(0, currentStock - consumption);
                 materialStockMap.put(taskKey, newStock);
-                log.debug("硫化消耗扣减: lhId={}, 原库存={}, 消耗={}, 新库存={}",
-                        taskKey, currentStock, consumption, newStock);
+                log.debug("    - lhId={}, 胎胚={}, 原库存={}, 消耗={}, 新库存={}",
+                        taskKey, lhResult.getEmbryoCode(), currentStock, consumption, newStock);
             }
         }
 
@@ -1499,6 +1769,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             }
         }
 
+        log.info("  3.2 分配成型产出（按胎胚 → 硫化任务）:");
         for (Map.Entry<String, Integer> entry : formingOutputMap.entrySet()) {
             String embryoCode = entry.getKey();
             int formingOutput = entry.getValue();
@@ -1508,7 +1779,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
             List<LhScheduleResult> relatedTasks = embryoToLhMap.get(embryoCode);
             if (relatedTasks == null || relatedTasks.isEmpty()) {
-                log.warn("成型产出找不到对应硫化任务: embryoCode={}, 产出={}", embryoCode, formingOutput);
+                log.warn("    - {}: 成型产出={} 条，但未找到对应硫化任务", embryoCode, formingOutput);
                 continue;
             }
 
@@ -1523,14 +1794,18 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 // 所有任务库存为0，平均分配成型产出
                 int avgOutput = formingOutput / relatedTasks.size();
                 int remaining = formingOutput - avgOutput * relatedTasks.size();
+                log.info("    - {}: 产出={} 条，平均分配到 {} 个任务（每任务 {} 条）",
+                        embryoCode, formingOutput, relatedTasks.size(), avgOutput);
                 for (int i = 0; i < relatedTasks.size(); i++) {
                     String taskKey = String.valueOf(relatedTasks.get(i).getId());
                     int alloc = avgOutput + (i == 0 ? remaining : 0);
                     materialStockMap.merge(taskKey, alloc, Integer::sum);
+                    log.debug("      * lhId={}, 分配={}", taskKey, alloc);
                 }
-                log.debug("成型产出平均分配: embryoCode={}, 产出={}, 任务数={}", embryoCode, formingOutput, relatedTasks.size());
             } else {
                 // 按库存比例分配成型产出，最后一个任务用倒扣
+                log.info("    - {}: 产出={} 条，按库存比例分配到 {} 个任务（总库存={}）",
+                        embryoCode, formingOutput, relatedTasks.size(), totalAllocated);
                 int allocatedTotal = 0;
                 for (int i = 0; i < relatedTasks.size(); i++) {
                     String taskKey = String.valueOf(relatedTasks.get(i).getId());
@@ -1543,12 +1818,12 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                         allocatedTotal += outputShare;
                     }
                     materialStockMap.merge(taskKey, outputShare, Integer::sum);
-                    log.debug("成型产出比例分配: lhId={}, 当前库存={}, 分配产出={}", taskKey, currentAlloc, outputShare);
+                    log.debug("      * lhId={}, 当前库存={}, 分配={}", taskKey, currentAlloc, outputShare);
                 }
             }
         }
 
-        log.info("materialStockMap 更新完成，共 {} 条", materialStockMap.size());
+        log.info("  materialStockMap 更新完成，共 {} 条记录", materialStockMap.size());
     }
 
     /**
@@ -1590,7 +1865,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 int currentStockNum = stock.getStockNum() != null ? stock.getStockNum() : 0;
                 int newStockNum = Math.max(0, currentStockNum + delta);
                 stock.setStockNum(newStockNum);
-                log.info("库存更新: embryoCode={}, 原stockNum={}, delta=({}-{}={}), 新stockNum={}",
+                log.info("  - {}: 原库存={}, 成型产出={}, 硫化消耗={}, 净变化={}, 新库存={}",
                         embryoCode, currentStockNum, formingOutput, vulcanizingConsumption, delta, newStockNum);
             }
         }
@@ -1710,6 +1985,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
         // 重算成型余量
         Map<String, Integer> newFormingRemainderMap = new HashMap<>();
+        log.info("  6.1 重算成型余量（物料 → 硫化余量 - 库存 = 成型余量）:");
         for (Map.Entry<String, MdmMonthSurplus> entry : monthSurplusMap.entrySet()) {
             String materialCode = entry.getKey();
             MdmMonthSurplus surplus = entry.getValue();
@@ -1718,11 +1994,11 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             int embryoStock = stockByEmbryo.getOrDefault(materialCode, 0);
             int formingRemainder = Math.max(0, vulcanizingRemainder - embryoStock);
             newFormingRemainderMap.put(materialCode, formingRemainder);
-            log.debug("成型余量重算: materialCode={}, 硫化余量={}, 库存={}, 成型余量={}",
+            log.debug("    - {}: 硫化余量={}, 库存={}, 成型余量={}",
                     materialCode, vulcanizingRemainder, embryoStock, formingRemainder);
         }
 
         context.setFormingRemainderMap(newFormingRemainderMap);
-        log.info("formingRemainderMap 重算完成，共 {} 条", newFormingRemainderMap.size());
+        log.info("  formingRemainderMap 重算完成，共 {} 条记录", newFormingRemainderMap.size());
     }
 }
