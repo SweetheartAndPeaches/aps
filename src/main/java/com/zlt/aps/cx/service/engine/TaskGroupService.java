@@ -330,12 +330,15 @@ public class TaskGroupService {
             totalFormingRemainder = formingRemainderMap.get(materialCode);
         }
 
-        // 计算当前任务的剩余成型余量 = 总成型余量 - 已使用成型余量
+        // 获取当前任务分配的库存
+        int currentTaskStock = task.getCurrentStock() != null ? task.getCurrentStock() : 0;
+
+        // 计算当前任务的剩余成型余量 = 总成型余量 - 已使用成型余量 - 当前任务库存
         Integer remainingFormingRemainder = null;
         if (totalFormingRemainder != null) {
-            remainingFormingRemainder = Math.max(0, totalFormingRemainder - usedRemainder);
-            log.debug("物料 {} 总成型余量={}, 已使用={}, 剩余={}", 
-                    materialCode, totalFormingRemainder, usedRemainder, remainingFormingRemainder);
+            remainingFormingRemainder = Math.max(0, totalFormingRemainder - usedRemainder - currentTaskStock);
+            log.debug("物料 {} 总成型余量={}, 已使用={}, 当前任务库存={}, 剩余={}", 
+                    materialCode, totalFormingRemainder, usedRemainder, currentTaskStock, remainingFormingRemainder);
         }
 
         task.setVulcanizeSurplusQty(vulcanizeSurplusQty);
@@ -942,13 +945,16 @@ public class TaskGroupService {
             log.info("收尾任务 {} 余量{}条被舍弃（非主销+余量≤2）", task.getEmbryoCode(), endingSurplusQty);
         } else if (!Boolean.TRUE.equals(task.getIsMainProduct())) {
             // 非主销产品 + 收尾余量>2条，按实际量下（不补车）
-            // requiredCars 按实际量计算，不足一车的部分也算1车
-            int planned = task.getPlannedProduction();
-            task.setRequiredCars((planned + tripCapacity - 1) / Math.max(tripCapacity, 1));
-            task.setEndingExtraInventory(planned);
+            // endingExtraInventory 设置为实际余量（不取整），用于后续均衡分配时扣除
+            task.setEndingExtraInventory(endingSurplusQty);
+            
+            // requiredCars 按实际余量计算，不足一车的部分也算1车
+            task.setRequiredCars((endingSurplusQty + tripCapacity - 1) / Math.max(tripCapacity, 1));
+            
+            // plannedProduction 保持取整后的值（用于显示），但实际生产按 endingExtraInventory
             task.setIsLastEndingBatch(true);
-            log.info("收尾任务 {} 今天最后一批（非主销），余量={}，计划={}",
-                    task.getEmbryoCode(), endingSurplusQty, planned);
+            log.info("收尾任务 {} 今天最后一批（非主销），余量={}，计划={}，实际生产={}",
+                    task.getEmbryoCode(), endingSurplusQty, task.getPlannedProduction(), endingSurplusQty);
         } else {
             // 主销产品最后一批：不够一车则补足到一车
             if (endingExtraInventory > 0 && endingExtraInventory < tripCapacity) {

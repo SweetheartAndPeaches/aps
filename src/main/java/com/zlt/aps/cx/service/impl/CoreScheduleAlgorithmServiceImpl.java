@@ -298,10 +298,13 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 task.setMainMaterialDesc(taskAlloc.getMainMaterialDesc());
                 task.setStructureName(taskAlloc.getStructureName());
                 task.setPlannedProduction(taskAlloc.getQuantity());
-                task.setEndingExtraInventory(taskAlloc.getQuantity());
+                // 优先使用 endingExtraInventory（实际需生产量），如果没有则用 quantity
+                task.setEndingExtraInventory(taskAlloc.getEndingExtraInventory() != null 
+                        ? taskAlloc.getEndingExtraInventory() : taskAlloc.getQuantity());
                 task.setIsTrialTask(taskAlloc.getIsTrialTask());
                 task.setIsEndingTask(taskAlloc.getIsEndingTask());
                 task.setIsContinueTask(taskAlloc.getIsContinueTask());
+                task.setIsLastEndingBatch(taskAlloc.getIsLastEndingBatch());  // 设置是否收尾最后一批
                 task.setIsOpeningDayTask(context.getIsOpeningDay());
                 task.setStockHours(taskAlloc.getStockHours());
                 task.setPriority(taskAlloc.getPriority());

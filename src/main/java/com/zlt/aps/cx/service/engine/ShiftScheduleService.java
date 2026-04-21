@@ -129,13 +129,13 @@ public class ShiftScheduleService {
                         "endingExtraInventory(待排产量)={}, vulcanizeMachineCount(硫化机台数)={}, " +
                         "tripCapacity(整车容量/每车条数)={}, " +
                         "isTrial={}, isClosingDay={}, isOpeningDay={}, isEnding={}, isContinue={}, " +
-                        "stockHours(库存可供时长h)={}, isOpeningDayTask={}, dayShifts.size={}",
+                        "stockHours(库存可供时长h)={}, isOpeningDayTask={}, isLastEndingBatch={}, dayShifts.size={}",
                 task.getEmbryoCode(), task.getMaterialCode(), task.getMaterialDesc(), task.getStructureName(),
                 endingExtraInventory, task.getVulcanizeMachineCount(),
                 tripCapacity,
                 task.getIsTrialTask(), task.getIsClosingDayTask(), task.getIsOpeningDayTask(),
                 task.getIsEndingTask(), task.getIsContinueTask(),
-                task.getStockHours(), task.getIsOpeningDayTask(),
+                task.getStockHours(), task.getIsOpeningDayTask(), task.getIsLastEndingBatch(),
                 dayShifts != null ? dayShifts.size() : "null");
 
         // 判断任务类型，按优先级从高到低
@@ -143,6 +143,7 @@ public class ShiftScheduleService {
         boolean isClosingDay = Boolean.TRUE.equals(task.getIsClosingDayTask());
         boolean isOpeningDay = Boolean.TRUE.equals(task.getIsOpeningDayTask());
         boolean isEnding = Boolean.TRUE.equals(task.getIsEndingTask()) || Boolean.TRUE.equals(task.getIsUrgentEnding());
+        boolean isLastEndingBatch = Boolean.TRUE.equals(task.getIsLastEndingBatch());  // 收尾最后一批
 
         // ---- 1. 试制任务：只在早班/中班，双数，不补整车 ----
         if (isTrial) {
@@ -186,7 +187,7 @@ public class ShiftScheduleService {
         }
 
         // ---- 4. 收尾任务：只能在硫化收尾班次或之前安排，最后班次可以不是整车 ----
-        if (isEnding) {
+        if (isEnding || isLastEndingBatch) {
             return scheduleEndingTask(task, machineCode, context, dayShifts, scheduleDate, tripCapacity);
         }
 

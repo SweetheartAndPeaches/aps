@@ -226,6 +226,10 @@ public interface CoreScheduleAlgorithmService {
         private Boolean isContinueTask;
         /** 硫化任务ID（关联LhScheduleResult） */
         private Long lhId;
+        /** 收尾额外库存（实际需生产量，用于均衡分配时扣除成型余量） */
+        private Integer endingExtraInventory;
+        /** 是否收尾最后一批（不补整车） */
+        private Boolean isLastEndingBatch;
     }
 
     /**
