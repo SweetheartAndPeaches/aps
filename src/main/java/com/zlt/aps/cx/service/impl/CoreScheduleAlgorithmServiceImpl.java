@@ -1832,6 +1832,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
      * <p>有效库存 = stockNum - overTimeStock - badNum + modifyNum
      * 所以调整库存时直接修改 stockNum 即可
      *
+     * <p>如果某个胎胚在 CxStock 中没有记录但有成型产出，会补充创建新的库存记录
+     *
      * @param context                        排程上下文
      * @param formingOutputMap               胎胚编码 → 成型产出量
      * @param vulcanizingConsumptionByEmbryo 胎胚编码 → 硫化消耗量
@@ -1843,7 +1845,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
         List<CxStock> stocks = context.getStocks();
         if (stocks == null) {
-            return;
+            stocks = new ArrayList<>();
+            context.setStocks(stocks);
         }
 
         // 收集所有涉及的胎胚编码
@@ -1851,28 +1854,63 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         allEmbryoCodes.addAll(formingOutputMap.keySet());
         allEmbryoCodes.addAll(vulcanizingConsumptionByEmbryo.keySet());
 
+        // 构建现有库存映射（胎胚编码 → CxStock）
+        Map<String, CxStock> existingStockMap = new HashMap<>();
         for (CxStock stock : stocks) {
-            String embryoCode = stock.getEmbryoCode();
-            if (embryoCode == null || !allEmbryoCodes.contains(embryoCode)) {
-                continue;
+            if (stock.getEmbryoCode() != null) {
+                existingStockMap.put(stock.getEmbryoCode(), stock);
             }
+        }
 
+        // 遍历所有涉及的胎胚编码
+        for (String embryoCode : allEmbryoCodes) {
             int formingOutput = formingOutputMap.getOrDefault(embryoCode, 0);
             int vulcanizingConsumption = vulcanizingConsumptionByEmbryo.getOrDefault(embryoCode, 0);
             int delta = formingOutput - vulcanizingConsumption;
 
-            if (delta != 0) {
+            if (delta == 0) {
+                continue;
+            }
+
+            CxStock stock = existingStockMap.get(embryoCode);
+            if (stock != null) {
+                // 已有库存记录，直接更新
                 int currentStockNum = stock.getStockNum() != null ? stock.getStockNum() : 0;
                 int newStockNum = Math.max(0, currentStockNum + delta);
                 stock.setStockNum(newStockNum);
                 log.info("  - {}: 原库存={}, 成型产出={}, 硫化消耗={}, 净变化={}, 新库存={}",
                         embryoCode, currentStockNum, formingOutput, vulcanizingConsumption, delta, newStockNum);
+            } else {
+                // 没有库存记录，但有成型产出或硫化消耗，需要补充创建
+                int newStockNum = Math.max(0, delta);  // 新库存 = 成型产出 - 硫化消耗（不能为负）
+                
+                CxStock newStock = new CxStock();
+                newStock.setEmbryoCode(embryoCode);
+                newStock.setStockNum(newStockNum);
+                newStock.setOverTimeStock(0);
+                newStock.setBadNum(0);
+                newStock.setModifyNum(0);
+                newStock.setIsDelete("0");
+                
+                // 设置库存日期（使用当前排程日期）
+                LocalDate scheduleDate = context.getCurrentScheduleDate();
+                if (scheduleDate != null) {
+                    newStock.setStockDate(java.sql.Date.valueOf(scheduleDate));
+                }
+                
+                stocks.add(newStock);
+                existingStockMap.put(embryoCode, newStock);
+                
+                log.info("  - {}: 【新增库存记录】成型产出={}, 硫化消耗={}, 净变化={}, 新库存={}",
+                        embryoCode, formingOutput, vulcanizingConsumption, delta, newStockNum);
             }
         }
     }
 
     /**
      * 更新 monthSurplusMap（硫化余量 -= 当天硫化消耗）
+     *
+     * <p>注意：vulcanizingConsumptionByEmbryo 的 key 是胎胚编码，需要转换为物料编码
      *
      * @param context                        排程上下文
      * @param vulcanizingConsumptionByEmbryo 胎胚编码 → 硫化消耗量
@@ -1882,20 +1920,56 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             Map<String, Integer> vulcanizingConsumptionByEmbryo) {
 
         Map<String, MdmMonthSurplus> monthSurplusMap = context.getMonthSurplusMap();
-        if (monthSurplusMap == null) {
+        if (monthSurplusMap == null || monthSurplusMap.isEmpty()) {
+            log.debug("【步骤4】monthSurplusMap 为空，跳过更新");
             return;
         }
 
+        if (vulcanizingConsumptionByEmbryo == null || vulcanizingConsumptionByEmbryo.isEmpty()) {
+            log.debug("【步骤4】vulcanizingConsumptionByEmbryo 为空，跳过更新");
+            return;
+        }
+
+        // 构建胎胚编码 → 物料编码的映射
+        List<LhScheduleResult> lhResults = context.getLhScheduleResults();
+        Map<String, String> embryoToMaterialMap = new HashMap<>();
+        if (lhResults != null) {
+            for (LhScheduleResult lh : lhResults) {
+                if (lh.getEmbryoCode() != null && lh.getMaterialCode() != null) {
+                    embryoToMaterialMap.put(lh.getEmbryoCode(), lh.getMaterialCode());
+                }
+            }
+        }
+
+        // 按物料编码汇总硫化消耗
+        Map<String, Integer> consumptionByMaterial = new HashMap<>();
         for (Map.Entry<String, Integer> entry : vulcanizingConsumptionByEmbryo.entrySet()) {
+            String embryoCode = entry.getKey();
+            int consumption = entry.getValue();
+            
+            String materialCode = embryoToMaterialMap.get(embryoCode);
+            if (materialCode != null) {
+                consumptionByMaterial.merge(materialCode, consumption, Integer::sum);
+            } else {
+                log.warn("【步骤4】胎胚 {} 未找到对应的物料编码", embryoCode);
+            }
+        }
+
+        // 更新硫化余量
+        log.info("【步骤4】硫化消耗按物料汇总详情:");
+        for (Map.Entry<String, Integer> entry : consumptionByMaterial.entrySet()) {
             String materialCode = entry.getKey();
             int consumption = entry.getValue();
+            
             MdmMonthSurplus surplus = monthSurplusMap.get(materialCode);
             if (surplus != null && surplus.getPlanSurplusQty() != null && consumption > 0) {
                 BigDecimal oldSurplus = surplus.getPlanSurplusQty();
                 BigDecimal newSurplus = oldSurplus.subtract(BigDecimal.valueOf(consumption));
                 surplus.setPlanSurplusQty(newSurplus);
-                log.info("硫化余量更新: materialCode={}, 原余量={}, 硫化消耗={}, 新余量={}",
+                log.info("  - {}: 原余量={}, 硫化消耗={}, 新余量={}",
                         materialCode, oldSurplus, consumption, newSurplus);
+            } else {
+                log.warn("  - {}: 未找到硫化余量记录或余量为空，消耗={}", materialCode, consumption);
             }
         }
     }
@@ -1971,31 +2045,31 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             return;
         }
 
-        // 按胎胚编码汇总库存
-        Map<String, Integer> stockByEmbryo = new HashMap<>();
+        // 按物料编码汇总库存（从 materialStockMap 按硫化任务汇总）
+        Map<String, Integer> stockByMaterial = new HashMap<>();
         if (lhResults != null && materialStockMap != null) {
             for (LhScheduleResult lh : lhResults) {
-                if (lh.getEmbryoCode() != null && lh.getId() != null) {
+                if (lh.getMaterialCode() != null && lh.getId() != null) {
                     String taskKey = String.valueOf(lh.getId());
                     int stock = materialStockMap.getOrDefault(taskKey, 0);
-                    stockByEmbryo.merge(lh.getEmbryoCode(), stock, Integer::sum);
+                    stockByMaterial.merge(lh.getMaterialCode(), stock, Integer::sum);
                 }
             }
         }
 
         // 重算成型余量
         Map<String, Integer> newFormingRemainderMap = new HashMap<>();
-        log.info("  6.1 重算成型余量（物料 → 硫化余量 - 库存 = 成型余量）:");
+        log.info("【步骤5】重算成型余量（物料 → 硫化余量 - 库存 = 成型余量）:");
         for (Map.Entry<String, MdmMonthSurplus> entry : monthSurplusMap.entrySet()) {
             String materialCode = entry.getKey();
             MdmMonthSurplus surplus = entry.getValue();
             int vulcanizingRemainder = surplus.getPlanSurplusQty() != null
                     ? surplus.getPlanSurplusQty().intValue() : 0;
-            int embryoStock = stockByEmbryo.getOrDefault(materialCode, 0);
-            int formingRemainder = Math.max(0, vulcanizingRemainder - embryoStock);
+            int materialStock = stockByMaterial.getOrDefault(materialCode, 0);
+            int formingRemainder = Math.max(0, vulcanizingRemainder - materialStock);
             newFormingRemainderMap.put(materialCode, formingRemainder);
-            log.debug("    - {}: 硫化余量={}, 库存={}, 成型余量={}",
-                    materialCode, vulcanizingRemainder, embryoStock, formingRemainder);
+            log.info("  - {}: 硫化余量={}, 库存={}, 成型余量={}",
+                    materialCode, vulcanizingRemainder, materialStock, formingRemainder);
         }
 
         context.setFormingRemainderMap(newFormingRemainderMap);
