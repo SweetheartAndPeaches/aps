@@ -158,27 +158,27 @@ public class NewTaskProcessor {
                         .add(constrainedTask.getEmbryoCode());
             }
 
-            // Step 3.5: 参与均衡的任务 = 新增任务 + 续作剩余需求（含约束量试）
-            // 续作保底预留已在 ContinueTaskProcessor 完成，剩余需求在此统一均衡
+            // Step 3.5: 参与均衡的任务 = balancedTasks（已包含新增任务和续作剩余任务）
+            // 注意：续作剩余任务已在 Step 1.1 加入 structureTaskMap，此处不再重复添加
             List<CoreScheduleAlgorithmService.DailyEmbryoTask> allTasksForStructure = new ArrayList<>(balancedTasks);
-
-            // 加入续作剩余 demand > 0 的任务
+            
+            // 统计续作剩余数量（仅用于日志）
             int continueRemaining = 0;
             if (!CollectionUtils.isEmpty(continueTasks)) {
                 for (CoreScheduleAlgorithmService.DailyEmbryoTask task : continueTasks) {
                     if (structureName.equals(task.getStructureName())) {
                         int demand = task.getVulcanizeMachineCount() != null ? task.getVulcanizeMachineCount() : 0;
                         if (demand > 0) {
-                            allTasksForStructure.add(task);
                             continueRemaining++;
                         }
                     }
                 }
             }
 
-            log.info("结构 {}：续作已占机台={}, 续作剩余={}, 均衡新增={}, 约束量试={}",
+            log.info("结构 {}：续作已占机台={}, 续作剩余={}, 均衡新增={}, 约束量试={}, 参与均衡总任务数={}",
                     structureName, continueLoadMap.size(), continueRemaining,
-                    balancedTasks.size() - constrainedTrials.size(), constrainedTrials.size());
+                    balancedTasks.size() - constrainedTrials.size() - continueRemaining, constrainedTrials.size(),
+                    allTasksForStructure.size());
 
             // Step 3.6: 构建机台最大硫化机数映射
             Map<String, Integer> machineMaxLhMap = buildMachineMaxLhMap(
