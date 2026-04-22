@@ -258,7 +258,10 @@ public class TaskGroupService {
             handleEndingRemainder(task, context);
 
             // 打印收尾任务完整信息（所有字段已填充完毕）
-            if (Boolean.TRUE.equals(task.getIsUrgentEnding())) {
+            // 条件：成型余量低于阈值 或 紧急收尾
+            Integer endingSurplus = task.getEndingSurplusQty();
+            if ((endingSurplus != null && endingSurplus < ENDING_URGENT_FORMING_REMAINDER)
+                    || Boolean.TRUE.equals(task.getIsUrgentEnding())) {
                 log.info("成型余量低于阈值的收尾任务：物料={}, 剩余成型余量={}, 阈值={} | 收尾任务={}, 收尾余量={}, 硫化余量={}, 收尾日={}, 距收尾天={}, 紧急收尾={}, 近期收尾={} | 待排产量={}, 需车数={}",
                         embryoCode, task.getEndingSurplusQty(), ENDING_URGENT_FORMING_REMAINDER,
                         task.getIsEndingTask(), task.getEndingSurplusQty(), task.getVulcanizeSurplusQty(),
