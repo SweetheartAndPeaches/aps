@@ -262,11 +262,11 @@ public class TaskGroupService {
             Integer endingSurplus = task.getEndingSurplusQty();
             if ((endingSurplus != null && endingSurplus < ENDING_URGENT_FORMING_REMAINDER)
                     || Boolean.TRUE.equals(task.getIsUrgentEnding())) {
-                log.info("成型余量低于阈值的收尾任务：物料={}, 剩余成型余量={}, 阈值={} | 收尾任务={}, 收尾余量={}, 硫化余量={}, 收尾日={}, 距收尾天={}, 紧急收尾={}, 近期收尾={} | 待排产量={}, 需车数={}",
+                log.info("成型余量低于阈值的收尾任务：物料={}, 剩余成型余量={}, 阈值={} | 收尾任务={}, 收尾余量={}, 硫化余量={}, 收尾日={}, 距收尾天={}, 紧急收尾={}, 近期收尾={} | 待排产量={}, 需车数={}, 最终需生产量={}",
                         embryoCode, task.getEndingSurplusQty(), ENDING_URGENT_FORMING_REMAINDER,
                         task.getIsEndingTask(), task.getEndingSurplusQty(), task.getVulcanizeSurplusQty(),
                         task.getEndingDate(), task.getDaysToEnding(), task.getIsUrgentEnding(), task.getIsNearEnding(),
-                        task.getPlannedProduction(), task.getRequiredCars());
+                        task.getPlannedProduction(), task.getRequiredCars(), task.getEndingExtraInventory());
             }
             
             // 更新已使用的成型余量（累加当前任务的 endingExtraInventory）
