@@ -347,15 +347,12 @@ public class TaskGroupService {
             totalFormingRemainder = formingRemainderMap.get(materialCode);
         }
 
-        // 获取当前任务分配的库存
-        int currentTaskStock = task.getCurrentStock() != null ? task.getCurrentStock() : 0;
-
-        // 计算当前任务的剩余成型余量 = 总成型余量 - 已使用成型余量 - 当前任务库存
+        // 计算当前任务的剩余成型余量 = 总成型余量 - 已使用成型余量
         Integer remainingFormingRemainder = null;
         if (totalFormingRemainder != null) {
-            remainingFormingRemainder = Math.max(0, totalFormingRemainder - usedRemainder - currentTaskStock);
-            log.debug("物料 {} 总成型余量={}, 已使用={}, 当前任务库存={}, 剩余={}", 
-                    materialCode, totalFormingRemainder, usedRemainder, currentTaskStock, remainingFormingRemainder);
+            remainingFormingRemainder = Math.max(0, totalFormingRemainder - usedRemainder);
+            log.debug("物料 {} 总成型余量={}, 已使用={}, 剩余={}", 
+                    materialCode, totalFormingRemainder, usedRemainder, remainingFormingRemainder);
         }
 
         task.setVulcanizeSurplusQty(vulcanizeSurplusQty);

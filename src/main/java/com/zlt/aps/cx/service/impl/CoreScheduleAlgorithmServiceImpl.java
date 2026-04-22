@@ -5,12 +5,14 @@ import com.zlt.aps.cx.entity.config.CxShiftConfig;
 import com.zlt.aps.cx.entity.schedule.CxScheduleDetail;
 import com.zlt.aps.cx.entity.schedule.CxScheduleResult;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
+import com.zlt.aps.cx.mapper.MdmSkuConstructionRefMapper;
 import com.zlt.aps.cx.service.engine.*;
 import com.zlt.aps.cx.vo.MonthPlanProductLhCapacityVo;
 import com.zlt.aps.cx.vo.ScheduleContextVo;
 import com.zlt.aps.mp.api.domain.entity.MdmMaterialInfo;
 import com.zlt.aps.mp.api.domain.entity.MdmMoldingMachine;
 import com.zlt.aps.mp.api.domain.entity.MdmMonthSurplus;
+import com.zlt.aps.mp.api.domain.entity.MdmSkuConstructionRef;
 import com.zlt.aps.mp.api.domain.entity.MdmStructureLhRatio;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -63,6 +65,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     private final ProductionCalculator productionCalculator;
     private final ScheduleDayTypeHelper scheduleDayTypeHelper;
     private final BalancingService balancingService;
+    private final MdmSkuConstructionRefMapper skuConstructionRefMapper;
 
     /** 构造函数注入 */
     @Autowired
@@ -73,7 +76,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             @Lazy ShiftScheduleService shiftScheduleService,
             @Lazy ProductionCalculator productionCalculator,
             ScheduleDayTypeHelper scheduleDayTypeHelper,
-            @Lazy BalancingService balancingService) {
+            @Lazy BalancingService balancingService,
+            MdmSkuConstructionRefMapper skuConstructionRefMapper) {
         this.continueTaskProcessor = continueTaskProcessor;
         this.trialTaskProcessor = trialTaskProcessor;
         this.newTaskProcessor = newTaskProcessor;
@@ -81,6 +85,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         this.productionCalculator = productionCalculator;
         this.scheduleDayTypeHelper = scheduleDayTypeHelper;
         this.balancingService = balancingService;
+        this.skuConstructionRefMapper = skuConstructionRefMapper;
     }
 
     /** 默认排程天数 */
@@ -645,10 +650,12 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 Map<String, Integer> stockMap = context.getMaterialStockMap();
                 if (stockMap != null) {
                     Integer stock = stockMap.get(String.valueOf(lhId));
-                    if (stock != null && stock > 0) {
-                        result.setTotalStock(new BigDecimal(stock));
-                    }
+                    result.setTotalStock(stock != null ? new BigDecimal(stock) : BigDecimal.ZERO);
+                } else {
+                    result.setTotalStock(BigDecimal.ZERO);
                 }
+            } else {
+                result.setTotalStock(BigDecimal.ZERO);
             }
 
             // ---- 硫化信息 ----
@@ -704,6 +711,13 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             result.setDataSource("0");
             result.setCreateTime(new Date());
 
+            // ---- 成型批次号 & 工单号 ----
+            String dateStr = startDate.format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd"));
+            String cxBatchNo = "CXPC" + dateStr + String.format("%03d", results.size() + 1);
+            String orderNo = "CXGD" + dateStr + String.format("%03d", results.size() + 1);
+            result.setCxBatchNo(cxBatchNo);
+            result.setOrderNo(orderNo);
+
             // ---- 收尾提示 ----
             if (result.getCxRemainQty() != null && result.getCxRemainQty().compareTo(BigDecimal.ZERO) <= 0) {
                 result.setMarkCloseOutTip("0");
@@ -713,8 +727,11 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
             // ---- 映射班次排量到 CLASS1~8 ----
             for (Map.Entry<String, ShiftScheduleService.ShiftProductionResult> classEntry : classSprMap.entrySet()) {
-                setClassFieldValue(result, classEntry.getKey(), classEntry.getValue());
+                setClassFieldValue(result, classEntry.getKey(), classEntry.getValue(), primaryLh, materialCode);
             }
+
+            // ---- 班次未排量的栏位补零 ----
+            fillDefaultClassValues(result, classSprMap.keySet());
 
             results.add(result);
         }
@@ -1126,7 +1143,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
      * @param classField CLASS1~CLASS8 班次字段标识
      * @param spr       班次排产结果
      */
-    private void setClassFieldValue(CxScheduleResult result, String classField, ShiftScheduleService.ShiftProductionResult spr) {
+    private void setClassFieldValue(CxScheduleResult result, String classField, ShiftScheduleService.ShiftProductionResult spr,
+                                       LhScheduleResult primaryLh, String materialCode) {
         if (classField == null || spr == null) {
             return;
         }
@@ -1134,58 +1152,100 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         // 构建原因分析字符串
         String analysis = buildTaskAnalysis(spr);
 
+        // 计划量（无值给0）
+        BigDecimal planQty = spr.getQuantity() != null ? new BigDecimal(spr.getQuantity()) : BigDecimal.ZERO;
+        // 完成量默认给0
+        BigDecimal finishQty = BigDecimal.ZERO;
+        // 示方书编号：取硫化任务的lhNo
+        String recipeNo = (primaryLh != null) ? primaryLh.getLhNo() : null;
+        // 示方书类型：通过基础表 MdmSkuConstructionRef 查询 lhType
+        String recipeType = null;
+        if (materialCode != null && recipeNo != null) {
+            try {
+                MdmSkuConstructionRef ref = skuConstructionRefMapper.selectByMaterialCodeAndLhNo(materialCode, recipeNo);
+                if (ref != null) {
+                    recipeType = ref.getLhType();
+                }
+            } catch (Exception e) {
+                log.debug("查询示方书类型失败: materialCode={}, lhNo={}", materialCode, recipeNo);
+            }
+        }
+
         switch (classField) {
             case "CLASS1":
-                result.setClass1PlanQty(spr.getQuantity() != null ? new BigDecimal(spr.getQuantity()) : null);
-                if (analysis != null) {
-                    result.setClass1Analysis(analysis);
-                }
+                result.setClass1PlanQty(planQty);
+                result.setClass1FinishQty(finishQty);
+                result.setClass1RecipeNo(recipeNo);
+                result.setClass1RecipeType(recipeType);
+                if (analysis != null) { result.setClass1Analysis(analysis); }
                 break;
             case "CLASS2":
-                result.setClass2PlanQty(spr.getQuantity() != null ? new BigDecimal(spr.getQuantity()) : null);
-                if (analysis != null) {
-                    result.setClass2Analysis(analysis);
-                }
+                result.setClass2PlanQty(planQty);
+                result.setClass2FinishQty(finishQty);
+                result.setClass2RecipeNo(recipeNo);
+                result.setClass2RecipeType(recipeType);
+                if (analysis != null) { result.setClass2Analysis(analysis); }
                 break;
             case "CLASS3":
-                result.setClass3PlanQty(spr.getQuantity() != null ? new BigDecimal(spr.getQuantity()) : null);
-                if (analysis != null) {
-                    result.setClass3Analysis(analysis);
-                }
+                result.setClass3PlanQty(planQty);
+                result.setClass3FinishQty(finishQty);
+                result.setClass3RecipeNo(recipeNo);
+                result.setClass3RecipeType(recipeType);
+                if (analysis != null) { result.setClass3Analysis(analysis); }
                 break;
             case "CLASS4":
-                result.setClass4PlanQty(spr.getQuantity() != null ? new BigDecimal(spr.getQuantity()) : null);
-                if (analysis != null) {
-                    result.setClass4Analysis(analysis);
-                }
+                result.setClass4PlanQty(planQty);
+                result.setClass4FinishQty(finishQty);
+                result.setClass4RecipeNo(recipeNo);
+                result.setClass4RecipeType(recipeType);
+                if (analysis != null) { result.setClass4Analysis(analysis); }
                 break;
             case "CLASS5":
-                result.setClass5PlanQty(spr.getQuantity() != null ? new BigDecimal(spr.getQuantity()) : null);
-                if (analysis != null) {
-                    result.setClass5Analysis(analysis);
-                }
+                result.setClass5PlanQty(planQty);
+                result.setClass5FinishQty(finishQty);
+                result.setClass5RecipeNo(recipeNo);
+                result.setClass5RecipeType(recipeType);
+                if (analysis != null) { result.setClass5Analysis(analysis); }
                 break;
             case "CLASS6":
-                result.setClass6PlanQty(spr.getQuantity() != null ? new BigDecimal(spr.getQuantity()) : null);
-                if (analysis != null) {
-                    result.setClass6Analysis(analysis);
-                }
+                result.setClass6PlanQty(planQty);
+                result.setClass6FinishQty(finishQty);
+                result.setClass6RecipeNo(recipeNo);
+                result.setClass6RecipeType(recipeType);
+                if (analysis != null) { result.setClass6Analysis(analysis); }
                 break;
             case "CLASS7":
-                result.setClass7PlanQty(spr.getQuantity() != null ? new BigDecimal(spr.getQuantity()) : null);
-                if (analysis != null) {
-                    result.setClass7Analysis(analysis);
-                }
+                result.setClass7PlanQty(planQty);
+                result.setClass7FinishQty(finishQty);
+                result.setClass7RecipeNo(recipeNo);
+                result.setClass7RecipeType(recipeType);
+                if (analysis != null) { result.setClass7Analysis(analysis); }
                 break;
             case "CLASS8":
-                result.setClass8PlanQty(spr.getQuantity() != null ? new BigDecimal(spr.getQuantity()) : null);
-                if (analysis != null) {
-                    result.setClass8Analysis(analysis);
-                }
+                result.setClass8PlanQty(planQty);
+                result.setClass8FinishQty(finishQty);
+                result.setClass8RecipeNo(recipeNo);
+                result.setClass8RecipeType(recipeType);
+                if (analysis != null) { result.setClass8Analysis(analysis); }
                 break;
             default:
                 log.warn("未知的 CLASS_FIELD: {}", classField);
         }
+    }
+
+    /**
+     * 填充未排产班次的默认值（PLAN_QTY=0, FINISH_QTY=0）
+     */
+    private void fillDefaultClassValues(CxScheduleResult result, Set<String> filledClasses) {
+        BigDecimal zero = BigDecimal.ZERO;
+        if (!filledClasses.contains("CLASS1")) { result.setClass1PlanQty(zero); result.setClass1FinishQty(zero); }
+        if (!filledClasses.contains("CLASS2")) { result.setClass2PlanQty(zero); result.setClass2FinishQty(zero); }
+        if (!filledClasses.contains("CLASS3")) { result.setClass3PlanQty(zero); result.setClass3FinishQty(zero); }
+        if (!filledClasses.contains("CLASS4")) { result.setClass4PlanQty(zero); result.setClass4FinishQty(zero); }
+        if (!filledClasses.contains("CLASS5")) { result.setClass5PlanQty(zero); result.setClass5FinishQty(zero); }
+        if (!filledClasses.contains("CLASS6")) { result.setClass6PlanQty(zero); result.setClass6FinishQty(zero); }
+        if (!filledClasses.contains("CLASS7")) { result.setClass7PlanQty(zero); result.setClass7FinishQty(zero); }
+        if (!filledClasses.contains("CLASS8")) { result.setClass8PlanQty(zero); result.setClass8FinishQty(zero); }
     }
 
     /**
