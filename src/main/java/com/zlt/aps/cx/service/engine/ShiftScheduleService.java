@@ -670,15 +670,16 @@ public class ShiftScheduleService {
 
         List<ShiftProductionResult> results = new ArrayList<>();
         int totalQty = task.getEndingExtraInventory();
-        log.info("scheduleNormalTask: embryoCode={}, totalQty(待排产量)={}, tripCapacity(每车条数)={}, vulcanizeMachineCount(硫化机台数)={}, dayShifts.size={}",
-                task.getEmbryoCode(), totalQty, tripCapacity, task.getVulcanizeMachineCount(), dayShifts != null ? dayShifts.size() : "null");
+        log.info("scheduleNormalTask: embryoCode={}, 待排产量={}, tripCapacity={}, dayShifts.size={}",
+                task.getEmbryoCode(), totalQty, tripCapacity, dayShifts != null ? dayShifts.size() : "null");
         if (totalQty <= 0) {
             return results;
         }
 
         int requiredCars = tripCapacity > 0 ? (totalQty + tripCapacity - 1) / tripCapacity : 1;
         int[] shiftCars = calculateWaveCars(requiredCars, dayShifts);
-        log.info("scheduleNormalTask: requiredCars(需要车数)={}, shiftCars(各班次分配车数)={}", requiredCars, Arrays.toString(shiftCars));
+        log.info("【波浪分配】胎胚={}, 待排={}条, 每车={}条, 需={}车, 各班分配={}",
+                 task.getEmbryoCode(), totalQty, tripCapacity, requiredCars, Arrays.toString(shiftCars));
 
         int hourlyCapacity = getMachineHourlyCapacity(machineCode, task.getMaterialCode(), task.getStructureName(), context);
         int remainingCars = requiredCars;
