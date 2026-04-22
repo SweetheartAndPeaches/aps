@@ -26,10 +26,6 @@ import java.util.Set;
  */
 public interface CoreScheduleAlgorithmService {
 
-    /** 成型余量紧急收尾阈值（低于此值则紧急） */
-    int ENDING_SURPLUS_THRESHOLD = 400;
-    /** 距收尾天数小于此值则标记为紧急收尾 */
-    int URGENT_ENDING_DAYS = 7;
 
     /**
      * 执行完整排程算法
