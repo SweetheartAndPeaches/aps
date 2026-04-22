@@ -1208,7 +1208,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             if (Boolean.TRUE.equals(task.getIsProductionTrial())) {
                 reasons.add("量试");
             }
-            if (Boolean.TRUE.equals(task.getIsEndingTask())) {
+            if (Boolean.TRUE.equals(task.getIsLastEndingBatch())) {
                 reasons.add("收尾");
             }
             if (Boolean.TRUE.equals(task.getIsOpeningDayTask())) {
