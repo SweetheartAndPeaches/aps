@@ -67,10 +67,9 @@ public class CxScheduleDetailServiceImpl extends ServiceImpl<CxScheduleDetailMap
         if (details == null || details.isEmpty()) {
             return false;
         }
-        // 逐条插入，避免 saveBatch 在 IdType.AUTO 下因回填 id 导致 Duplicate entry 问题
+        // 清除所有明细记录的ID,避免主键冲突,让数据库自动生成新ID
         for (CxScheduleDetail detail : details) {
             detail.setId(null);
-            save(detail);
         }
         return true;
     }
