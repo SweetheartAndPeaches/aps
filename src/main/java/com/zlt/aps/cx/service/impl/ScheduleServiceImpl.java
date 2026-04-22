@@ -1147,6 +1147,18 @@ public class ScheduleServiceImpl implements ScheduleService {
             materialStockMap = allocateStockByMaterialRatio(stocks, lhScheduleResults, dayShifts, scheduleDate, materialLhCapacityMap);
             log.debug("按硫化任务维度分配胎胚库存 {} 条", materialStockMap.size());
 
+            // 按物料编码汇总库存（从 materialStockMap 按硫化任务汇总）
+            Map<String, Integer> stockByMaterial = new HashMap<>();
+            if (lhScheduleResults != null && materialStockMap != null) {
+                for (LhScheduleResult lh : lhScheduleResults) {
+                    if (lh.getMaterialCode() != null && lh.getId() != null) {
+                        String taskKey = String.valueOf(lh.getId());
+                        int stock = materialStockMap.getOrDefault(taskKey, 0);
+                        stockByMaterial.merge(lh.getMaterialCode(), stock, Integer::sum);
+                    }
+                }
+            }
+
             // 计算成型余量
             for (Map.Entry<String, MdmMonthSurplus> entry : monthSurplusMap.entrySet()) {
                 String materialCode = entry.getKey();
@@ -1154,8 +1166,8 @@ public class ScheduleServiceImpl implements ScheduleService {
 
                 int vulcanizingRemainder = surplus.getPlanSurplusQty() != null
                         ? surplus.getPlanSurplusQty().intValue() : 0;
-                int embryoStock = materialStockMap.getOrDefault(materialCode, 0);
-                int formingRemainder = Math.max(0, vulcanizingRemainder - embryoStock);
+                int materialStock = stockByMaterial.getOrDefault(materialCode, 0);
+                int formingRemainder = Math.max(0, vulcanizingRemainder - materialStock);
 
                 formingRemainderMap.put(materialCode, formingRemainder);
             }
