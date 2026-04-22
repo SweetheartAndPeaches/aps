@@ -360,8 +360,8 @@ public class TaskGroupService {
         boolean isEndingTask = remainingFormingRemainder != null && remainingFormingRemainder <= 0;
         task.setIsEndingTask(isEndingTask);
 
-        // 获取收尾日（从物料收尾管理表）
-        LocalDate endingDate = findEndingDate(embryoCode, context);
+        // 获取收尾日（从物料收尾管理表，该表以物料编码为键）
+        LocalDate endingDate = findEndingDate(task.getMaterialCode(), context);
         task.setEndingDate(endingDate);
 
         if (endingDate != null) {
@@ -378,7 +378,7 @@ public class TaskGroupService {
 
             if (isUrgentEnding) {
                 log.info("紧急收尾任务：物料={}, 收尾日={}, 距收尾{}天",
-                        embryoCode, endingDate, daysToEnding);
+                        task.getMaterialCode(), endingDate, daysToEnding);
             }
         }
 
@@ -843,10 +843,14 @@ public class TaskGroupService {
      * @param context    排程上下文
      * @return 收尾日期，无则返回 null
      */
-    private LocalDate findEndingDate(String embryoCode, ScheduleContextVo context) {
+    /**
+     * 从物料收尾管理表获取计划收尾日期
+     * @param materialCode 物料编码（CxMaterialEnding.materialCode 存的是物料编码）
+     */
+    private LocalDate findEndingDate(String materialCode, ScheduleContextVo context) {
         if (context.getMaterialEndings() != null) {
             for (CxMaterialEnding ending : context.getMaterialEndings()) {
-                if (embryoCode.equals(ending.getMaterialCode())) {
+                if (materialCode.equals(ending.getMaterialCode())) {
                     return ending.getPlannedEndingDate();
                 }
             }
