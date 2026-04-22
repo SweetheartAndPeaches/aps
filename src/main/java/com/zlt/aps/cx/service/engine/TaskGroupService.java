@@ -322,7 +322,6 @@ public class TaskGroupService {
             LocalDate scheduleDate,
             int usedRemainder) {
 
-        String embryoCode = task.getEmbryoCode();
         String materialCode = task.getMaterialCode();
 
         // 获取成型余量（从预计算的映射中获取）
@@ -375,7 +374,7 @@ public class TaskGroupService {
 
             // 判断是否3天内收尾（紧急），或成型余量>=400（库存积压风险）
             boolean isUrgentEnding = (daysToEnding >= 0 && daysToEnding <= URGENT_ENDING_DAYS)
-                    || (remainingFormingRemainder != null && remainingFormingRemainder >= ENDING_URGENT_FORMING_REMAINDER);
+                    || (remainingFormingRemainder != null && remainingFormingRemainder <= ENDING_URGENT_FORMING_REMAINDER);
             task.setIsUrgentEnding(isUrgentEnding);
 
             if (isUrgentEnding) {
