@@ -6,6 +6,7 @@ import com.zlt.aps.cx.entity.config.CxShiftConfig;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
 import com.zlt.aps.cx.vo.MonthPlanProductLhCapacityVo;
 import com.zlt.aps.cx.vo.ScheduleContextVo;
+import com.zlt.aps.cx.service.engine.CoreScheduleAlgorithmService;
 import com.zlt.aps.mp.api.domain.entity.MdmMaterialInfo;
 import com.zlt.aps.mp.api.domain.entity.MdmMonthSurplus;
 import lombok.RequiredArgsConstructor;
@@ -372,8 +373,9 @@ public class TaskGroupService {
             boolean isNearEnding = daysToEnding >= 0 && daysToEnding <= ENDING_DAYS_THRESHOLD;
             task.setIsNearEnding(isNearEnding);
 
-            // 判断是否3天内收尾（紧急）
-            boolean isUrgentEnding = daysToEnding >= 0 && daysToEnding <= URGENT_ENDING_DAYS;
+            // 判断是否3天内收尾（紧急），或成型余量>=400（库存积压风险）
+            boolean isUrgentEnding = (daysToEnding >= 0 && daysToEnding <= URGENT_ENDING_DAYS)
+                    || (remainingFormingRemainder != null && remainingFormingRemainder >= ENDING_URGENT_FORMING_REMAINDER);
             task.setIsUrgentEnding(isUrgentEnding);
 
             if (isUrgentEnding) {
