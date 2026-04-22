@@ -193,14 +193,19 @@ public class TaskGroupService {
                 continue;
             }
             
-            // 每个班次只处理自己班次有排量的任务
-            // 如果当前班次没有排量（为null或<=0），则跳过该任务（不创建任务）
-            if (currentClassIndex > 0) {
-                Integer classPlanQty = getClassPlanQtyByIndex(lhResult, currentClassIndex);
-                if (classPlanQty == null || classPlanQty <= 0) {
-                    skippedNullTask++;
-                    continue;
-                }
+            // 库存够硫化当天剩余班次的消耗，跳过该任务
+            // 逻辑：
+            // - 班次1（第一天）：判断库存够硫化班次1+班次2的计划，够了就跳过
+            // - 班次2（第一天）：判断库存够硫化班次2的计划，够了就跳过
+            // - 班次1（第二天）：判断库存够硫化班次1+班次2+班次3的计划，够了就跳过
+            // - 依次类推
+            int currentStock = getCurrentStock(context, lhResult.getId());
+            int todayRemainingDemand = calculateTodayRemainingDemand(context, dayShifts, lhResult);
+            if (todayRemainingDemand > 0 && currentStock >= todayRemainingDemand) {
+                log.info("库存充足跳过: 胎胚={}, 库存={}, 当日剩余需求={}, 当前班次={}", 
+                        lhResult.getEmbryoCode(), currentStock, todayRemainingDemand, dayShifts.get(0).getShiftCode());
+                skippedNullTask++;
+                continue;
             }
 
             // 检查1：硫化余量 <= 0，说明该物料已超产，不再需要生产
@@ -753,6 +758,61 @@ public class TaskGroupService {
             return 0;
         }
         return materialStockMap.getOrDefault(String.valueOf(lhId), 0);
+    }
+
+    /**
+     * 计算当日剩余班次的硫化需求总量
+     *
+     * <p>按班次维度判断库存是否充足：
+     * - 班次1（第一天）：库存 >= 班次1计划量 + 班次2计划量 → 跳过
+     * - 班次2（第一天）：库存 >= 班次2计划量 → 跳过
+     * - 班次1（第二天）：库存 >= 班次1+2+3计划量 → 跳过
+     * - 依次类推
+     *
+     * @param context   排程上下文
+     * @param dayShifts 当前班次配置列表（singleShiftList，只含当前班次）
+     * @param lhResult  硫化记录
+     * @return 当日剩余班次的硫化需求总量
+     */
+    private int calculateTodayRemainingDemand(ScheduleContextVo context, List<CxShiftConfig> dayShifts, LhScheduleResult lhResult) {
+        if (dayShifts == null || dayShifts.isEmpty()) {
+            return 0;
+        }
+        CxShiftConfig currentShift = dayShifts.get(0);
+        int currentScheduleDay = currentShift.getScheduleDay() != null ? currentShift.getScheduleDay() : 1;
+        int currentClassIndex = currentShift.getDayShiftOrder() != null ? currentShift.getDayShiftOrder() : 1;
+
+        // 从上下文获取所有班次配置，确定当天有几个班次
+        List<CxShiftConfig> allShifts = context.getShiftConfigList();
+        if (allShifts == null || allShifts.isEmpty()) {
+            return 0;
+        }
+        // 当天班次数 = scheduleDay 等于当前班的班次数
+        int shiftsPerDay = (int) allShifts.stream()
+                .filter(c -> c.getScheduleDay() != null && c.getScheduleDay().equals(currentScheduleDay))
+                .count();
+        if (shiftsPerDay <= 0) {
+            shiftsPerDay = 1;
+        }
+
+        // 计算当日剩余班次数（含当前班次）
+        int remainingShifts = shiftsPerDay - currentClassIndex + 1;
+        if (remainingShifts <= 0) {
+            return 0;
+        }
+
+        // 计算需求：从当前班次到当日最后一个班次的 classPlanQty 总和
+        int totalDemand = 0;
+        for (int i = 0; i < remainingShifts; i++) {
+            int classOffset = (currentScheduleDay - 1) * 3 + currentClassIndex + i - 1; // 0-indexed class field offset
+            if (classOffset >= 0 && classOffset < 8) {
+                Integer classDemand = getClassPlanQtyByIndex(lhResult, classOffset + 1); // classIndex is 1-based
+                if (classDemand != null && classDemand > 0) {
+                    totalDemand += classDemand;
+                }
+            }
+        }
+        return totalDemand;
     }
 
     /**
