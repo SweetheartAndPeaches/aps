@@ -256,6 +256,15 @@ public class TaskGroupService {
             calculatePlannedProduction(task, context, scheduleDate);
             // S5.2.6 收尾余量处理
             handleEndingRemainder(task, context);
+
+            // 打印收尾任务完整信息（所有字段已填充完毕）
+            if (Boolean.TRUE.equals(task.getIsUrgentEnding())) {
+                log.info("成型余量低于阈值的收尾任务：物料={}, 剩余成型余量={}, 阈值={} | 收尾任务={}, 收尾余量={}, 硫化余量={}, 收尾日={}, 距收尾天={}, 紧急收尾={}, 近期收尾={} | 待排产量={}, 需车数={}",
+                        embryoCode, task.getEndingSurplusQty(), ENDING_URGENT_FORMING_REMAINDER,
+                        task.getIsEndingTask(), task.getEndingSurplusQty(), task.getVulcanizeSurplusQty(),
+                        task.getEndingDate(), task.getDaysToEnding(), task.getIsUrgentEnding(), task.getIsNearEnding(),
+                        task.getPlannedProduction(), task.getRequiredCars());
+            }
             
             // 更新已使用的成型余量（累加当前任务的 endingExtraInventory）
             if (task.getEndingExtraInventory() != null && task.getEndingExtraInventory() > 0) {
@@ -368,16 +377,6 @@ public class TaskGroupService {
                 log.info("紧急收尾任务：物料={}, 收尾日={}, 距收尾{}天",
                         embryoCode, endingDate, daysToEnding);
             }
-        }
-
-        // 成型余量小于阈值也标记为紧急收尾
-        if (remainingFormingRemainder != null && remainingFormingRemainder < ENDING_URGENT_FORMING_REMAINDER && remainingFormingRemainder > 0) {
-            task.setIsUrgentEnding(true);
-            log.info("成型余量低于阈值的收尾任务：物料={}, 剩余成型余量={}, 阈值={} | 收尾任务={}, 收尾余量={}, 硫化余量={}, 收尾日={}, 距收尾天={}, 紧急收尾={}, 近期收尾={} | 待排产量={}, 需车数={}",
-                    embryoCode, remainingFormingRemainder, ENDING_URGENT_FORMING_REMAINDER,
-                    task.getIsEndingTask(), task.getEndingSurplusQty(), task.getVulcanizeSurplusQty(),
-                    task.getEndingDate(), task.getDaysToEnding(), task.getIsUrgentEnding(), task.getIsNearEnding(),
-                    task.getPlannedProduction(), task.getRequiredCars());
         }
 
         // 计算优先级
