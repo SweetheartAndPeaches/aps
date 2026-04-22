@@ -241,9 +241,13 @@ public class NewTaskProcessor {
                     taskAlloc.setMaterialDesc(task.getMaterialDesc());
                     taskAlloc.setMainMaterialDesc(task.getMainMaterialDesc());
                     taskAlloc.setStructureName(task.getStructureName());
-                    taskAlloc.setQuantity(assignedQty);  // 使用均衡分配的实际数量，而非 plannedProduction
-                    taskAlloc.setVulcanizeMachineCount(assignedQty);
-                    taskAlloc.setEndingExtraInventory(assignedQty);  // 均衡分配量即为实际需排产量
+                    // quantity 和 endingExtraInventory 使用 TaskGroupService 预计算的胎胚数量
+                    // assignedQty 单位是硫化机台数，不能作为排产量
+                    int taskPlannedQty = task.getEndingExtraInventory() != null && task.getEndingExtraInventory() > 0
+                            ? task.getEndingExtraInventory() : task.getDemandQuantity();
+                    taskAlloc.setQuantity(taskPlannedQty);
+                    taskAlloc.setVulcanizeMachineCount(assignedQty);  // assignedQty 单位：硫化机台数
+                    taskAlloc.setEndingExtraInventory(task.getEndingExtraInventory());
                     taskAlloc.setPriority(task.getPriority());
                     taskAlloc.setStockHours(task.getStockHours());
                     taskAlloc.setIsTrialTask(task.getIsTrialTask());
