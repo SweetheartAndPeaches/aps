@@ -263,26 +263,23 @@ public class TaskGroupService {
             int usedRemainder = materialUsedFormingRemainder.getOrDefault(materialCode, 0);
             calculateEndingInfo(task, context, scheduleDate, usedRemainder);
 
-            // S5.2.4.1 回溯更新：发现成型余量耗尽时，更新同一物料之前所有任务的 isLastEndingBatch
-            Integer remainingAfterCalc = task.getEndingSurplusQty();
-            if (remainingAfterCalc != null && remainingAfterCalc <= 0) {
-                task.setIsLastEndingBatch(true);
-                // 回溯更新同一物料之前的所有任务
-                List<CoreScheduleAlgorithmService.DailyEmbryoTask> previousTasks = materialTasksMap.get(materialCode);
-                if (previousTasks != null) {
-                    for (CoreScheduleAlgorithmService.DailyEmbryoTask prevTask : previousTasks) {
-                        if (!Boolean.TRUE.equals(prevTask.getIsLastEndingBatch())) {
-                            prevTask.setIsLastEndingBatch(true);
-                            log.info("回溯更新 isLastEndingBatch: 物料={}, 胎胚={} → true", materialCode, prevTask.getEmbryoCode());
-                        }
-                    }
-                }
-            }
-
             // S5.2.5 计算待排产量
             calculatePlannedProduction(task, context, scheduleDate);
             // S5.2.6 收尾余量处理
             handleEndingRemainder(task, context);
+            
+            // S5.2.6.1 收尾余量处理后再次检查：如果 handleEndingRemainder 标记了 isLastEndingBatch，需要回溯更新
+            if (Boolean.TRUE.equals(task.getIsLastEndingBatch())) {
+                List<CoreScheduleAlgorithmService.DailyEmbryoTask> allTasksForMaterial = materialTasksMap.get(materialCode);
+                if (allTasksForMaterial != null) {
+                    for (CoreScheduleAlgorithmService.DailyEmbryoTask prevTask : allTasksForMaterial) {
+                        if (prevTask != task && !Boolean.TRUE.equals(prevTask.getIsLastEndingBatch())) {
+                            prevTask.setIsLastEndingBatch(true);
+                            log.info("回溯更新 isLastEndingBatch（收尾余量处理）: 物料={}, 胎胚={} → true", materialCode, prevTask.getEmbryoCode());
+                        }
+                    }
+                }
+            }
 
             // 打印收尾任务完整信息（所有字段已填充完毕）
             // 条件：成型余量低于阈值 或 紧急收尾
