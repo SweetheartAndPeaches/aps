@@ -268,11 +268,19 @@ public class TaskGroupService {
             Integer endingSurplus = task.getEndingSurplusQty();
             if ((endingSurplus != null && endingSurplus < ENDING_URGENT_FORMING_REMAINDER)
                     || Boolean.TRUE.equals(task.getIsUrgentEnding())) {
-                log.info("成型余量低于阈值的收尾任务：物料={}, 剩余成型余量={}, 阈值={} | 收尾任务={}, 收尾余量={}, 硫化余量={}, 收尾日={}, 距收尾天={}, 紧急收尾={}, 近期收尾={} | 待排产量={}, 需车数={}, 最终需生产量={}",
+                // 获取计算公式所需参数
+                int vulcanizeDmd = task.getVulcanizeDemand() != null ? task.getVulcanizeDemand() : 0;
+                int stock = task.getCurrentStock() != null ? task.getCurrentStock() : 0;
+                int netDemand = Math.max(0, vulcanizeDmd - stock);
+                BigDecimal lossRate = context.getLossRate() != null ? context.getLossRate() : BigDecimal.ZERO;
+                int tripCap = getTripCapacity(task.getStructureName(), context);
+                int plannedProd = task.getPlannedProduction() != null ? task.getPlannedProduction() : 0;
+                log.info("成型余量低于阈值的收尾任务：物料={}, 剩余成型余量={}, 阈值={} | 收尾任务={}, 收尾余量={}, 硫化余量={}, 收尾日={}, 距收尾天={}, 紧急收尾={}, 近期收尾={}, 收尾最后一批={} | 计算公式：(日硫化量{} - 库存{}) × (1 + 损耗率{}) = {} × {} = {} | 整车({})取整后待排产量={}, 需车数={}, 最终需生产量={}",
                         embryoCode, task.getEndingSurplusQty(), ENDING_URGENT_FORMING_REMAINDER,
                         task.getIsEndingTask(), task.getEndingSurplusQty(), task.getVulcanizeSurplusQty(),
-                        task.getEndingDate(), task.getDaysToEnding(), task.getIsUrgentEnding(), task.getIsNearEnding(),
-                        task.getPlannedProduction(), task.getRequiredCars(), task.getEndingExtraInventory());
+                        task.getEndingDate(), task.getDaysToEnding(), task.getIsUrgentEnding(), task.getIsNearEnding(), task.getIsLastEndingBatch(),
+                        vulcanizeDmd, stock, lossRate, netDemand, lossRate.add(BigDecimal.ONE).setScale(4, BigDecimal.ROUND_HALF_UP), plannedProd,
+                        tripCap, task.getPlannedProduction(), task.getRequiredCars(), task.getEndingExtraInventory());
             }
             
             // 更新已使用的成型余量（累加当前任务的 endingExtraInventory）
@@ -284,7 +292,7 @@ public class TaskGroupService {
             // S5.2.7 停产特殊处理
             handleOpeningClosingDay(task, context, dayShifts);
             // S5.2.8 试制任务：产量必须是双数，不补整车
-            if (Boolean.TRUE.equals(isTrialTask)) {
+            if (Boolean.TRUE.equals(isTrialTask) || Boolean.TRUE.equals(isProductionTrial)) {
                 Integer pp = task.getPlannedProduction();
                 if (pp != null && pp % 2 != 0) {
                     task.setPlannedProduction(pp - 1);
@@ -1024,7 +1032,7 @@ public class TaskGroupService {
                     task.getEmbryoCode(), endingSurplusQty, task.getPlannedProduction(), endingSurplusQty);
         } else {
             // 主销产品最后一批：不够一车则补足到一车
-            if (endingExtraInventory > 0 && endingExtraInventory < tripCapacity) {
+            if (endingSurplusQty > 0 && endingSurplusQty < tripCapacity) {
                 task.setPlannedProduction(tripCapacity);
                 task.setRequiredCars(1);
                 task.setEndingExtraInventory(tripCapacity);

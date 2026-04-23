@@ -60,7 +60,11 @@ public class CxScheduleDetail extends BaseEntity {
     @TableField("MATERIAL_CODE")
     private String materialCode;
 
-     @ApiModelProperty(value = "一班车次号")
+     @ApiModelProperty(value = "一班计划数")
+    @TableField("CLASS1_PLAN_QTY")
+    private BigDecimal class1PlanQty;
+
+    @ApiModelProperty(value = "一班车次号")
     @TableField("CLASS1_TRIP_NO")
     private String class1TripNo;
 
@@ -85,6 +89,10 @@ public class CxScheduleDetail extends BaseEntity {
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     @TableField("CLASS1_PLAN_END_TIME")
     private Date class1PlanEndTime;
+
+    @ApiModelProperty(value = "二班计划数")
+    @TableField("CLASS2_PLAN_QTY")
+    private BigDecimal class2PlanQty;
 
       @ApiModelProperty(value = "二班车次号")
     @TableField("CLASS2_TRIP_NO")
@@ -116,6 +124,10 @@ public class CxScheduleDetail extends BaseEntity {
     @TableField("CLASS3_TRIP_NO")
     private String class3TripNo;
 
+
+    @ApiModelProperty(value = "三班计划数")
+    @TableField("CLASS3_PLAN_QTY")
+    private BigDecimal class3PlanQty;
     @ApiModelProperty(value = "三班车次容量（整车条数）")
     @TableField("CLASS3_TRIP_CAPACITY")
     private BigDecimal class3TripCapacity;
@@ -143,6 +155,10 @@ public class CxScheduleDetail extends BaseEntity {
     @TableField("CLASS4_TRIP_NO")
     private String class4TripNo;
 
+
+    @ApiModelProperty(value = "四班计划数")
+    @TableField("CLASS4_PLAN_QTY")
+    private BigDecimal class4PlanQty;
     @ApiModelProperty(value = "四班车次容量（整车条数）")
     @TableField("CLASS4_TRIP_CAPACITY")
     private BigDecimal class4TripCapacity;
@@ -169,6 +185,10 @@ public class CxScheduleDetail extends BaseEntity {
     @TableField("CLASS5_TRIP_NO")
     private String class5TripNo;
 
+
+    @ApiModelProperty(value = "五班计划数")
+    @TableField("CLASS5_PLAN_QTY")
+    private BigDecimal class5PlanQty;
     @ApiModelProperty(value = "五班车次容量（整车条数）")
     @TableField("CLASS5_TRIP_CAPACITY")
     private BigDecimal class5TripCapacity;
@@ -195,6 +215,10 @@ public class CxScheduleDetail extends BaseEntity {
     @TableField("CLASS6_TRIP_NO")
     private String class6TripNo;
 
+
+    @ApiModelProperty(value = "六班计划数")
+    @TableField("CLASS6_PLAN_QTY")
+    private BigDecimal class6PlanQty;
     @ApiModelProperty(value = "六班车次容量（整车条数）")
     @TableField("CLASS6_TRIP_CAPACITY")
     private BigDecimal class6TripCapacity;
@@ -217,10 +241,13 @@ public class CxScheduleDetail extends BaseEntity {
     @TableField("CLASS6_PLAN_END_TIME")
     private Date class6PlanEndTime;
 
-    
     @ApiModelProperty(value = "七班车次号")
     @TableField("CLASS7_TRIP_NO")
     private String class7TripNo;
+
+    @ApiModelProperty(value = "七班计划数")
+    @TableField("CLASS7_PLAN_QTY")
+    private BigDecimal class7PlanQty;
 
     @ApiModelProperty(value = "七班车次容量（整车条数）")
     @TableField("CLASS7_TRIP_CAPACITY")
@@ -247,6 +274,10 @@ public class CxScheduleDetail extends BaseEntity {
     @ApiModelProperty(value = "八班车次号")
     @TableField("CLASS8_TRIP_NO")
     private String class8TripNo;
+
+    @ApiModelProperty(value = "八班计划数")
+    @TableField("CLASS8_PLAN_QTY")
+    private BigDecimal class8PlanQty;
 
     @ApiModelProperty(value = "八班车次容量（整车条数）")
     @TableField("CLASS8_TRIP_CAPACITY")

@@ -921,6 +921,20 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         }
 
         log.info("子表构建完成（按班次）：共 {} 条车次记录", allDetails.size());
+        // 打印前5条验证数据
+        for (int i = 0; i < Math.min(5, allDetails.size()); i++) {
+            CxScheduleDetail d = allDetails.get(i);
+            log.info("子表明细[{}]: 机台={}, 胎胚={}, CLASS1=[TRIP={},PLAN={},HOURS={}], CLASS2=[TRIP={},PLAN={}], CLASS3=[TRIP={},PLAN={}], CLASS4=[TRIP={},PLAN={}], CLASS5=[TRIP={},PLAN={}], CLASS6=[TRIP={},PLAN={}], CLASS7=[TRIP={},PLAN={}], CLASS8=[TRIP={},PLAN={}]",
+                    i, d.getCxMachineCode(), d.getEmbryoCode(),
+                    d.getClass1TripNo(), d.getClass1PlanQty(), d.getClass1StockHours(),
+                    d.getClass2TripNo(), d.getClass2PlanQty(),
+                    d.getClass3TripNo(), d.getClass3PlanQty(),
+                    d.getClass4TripNo(), d.getClass4PlanQty(),
+                    d.getClass5TripNo(), d.getClass5PlanQty(),
+                    d.getClass6TripNo(), d.getClass6PlanQty(),
+                    d.getClass7TripNo(), d.getClass7PlanQty(),
+                    d.getClass8TripNo(), d.getClass8PlanQty());
+        }
         return allDetails;
     }
 
@@ -1003,6 +1017,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         }
         switch (classField) {
             case "CLASS1":
+                detail.setClass1PlanQty(BigDecimal.valueOf(trip.getPlanQty()));
                 detail.setClass1TripNo(String.valueOf(trip.getTripNo()));
                 detail.setClass1TripCapacity(BigDecimal.valueOf(trip.getTripCapacity()));
                 detail.setClass1StockHours(trip.getStockHours());
@@ -1013,6 +1028,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                         ? java.sql.Timestamp.valueOf(trip.getPlanEndTime()) : null);
                 break;
             case "CLASS2":
+                detail.setClass2PlanQty(BigDecimal.valueOf(trip.getPlanQty()));
                 detail.setClass2TripNo(String.valueOf(trip.getTripNo()));
                 detail.setClass2TripCapacity(BigDecimal.valueOf(trip.getTripCapacity()));
                 detail.setClass2StockHours(trip.getStockHours());
@@ -1023,6 +1039,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                         ? java.sql.Timestamp.valueOf(trip.getPlanEndTime()) : null);
                 break;
             case "CLASS3":
+                detail.setClass3PlanQty(BigDecimal.valueOf(trip.getPlanQty()));
                 detail.setClass3TripNo(String.valueOf(trip.getTripNo()));
                 detail.setClass3TripCapacity(BigDecimal.valueOf(trip.getTripCapacity()));
                 detail.setClass3StockHours(trip.getStockHours());
@@ -1033,34 +1050,59 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                         ? java.sql.Timestamp.valueOf(trip.getPlanEndTime()) : null);
                 break;
             case "CLASS4":
+                detail.setClass4PlanQty(BigDecimal.valueOf(trip.getPlanQty()));
                 detail.setClass4TripNo(String.valueOf(trip.getTripNo()));
                 detail.setClass4TripCapacity(BigDecimal.valueOf(trip.getTripCapacity()));
                 detail.setClass4StockHours(trip.getStockHours());
                 detail.setClass4Sequence(trip.getSequence());
+                detail.setClass4PlanStartTime(trip.getPlanStartTime() != null
+                        ? java.sql.Timestamp.valueOf(trip.getPlanStartTime()) : null);
+                detail.setClass4PlanEndTime(trip.getPlanEndTime() != null
+                        ? java.sql.Timestamp.valueOf(trip.getPlanEndTime()) : null);
                 break;
             case "CLASS5":
+                detail.setClass5PlanQty(BigDecimal.valueOf(trip.getPlanQty()));
                 detail.setClass5TripNo(String.valueOf(trip.getTripNo()));
                 detail.setClass5TripCapacity(BigDecimal.valueOf(trip.getTripCapacity()));
                 detail.setClass5StockHours(trip.getStockHours());
                 detail.setClass5Sequence(trip.getSequence());
+                detail.setClass5PlanStartTime(trip.getPlanStartTime() != null
+                        ? java.sql.Timestamp.valueOf(trip.getPlanStartTime()) : null);
+                detail.setClass5PlanEndTime(trip.getPlanEndTime() != null
+                        ? java.sql.Timestamp.valueOf(trip.getPlanEndTime()) : null);
                 break;
             case "CLASS6":
+                detail.setClass6PlanQty(BigDecimal.valueOf(trip.getPlanQty()));
                 detail.setClass6TripNo(String.valueOf(trip.getTripNo()));
                 detail.setClass6TripCapacity(BigDecimal.valueOf(trip.getTripCapacity()));
                 detail.setClass6StockHours(trip.getStockHours());
                 detail.setClass6Sequence(trip.getSequence());
+                detail.setClass6PlanStartTime(trip.getPlanStartTime() != null
+                        ? java.sql.Timestamp.valueOf(trip.getPlanStartTime()) : null);
+                detail.setClass6PlanEndTime(trip.getPlanEndTime() != null
+                        ? java.sql.Timestamp.valueOf(trip.getPlanEndTime()) : null);
                 break;
             case "CLASS7":
+                detail.setClass7PlanQty(BigDecimal.valueOf(trip.getPlanQty()));
                 detail.setClass7TripNo(String.valueOf(trip.getTripNo()));
                 detail.setClass7TripCapacity(BigDecimal.valueOf(trip.getTripCapacity()));
                 detail.setClass7StockHours(trip.getStockHours());
                 detail.setClass7Sequence(trip.getSequence());
+                detail.setClass7PlanStartTime(trip.getPlanStartTime() != null
+                        ? java.sql.Timestamp.valueOf(trip.getPlanStartTime()) : null);
+                detail.setClass7PlanEndTime(trip.getPlanEndTime() != null
+                        ? java.sql.Timestamp.valueOf(trip.getPlanEndTime()) : null);
                 break;
             case "CLASS8":
+                detail.setClass8PlanQty(BigDecimal.valueOf(trip.getPlanQty()));
                 detail.setClass8TripNo(String.valueOf(trip.getTripNo()));
                 detail.setClass8TripCapacity(BigDecimal.valueOf(trip.getTripCapacity()));
                 detail.setClass8StockHours(trip.getStockHours());
                 detail.setClass8Sequence(trip.getSequence());
+                detail.setClass8PlanStartTime(trip.getPlanStartTime() != null
+                        ? java.sql.Timestamp.valueOf(trip.getPlanStartTime()) : null);
+                detail.setClass8PlanEndTime(trip.getPlanEndTime() != null
+                        ? java.sql.Timestamp.valueOf(trip.getPlanEndTime()) : null);
                 break;
             default:
                 log.warn("未知的 CLASS_FIELD: {}", classField);
