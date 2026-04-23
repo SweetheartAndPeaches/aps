@@ -524,6 +524,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                             merged.setTripCapacity(existing.getTripCapacity());
                             merged.setStockHours(existing.getStockHours());
                             merged.setSequence(existing.getSequence());
+                            merged.setSourceTask(existing.getSourceTask());
                             merged.setPlanStartTime(existing.getPlanStartTime());
                             merged.setPlanEndTime(existing.getPlanEndTime());
                             return merged;
