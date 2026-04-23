@@ -338,6 +338,7 @@ public class TrialTaskProcessor {
         taskAllocation.setPriority(task.getPriority());
         taskAllocation.setStockHours(task.getStockHours());
         taskAllocation.setIsTrialTask(task.getIsTrialTask());
+        taskAllocation.setIsProductionTrial(task.getIsProductionTrial());
         taskAllocation.setIsEndingTask(task.getIsEndingTask());
         taskAllocation.setEndingSurplusQty(task.getEndingSurplusQty());
         taskAllocation.setIsMainProduct(task.getIsMainProduct());

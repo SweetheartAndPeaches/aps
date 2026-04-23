@@ -217,6 +217,8 @@ public interface CoreScheduleAlgorithmService {
         private BigDecimal stockHours;
         /** 是否试制任务 */
         private Boolean isTrialTask;
+        /** 是否量试任务（施工阶段为02-量试） */
+        private Boolean isProductionTrial;
         /** 是否收尾任务 */
         private Boolean isEndingTask;
         /** 收尾余量 */

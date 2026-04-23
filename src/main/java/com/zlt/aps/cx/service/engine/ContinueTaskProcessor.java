@@ -174,6 +174,7 @@ public class ContinueTaskProcessor {
         taskAllocation.setPriority(task.getPriority());
         taskAllocation.setStockHours(task.getStockHours());
         taskAllocation.setIsTrialTask(task.getIsTrialTask());
+        taskAllocation.setIsProductionTrial(task.getIsProductionTrial());
         taskAllocation.setIsEndingTask(task.getIsEndingTask());
         taskAllocation.setEndingSurplusQty(task.getEndingSurplusQty());
         taskAllocation.setEndingExtraInventory(task.getEndingExtraInventory());  // 设置收尾额外库存
@@ -638,6 +639,7 @@ public class ContinueTaskProcessor {
         taskAllocation.setPriority(task.getPriority());
         taskAllocation.setStockHours(task.getStockHours());
         taskAllocation.setIsTrialTask(task.getIsTrialTask());
+        taskAllocation.setIsProductionTrial(task.getIsProductionTrial());
         taskAllocation.setIsEndingTask(task.getIsEndingTask());
         taskAllocation.setEndingSurplusQty(task.getEndingSurplusQty());
         taskAllocation.setEndingExtraInventory(task.getEndingExtraInventory());  // 设置收尾额外库存
