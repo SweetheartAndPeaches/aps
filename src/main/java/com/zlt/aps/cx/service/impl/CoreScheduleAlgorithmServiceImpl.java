@@ -1306,6 +1306,9 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
         // 从 sourceTask 获取详细任务类型
         CoreScheduleAlgorithmService.DailyEmbryoTask task = spr.getSourceTask();
+        // 调试日志：打印isLastEndingBatch值
+        log.info("buildTaskAnalysis: embryo={}, spr.isLastEndingBatch={}, task.isLastEndingBatch={}", 
+                 spr.getEmbryoCode(), spr.getIsLastEndingBatch(), task != null ? task.getIsLastEndingBatch() : "task is null");
         if (task != null) {
             if (Boolean.TRUE.equals(task.getIsTrialTask())) {
                 reasons.add("试制");

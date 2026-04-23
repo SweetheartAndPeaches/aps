@@ -256,6 +256,7 @@ public class NewTaskProcessor {
                     taskAlloc.setEndingSurplusQty(task.getEndingSurplusQty());
                     taskAlloc.setIsMainProduct(task.getIsMainProduct());
                     taskAlloc.setLhId(task.getLhId());
+                    taskAlloc.setIsLastEndingBatch(task.getIsLastEndingBatch());
 
                     result.getTaskAllocations().add(taskAlloc);
                 }
