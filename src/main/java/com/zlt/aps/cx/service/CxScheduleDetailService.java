@@ -74,6 +74,14 @@ public interface CxScheduleDetailService extends IService<CxScheduleDetail> {
     boolean deleteByMainId(Long mainId);
 
     /**
+     * 批量根据主表ID删除明细
+     *
+     * @param mainIds 主表ID列表
+     * @return 是否成功
+     */
+    boolean deleteByMainIds(List<Long> mainIds);
+
+    /**
      * 获取下一个车次号
      *
      * @param mainId    主表ID

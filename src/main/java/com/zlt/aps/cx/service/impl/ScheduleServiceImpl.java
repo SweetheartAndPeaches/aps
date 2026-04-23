@@ -26,6 +26,7 @@ import com.zlt.aps.cx.api.domain.entity.CxMachineOnlineInfo;
 import com.zlt.aps.cx.api.domain.entity.CxStructureTreadConfig;
 import com.zlt.aps.cx.mapper.CxStructureTreadConfigMapper;
 import com.zlt.aps.mp.api.domain.entity.*;
+import com.zlt.aps.mp.api.domain.entity.MdmDevicePlanShut;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -234,7 +235,7 @@ public class ScheduleServiceImpl implements ScheduleService {
     }
 
     /**
-     * 删除指定日期的排程结果（主表+子表）
+     * 删除指定日期的排程结果(主表+子表)
      */
     private void deleteExistingScheduleResults(LocalDate scheduleDate) {
         // 先查出该日期所有主表记录，获取ID用于删子表
@@ -244,18 +245,21 @@ public class ScheduleServiceImpl implements ScheduleService {
         );
 
         if (!existingResults.isEmpty()) {
-            // 删除子表：按每个主表ID删除
-            for (CxScheduleResult existing : existingResults) {
-                scheduleDetailService.deleteByMainId(existing.getId());
-            }
-            log.info("删除日期 {} 的子表记录，共 {} 条主表关联", scheduleDate, existingResults.size());
+            // 提取所有主表ID
+            List<Long> mainIds = existingResults.stream()
+                    .map(CxScheduleResult::getId)
+                    .collect(Collectors.toList());
 
-            // 删除主表
+            // 批量删除子表：按主表ID列表一次性删除
+            scheduleDetailService.deleteByMainIds(mainIds);
+            log.info("批量删除日期 {} 的子表记录，共 {} 条主表关联", scheduleDate, mainIds.size());
+
+            // 批量删除主表
             scheduleResultMapper.delete(
                     new LambdaQueryWrapper<CxScheduleResult>()
                             .eq(CxScheduleResult::getScheduleDate, scheduleDate)
             );
-            log.info("删除日期 {} 的主表记录 {} 条", scheduleDate, existingResults.size());
+            log.info("批量删除日期 {} 的主表记录 {} 条", scheduleDate, existingResults.size());
         } else {
             log.info("日期 {} 无历史排程数据，跳过删除", scheduleDate);
         }

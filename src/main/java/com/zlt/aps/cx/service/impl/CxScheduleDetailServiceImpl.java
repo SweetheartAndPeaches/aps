@@ -82,6 +82,16 @@ public class CxScheduleDetailServiceImpl extends ServiceImpl<CxScheduleDetailMap
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean deleteByMainIds(List<Long> mainIds) {
+        if (mainIds == null || mainIds.isEmpty()) {
+            return true;
+        }
+        return remove(new LambdaQueryWrapper<CxScheduleDetail>()
+                .in(CxScheduleDetail::getMainId, mainIds));
+    }
+
+    @Override
     public Integer getNextTripNo(Long mainId, String shiftCode) {
         List<CxScheduleDetail> details = listByShift(mainId, shiftCode);
         if (details.isEmpty()) {
