@@ -186,6 +186,8 @@ public class TaskGroupService {
         
         // 跟踪每个物料已使用的成型余量（用于多任务共享同一物料的场景）
         Map<String, Integer> materialUsedFormingRemainder = new HashMap<>();
+        // 跟踪每个物料已处理的任务列表（用于回溯更新 isLastEndingBatch）
+        Map<String, List<CoreScheduleAlgorithmService.DailyEmbryoTask>> materialTasksMap = new HashMap<>();
         
         for (LhScheduleResult lhResult : lhScheduleResults) {
             if (lhResult.getEmbryoCode() == null) {
@@ -254,9 +256,28 @@ public class TaskGroupService {
             task.setContinueMachineCodes(continueMachineCodes);
             task.setIsFirstTask(!isContinueTask && !isTrialTask && !isProductionTrial);
 
+            // 将任务添加到物料任务列表（用于回溯更新）
+            materialTasksMap.computeIfAbsent(materialCode, k -> new ArrayList<>()).add(task);
+
             // S5.2.4 计算收尾属性（传入已使用的成型余量）
             int usedRemainder = materialUsedFormingRemainder.getOrDefault(materialCode, 0);
             calculateEndingInfo(task, context, scheduleDate, usedRemainder);
+
+            // S5.2.4.1 回溯更新：发现成型余量耗尽时，更新同一物料之前所有任务的 isLastEndingBatch
+            Integer remainingAfterCalc = task.getEndingSurplusQty();
+            if (remainingAfterCalc != null && remainingAfterCalc <= 0) {
+                task.setIsLastEndingBatch(true);
+                // 回溯更新同一物料之前的所有任务
+                List<CoreScheduleAlgorithmService.DailyEmbryoTask> previousTasks = materialTasksMap.get(materialCode);
+                if (previousTasks != null) {
+                    for (CoreScheduleAlgorithmService.DailyEmbryoTask prevTask : previousTasks) {
+                        if (!Boolean.TRUE.equals(prevTask.getIsLastEndingBatch())) {
+                            prevTask.setIsLastEndingBatch(true);
+                            log.info("回溯更新 isLastEndingBatch: 物料={}, 胎胚={} → true", materialCode, prevTask.getEmbryoCode());
+                        }
+                    }
+                }
+            }
 
             // S5.2.5 计算待排产量
             calculatePlannedProduction(task, context, scheduleDate);
@@ -1017,6 +1038,7 @@ public class TaskGroupService {
             task.setEndingExtraInventory(0);
             task.setEndingAbandoned(true);
             task.setEndingAbandonedQty(endingSurplusQty);
+            task.setIsLastEndingBatch(true);
             log.info("收尾任务 {} 余量{}条被舍弃（非主销+余量≤2）", task.getEmbryoCode(), endingSurplusQty);
         } else if (!Boolean.TRUE.equals(task.getIsMainProduct())) {
             // 非主销产品 + 收尾余量>2条，按实际量下（不补车）
