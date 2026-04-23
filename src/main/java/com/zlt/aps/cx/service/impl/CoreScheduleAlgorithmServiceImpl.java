@@ -1345,10 +1345,13 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         }
 
         if (reasons.isEmpty()) {
+            log.info("buildTaskAnalysis: embryo={}, analysis=null (reasons empty)", spr.getEmbryoCode());
             return null;
         }
 
-        return String.join(",", reasons);
+        String result = String.join(",", reasons);
+        log.info("buildTaskAnalysis: embryo={}, analysis={}", spr.getEmbryoCode(), result);
+        return result;
     }
 
     /**
