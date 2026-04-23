@@ -58,7 +58,7 @@ public class ScheduleMainController {
         ScheduleService.ScheduleResult result = scheduleService.executeSchedule(request);
 
         if (result.isSuccess()) {
-            return AjaxResult.success(result);
+            return AjaxResult.success();
         } else {
             // 校验不通过时，构建校验摘要返回前端
             ScheduleService.ValidationSummary summary = new ScheduleService.ValidationSummary();

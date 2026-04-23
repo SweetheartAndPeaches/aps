@@ -91,7 +91,7 @@ public class LhScheduleResultValidationStrategy extends BaseValidationStrategy {
         List<LhScheduleResult> lhResults = context.getLhScheduleResults();
 
         if (lhResults == null || lhResults.isEmpty()) {
-            addWarn(result,
+            addError(result,
                     "硫化排程结果为空，无可排产任务",
                     "请先执行硫化排程或检查排程日期是否正确");
             return;
