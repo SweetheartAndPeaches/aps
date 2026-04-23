@@ -527,6 +527,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                             merged.setSourceTask(existing.getSourceTask());
                             merged.setPlanStartTime(existing.getPlanStartTime());
                             merged.setPlanEndTime(existing.getPlanEndTime());
+                            // 注意：isLastEndingBatch 不在此处合并，每个班次保持独立状态
+                            // merged 对象不会被使用（因为 existing == null 时直接返回 spr）
                             return merged;
                         });
                 taskTotalQtyMap.merge(taskKey, spr.getQuantity() != null ? spr.getQuantity() : 0, Integer::sum);
