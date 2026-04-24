@@ -723,7 +723,14 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             result.setOrderNo(orderNo);
 
             // ---- 收尾提示 ----
-            if (result.getCxRemainQty() != null && result.getCxRemainQty().compareTo(BigDecimal.ZERO) <= 0) {
+            boolean isUrgentEnding = false;
+            for (ShiftScheduleService.ShiftProductionResult spr : classSprMap.values()) {
+                if (Boolean.TRUE.equals(spr.getSourceTask() != null ? spr.getSourceTask().getIsUrgentEnding() : false)) {
+                    isUrgentEnding = true;
+                    break;
+                }
+            }
+            if (isUrgentEnding || (result.getCxRemainQty() != null && result.getCxRemainQty().compareTo(BigDecimal.ZERO) <= 0)) {
                 result.setMarkCloseOutTip("0");
             } else {
                 result.setMarkCloseOutTip("1");

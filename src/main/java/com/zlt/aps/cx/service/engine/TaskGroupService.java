@@ -1043,7 +1043,7 @@ public class TaskGroupService {
 
         // 今天最后一天收尾
         int tripCapacity = getTripCapacity(task.getStructureName(), context);
-        if (!Boolean.TRUE.equals(task.getIsMainProduct()) && endingSurplusQty <= ENDING_DISCARD_THRESHOLD) {
+        if (!Boolean.TRUE.equals(task.getIsMainProduct()) && endingSurplusQty <= getEndingDiscardThreshold(context)) {
             // 非主销产品 + 收尾余量≤2条，舍弃当天排产
             task.setPlannedProduction(0);
             task.setRequiredCars(0);
