@@ -2032,46 +2032,40 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             return;
         }
 
-        if (vulcanizingConsumptionByEmbryo == null || vulcanizingConsumptionByEmbryo.isEmpty()) {
-            log.debug("【步骤4】vulcanizingConsumptionByEmbryo 为空，跳过更新");
+        List<LhScheduleResult> lhResults = context.getLhScheduleResults();
+        if (lhResults == null || lhResults.isEmpty()) {
+            log.debug("【步骤4】lhResults 为空，跳过更新");
             return;
         }
 
-        // 构建胎胚编码 → 硫化任务列表的映射（一对多：一个胎胚可能对应多个物料/硫化任务）
-        List<LhScheduleResult> lhResults = context.getLhScheduleResults();
-        Map<String, List<LhScheduleResult>> embryoToLhListMap = new HashMap<>();
-        if (lhResults != null) {
-            for (LhScheduleResult lh : lhResults) {
-                if (lh.getEmbryoCode() != null && lh.getMaterialCode() != null) {
-                    embryoToLhListMap.computeIfAbsent(lh.getEmbryoCode(), k -> new ArrayList<>()).add(lh);
-                }
+        // 按物料汇总硫化消耗（一个物料只扣减一次）
+        Map<String, Integer> consumptionByMaterial = new HashMap<>();
+        for (LhScheduleResult lh : lhResults) {
+            String embryoCode = lh.getEmbryoCode();
+            String materialCode = lh.getMaterialCode();
+            if (embryoCode == null || materialCode == null) {
+                continue;
+            }
+            Integer consumption = vulcanizingConsumptionByEmbryo.get(embryoCode);
+            if (consumption != null && consumption > 0) {
+                consumptionByMaterial.merge(materialCode, consumption, Integer::sum);
             }
         }
 
-        // 更新硫化余量：每个物料都用完整的硫化消耗量去更新（不按比例分配）
+        // 更新硫化余量：每个物料只更新一次
         log.info("【步骤4】硫化消耗按物料汇总详情:");
-        for (Map.Entry<String, Integer> entry : vulcanizingConsumptionByEmbryo.entrySet()) {
-            String embryoCode = entry.getKey();
+        for (Map.Entry<String, Integer> entry : consumptionByMaterial.entrySet()) {
+            String materialCode = entry.getKey();
             int consumption = entry.getValue();
-            
-            List<LhScheduleResult> lhList = embryoToLhListMap.get(embryoCode);
-            if (lhList != null && !lhList.isEmpty()) {
-                // 每个物料都用完整的硫化消耗量去更新
-                for (LhScheduleResult lh : lhList) {
-                    String materialCode = lh.getMaterialCode();
-                    MdmMonthSurplus surplus = monthSurplusMap.get(materialCode);
-                    if (surplus != null && surplus.getPlanSurplusQty() != null && consumption > 0) {
-                        BigDecimal oldSurplus = surplus.getPlanSurplusQty();
-                        BigDecimal newSurplus = oldSurplus.subtract(BigDecimal.valueOf(consumption));
-                        surplus.setPlanSurplusQty(newSurplus);
-                        log.info("  - {}: 原余量={}, 硫化消耗={}, 新余量={}",
-                                materialCode, oldSurplus, consumption, newSurplus);
-                    } else {
-                        log.warn("  - {}: 未找到硫化余量记录或余量为空，消耗={}", materialCode, consumption);
-                    }
-                }
+            MdmMonthSurplus surplus = monthSurplusMap.get(materialCode);
+            if (surplus != null && surplus.getPlanSurplusQty() != null) {
+                BigDecimal oldSurplus = surplus.getPlanSurplusQty();
+                BigDecimal newSurplus = oldSurplus.subtract(BigDecimal.valueOf(consumption));
+                surplus.setPlanSurplusQty(newSurplus);
+                log.info("  - {}: 原余量={}, 硫化消耗={}, 新余量={}",
+                        materialCode, oldSurplus, consumption, newSurplus);
             } else {
-                log.warn("【步骤4】胎胚 {} 未找到对应的硫化任务", embryoCode);
+                log.warn("  - {}: 未找到硫化余量记录或余量为空，消耗={}", materialCode, consumption);
             }
         }
     }
