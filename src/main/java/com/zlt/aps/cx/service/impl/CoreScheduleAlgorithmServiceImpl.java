@@ -1475,7 +1475,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             log.info("  - {}: {} 条", entry.getKey(), entry.getValue());
         }
 
-        // 2. 计算当天硫化消耗（按胎胚编码汇总，根据当天班次CLASS字段获取计划量）
+        // 2. 计算当天硫化消耗
+        // 2.1 按胎胚编码汇总（用于更新CxStock）
         Map<String, Integer> vulcanizingConsumptionByEmbryo = new HashMap<>();
         Map<Long, Integer> vulcanizingConsumptionByLhId = new HashMap<>();
         calculateVulcanizingConsumption(context.getLhScheduleResults(), dayShifts,
@@ -1483,6 +1484,15 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         log.info("【步骤2】硫化消耗汇总（胎胚 → 消耗量）:");
         for (Map.Entry<String, Integer> entry : vulcanizingConsumptionByEmbryo.entrySet()) {
             log.info("  - {}: {} 条", entry.getKey(), entry.getValue());
+        }
+
+        // 2.2 按物料编码汇总（用于更新硫化余量）
+        Map<String, Integer> vulcanizingConsumptionByMaterial = new HashMap<>();
+        calculateVulcanizingConsumptionByMaterial(context.getLhScheduleResults(), dayShifts,
+                vulcanizingConsumptionByMaterial);
+        log.info("【步骤2】硫化消耗汇总（物料 → 消耗量）:");
+        for (Map.Entry<String, Integer> entry : vulcanizingConsumptionByMaterial.entrySet()) {
+            log.info("  - {}: {}", entry.getKey(), entry.getValue());
         }
 
         // 2.5. 先更新 CxStock 实体中的 stockNum（计算新库存 = 原库存 + 成型产出 - 硫化消耗）
@@ -1495,7 +1505,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
         // 5. 更新 monthSurplusMap（硫化余量 -= 当天硫化消耗）
         log.info("【步骤4】更新硫化余量（monthSurplusMap）...");
-        updateMonthSurplus(context, vulcanizingConsumptionByEmbryo);
+        updateMonthSurplus(context, vulcanizingConsumptionByMaterial);
 
         // 6. 重算 formingRemainderMap（成型余量 = 硫化余量 - 库存）
         log.info("【步骤5】重算成型余量（formingRemainderMap）...");
@@ -1586,6 +1596,36 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 if (lhResult.getId() != null) {
                     vulcanizingConsumptionByLhId.merge(lhResult.getId(), consumption, Integer::sum);
                 }
+            }
+        }
+    }
+
+    /**
+     * 计算当天硫化消耗，按物料编码汇总
+     *
+     * @param lhResults                              硫化排程结果列表
+     * @param dayShifts                              当天班次配置
+     * @param vulcanizingConsumptionByMaterial       输出：物料编码 → 硫化消耗量
+     */
+    private void calculateVulcanizingConsumptionByMaterial(
+            List<LhScheduleResult> lhResults,
+            List<CxShiftConfig> dayShifts,
+            Map<String, Integer> vulcanizingConsumptionByMaterial) {
+
+        if (lhResults == null || dayShifts == null || dayShifts.isEmpty()) {
+            return;
+        }
+
+        for (LhScheduleResult lhResult : lhResults) {
+            String materialCode = lhResult.getMaterialCode();
+            if (materialCode == null) {
+                continue;
+            }
+
+            // 获取当天班次对应的硫化计划量
+            int consumption = getVulcanizingConsumptionForDay(lhResult, dayShifts);
+            if (consumption > 0) {
+                vulcanizingConsumptionByMaterial.merge(materialCode, consumption, Integer::sum);
             }
         }
     }
@@ -2061,14 +2101,12 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     /**
      * 更新 monthSurplusMap（硫化余量 -= 当天硫化消耗）
      *
-     * <p>注意：vulcanizingConsumptionByEmbryo 的 key 是胎胚编码，需要转换为物料编码
-     *
-     * @param context                        排程上下文
-     * @param vulcanizingConsumptionByEmbryo 胎胚编码 → 硫化消耗量
+     * @param context                             排程上下文
+     * @param vulcanizingConsumptionByMaterial    物料编码 → 硫化消耗量
      */
     private void updateMonthSurplus(
             ScheduleContextVo context,
-            Map<String, Integer> vulcanizingConsumptionByEmbryo) {
+            Map<String, Integer> vulcanizingConsumptionByMaterial) {
 
         Map<String, MdmMonthSurplus> monthSurplusMap = context.getMonthSurplusMap();
         if (monthSurplusMap == null || monthSurplusMap.isEmpty()) {
@@ -2076,29 +2114,14 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             return;
         }
 
-        List<LhScheduleResult> lhResults = context.getLhScheduleResults();
-        if (lhResults == null || lhResults.isEmpty()) {
-            log.debug("【步骤4】lhResults 为空，跳过更新");
+        if (vulcanizingConsumptionByMaterial == null || vulcanizingConsumptionByMaterial.isEmpty()) {
+            log.debug("【步骤4】vulcanizingConsumptionByMaterial 为空，跳过更新");
             return;
-        }
-
-        // 按物料汇总硫化消耗（一个物料只扣减一次）
-        Map<String, Integer> consumptionByMaterial = new HashMap<>();
-        for (LhScheduleResult lh : lhResults) {
-            String embryoCode = lh.getEmbryoCode();
-            String materialCode = lh.getMaterialCode();
-            if (embryoCode == null || materialCode == null) {
-                continue;
-            }
-            Integer consumption = vulcanizingConsumptionByEmbryo.get(embryoCode);
-            if (consumption != null && consumption > 0) {
-                consumptionByMaterial.merge(materialCode, consumption, Integer::sum);
-            }
         }
 
         // 更新硫化余量：每个物料只更新一次
         log.info("【步骤4】硫化消耗按物料汇总详情:");
-        for (Map.Entry<String, Integer> entry : consumptionByMaterial.entrySet()) {
+        for (Map.Entry<String, Integer> entry : vulcanizingConsumptionByMaterial.entrySet()) {
             String materialCode = entry.getKey();
             int consumption = entry.getValue();
             MdmMonthSurplus surplus = monthSurplusMap.get(materialCode);
