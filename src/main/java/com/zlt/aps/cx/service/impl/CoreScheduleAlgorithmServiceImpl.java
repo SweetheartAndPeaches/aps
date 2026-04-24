@@ -2041,75 +2041,30 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             }
         }
 
-        // 按物料编码汇总硫化消耗（按日硫化量比例分配）
-        Map<String, Integer> consumptionByMaterial = new HashMap<>();
+        // 更新硫化余量：每个物料都用完整的硫化消耗量去更新（不按比例分配）
+        log.info("【步骤4】硫化消耗按物料汇总详情:");
         for (Map.Entry<String, Integer> entry : vulcanizingConsumptionByEmbryo.entrySet()) {
             String embryoCode = entry.getKey();
             int consumption = entry.getValue();
             
             List<LhScheduleResult> lhList = embryoToLhListMap.get(embryoCode);
             if (lhList != null && !lhList.isEmpty()) {
-                if (lhList.size() == 1) {
-                    // 一对一：直接分配
-                    String materialCode = lhList.get(0).getMaterialCode();
-                    consumptionByMaterial.merge(materialCode, consumption, Integer::sum);
-                } else {
-                    // 一对多：按日硫化量比例分配消耗
-                    int totalDailyQty = 0;
-                    for (LhScheduleResult lh : lhList) {
-                        if (lh.getDailyPlanQty() != null) {
-                            totalDailyQty += lh.getDailyPlanQty();
-                        }
-                    }
-                    if (totalDailyQty > 0) {
-                        int allocated = 0;
-                        for (int i = 0; i < lhList.size(); i++) {
-                            LhScheduleResult lh = lhList.get(i);
-                            int dailyQty = lh.getDailyPlanQty() != null ? lh.getDailyPlanQty() : 0;
-                            int alloc;
-                            if (i == lhList.size() - 1) {
-                                // 最后一个分配剩余量，避免四舍五入误差
-                                alloc = consumption - allocated;
-                            } else {
-                                alloc = consumption * dailyQty / totalDailyQty;
-                            }
-                            if (alloc > 0) {
-                                consumptionByMaterial.merge(lh.getMaterialCode(), alloc, Integer::sum);
-                                allocated += alloc;
-                            }
-                        }
-                        log.debug("【步骤4】胎胚 {} 硫化消耗={}, 按{}个物料按日硫化量比例分配", embryoCode, consumption, lhList.size());
+                // 每个物料都用完整的硫化消耗量去更新
+                for (LhScheduleResult lh : lhList) {
+                    String materialCode = lh.getMaterialCode();
+                    MdmMonthSurplus surplus = monthSurplusMap.get(materialCode);
+                    if (surplus != null && surplus.getPlanSurplusQty() != null && consumption > 0) {
+                        BigDecimal oldSurplus = surplus.getPlanSurplusQty();
+                        BigDecimal newSurplus = oldSurplus.subtract(BigDecimal.valueOf(consumption));
+                        surplus.setPlanSurplusQty(newSurplus);
+                        log.info("  - {}: 原余量={}, 硫化消耗={}, 新余量={}",
+                                materialCode, oldSurplus, consumption, newSurplus);
                     } else {
-                        // 日硫化量都为0，平均分配
-                        int avg = consumption / lhList.size();
-                        int remainder = consumption - avg * lhList.size();
-                        for (int i = 0; i < lhList.size(); i++) {
-                            int alloc = avg + (i < remainder ? 1 : 0);
-                            consumptionByMaterial.merge(lhList.get(i).getMaterialCode(), alloc, Integer::sum);
-                        }
-                        log.debug("【步骤4】胎胚 {} 硫化消耗={}, 日硫化量为0，平均分配给{}个物料", embryoCode, consumption, lhList.size());
+                        log.warn("  - {}: 未找到硫化余量记录或余量为空，消耗={}", materialCode, consumption);
                     }
                 }
             } else {
                 log.warn("【步骤4】胎胚 {} 未找到对应的硫化任务", embryoCode);
-            }
-        }
-
-        // 更新硫化余量
-        log.info("【步骤4】硫化消耗按物料汇总详情:");
-        for (Map.Entry<String, Integer> entry : consumptionByMaterial.entrySet()) {
-            String materialCode = entry.getKey();
-            int consumption = entry.getValue();
-            
-            MdmMonthSurplus surplus = monthSurplusMap.get(materialCode);
-            if (surplus != null && surplus.getPlanSurplusQty() != null && consumption > 0) {
-                BigDecimal oldSurplus = surplus.getPlanSurplusQty();
-                BigDecimal newSurplus = oldSurplus.subtract(BigDecimal.valueOf(consumption));
-                surplus.setPlanSurplusQty(newSurplus);
-                log.info("  - {}: 原余量={}, 硫化消耗={}, 新余量={}",
-                        materialCode, oldSurplus, consumption, newSurplus);
-            } else {
-                log.warn("  - {}: 未找到硫化余量记录或余量为空，消耗={}", materialCode, consumption);
             }
         }
     }

@@ -2,6 +2,7 @@ package com.zlt.aps.cx.service.engine;
 
 import com.zlt.aps.cx.api.domain.entity.CxStock;
 import com.zlt.aps.cx.entity.CxMaterialEnding;
+import com.zlt.aps.cx.entity.config.CxParamConfig;
 import com.zlt.aps.cx.entity.config.CxShiftConfig;
 import com.zlt.aps.cx.entity.schedule.LhScheduleResult;
 import com.zlt.aps.cx.vo.MonthPlanProductLhCapacityVo;
@@ -47,17 +48,31 @@ public class TaskGroupService {
 
     // ==================== 业务阈值常量 ====================
 
-    /** 收尾舍弃阈值：非主销产品余量≤此值时舍弃（条） */
-    private static final int ENDING_DISCARD_THRESHOLD = 2;
+    /** 收尾舍弃阈值默认值：非主销产品余量≤此值时舍弃（条） */
+    private static final int DEFAULT_ENDING_DISCARD_THRESHOLD = 2;
 
-    /** 成型余量紧急阈值：成型余量低于此值标记为紧急收尾（条） */
-    private static final int ENDING_URGENT_FORMING_REMAINDER = 400;
+    /** 成型余量紧急阈值默认值：成型余量低于此值标记为紧急收尾（条） */
+    private static final int DEFAULT_ENDING_URGENT_FORMING_REMAINDER = 400;
 
-    /** 近期收尾天数阈值（10 天内） */
-    private static final int ENDING_DAYS_THRESHOLD = 10;
+    /** 近期收尾天数阈值默认值（10 天内） */
+    private static final int DEFAULT_ENDING_DAYS_THRESHOLD = 10;
 
-    /** 紧急收尾天数阈值（3 天内） */
-    private static final int URGENT_ENDING_DAYS = 3;
+    /** 紧急收尾天数阈值默认值（3 天内） */
+    private static final int DEFAULT_URGENT_ENDING_DAYS = 3;
+
+    // ==================== 参数配置编码 ====================
+
+    /** 参数编码：收尾舍弃阈值 */
+    private static final String PARAM_ENDING_DISCARD_THRESHOLD = "ENDING_DISCARD_THRESHOLD";
+
+    /** 参数编码：成型余量紧急阈值 */
+    private static final String PARAM_ENDING_URGENT_FORMING_REMAINDER = "ENDING_URGENT_FORMING_REMAINDER";
+
+    /** 参数编码：近期收尾天数阈值 */
+    private static final String PARAM_ENDING_DAYS_THRESHOLD = "ENDING_DAYS_THRESHOLD";
+
+    /** 参数编码：紧急收尾天数阈值 */
+    private static final String PARAM_URGENT_ENDING_DAYS = "URGENT_ENDING_DAYS";
 
     /** 库存低水位阈值（小时）：低于此值提升优先级 */
     private static final BigDecimal STOCK_LOW_HOURS_THRESHOLD = new BigDecimal("4");
@@ -284,7 +299,7 @@ public class TaskGroupService {
             // 打印收尾任务完整信息（所有字段已填充完毕）
             // 条件：成型余量低于阈值 或 紧急收尾
             Integer endingSurplus = task.getEndingSurplusQty();
-            if ((endingSurplus != null && endingSurplus < ENDING_URGENT_FORMING_REMAINDER)
+            if ((endingSurplus != null && endingSurplus < getEndingUrgentFormingRemainder(context))
                     || Boolean.TRUE.equals(task.getIsUrgentEnding())) {
                 // 获取计算公式所需参数
                 int vulcanizeDmd = task.getVulcanizeDemand() != null ? task.getVulcanizeDemand() : 0;
@@ -294,7 +309,7 @@ public class TaskGroupService {
                 int tripCap = getTripCapacity(task.getStructureName(), context);
                 int plannedProd = task.getPlannedProduction() != null ? task.getPlannedProduction() : 0;
                 log.info("成型余量低于阈值的收尾任务：物料={}, 剩余成型余量={}, 阈值={} | 收尾任务={}, 收尾余量={}, 硫化余量={}, 收尾日={}, 距收尾天={}, 紧急收尾={}, 近期收尾={}, 收尾最后一批={} | 计算公式：(日硫化量{} - 库存{}) × (1 + 损耗率{}) = {} × {} = {} | 整车({})取整后待排产量={}, 需车数={}, 最终需生产量={}",
-                        embryoCode, task.getEndingSurplusQty(), ENDING_URGENT_FORMING_REMAINDER,
+                        embryoCode, task.getEndingSurplusQty(), getEndingUrgentFormingRemainder(context),
                         task.getIsEndingTask(), task.getEndingSurplusQty(), task.getVulcanizeSurplusQty(),
                         task.getEndingDate(), task.getDaysToEnding(), task.getIsUrgentEnding(), task.getIsNearEnding(), task.getIsLastEndingBatch(),
                         vulcanizeDmd, stock, lossRate, netDemand, lossRate.add(BigDecimal.ONE).setScale(4, BigDecimal.ROUND_HALF_UP), plannedProd,
@@ -397,12 +412,12 @@ public class TaskGroupService {
             task.setDaysToEnding(daysToEnding);
 
             // 判断是否10天内收尾
-            boolean isNearEnding = daysToEnding >= 0 && daysToEnding <= ENDING_DAYS_THRESHOLD;
+            boolean isNearEnding = daysToEnding >= 0 && daysToEnding <= getEndingDaysThreshold(context);
             task.setIsNearEnding(isNearEnding);
 
             // 判断是否3天内收尾（紧急），或成型余量>=400（库存积压风险）
-            boolean isUrgentEnding = (daysToEnding >= 0 && daysToEnding <= URGENT_ENDING_DAYS)
-                    || (remainingFormingRemainder != null && remainingFormingRemainder <= ENDING_URGENT_FORMING_REMAINDER);
+            boolean isUrgentEnding = (daysToEnding >= 0 && daysToEnding <= getUrgentEndingDays(context))
+                    || (remainingFormingRemainder != null && remainingFormingRemainder <= getEndingUrgentFormingRemainder(context));
             task.setIsUrgentEnding(isUrgentEnding);
 
             if (isUrgentEnding) {
@@ -1489,5 +1504,87 @@ public class TaskGroupService {
      */
     private int getTripCapacity(String structureName, ScheduleContextVo context) {
         return productionCalculator.getTripCapacity(structureName, context);
+    }
+
+    // ==================== 参数配置获取方法 ====================
+
+    /**
+     * 获取收尾舍弃阈值：非主销产品余量≤此值时舍弃
+     * 优先使用参数配置，否则使用默认值
+     */
+    private int getEndingDiscardThreshold(ScheduleContextVo context) {
+        if (context.getParamConfigMap() != null) {
+            CxParamConfig config = context.getParamConfigMap().get(PARAM_ENDING_DISCARD_THRESHOLD);
+            if (config != null && config.getParamValue() != null) {
+                try {
+                    int value = Integer.parseInt(config.getParamValue());
+                    log.debug("收尾舍弃阈值使用参数配置: {}", value);
+                    return value;
+                } catch (NumberFormatException e) {
+                    log.warn("解析收尾舍弃阈值配置失败: {}", config.getParamValue());
+                }
+            }
+        }
+        return DEFAULT_ENDING_DISCARD_THRESHOLD;
+    }
+
+    /**
+     * 获取成型余量紧急阈值：成型余量低于此值标记为紧急收尾
+     * 优先使用参数配置，否则使用默认值
+     */
+    private int getEndingUrgentFormingRemainder(ScheduleContextVo context) {
+        if (context.getParamConfigMap() != null) {
+            CxParamConfig config = context.getParamConfigMap().get(PARAM_ENDING_URGENT_FORMING_REMAINDER);
+            if (config != null && config.getParamValue() != null) {
+                try {
+                    int value = Integer.parseInt(config.getParamValue());
+                    log.debug("成型余量紧急阈值使用参数配置: {}", value);
+                    return value;
+                } catch (NumberFormatException e) {
+                    log.warn("解析成型余量紧急阈值配置失败: {}", config.getParamValue());
+                }
+            }
+        }
+        return DEFAULT_ENDING_URGENT_FORMING_REMAINDER;
+    }
+
+    /**
+     * 获取近期收尾天数阈值（10天内）
+     * 优先使用参数配置，否则使用默认值
+     */
+    private int getEndingDaysThreshold(ScheduleContextVo context) {
+        if (context.getParamConfigMap() != null) {
+            CxParamConfig config = context.getParamConfigMap().get(PARAM_ENDING_DAYS_THRESHOLD);
+            if (config != null && config.getParamValue() != null) {
+                try {
+                    int value = Integer.parseInt(config.getParamValue());
+                    log.debug("近期收尾天数阈值使用参数配置: {}", value);
+                    return value;
+                } catch (NumberFormatException e) {
+                    log.warn("解析近期收尾天数阈值配置失败: {}", config.getParamValue());
+                }
+            }
+        }
+        return DEFAULT_ENDING_DAYS_THRESHOLD;
+    }
+
+    /**
+     * 获取紧急收尾天数阈值（3天内）
+     * 优先使用参数配置，否则使用默认值
+     */
+    private int getUrgentEndingDays(ScheduleContextVo context) {
+        if (context.getParamConfigMap() != null) {
+            CxParamConfig config = context.getParamConfigMap().get(PARAM_URGENT_ENDING_DAYS);
+            if (config != null && config.getParamValue() != null) {
+                try {
+                    int value = Integer.parseInt(config.getParamValue());
+                    log.debug("紧急收尾天数阈值使用参数配置: {}", value);
+                    return value;
+                } catch (NumberFormatException e) {
+                    log.warn("解析紧急收尾天数阈值配置失败: {}", config.getParamValue());
+                }
+            }
+        }
+        return DEFAULT_URGENT_ENDING_DAYS;
     }
 }
