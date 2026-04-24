@@ -884,7 +884,7 @@ public class TaskGroupService {
             MonthPlanProductLhCapacityVo capacityVo = lhCapacityMap.get(materialCode);
             if (capacityVo != null) {
                 if (capacityVo.getDayVulcanizationQty() != null && capacityVo.getDayVulcanizationQty() > 0) {
-                    dailyLhCapacity = capacityVo.getDayVulcanizationQty();
+                    dailyLhCapacity = capacityVo.getDayVulcanizationQty() / 2; // 日硫化量是双模的，需要除以2得到单模产量
                 } else if (capacityVo.getStandardCapacity() != null && capacityVo.getStandardCapacity() > 0) {
                     dailyLhCapacity = capacityVo.getStandardCapacity();
                 }
