@@ -470,7 +470,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         Map<String, Map<String, ShiftScheduleService.ShiftProductionResult>> taskClassSprMap = new LinkedHashMap<>();
         Map<String, Integer> taskTotalQtyMap = new LinkedHashMap<>();
         Map<String, String> taskStructureMap = new LinkedHashMap<>();
-        Map<String, Long> taskLhIdMap = new LinkedHashMap<>();
+        Map<String, List<Long>> taskLhIdListMap = new LinkedHashMap<>();
 
         for (ShiftScheduleResult shiftResult : shiftResults) {
             int day = shiftResult.getDay();
@@ -548,7 +548,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                         String materialCode = taskAlloc.getMaterialCode() != null ? taskAlloc.getMaterialCode() : "";
                         String taskKey = allocation.getMachineCode() + "|" + embryoCode + "|" + materialCode;
                         if (taskAlloc.getLhId() != null) {
-                            taskLhIdMap.putIfAbsent(taskKey, taskAlloc.getLhId());
+                            taskLhIdListMap.computeIfAbsent(taskKey, k -> new ArrayList<>()).add(taskAlloc.getLhId());
                         }
                     }
                 }
@@ -648,44 +648,81 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 }
             }
 
-            // ---- 库存信息 ----
-            Long lhId = taskLhIdMap.get(taskKey);
-            if (lhId != null) {
+            // ---- 库存信息（求和合并多个lhId的库存） ----
+            List<Long> lhIdList = taskLhIdListMap.get(taskKey);
+            int totalStock = 0;
+            if (lhIdList != null && !lhIdList.isEmpty()) {
                 Map<String, Integer> stockMap = context.getMaterialStockMap();
-                if (stockMap != null) {
-                    Integer stock = stockMap.get(String.valueOf(lhId));
-                    result.setTotalStock(stock != null ? new BigDecimal(stock) : BigDecimal.ZERO);
-                } else {
-                    result.setTotalStock(BigDecimal.ZERO);
+                for (Long lhId : lhIdList) {
+                    if (stockMap != null) {
+                        Integer stock = stockMap.get(String.valueOf(lhId));
+                        totalStock += (stock != null ? stock : 0);
+                    }
                 }
-            } else {
-                result.setTotalStock(BigDecimal.ZERO);
+            }
+            result.setTotalStock(new BigDecimal(totalStock));
+
+            // ---- 硫化信息（合并多个硫化任务） ----
+            List<LhScheduleResult> allLhResults = new ArrayList<>();
+            if (lhIdList != null && !lhIdList.isEmpty()) {
+                for (Long lhId : lhIdList) {
+                    LhScheduleResult lh = lhByIdMap.get(lhId);
+                    if (lh != null) {
+                        allLhResults.add(lh);
+                    }
+                }
+            }
+            // 如果没有lhId，尝试按物料查找
+            if (allLhResults.isEmpty() && materialCodeToLhMap != null && materialCode != null) {
+                List<LhScheduleResult> related = materialCodeToLhMap.get(materialCode);
+                if (related != null) {
+                    allLhResults.addAll(related);
+                }
             }
 
-            // ---- 硫化信息 ----
-            LhScheduleResult primaryLh = null;
-            if (lhId != null) {
-                primaryLh = lhByIdMap.get(lhId);
-            }
-            if (primaryLh == null && materialCode != null) {
-                List<LhScheduleResult> relatedLhResults = materialCodeToLhMap.get(materialCode);
-                if (relatedLhResults != null && !relatedLhResults.isEmpty()) {
-                    primaryLh = relatedLhResults.get(0);
-                }
-            }
+            // 第一个硫化任务（用于lhClassQty和lhRemainQty）
+            LhScheduleResult primaryLh = allLhResults.isEmpty() ? null : allLhResults.get(0);
 
-            if (primaryLh != null) {
-                result.setLhMachineCode(primaryLh.getLhMachineCode());
-                result.setLhMachineName(primaryLh.getLhMachineName());
-                result.setLhScheduleIds(primaryLh.getId() != null ? String.valueOf(primaryLh.getId()) : null);
-                if (primaryLh.getMouldQty() != null) {
-                    result.setLhMachineQty(new BigDecimal(primaryLh.getMouldQty()));
+            if (!allLhResults.isEmpty()) {
+                // lhScheduleIds: 逗号分隔合并
+                String lhIds = lhIdList != null ? lhIdList.stream()
+                    .map(String::valueOf)
+                    .collect(Collectors.joining(",")) : null;
+                result.setLhScheduleIds(lhIds);
+
+                // lhMachineCode: 逗号分隔合并
+                String lhMachineCodes = allLhResults.stream()
+                    .map(LhScheduleResult::getLhMachineCode)
+                    .filter(Objects::nonNull)
+                    .distinct()
+                    .collect(Collectors.joining(","));
+                result.setLhMachineCode(lhMachineCodes);
+
+                // lhMachineName: 逗号分隔合并
+                String lhMachineNames = allLhResults.stream()
+                    .map(LhScheduleResult::getLhMachineName)
+                    .filter(Objects::nonNull)
+                    .distinct()
+                    .collect(Collectors.joining(","));
+                result.setLhMachineName(lhMachineNames);
+
+                // lhMachineQty: 求和合并
+                int totalLhMachineQty = 0;
+                for (LhScheduleResult lh : allLhResults) {
+                    if (lh.getMouldQty() != null) {
+                        totalLhMachineQty += lh.getMouldQty();
+                    }
                 }
-                if (primaryLh.getSingleMouldShiftQty() != null) {
+                result.setLhMachineQty(new BigDecimal(totalLhMachineQty));
+
+                // lhClassQty: 只取第一个
+                if (primaryLh != null && primaryLh.getSingleMouldShiftQty() != null) {
                     result.setLhClassQty(new BigDecimal(primaryLh.getSingleMouldShiftQty()));
                 }
+
+                // lhRemainQty: 只取第一个
                 Map<String, MdmMonthSurplus> monthSurplusMap = context.getMonthSurplusMap();
-                if (monthSurplusMap != null) {
+                if (monthSurplusMap != null && primaryLh != null) {
                     String surplusKey = materialCode != null ? materialCode : embryoCode;
                     MdmMonthSurplus surplus = monthSurplusMap.get(surplusKey);
                     if (surplus != null && surplus.getPlanSurplusQty() != null) {
@@ -694,8 +731,12 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 }
             }
 
-            // ---- 成型余量 ----
-            {
+            // ---- 成型余量（重新计算 = lhRemainQty - totalStock） ----
+            BigDecimal lhRemainQty = result.getLhRemainQty();
+            if (lhRemainQty != null) {
+                result.setCxRemainQty(lhRemainQty.subtract(result.getTotalStock()));
+            } else {
+                // 如果没有lhRemainQty，尝试从formingRemainderMap获取
                 Map<String, Integer> formingRemainderMap = context.getFormingRemainderMap();
                 if (formingRemainderMap != null && materialCode != null) {
                     Integer cxRemain = formingRemainderMap.get(materialCode);
