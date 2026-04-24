@@ -808,19 +808,6 @@ public class ScheduleServiceImpl implements ScheduleService {
                         Collectors.toList()));
 
         context.setStructureAllocationMap(structureAllocationMap);
-
-        // 按年月分组（用于跨月时获取对应月份的配置）
-        Map<Integer, Map<String, List<MpCxCapacityConfiguration>>> structureAllocationMapByMonth = new LinkedHashMap<>();
-        for (MpCxCapacityConfiguration config : allocations) {
-            if (config.getYear() == null || config.getMonth() == null) continue;
-            Integer yearMonth = config.getYear() * 100 + config.getMonth();
-            structureAllocationMapByMonth
-                    .computeIfAbsent(yearMonth, k -> new LinkedHashMap<>())
-                    .computeIfAbsent(config.getStructureName(), k -> new ArrayList<>())
-                    .add(config);
-        }
-        context.setStructureAllocationMapByMonth(structureAllocationMapByMonth);
-        log.info("按年月分组结构配置，共 {} 个月份", structureAllocationMapByMonth.size());
         log.info("加载结构排产配置 {} 条，共 {} 个结构", allocations.size(), structureAllocationMap.size());
     }
 

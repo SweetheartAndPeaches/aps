@@ -433,12 +433,6 @@ public class ScheduleContextVo {
      */
     private Map<String, List<MpCxCapacityConfiguration>> structureAllocationMap;
 
-
-    /**
-     * 结构排产配置映射（年月 -> 结构编码 -> 可分配机台列表）
-     * 用于跨月时按年月获取对应的配置
-     */
-    private Map<Integer, Map<String, List<MpCxCapacityConfiguration>>> structureAllocationMapByMonth;
     /**
      * 月计划排产版本
      * 从硫化排程结果中提取，用于过滤结构排产配置
