@@ -311,7 +311,10 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 task.setIsEndingTask(taskAlloc.getIsEndingTask());
                 task.setIsContinueTask(taskAlloc.getIsContinueTask());
                 task.setIsLastEndingBatch(taskAlloc.getIsLastEndingBatch());  // 设置是否收尾最后一批
-                task.setIsOpeningDayTask(context.getIsOpeningDay());
+                // 使用新逻辑：根据班次级别判断开产/停产/停产前一天
+                int shiftOrder = shiftConfig.getDayShiftOrder() != null ? shiftConfig.getDayShiftOrder() : 1;
+                task.setIsOpeningDayTask(scheduleDayTypeHelper.isOpenStartShift(scheduleDate, shiftOrder));
+                task.setIsClosingDayTask(scheduleDayTypeHelper.isClosedShift(scheduleDate, shiftOrder));
                 task.setStockHours(taskAlloc.getStockHours());
                 task.setPriority(taskAlloc.getPriority());
                 task.setLhId(taskAlloc.getLhId());

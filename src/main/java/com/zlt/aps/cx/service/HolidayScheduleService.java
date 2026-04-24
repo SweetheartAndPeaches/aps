@@ -21,38 +21,36 @@ import java.util.Map;
  */
 public interface HolidayScheduleService {
 
+    // ==================== 以下为废弃方法（按天判断，已改用按班次判断） ====================
+
     /**
-     * 检查是否为节假日
-     *
-     * @param date 日期
-     * @return 是否为节假日
+     * 检查是否为节假日（废弃：已改用按班次级别判断）
+     * @deprecated use {@link #determineShiftType(LocalDate, int)} instead
      */
+    @Deprecated
     boolean isHoliday(LocalDate date);
 
     /**
-     * 检查是否为停产日
+     * 检查是否为停产日（废弃：已改用按班次级别判断）
      * 停产日 = 节假日首日
-     *
-     * @param date 日期
-     * @return 是否为停产日
+     * @deprecated use {@link #determineShiftType(LocalDate, int)} instead
      */
+    @Deprecated
     boolean isStopProductionDay(LocalDate date);
 
     /**
-     * 检查是否为开产日
+     * 检查是否为开产日（废弃：已改用按班次级别判断）
      * 开产日 = 节假日后首个工作日
-     *
-     * @param date 日期
-     * @return 是否为开产日
+     * @deprecated use {@link #determineShiftType(LocalDate, int)} instead
      */
+    @Deprecated
     boolean isStartProductionDay(LocalDate date);
 
     /**
-     * 检查是否为停产前一天
-     *
-     * @param date 日期
-     * @return 是否为停产前一天
+     * 检查是否为停产前一天（废弃：已改用按班次级别判断）
+     * @deprecated use {@link #determineShiftType(LocalDate, int)} instead
      */
+    @Deprecated
     boolean isBeforeHoliday(LocalDate date);
 
     /**

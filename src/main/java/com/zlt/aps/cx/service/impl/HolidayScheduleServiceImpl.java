@@ -269,45 +269,34 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
         return ShiftType.NORMAL;
     }
 
-    // ==================== 以下为原有方法兼容保留 ====================
+    // ==================== 以下为废弃方法（按天判断，已改用按班次判断） ====================
 
     @Override
+    @Deprecated
     public boolean isHoliday(LocalDate date) {
-        // 兼容原有逻辑：如果三个班次全部停产，则视为停产日
-        String flag1 = getShiftFlag(date, 1);
-        String flag2 = getShiftFlag(date, 2);
-        String flag3 = getShiftFlag(date, 3);
-        
-        return SHIFT_FLAG_STOP.equals(flag1) 
-            && SHIFT_FLAG_STOP.equals(flag2) 
-            && SHIFT_FLAG_STOP.equals(flag3);
+        // 废弃：三个班次全部停产视为停产日（已改用 determineShiftType 按班次级别判断）
+        return false;
     }
 
     @Override
+    @Deprecated
     public boolean isStopProductionDay(LocalDate date) {
-        // 兼容原有逻辑：如果当天停产且前一天不是停产日
-        if (!isHoliday(date)) {
-            return false;
-        }
-        LocalDate previousDay = date.minusDays(1);
-        return !isHoliday(previousDay);
+        // 废弃：按天判断停产日（已改用 determineShiftType 按班次级别判断）
+        return false;
     }
 
     @Override
+    @Deprecated
     public boolean isStartProductionDay(LocalDate date) {
-        // 兼容原有逻辑：如果当天工作日且前一天是停产日
-        if (isHoliday(date)) {
-            return false;
-        }
-        LocalDate previousDay = date.minusDays(1);
-        return isHoliday(previousDay);
+        // 废弃：按天判断开产日（已改用 determineShiftType 按班次级别判断）
+        return false;
     }
 
     @Override
+    @Deprecated
     public boolean isBeforeHoliday(LocalDate date) {
-        // 兼容原有逻辑：检查明天是否为停产日
-        LocalDate nextDay = date.plusDays(1);
-        return isStopProductionDay(nextDay);
+        // 废弃：按天判断停产前一天（已改用 determineShiftType 按班次级别判断）
+        return false;
     }
 
     @Override

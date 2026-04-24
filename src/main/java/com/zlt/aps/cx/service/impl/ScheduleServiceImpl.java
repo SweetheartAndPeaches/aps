@@ -917,12 +917,11 @@ public class ScheduleServiceImpl implements ScheduleService {
     }
 
     /**
-     * 设置节假日相关标记
+     * 设置节假日相关标记（已废弃，改用ScheduleDayTypeHelper按班次级别判断）
      */
     private void setHolidayFlags(ScheduleContextVo context, LocalDate scheduleDate) {
-        context.setIsOpeningDay(holidayScheduleService.isStartProductionDay(scheduleDate));
-        context.setIsClosingDay(holidayScheduleService.isStopProductionDay(scheduleDate));
-        context.setIsBeforeClosingDay(holidayScheduleService.isBeforeHoliday(scheduleDate));
+        // 已废弃：改用 CoreScheduleAlgorithmServiceImpl 中的 scheduleDayTypeHelper.isOpenStartShift/isClosedShift/isBeforeCloseShift
+        // 这些方法按班次级别判断开产/停产，更精确
     }
 
     /**
