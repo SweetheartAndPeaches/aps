@@ -321,41 +321,54 @@ public class NewTaskProcessor {
     }
 
     /**
-     * 获取指定结构在当前日期可安排的机台配置（按 PRODUCTION_VERSION 过滤）
+     * 获取指定结构在当前日期可安排的机台配置（按年月区分版本）
      *
+     * <p>跨月时优先使用对应月份的配置，如果月份没有配置则回退到原逻辑
      * <p>过滤条件：
-     * 1. 日期范围 (beginDay/endDay 是月内天数 1-31)
-     * 2. 生产版本匹配
-     * 3. 机台必须在 availableMachines 中存在且可用
+     * 1. 年月匹配（优先）或结构匹配（回退）
+     * 2. 日期范围 (beginDay/endDay 是月内天数 1-31)
+     * 3. 生产版本匹配
+     * 4. 机台必须在 availableMachines 中存在且可用
      */
     private List<MpCxCapacityConfiguration> getAvailableMachinesForStructure(
             String structureName, LocalDate scheduleDate, ScheduleContextVo context,
             String productionVersion) {
-        if (context.getStructureAllocationMap() != null) {
-            List<MpCxCapacityConfiguration> configs =
-                    context.getStructureAllocationMap().get(structureName);
-            if (configs != null && !configs.isEmpty()) {
-                int dayOfMonth = scheduleDate.getDayOfMonth();
-                
-                // 获取可用成型机编码集合
-                Set<String> availableMachineCodes = new HashSet<>();
-                if (context.getAvailableMachines() != null) {
-                    for (MdmMoldingMachine machine : context.getAvailableMachines()) {
-                        availableMachineCodes.add(machine.getCxMachineCode());
-                    }
-                }
-                
-                return configs.stream()
-                        .filter(c -> c.getBeginDay() != null && c.getEndDay() != null)
-                        .filter(c -> c.getBeginDay() <= dayOfMonth && c.getEndDay() >= dayOfMonth)
-                        .filter(c -> productionVersion == null
-                                || productionVersion.equals(c.getProductionVersion()))
-                        // 过滤：只保留存在于 availableMachines 中的机台
-                        .filter(c -> availableMachineCodes.contains(c.getCxMachineCode()))
-                        .collect(Collectors.toList());
+        List<MpCxCapacityConfiguration> configs = new ArrayList<>();
+        
+        // 计算年月
+        Integer yearMonth = scheduleDate.getYear() * 100 + scheduleDate.getMonthValue();
+        
+        // 1. 优先按年月获取配置（支持跨月）
+        Map<Integer, Map<String, List<MpCxCapacityConfiguration>>> mapByMonth = context.getStructureAllocationMapByMonth();
+        if (mapByMonth != null && mapByMonth.containsKey(yearMonth)) {
+            configs = mapByMonth.get(yearMonth).getOrDefault(structureName, new ArrayList<>());
+        } else if (context.getStructureAllocationMap() != null) {
+            // 2. 回退：按结构获取配置（原有逻辑）
+            configs = context.getStructureAllocationMap().getOrDefault(structureName, new ArrayList<>());
+        }
+        
+        if (configs.isEmpty()) {
+            return new ArrayList<>();
+        }
+        
+        int dayOfMonth = scheduleDate.getDayOfMonth();
+        
+        // 获取可用成型机编码集合
+        Set<String> availableMachineCodes = new HashSet<>();
+        if (context.getAvailableMachines() != null) {
+            for (MdmMoldingMachine machine : context.getAvailableMachines()) {
+                availableMachineCodes.add(machine.getCxMachineCode());
             }
         }
-        return new ArrayList<>();
+        
+        return configs.stream()
+                .filter(c -> c.getBeginDay() != null && c.getEndDay() != null)
+                .filter(c -> c.getBeginDay() <= dayOfMonth && c.getEndDay() >= dayOfMonth)
+                .filter(c -> productionVersion == null
+                        || productionVersion.equals(c.getProductionVersion()))
+                // 过滤：只保留存在于 availableMachines 中的机台
+                .filter(c -> availableMachineCodes.contains(c.getCxMachineCode()))
+                .collect(Collectors.toList());
     }
 
     /**

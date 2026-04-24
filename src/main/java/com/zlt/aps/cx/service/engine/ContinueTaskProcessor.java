@@ -226,23 +226,40 @@ public class ContinueTaskProcessor {
         return historyMap;
     }
 
+
+    /**
+     * 获取指定结构在当前日期可安排的机台配置（按年月区分版本）
+     *
+     * <p>跨月时优先使用对应月份的配置，如果月份没有配置则回退到原逻辑
+     */
     private List<MpCxCapacityConfiguration> getAvailableMachinesForStructure(
             String structureName, LocalDate scheduleDate, ScheduleContextVo context,
             String productionVersion) {
-        if (context.getStructureAllocationMap() != null) {
-            List<MpCxCapacityConfiguration> configs = context.getStructureAllocationMap().get(structureName);
-            if (configs != null && !configs.isEmpty()) {
-                int day = scheduleDate.getDayOfMonth();
-                // 过滤日期范围 + PRODUCTION_VERSION
-                return configs.stream()
-                        .filter(c -> c.getBeginDay() != null && c.getEndDay() != null)
-                        .filter(c -> c.getBeginDay() <= day && c.getEndDay() >= day)
-                        .filter(c -> productionVersion == null
-                                || productionVersion.equals(c.getProductionVersion()))
-                        .collect(Collectors.toList());
-            }
+        List<MpCxCapacityConfiguration> configs = new ArrayList<>();
+        
+        // 计算年月
+        Integer yearMonth = scheduleDate.getYear() * 100 + scheduleDate.getMonthValue();
+        
+        // 1. 优先按年月获取配置（支持跨月）
+        Map<Integer, Map<String, List<MpCxCapacityConfiguration>>> mapByMonth = context.getStructureAllocationMapByMonth();
+        if (mapByMonth != null && mapByMonth.containsKey(yearMonth)) {
+            configs = mapByMonth.get(yearMonth).getOrDefault(structureName, new ArrayList<>());
+        } else if (context.getStructureAllocationMap() != null) {
+            // 2. 回退：按结构获取配置（原有逻辑）
+            configs = context.getStructureAllocationMap().getOrDefault(structureName, new ArrayList<>());
         }
-        return new ArrayList<>();
+        
+        if (configs.isEmpty()) {
+            return new ArrayList<>();
+        }
+        
+        int day = scheduleDate.getDayOfMonth();
+        return configs.stream()
+                .filter(c -> c.getBeginDay() != null && c.getEndDay() != null)
+                .filter(c -> c.getBeginDay() <= day && c.getEndDay() >= day)
+                .filter(c -> productionVersion == null
+                        || productionVersion.equals(c.getProductionVersion()))
+                .collect(Collectors.toList());
     }
 
     /**
