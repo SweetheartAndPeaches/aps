@@ -34,11 +34,11 @@ public class ParamConfigValidationStrategy extends BaseValidationStrategy {
     static {
         PARAM_DEFAULTS.put("LOSS_RATE", "0.02");
         PARAM_DEFAULTS.put("MAX_TYPES_PER_MACHINE", "4");
-        PARAM_DEFAULTS.put("DEFAULT_TRIP_CAPACITY", "200");
+        
         
         PARAM_DESCRIPTIONS.put("LOSS_RATE", "损耗率，用于计算实际产能");
         PARAM_DESCRIPTIONS.put("MAX_TYPES_PER_MACHINE", "单个机台最多生产的物料种类数");
-        PARAM_DESCRIPTIONS.put("DEFAULT_TRIP_CAPACITY", "默认整车容量（条/班次）");
+       
     }
 
     @Override

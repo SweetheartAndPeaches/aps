@@ -454,7 +454,7 @@ public class ContinueTaskProcessor {
             boolean isOpeningDay) {
 
         // 停产日已在 handleOpeningClosingDay 中设置 plannedProduction=0，跳过此处
-        if (scheduleDayTypeHelper.isStopDay(scheduleDate)) {
+        if (scheduleDayTypeHelper.isStopDay(scheduleDate, context.getFactoryCode())) {
             return;
         }
 
@@ -507,7 +507,7 @@ public class ContinueTaskProcessor {
         LocalDate scheduleDate = context.getCurrentScheduleDate();
         
         // Step 1: 从当前日期往前找最近一个有 dayFlag 标识的日期
-        DayFlagInfo flagInfo = scheduleDayTypeHelper.getDayFlagInfo(scheduleDate);
+        DayFlagInfo flagInfo = scheduleDayTypeHelper.findNearestDayFlag(scheduleDate, context.getFactoryCode());
         
         if (flagInfo == null || flagInfo.dayFlag == null) {
             // 没有找到任何标识，按正常日期处理

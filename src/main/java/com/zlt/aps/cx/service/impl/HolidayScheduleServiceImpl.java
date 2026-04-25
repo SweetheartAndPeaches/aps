@@ -68,7 +68,7 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
     private static final int DEFAULT_MAX_PARKING_HOURS = 24;
 
     /** 成型工序编码 */
-    private static final String PROC_CODE_CX = "CX";
+    private static final String PROC_CODE_CX = "03";
 
     /** 班次停产标志：0-停 */
     private static final String SHIFT_FLAG_STOP = "0";

@@ -876,7 +876,7 @@ public class ProductionCalculator {
         // Step 3: 判断是否停产日（根据 dayFlag：停产标识日之后才算停产）
         // 停产标识的那一天本身有量，只有停产日之后才算停产
         ScheduleDayTypeHelper.DayFlagInfo flagInfo =
-                scheduleDayTypeHelper.getDayFlagInfo(scheduleDate);
+                scheduleDayTypeHelper.findNearestDayFlag(scheduleDate, context.getFactoryCode());
         if (flagInfo != null && "0".equals(flagInfo.dayFlag) && scheduleDate.isAfter(flagInfo.nearestDate)) {
             // 停产日之后：plannedProduction = 0，使用停产收尾规则
             return calculateClosingDayQuantity(embryoCode, structureName, context, scheduleDate);

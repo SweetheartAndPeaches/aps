@@ -974,7 +974,7 @@ public class TaskGroupService {
                                              ScheduleContextVo context,
                                              LocalDate scheduleDate) {
         // 停产日：当天产量设为0
-        if (scheduleDayTypeHelper.isStopDay(scheduleDate)) {
+        if (scheduleDayTypeHelper.isStopDay(scheduleDate, context.getFactoryCode())) {
             task.setPlannedProduction(0);
             task.setRequiredCars(0);
             task.setEndingExtraInventory(0);
@@ -1099,6 +1099,7 @@ public class TaskGroupService {
                                           ScheduleContextVo context,
                                           List<CxShiftConfig> dayShifts) {
         LocalDate scheduleDate = context.getCurrentScheduleDate();
+        String factoryCode = context.getFactoryCode();
 
         // 获取当前班次信息
         CxShiftConfig currentShift = dayShifts != null && dayShifts.size() == 1 ? dayShifts.get(0) : null;
@@ -1106,7 +1107,7 @@ public class TaskGroupService {
                 ? currentShift.getDayShiftOrder() : 0;
 
         // ==================== 停产日（已停产）：当天产量设为0 ====================
-        if (scheduleDayTypeHelper.isStopDay(scheduleDate)) {
+        if (scheduleDayTypeHelper.isStopDay(scheduleDate, factoryCode)) {
             task.setPlannedProduction(0);
             task.setRequiredCars(0);
             task.setEndingExtraInventory(0);
@@ -1115,12 +1116,15 @@ public class TaskGroupService {
 
         // ==================== 停产逻辑调整（v2）====================
         // 每个班次都检查：今天有没有包含停产班次
-        // 判断条件1：当前班次本身是否为停产班次（day_flag="0"）
-        boolean isCurrentClosingShift = scheduleDayTypeHelper.isClosingShift(scheduleDate, currentDayShiftOrder);
+        // 判断条件1：当前班次本身是否为停产班次（shift_flag="0"）
+        boolean isCurrentClosingShift = scheduleDayTypeHelper.isClosingShift(scheduleDate, currentDayShiftOrder, factoryCode);
         // 判断条件2：当前班次的下一个班次是否为停产班次（即当前班次是停产前最后一个生产班次）
-        boolean isBeforeClosingShift = scheduleDayTypeHelper.isBeforeCloseShift(scheduleDate, currentDayShiftOrder);
+        boolean isBeforeClosingShift = scheduleDayTypeHelper.isBeforeCloseShift(scheduleDate, currentDayShiftOrder, factoryCode);
         // 判断条件3：当前班次本身是否是停产标识日的班次（包含停产班次的当天）
-        boolean isStopFlagDayToday = scheduleDayTypeHelper.isStopFlagDay(scheduleDate);
+        boolean isStopFlagDayToday = scheduleDayTypeHelper.isStopFlagDay(scheduleDate, factoryCode);
+
+        log.info("停产判断：工厂={}, 日期={}, dayShiftOrder={}, isClosing={}, isBeforeClose={}, isStopFlagDay={}",
+                factoryCode, scheduleDate, currentDayShiftOrder, isCurrentClosingShift, isBeforeClosingShift, isStopFlagDayToday);
 
         if (isCurrentClosingShift || isBeforeClosingShift || isStopFlagDayToday) {
             // 今天包含停产班次，走停产逻辑
@@ -1129,7 +1133,7 @@ public class TaskGroupService {
         }
 
         // ==================== 开产日处理 ====================
-        if (scheduleDayTypeHelper.isOpeningDay(scheduleDate)) {
+        if (scheduleDayTypeHelper.isOpeningDay(scheduleDate, factoryCode)) {
             handleOpeningDayTaskV2(task, context, scheduleDate, currentDayShiftOrder);
             return;
         }
@@ -1241,7 +1245,7 @@ public class TaskGroupService {
 
         // ==================== 判断当前班次本身是否为停产班次 ====================
         // 如果当前班次本身是停产班次（day_flag="0"），则不生产，产量为0
-        boolean isCurrentClosingShift = scheduleDayTypeHelper.isClosingShift(scheduleDate, currentDayShiftOrder);
+        boolean isCurrentClosingShift = scheduleDayTypeHelper.isClosingShift(scheduleDate, currentDayShiftOrder, context.getFactoryCode());
         if (isCurrentClosingShift) {
             log.info("当前班次 {} 是停产班次，产量设为0", currentDayShiftOrder);
             task.setPlannedProduction(0);
@@ -1532,7 +1536,47 @@ public class TaskGroupService {
         }
         // 获取班次配置（按dayShiftOrder排序）
         List<CxShiftConfig> shiftConfigs = getSortedShiftConfigs(context);
-        return scheduleDayTypeHelper.getShiftOrderByTime(vulcanizingStopTimeStr, shiftConfigs);
+        // 提取时间部分 HH:mm，用于与班次时间比较
+        // 格式可能是 "2026-05-19 5:30" 或 "5:30"，都需要提取出 "05:30"
+        String timePart = extractTimePart(vulcanizingStopTimeStr);
+        return scheduleDayTypeHelper.getShiftOrderByTime(timePart, shiftConfigs);
+    }
+
+    /**
+     * 从时间字符串中提取 HH:mm 格式的时间部分
+     * 支持格式： "2026-05-19 05:30" -> "05:30" 或 "05:30" -> "05:30"
+     */
+    private String extractTimePart(String dateTimeStr) {
+        if (dateTimeStr == null) {
+            return null;
+        }
+        String trimmed = dateTimeStr.trim();
+        // 如果包含空格，取空格后的部分
+        if (trimmed.contains(" ")) {
+            String[] parts = trimmed.split("\\s+");
+            if (parts.length >= 2) {
+                trimmed = parts[parts.length - 1]; // 取最后一部分（时间部分）
+            }
+        }
+        // 格式化，确保是 HH:mm 格式（补零）
+        try {
+            String[] timeParts = trimmed.split(":");
+            if (timeParts.length >= 2) {
+                String hour = timeParts[0].trim();
+                String minute = timeParts[1].trim();
+                // 补零
+                if (hour.length() == 1) {
+                    hour = "0" + hour;
+                }
+                if (minute.length() == 1) {
+                    minute = "0" + minute;
+                }
+                return hour + ":" + minute;
+            }
+        } catch (Exception e) {
+            log.warn("解析时间字符串失败: {}", dateTimeStr);
+        }
+        return trimmed;
     }
 
     /**
@@ -1550,7 +1594,9 @@ public class TaskGroupService {
             return null;
         }
         List<CxShiftConfig> shiftConfigs = getSortedShiftConfigs(context);
-        return scheduleDayTypeHelper.getShiftOrderByTime(vulcanizingOpenTimeStr, shiftConfigs);
+        // 提取时间部分 HH:mm，用于与班次时间比较
+        String timePart = extractTimePart(vulcanizingOpenTimeStr);
+        return scheduleDayTypeHelper.getShiftOrderByTime(timePart, shiftConfigs);
     }
 
     /**

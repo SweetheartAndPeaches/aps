@@ -101,9 +101,10 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
         // 预加载工作日历缓存，避免后续频繁数据库查询
         LocalDate scheduleDate = context.getScheduleDate();
+        String factoryCode = context.getFactoryCode();
         int scheduleDays = context.getScheduleDays() != null ? context.getScheduleDays() : DEFAULT_SCHEDULE_DAYS;
         if (scheduleDate != null) {
-            scheduleDayTypeHelper.preloadCache(scheduleDate, scheduleDate.plusDays(scheduleDays - 1));
+            scheduleDayTypeHelper.preloadCache(scheduleDate, scheduleDate.plusDays(scheduleDays - 1), factoryCode);
         }
 
         // 使用 ScheduleServiceImpl.buildScheduleContext 中已加载的班次配置
@@ -143,15 +144,16 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                     .minusDays(SCHEDULE_START_OFFSET_DAYS).plusDays(day - 1);
 
             // 检查当前天是否是整天停产
-            if (scheduleDayTypeHelper.isFullDayStopped(currentScheduleDate)) {
+            if (scheduleDayTypeHelper.isFullDayStopped(currentScheduleDate, factoryCode)) {
                 log.info("第 {} 天日期 {} 整天停产，跳过班次 {} 的排程", day, currentScheduleDate, shiftConfig.getShiftCode());
                 continue;
             }
 
             // 检查当前班次是否停产
             Integer dayShiftOrder = shiftConfig.getDayShiftOrder();
-            if (dayShiftOrder != null && scheduleDayTypeHelper.isShiftStopped(currentScheduleDate, dayShiftOrder)) {
-                log.info("第 {} 天日期 {} 班次 {} 停产，跳过该班次排程", day, currentScheduleDate, shiftConfig.getShiftCode());
+            if (dayShiftOrder != null && scheduleDayTypeHelper.isShiftStopped(currentScheduleDate, dayShiftOrder, factoryCode)) {
+                log.info("第 {} 天日期 {} 班次 {}(dayShiftOrder={}) 停产，跳过该班次排程", 
+                        day, currentScheduleDate, shiftConfig.getShiftCode(), dayShiftOrder);
                 continue;
             }
 
@@ -256,6 +258,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             Map<String, Set<String>> machineOnlineEmbryoMap) {
 
         List<CxShiftConfig> singleShiftList = Collections.singletonList(shiftConfig);
+        String factoryCode = context.getFactoryCode();
 
         log.info("========== 开始执行班次排程，天={}, 日期={}, 班次={} ==========",
                 day, scheduleDate, shiftConfig.getShiftCode());
@@ -322,8 +325,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 task.setIsLastEndingBatch(taskAlloc.getIsLastEndingBatch());  // 设置是否收尾最后一批
                 // 使用新逻辑：根据班次级别判断开产/停产/停产前一天
                 int shiftOrder = shiftConfig.getDayShiftOrder() != null ? shiftConfig.getDayShiftOrder() : 1;
-                task.setIsOpeningDayTask(scheduleDayTypeHelper.isOpenStartShift(scheduleDate, shiftOrder));
-                task.setIsClosingDayTask(scheduleDayTypeHelper.isClosedShift(scheduleDate, shiftOrder));
+                task.setIsOpeningDayTask(scheduleDayTypeHelper.isOpenStartShift(scheduleDate, shiftOrder, factoryCode));
+                task.setIsClosingDayTask(scheduleDayTypeHelper.isClosedShift(scheduleDate, shiftOrder, factoryCode));
                 task.setStockHours(taskAlloc.getStockHours());
                 task.setPriority(taskAlloc.getPriority());
                 task.setLhId(taskAlloc.getLhId());
