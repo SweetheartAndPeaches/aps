@@ -17,7 +17,9 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -1145,7 +1147,7 @@ public class TaskGroupService {
             log.info("当前班次事件: 工厂={}, 日期={}, 当天第{}班, 类型={}, 停产标识日={}",
                     factoryCode, scheduleDate, currentDayShiftOrder,
                     isCurrentClosingShift ? "停产班"
-                            : isBeforeClosingShift ? "停产前一天班次(下个班次停产)"
+                            : isBeforeClosingShift ? "停产前一个班次(下个班次停产)"
                             : "停产标识日",
                     isStopFlagDayToday);
             // 今天包含停产班次，走停产逻辑
@@ -1153,10 +1155,47 @@ public class TaskGroupService {
             return;
         }
 
+        // ==================== 停产日前一天封顶 ====================
+        // 如果明天有停产班次，需跨天封顶当前班次的产量
+        // 避免前一个班次过量生产，导致停产后库存过剩（此检查必须在开产日前，避免被截断）
+        LocalDate nextDay = scheduleDate.plusDays(1);
+        boolean isNextDayStop = scheduleDayTypeHelper.hasAnyClosingShift(nextDay, factoryCode);
+
         // ==================== 开产日处理 ====================
         if (scheduleDayTypeHelper.isOpeningDay(scheduleDate, factoryCode)) {
             handleOpeningDayTaskV2(task, context, scheduleDate, currentDayShiftOrder);
+            if (isNextDayStop) {
+                int closingRequiredStock = calculateClosingRequiredStockV2(task, context, scheduleDate, currentDayShiftOrder, dayShifts);
+                int currentStock = task.getCurrentStock() != null ? task.getCurrentStock() : 0;
+                int thisShiftNeeded = Math.max(0, closingRequiredStock - currentStock);
+                int normalDemand = task.getPlannedProduction() != null ? task.getPlannedProduction() : 0;
+                int cappedProduction = Math.min(normalDemand, thisShiftNeeded);
+                log.info("跨天封顶(明天{}有停产,开产日): 胎胚={}, 反推需求={}, 库存={}, 还需={}, 正常需求={}, 封顶={}",
+                        nextDay, task.getEmbryoCode(), closingRequiredStock, currentStock,
+                        thisShiftNeeded, normalDemand, cappedProduction);
+                int tripCapacity = getTripCapacity(task.getStructureName(), context);
+                int roundedProduction = productionCalculator.roundToVehicle(cappedProduction, tripCapacity);
+                task.setPlannedProduction(roundedProduction);
+                task.setEndingExtraInventory(roundedProduction);
+                task.setRequiredCars(tripCapacity > 0 ? (roundedProduction + tripCapacity - 1) / tripCapacity : 0);
+            }
             return;
+        }
+
+        if (isNextDayStop) {
+            int closingRequiredStock = calculateClosingRequiredStockV2(task, context, scheduleDate, currentDayShiftOrder, dayShifts);
+            int currentStock = task.getCurrentStock() != null ? task.getCurrentStock() : 0;
+            int thisShiftNeeded = Math.max(0, closingRequiredStock - currentStock);
+            int normalDemand = task.getPlannedProduction() != null ? task.getPlannedProduction() : 0;
+            int cappedProduction = Math.min(normalDemand, thisShiftNeeded);
+            log.info("跨天封顶(明天{}有停产): 胎胚={}, 反推需求={}, 库存={}, 还需={}, 正常需求={}, 封顶={}",
+                    nextDay, task.getEmbryoCode(), closingRequiredStock, currentStock,
+                    thisShiftNeeded, normalDemand, cappedProduction);
+            int tripCapacity = getTripCapacity(task.getStructureName(), context);
+            int roundedProduction = productionCalculator.roundToVehicle(cappedProduction, tripCapacity);
+            task.setPlannedProduction(roundedProduction);
+            task.setEndingExtraInventory(roundedProduction);
+            task.setRequiredCars(tripCapacity > 0 ? (roundedProduction + tripCapacity - 1) / tripCapacity : 0);
         }
     }
 
@@ -1298,9 +1337,7 @@ public class TaskGroupService {
         // 封顶：取正常需求和反推需求中的较小值
         int cappedProduction = Math.min(normalDemand, thisShiftNeeded);
 
-        log.info("停产反推封顶V2: embryoCode={}, closingShiftOrder={}, closingRequiredStock={}, " +
-                        "currentStock={}, normalDemand={}, thisShiftNeeded={}, cappedProduction={}, " +
-                        "currentDayShiftOrder={}",
+        log.info("停产反推封顶: 胎胚={}, 停锅班次=当天第{}班, 反推需胎胚={}, 当前库存={}, 正常班需求={}, 还需生产={}, 封顶={}, 当前班次=当天第{}班",
                 task.getEmbryoCode(), closingShiftOrder, closingRequiredStock,
                 currentStock, normalDemand, thisShiftNeeded, cappedProduction, currentDayShiftOrder);
 
@@ -1434,10 +1471,8 @@ public class TaskGroupService {
 
         int requiredStock = (int) Math.ceil((double) durationSeconds / singleTireMoldSeconds * moldQty);
 
-        log.info("停产反推总量V2: embryoCode={}, dailyLhCapacity={}, moldQty={}, ratio={}, " +
-                        "singleTireMoldSeconds={}, stopTime={}, shiftStartTime={}, reservedDigestHours={}h, " +
-                        "durationSeconds={}, requiredStock={}",
-                task.getEmbryoCode(), dailyLhCapacity, moldQty, ratio,
+        log.info("停产反推总量: 胎胚={}, 单模日硫化量={}, 模数={}, 单胎时长={}s, 停锅={}, 当前班次开始={}, 消化={}h, 可用={}s, 需胎胚={}",
+                task.getEmbryoCode(), dailyLhCapacity, moldQty,
                 String.format("%.1f", singleTireMoldSeconds), stopTime, shiftStartTime, reservedDigestHours,
                 durationSeconds, requiredStock);
 
@@ -1547,17 +1582,21 @@ public class TaskGroupService {
      * @return 停锅班次的dayShiftOrder，找不到返回null
      */
     private Integer determineClosingShiftOrder(ScheduleContextVo context) {
-        String vulcanizingStopTimeStr = context.getVulcanizingStopTimeStr();
-        if (vulcanizingStopTimeStr == null || vulcanizingStopTimeStr.isEmpty()) {
-            log.warn("未配置硫化机停锅时间(VULCANIZING_STOP_TIME)，无法确定停锅班次");
-            return null;
+        LocalDateTime stopDateTime = context.getVulcanizingStopDateTime();
+        if (stopDateTime == null) {
+            // 回退：只有 HH:mm 格式，用旧方法按时分匹配
+            String vulcanizingStopTimeStr = context.getVulcanizingStopTimeStr();
+            if (vulcanizingStopTimeStr == null || vulcanizingStopTimeStr.isEmpty()) {
+                log.warn("未配置硫化机停锅时间(VULCANIZING_STOP_TIME)，无法确定停锅班次");
+                return null;
+            }
+            List<CxShiftConfig> shiftConfigs = getSortedShiftConfigs(context);
+            String timePart = extractTimePart(vulcanizingStopTimeStr);
+            return scheduleDayTypeHelper.getShiftOrderByTime(timePart, shiftConfigs);
         }
-        // 获取班次配置（按dayShiftOrder排序）
-        List<CxShiftConfig> shiftConfigs = getSortedShiftConfigs(context);
-        // 提取时间部分 HH:mm，用于与班次时间比较
-        // 格式可能是 "2026-05-19 5:30" 或 "5:30"，都需要提取出 "05:30"
-        String timePart = extractTimePart(vulcanizingStopTimeStr);
-        return scheduleDayTypeHelper.getShiftOrderByTime(timePart, shiftConfigs);
+
+        // 使用完整日期时间匹配：遍历所有班次，结合排程日期算出每个班次的实际起止时间
+        return findShiftOrderByDateTime(stopDateTime, context);
     }
 
     /**
@@ -1606,15 +1645,71 @@ public class TaskGroupService {
      * @return 硫化开产班次的dayShiftOrder，找不到返回null
      */
     private Integer determineLhOpeningShiftOrder(ScheduleContextVo context) {
+        LocalDateTime openDateTime = context.getVulcanizingOpenDateTime();
+        if (openDateTime != null) {
+            return findShiftOrderByDateTime(openDateTime, context);
+        }
+        // 回退：只有 HH:mm 格式
         String vulcanizingOpenTimeStr = context.getVulcanizingOpenTimeStr();
         if (vulcanizingOpenTimeStr == null || vulcanizingOpenTimeStr.isEmpty()) {
             log.warn("未配置硫化开模时间(VULCANIZING_OPEN_TIME)，无法确定硫化开产班次");
             return null;
         }
         List<CxShiftConfig> shiftConfigs = getSortedShiftConfigs(context);
-        // 提取时间部分 HH:mm，用于与班次时间比较
         String timePart = extractTimePart(vulcanizingOpenTimeStr);
         return scheduleDayTypeHelper.getShiftOrderByTime(timePart, shiftConfigs);
+    }
+
+    /**
+     * 根据完整日期时间查找对应的班次序号
+     *
+     * <p>遍历所有班次配置，结合排程日期算出每个班次的实际起止时间范围，
+     * 找到目标时间落在哪个班次内。支持跨天班次。
+     *
+     * @param dateTime 目标日期时间（如停锅时间 2026-05-19T05:30）
+     * @param context  排程上下文
+     * @return 班次序号（dayShiftOrder），找不到返回第一个班次序号
+     */
+    private Integer findShiftOrderByDateTime(LocalDateTime dateTime, ScheduleContextVo context) {
+        LocalDate scheduleDate = context.getScheduleDate();
+        if (scheduleDate == null) {
+            return null;
+        }
+        // 排程起始日期：前端传入最后一天，往前推2天
+        LocalDate scheduleStartDate = scheduleDate.minusDays(2);
+
+        List<CxShiftConfig> allShifts = context.getShiftConfigList();
+        if (allShifts == null || allShifts.isEmpty()) {
+            return null;
+        }
+
+        for (CxShiftConfig shift : allShifts) {
+            if (shift.getScheduleDay() == null || shift.getDayShiftOrder() == null) continue;
+
+            LocalDate shiftDate = scheduleStartDate.plusDays(shift.getScheduleDay() - 1);
+            LocalTime shiftStartTime = shift.getShiftStartTime();
+            LocalTime shiftEndTime = shift.getShiftEndTime();
+
+            LocalDateTime shiftStart = LocalDateTime.of(shiftDate, shiftStartTime);
+            LocalDateTime shiftEnd = LocalDateTime.of(shiftDate, shiftEndTime);
+
+            // 跨天班次：endTime <= startTime，结束时间加1天
+            if (!shiftEnd.isAfter(shiftStart)) {
+                shiftEnd = shiftEnd.plusDays(1);
+            }
+
+            if (!dateTime.isBefore(shiftStart) && dateTime.isBefore(shiftEnd)) {
+                return shift.getDayShiftOrder();
+            }
+        }
+
+        // 兜底：取第一个班次
+        CxShiftConfig firstShift = allShifts.stream()
+                .filter(s -> s.getScheduleDay() != null && s.getDayShiftOrder() != null)
+                .min(Comparator.comparingInt(CxShiftConfig::getScheduleDay)
+                        .thenComparingInt(CxShiftConfig::getDayShiftOrder))
+                .orElse(null);
+        return firstShift != null ? firstShift.getDayShiftOrder() : null;
     }
 
     /**
@@ -1673,9 +1768,8 @@ public class TaskGroupService {
         // 反推总量 = 时长 / 单胎单模时长 × 模数
         int requiredStock = (int) Math.ceil(durationSeconds / singleTireMoldSeconds * moldQty);
 
-        log.info("停产反推总量计算: embryoCode={}, dailyLhCapacity={}, moldQty={}, ratio={}, " +
-                        "singleTireMoldSeconds={}, reservedDigestHours={}h, requiredStock={}",
-                task.getEmbryoCode(), dailyLhCapacity, moldQty, ratio,
+        log.info("停产反推总量(旧): 胎胚={}, 单模日硫化量={}, 模数={}, 单胎时长={}s, 消化={}h, 需胎胚={}",
+                task.getEmbryoCode(), dailyLhCapacity, moldQty,
                 String.format("%.1f", singleTireMoldSeconds), reservedDigestHours, requiredStock);
 
         return requiredStock;
@@ -1776,7 +1870,7 @@ public class TaskGroupService {
         if (context.getMaterialLhCapacityMap() != null && lhResult.getMaterialCode() != null) {
             MonthPlanProductLhCapacityVo vo = context.getMaterialLhCapacityMap().get(lhResult.getMaterialCode());
             if (vo != null && vo.getDayVulcanizationQty() != null) {
-                return vo.getDayVulcanizationQty();
+                return vo.getDayVulcanizationQty() / 2;
             }
         }
         return 0;
@@ -1790,7 +1884,7 @@ public class TaskGroupService {
         if (context.getMaterialLhCapacityMap() != null && task.getMaterialCode() != null) {
             MonthPlanProductLhCapacityVo vo = context.getMaterialLhCapacityMap().get(task.getMaterialCode());
             if (vo != null && vo.getDayVulcanizationQty() != null) {
-                return vo.getDayVulcanizationQty();
+                return vo.getDayVulcanizationQty() / 2;
             }
         }
         return 0;

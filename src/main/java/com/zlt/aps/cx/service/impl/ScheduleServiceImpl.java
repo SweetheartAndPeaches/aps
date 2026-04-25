@@ -757,11 +757,14 @@ public class ScheduleServiceImpl implements ScheduleService {
             context.setVulcanizingStopTimeStr(stopTimeValue);
             // 尝试解析为完整日期时间格式 yyyy-MM-dd HH:mm
             try {
-                if (stopTimeValue.length() >= 16 && stopTimeValue.contains("-") && stopTimeValue.contains(":")) {
-                    LocalDateTime stopDateTime = LocalDateTime.parse(stopTimeValue,
-                            java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
-                    context.setVulcanizingStopDateTime(stopDateTime);
-                    log.info("硫化机停锅时间配置（完整日期时间）：{}", stopDateTime);
+                if (stopTimeValue.contains("-") && stopTimeValue.contains(":")) {
+                    LocalDateTime stopDateTime = parseFlexibleDateTime(stopTimeValue);
+                    if (stopDateTime != null) {
+                        context.setVulcanizingStopDateTime(stopDateTime);
+                        log.info("硫化机停锅时间配置（完整日期时间）：{}", stopDateTime);
+                    } else {
+                        log.info("硫化机停锅时间配置（HH:mm格式）：{}", stopTimeValue);
+                    }
                 } else {
                     log.info("硫化机停锅时间配置（HH:mm格式）：{}", stopTimeValue);
                 }
@@ -777,11 +780,14 @@ public class ScheduleServiceImpl implements ScheduleService {
             context.setVulcanizingOpenTimeStr(openTimeValue);
             // 尝试解析为完整日期时间格式 yyyy-MM-dd HH:mm
             try {
-                if (openTimeValue.length() >= 16 && openTimeValue.contains("-") && openTimeValue.contains(":")) {
-                    LocalDateTime openDateTime = LocalDateTime.parse(openTimeValue,
-                            java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
-                    context.setVulcanizingOpenDateTime(openDateTime);
-                    log.info("硫化开模时间配置（完整日期时间）：{}", openDateTime);
+                if (openTimeValue.contains("-") && openTimeValue.contains(":")) {
+                    LocalDateTime openDateTime = parseFlexibleDateTime(openTimeValue);
+                    if (openDateTime != null) {
+                        context.setVulcanizingOpenDateTime(openDateTime);
+                        log.info("硫化开模时间配置（完整日期时间）：{}", openDateTime);
+                    } else {
+                        log.info("硫化开模时间配置（HH:mm格式）：{}", openTimeValue);
+                    }
                 } else {
                     log.info("硫化开模时间配置（HH:mm格式）：{}", openTimeValue);
                 }
@@ -1909,4 +1915,39 @@ public class ScheduleServiceImpl implements ScheduleService {
         }
         return productionDays;
     }
+
+    /**
+     * 灵活解析日期时间字符串，支持 HH:mm 和 H:mm 两种格式
+     *
+     * @param dateTimeStr 日期时间字符串，如 "2026-05-19 5:30" 或 "2026-05-19 05:30"
+     * @return 解析后的 LocalDateTime，无法解析时返回 null
+     */
+    private LocalDateTime parseFlexibleDateTime(String dateTimeStr) {
+        if (dateTimeStr == null || dateTimeStr.isEmpty()) {
+            return null;
+        }
+        String trimmed = dateTimeStr.trim();
+        // 按空格分割，取出日期部分和时间部分
+        int spaceIdx = trimmed.indexOf(" ");
+        if (spaceIdx < 0) {
+            return null;
+        }
+        String datePart = trimmed.substring(0, spaceIdx);
+        String timePart = trimmed.substring(spaceIdx + 1).trim();
+        // 补零：将 "5:30" 格式化为 "05:30"
+        String[] timeSegments = timePart.split(":");
+        if (timeSegments.length >= 2) {
+            String hour = timeSegments[0].length() == 1 ? "0" + timeSegments[0] : timeSegments[0];
+            String minute = timeSegments[1].length() == 1 ? "0" + timeSegments[1] : timeSegments[1];
+            timePart = hour + ":" + minute;
+        }
+        try {
+            return LocalDateTime.parse(datePart + " " + timePart,
+                    java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    // ==================== 属性注入 ====================
 }
