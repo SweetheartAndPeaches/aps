@@ -1115,12 +1115,14 @@ public class TaskGroupService {
 
         // ==================== 停产逻辑调整（v2）====================
         // 每个班次都检查：今天有没有包含停产班次
-        // 判断条件：当前班次的下一个班次是否为停产班次（即当前班次是停产前最后一个生产班次）
-        boolean hasClosingShiftToday = scheduleDayTypeHelper.isBeforeCloseShift(scheduleDate, currentDayShiftOrder);
-        // 也检查当前班次本身是否是停产标识日的班次（包含停产班次的当天）
+        // 判断条件1：当前班次本身是否为停产班次（day_flag="0"）
+        boolean isCurrentClosingShift = scheduleDayTypeHelper.isClosingShift(scheduleDate, currentDayShiftOrder);
+        // 判断条件2：当前班次的下一个班次是否为停产班次（即当前班次是停产前最后一个生产班次）
+        boolean isBeforeClosingShift = scheduleDayTypeHelper.isBeforeCloseShift(scheduleDate, currentDayShiftOrder);
+        // 判断条件3：当前班次本身是否是停产标识日的班次（包含停产班次的当天）
         boolean isStopFlagDayToday = scheduleDayTypeHelper.isStopFlagDay(scheduleDate);
 
-        if (hasClosingShiftToday || isStopFlagDayToday) {
+        if (isCurrentClosingShift || isBeforeClosingShift || isStopFlagDayToday) {
             // 今天包含停产班次，走停产逻辑
             handleClosingDayTaskV2(task, context, scheduleDate, currentDayShiftOrder, dayShifts);
             return;
@@ -1236,6 +1238,17 @@ public class TaskGroupService {
                                          List<CxShiftConfig> dayShifts) {
         // 标记为停产日任务
         task.setIsClosingDayTask(true);
+
+        // ==================== 判断当前班次本身是否为停产班次 ====================
+        // 如果当前班次本身是停产班次（day_flag="0"），则不生产，产量为0
+        boolean isCurrentClosingShift = scheduleDayTypeHelper.isClosingShift(scheduleDate, currentDayShiftOrder);
+        if (isCurrentClosingShift) {
+            log.info("当前班次 {} 是停产班次，产量设为0", currentDayShiftOrder);
+            task.setPlannedProduction(0);
+            task.setRequiredCars(0);
+            task.setEndingExtraInventory(0);
+            return;
+        }
 
         // 确定停锅班次
         Integer closingShiftOrder = determineClosingShiftOrder(context);

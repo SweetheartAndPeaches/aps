@@ -441,6 +441,17 @@ public class ScheduleDayTypeHelper {
     }
 
     /**
+     * 判断是否为停产班（本班次=0）
+     *
+     * @param date       日期
+     * @param shiftOrder 班次序号（1,2,3）
+     * @return true 表示停产班
+     */
+    public boolean isClosingShift(LocalDate date, int shiftOrder) {
+        return determineShiftType(date, shiftOrder) == ShiftType.CLOSED;
+    }
+
+    /**
      * 判断是否为停产前一天班次（本班次=1 且 下班次=0）
      *
      * @param date       日期
