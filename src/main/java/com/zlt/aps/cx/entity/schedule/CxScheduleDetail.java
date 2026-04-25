@@ -16,8 +16,7 @@ import java.util.Date;
  * 对应表：T_CX_SCHEDULE_DETAIL
  *
  * <p>子表通过 mainId 关联主表 T_CX_SCHEDULE_RESULT，
- * 主表公共字段（cxBatchNo、scheduleDate、cxMachineCode、materialCode、embryoCode 等）
- * 不在子表重复存储，由主表继承即可。
+ * 同时冗余存储 embryoCode、materialCode、cxMachineCode，便于直接查询。
  *
  * <p>子表核心维度：机台 + 胎胚 + 车次
  * 每条记录代表一个胎胚在8个班次内的车次排产明细，
@@ -37,6 +36,18 @@ public class CxScheduleDetail extends BaseEntity {
     @ApiModelProperty(value = "所属主表ID")
     @TableField("MAIN_ID")
     private Long mainId;
+
+    @ApiModelProperty(value = "机台编码")
+    @TableField("CX_MACHINE_CODE")
+    private String cxMachineCode;
+
+    @ApiModelProperty(value = "物料编码")
+    @TableField("MATERIAL_CODE")
+    private String materialCode;
+
+    @ApiModelProperty(value = "胎胚编码")
+    @TableField("EMBRYO_CODE")
+    private String embryoCode;
 
     // ==================== 一班 ====================
     @ApiModelProperty(value = "一班计划数")

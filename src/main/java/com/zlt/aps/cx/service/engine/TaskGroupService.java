@@ -313,8 +313,25 @@ public class TaskGroupService {
             int usedRemainder = materialUsedFormingRemainder.getOrDefault(materialCode, 0);
             calculateEndingInfo(task, context, scheduleDate, usedRemainder);
 
-            // S5.2.4.1 开产班次提前算出备货基准量（存于 openingShiftCapacity，供后续收尾后对比）
+            // S5.2.4.1 开产班次：更新 vulcanizeDemand 为下一个有计划的 CLASS 的量
             if (isOpeningShift) {
+                int currentDemand = task.getVulcanizeDemand() != null ? task.getVulcanizeDemand() : 0;
+                if (currentDemand <= 0) {
+                    if (lhResult != null) {
+                        if (currentClassIndex > 0) {
+                            for (int ci = currentClassIndex + 1; ci <= 8; ci++) {
+                                Integer nextPlan = getClassPlanQtyByIndex(lhResult, ci);
+                                if (nextPlan != null && nextPlan > 0) {
+                                    task.setVulcanizeDemand(nextPlan);
+                                    log.info("开产班次: 胎胚={}, 当前CLASS{}计划=0, 使用CLASS{}计划={}",
+                                            embryoCode, currentClassIndex, ci, nextPlan);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+                // 同时算出开产基准量（6/24 × 双模日硫化，往下取整车），供 handleOpeningDayTaskV2 封顶用
                 int doubleMoldDailyCapacity = getDailyLhCapacityByTask(task, context) * 2;
                 if (doubleMoldDailyCapacity > 0) {
                     int raw = (int) Math.ceil(6.0 / 24.0 * doubleMoldDailyCapacity);
@@ -1558,11 +1575,10 @@ public class TaskGroupService {
                                          List<CxShiftConfig> dayShifts) {
         task.setIsOpeningDayTask(true);
 
-        // ==================== 取开产基准量与收尾后实需的较小值 ====================
-        // openingShiftCapacity 已在 groupTasks 中提前算好并存入了 task
-        // endingExtraInventory 已经过 calculatePlannedProduction + handleEndingRemainder + 试制调整
+        // 收尾/试制已正常算完（vulcanizeDemand 已在循环中被更新为下游 CLASS 计划量）
+        // openingShiftCapacity 为 6/24 开产基准量，取较小值封顶
         int openingBase = task.getOpeningShiftCapacity() != null ? task.getOpeningShiftCapacity() : 0;
-        int endingAdjusted = task.getEndingExtraInventory() != null ? task.getEndingExtraInventory() : Integer.MAX_VALUE;
+        int endingAdjusted = task.getEndingExtraInventory() != null ? task.getEndingExtraInventory() : 0;
         int finalProduction = Math.min(openingBase, endingAdjusted);
 
         task.setPlannedProduction(finalProduction);
@@ -1572,9 +1588,7 @@ public class TaskGroupService {
         task.setRequiredCars(tripCapacity > 0 ? (finalProduction + tripCapacity - 1) / tripCapacity : 0);
 
         log.info("开产日排产: 胎胚={}, 开产基准={}, 收尾后实需={}, 最终产量={}, 需车={}",
-                task.getEmbryoCode(), openingBase,
-                endingAdjusted == Integer.MAX_VALUE ? "无" : String.valueOf(endingAdjusted),
-                finalProduction,
+                task.getEmbryoCode(), openingBase, endingAdjusted, finalProduction,
                 tripCapacity > 0 ? (finalProduction + tripCapacity - 1) / tripCapacity : 0);
     }
 

@@ -1261,6 +1261,9 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
             for (Map.Entry<Integer, List<TripRecord>> entry : tripsByNo.entrySet()) {
                 CxScheduleDetail detail = new CxScheduleDetail();
+                detail.setCxMachineCode(machineCode);
+                detail.setEmbryoCode(embryoCode);
+                detail.setMaterialCode(tracker.getMaterialCode());
 
                 // 将8个班次的车次数据合并到一条记录中
                 for (TripRecord trip : entry.getValue()) {

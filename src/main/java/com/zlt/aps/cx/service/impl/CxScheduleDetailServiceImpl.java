@@ -184,7 +184,7 @@ public class CxScheduleDetailServiceImpl extends ServiceImpl<CxScheduleDetailMap
         for (CxScheduleDetail detail : details) {
             detail.setId(null);
         }
-        return true;
+        return saveBatch(details);
     }
 
     @Override
