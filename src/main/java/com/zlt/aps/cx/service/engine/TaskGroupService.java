@@ -197,6 +197,20 @@ public class TaskGroupService {
         log.info("【收尾参数配置】收尾舍弃阈值={}, 成型余量紧急阈值={}, 近期收尾天数={}, 紧急收尾天数={}",
                 endingDiscardThreshold, endingUrgentFormingRemainder, endingDaysThreshold, urgentEndingDays);
 
+        // 判断当前班次是否为开产班次（用于提前过滤关键产品）
+        boolean isOpeningShift = false;
+        if (dayShifts != null && !dayShifts.isEmpty()) {
+            CxShiftConfig currentShift = dayShifts.get(0);
+            if (currentShift.getDayShiftOrder() != null) {
+                LocalDate currentScheduleDate = context.getCurrentScheduleDate();
+                String factoryCode = context.getFactoryCode();
+                ScheduleDayTypeHelper.ShiftType st = scheduleDayTypeHelper.determineShiftType(
+                        currentScheduleDate, currentShift.getDayShiftOrder(), factoryCode);
+                isOpeningShift = st == ScheduleDayTypeHelper.ShiftType.OPEN_START
+                        || scheduleDayTypeHelper.isOpeningDay(currentScheduleDate, factoryCode);
+            }
+        }
+
         if (machineOnlineEmbryoMap == null) {
             machineOnlineEmbryoMap = new HashMap<>();
         }
@@ -267,6 +281,14 @@ public class TaskGroupService {
                 continue;
             }
 
+            // 开产班次提前过滤关键产品（不在分组中保留，直接在循环中跳过）
+            if (isOpeningShift && context.getKeyProductCodes() != null
+                    && lhResult.getEmbryoCode() != null
+                    && context.getKeyProductCodes().contains(lhResult.getEmbryoCode())) {
+                log.info("开产班次关键产品跳过: 胎胚={}", lhResult.getEmbryoCode());
+                continue;
+            }
+
             String embryoCode = lhResult.getEmbryoCode();
 
             // 判断任务类型
@@ -290,6 +312,17 @@ public class TaskGroupService {
             // S5.2.4 计算收尾属性（传入已使用的成型余量）
             int usedRemainder = materialUsedFormingRemainder.getOrDefault(materialCode, 0);
             calculateEndingInfo(task, context, scheduleDate, usedRemainder);
+
+            // S5.2.4.1 开产班次提前算出备货基准量（存于 openingShiftCapacity，供后续收尾后对比）
+            if (isOpeningShift) {
+                int doubleMoldDailyCapacity = getDailyLhCapacityByTask(task, context) * 2;
+                if (doubleMoldDailyCapacity > 0) {
+                    int raw = (int) Math.ceil(6.0 / 24.0 * doubleMoldDailyCapacity);
+                    int tripCapacity = getTripCapacity(task.getStructureName(), context);
+                    int openingBase = tripCapacity > 0 ? (raw / tripCapacity) * tripCapacity : raw;
+                    task.setOpeningShiftCapacity(openingBase);
+                }
+            }
 
             // S5.2.5 计算待排产量
             calculatePlannedProduction(task, context, scheduleDate);
@@ -1161,9 +1194,12 @@ public class TaskGroupService {
         LocalDate nextDay = scheduleDate.plusDays(1);
         boolean isNextDayStop = scheduleDayTypeHelper.hasAnyClosingShift(nextDay, factoryCode);
 
-        // ==================== 开产日处理 ====================
-        if (scheduleDayTypeHelper.isOpeningDay(scheduleDate, factoryCode)) {
-            handleOpeningDayTaskV2(task, context, scheduleDate, currentDayShiftOrder);
+        // ==================== 开产处理 ====================
+        // 判断条件：班次类型为 OPEN_START（本班次开产，上个班次停产）或 isOpeningDay
+        boolean isOpening = shiftType == ScheduleDayTypeHelper.ShiftType.OPEN_START
+                || scheduleDayTypeHelper.isOpeningDay(scheduleDate, factoryCode);
+        if (isOpening) {
+            handleOpeningDayTaskV2(task, context, scheduleDate, currentDayShiftOrder, dayShifts);
             if (isNextDayStop) {
                 int closingRequiredStock = calculateClosingRequiredStockV2(task, context, scheduleDate, currentDayShiftOrder, dayShifts);
                 int currentStock = task.getCurrentStock() != null ? task.getCurrentStock() : 0;
@@ -1329,17 +1365,18 @@ public class TaskGroupService {
         task.setClosingRequiredStock(closingRequiredStock);
 
         int currentStock = task.getCurrentStock() != null ? task.getCurrentStock() : 0;
-        int normalDemand = task.getPlannedProduction() != null ? task.getPlannedProduction() : 0;
+        int endingInventory = task.getEndingExtraInventory() != null ? task.getEndingExtraInventory() : 0;
 
         // 当前班次到停机时间还需的量
         int thisShiftNeeded = Math.max(0, closingRequiredStock - currentStock);
 
-        // 封顶：取正常需求和反推需求中的较小值
-        int cappedProduction = Math.min(normalDemand, thisShiftNeeded);
+        // 封顶：取 endingExtraInventory（收尾/试制调整后的量）和反推需求中的较小值
+        // 如果 endingExtraInventory < 反推需求，说明收尾已经在限制了，停产不放大
+        int cappedProduction = Math.min(endingInventory, thisShiftNeeded);
 
-        log.info("停产反推封顶: 胎胚={}, 停锅班次=当天第{}班, 反推需胎胚={}, 当前库存={}, 正常班需求={}, 还需生产={}, 封顶={}, 当前班次=当天第{}班",
+        log.info("停产反推封顶: 胎胚={}, 停锅班次=当天第{}班, 反推需胎胚={}, 当前库存={}, 收尾后实需={}, 还需生产={}, 封顶={}, 当前班次=当天第{}班",
                 task.getEmbryoCode(), closingShiftOrder, closingRequiredStock,
-                currentStock, normalDemand, thisShiftNeeded, cappedProduction, currentDayShiftOrder);
+                currentStock, endingInventory, thisShiftNeeded, cappedProduction, currentDayShiftOrder);
 
         // ==================== 如果之前走了收尾余量处理，以停产为优先调整回来 ====================
         if (Boolean.TRUE.equals(task.getIsLastEndingBatch())) {
@@ -1498,79 +1535,47 @@ public class TaskGroupService {
     }
 
     /**
-     * 开产日任务处理 V2：提前一班备货（简化公式）
+     * 开产日任务处理（开产基准量已在 groupTasks 中提前算出并存于 openingShiftCapacity）
      *
-     * <p>调整逻辑：
-     * <ul>
-     *   <li>获取开产班次下一个班次的硫化任务，排除关键产品</li>
-     *   <li>endingExtraInventory = (6/24) × 物料日硫化量</li>
-     *   <li>开产首班不补整车</li>
-     * </ul>
+     * <p>逻辑：
+     * <ol>
+     *   <li>取 groupTasks 中预存的 openingShiftCapacity（开产基准量，向下取整到整车）</li>
+     *   <li>与收尾/试制调整后的 endingExtraInventory 比较，取较小值</li>
+     * </ol>
+     *
+     * <p>注意：关键产品已在 groupTasks 中提前过滤，不会进入此方法
      *
      * @param task               胎胚任务
      * @param context            排程上下文
      * @param scheduleDate       排程日期
      * @param currentDayShiftOrder 当前班次序号
+     * @param dayShifts          当前班次配置
      */
     private void handleOpeningDayTaskV2(CoreScheduleAlgorithmService.DailyEmbryoTask task,
                                          ScheduleContextVo context,
                                          LocalDate scheduleDate,
-                                         int currentDayShiftOrder) {
-        // 确定硫化开产班次和成型开产班次
-        Integer lhOpeningShiftOrder = determineLhOpeningShiftOrder(context);
-        if (lhOpeningShiftOrder == null) {
-            log.warn("开产日 {} 无法确定硫化开产班次，保持原计划量", scheduleDate);
-            return;
-        }
-        int formingOpeningShiftOrder = Math.max(1, lhOpeningShiftOrder - 1);
-        task.setLhOpeningShiftOrder(lhOpeningShiftOrder);
-        task.setFormingOpeningShiftOrder(formingOpeningShiftOrder);
+                                         int currentDayShiftOrder,
+                                         List<CxShiftConfig> dayShifts) {
+        task.setIsOpeningDayTask(true);
 
-        // ==================== 关键产品过滤 ====================
-        // 开产时过滤关键产品：如果当前任务是关键产品，开产首班不排
-        boolean isKeyProduct = context.getKeyProductCodes() != null
-                && task.getEmbryoCode() != null
-                && context.getKeyProductCodes().contains(task.getEmbryoCode());
+        // ==================== 取开产基准量与收尾后实需的较小值 ====================
+        // openingShiftCapacity 已在 groupTasks 中提前算好并存入了 task
+        // endingExtraInventory 已经过 calculatePlannedProduction + handleEndingRemainder + 试制调整
+        int openingBase = task.getOpeningShiftCapacity() != null ? task.getOpeningShiftCapacity() : 0;
+        int endingAdjusted = task.getEndingExtraInventory() != null ? task.getEndingExtraInventory() : Integer.MAX_VALUE;
+        int finalProduction = Math.min(openingBase, endingAdjusted);
 
-        // 当前班次 = 成型开产首班（早于硫化开产一个班次）
-        if (currentDayShiftOrder == formingOpeningShiftOrder && currentDayShiftOrder < lhOpeningShiftOrder) {
-            log.info("开产日排产: 胎胚={}, 当前班次=成型开产首班(当天第{}班), 计划在硫化开产(当天第{}班)前备货",
-                    task.getEmbryoCode(), currentDayShiftOrder, lhOpeningShiftOrder);
-            // 关键产品在开产首班不排产
-            if (isKeyProduct) {
-                task.setPlannedProduction(0);
-                task.setEndingExtraInventory(0);
-                task.setRequiredCars(0);
-                log.info("开产日排产(关键产品跳过): 胎胚={}, 开产首班关键产品不排产", task.getEmbryoCode());
-                return;
-            }
+        task.setPlannedProduction(finalProduction);
+        task.setEndingExtraInventory(finalProduction);
 
-            // ==================== 简化公式：endingExtraInventory = (6/24) × 物料日硫化量 ====================
-            int dailyLhCapacity = getDailyLhCapacityByTask(task, context);
-            if (dailyLhCapacity <= 0) {
-                log.warn("开产日排产(日硫化量为0): 胎胚={}, 无法计算备货量", task.getEmbryoCode());
-                task.setPlannedProduction(0);
-                task.setEndingExtraInventory(0);
-                task.setRequiredCars(0);
-                return;
-            }
+        int tripCapacity = getTripCapacity(task.getStructureName(), context);
+        task.setRequiredCars(tripCapacity > 0 ? (finalProduction + tripCapacity - 1) / tripCapacity : 0);
 
-            // endingExtraInventory = (6/24) × 物料日硫化量
-            int openingInventory = (int) Math.ceil(6.0 / 24.0 * dailyLhCapacity);
-
-            // 开产首班不补整车
-            task.setPlannedProduction(openingInventory);
-            task.setEndingExtraInventory(openingInventory);
-            task.setRequiredCars(openingInventory > 0 ? 1 : 0);
-            task.setIsOpeningDayTask(true);
-            task.setOpeningShiftCapacity(openingInventory);
-
-            log.info("开产日排产(首班备货): 胎胚={}, 日硫化量={}, 备货量(=6/24*日硫化量)={}, 不补整车",
-                    task.getEmbryoCode(), dailyLhCapacity, openingInventory);
-        } else if (currentDayShiftOrder >= lhOpeningShiftOrder) {
-            // 硫化已开产的班次：正常排产（demand已在buildSingleTask中正确计算）
-            task.setIsOpeningDayTask(true);
-        }
+        log.info("开产日排产: 胎胚={}, 开产基准={}, 收尾后实需={}, 最终产量={}, 需车={}",
+                task.getEmbryoCode(), openingBase,
+                endingAdjusted == Integer.MAX_VALUE ? "无" : String.valueOf(endingAdjusted),
+                finalProduction,
+                tripCapacity > 0 ? (finalProduction + tripCapacity - 1) / tripCapacity : 0);
     }
 
     /**
