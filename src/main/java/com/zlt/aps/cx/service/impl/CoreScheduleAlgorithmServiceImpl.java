@@ -361,12 +361,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         }
         log.info("【班次完成】共分配 {} 条排产记录", shiftProductionResults.size());
 
-        // 注意：按班次排程时不需要跨班次均衡（balanceShiftQuantities），
-        // 因为每个班次独立 DFS 均衡，量已经按单班次需求分配
-
-        // ==================== 精度计划安排 ====================
-        // 机台按可供硫化时间降序排序，检查是否需要安排精度校验
-        applyPrecisionPlanDeduction(allAllocations, shiftProductionResults, context, scheduleDate);
+        // 注意：精度计划扣量和班次量均衡在 executeSchedule 主流程的 L193-197 统一调用
+        // 这里每个班次独立排程，不需要额外处理
 
         // 封装该班次排产结果
         ShiftScheduleResult shiftResult = new ShiftScheduleResult();
