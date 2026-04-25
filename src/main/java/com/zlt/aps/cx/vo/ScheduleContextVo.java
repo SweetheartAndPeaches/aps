@@ -383,9 +383,21 @@ public class ScheduleContextVo {
     private String vulcanizingStopTimeStr;
 
     /**
+     * 硫化机停锅时间（完整日期时间，格式 yyyy-MM-dd HH:mm，如 "2026-05-06 08:00"）
+     * 优先使用此字段，若为空则回退到 vulcanizingStopTimeStr
+     */
+    private LocalDateTime vulcanizingStopDateTime;
+
+    /**
      * 硫化开模时间（开产日硫化开始时刻，HH:mm格式字符串，如 "08:00"）
      */
     private String vulcanizingOpenTimeStr;
+
+    /**
+     * 硫化开模时间（完整日期时间，格式 yyyy-MM-dd HH:mm，如 "2026-05-07 08:00"）
+     * 优先使用此字段，若为空则回退到 vulcanizingOpenTimeStr
+     */
+    private LocalDateTime vulcanizingOpenDateTime;
 
     /**
      * H15开头机台最大胎胚种类数（未配置则按配比默认值，配置后覆盖配比值）

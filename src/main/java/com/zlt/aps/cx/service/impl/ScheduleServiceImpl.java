@@ -35,6 +35,7 @@ import org.springframework.util.CollectionUtils;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -140,6 +141,7 @@ public class ScheduleServiceImpl implements ScheduleService {
     private final CxMaterialEndingMapper materialEndingMapper;
     private final MpCxCapacityConfigurationMapper capacityConfigurationMapper;
     private final MdmWorkCalendarMapper workCalendarMapper;
+    private final CxPrecisionPlanMapper precisionPlanMapper;
 
     // ==================== 公共方法 ====================
 
@@ -232,6 +234,42 @@ public class ScheduleServiceImpl implements ScheduleService {
             log.error("重排程失败", e);
             return false;
         }
+    }
+
+    /**
+     * 加载精度计划
+     *
+     * <p>查询条件：planDate < 当前班次所在日期 - 3天（可配置），且 actualDate 为空（未执行）
+     * <p>这些是需要安排精度校验的机台
+     *
+     * @param context      排程上下文
+     * @param scheduleDate 排程日期
+     */
+    private void loadPrecisionPlans(ScheduleContextVo context, LocalDate scheduleDate) {
+        // 精度提前天数（默认3天，可通过参数配置）
+        int precisionAdvanceDays = 3;
+        CxParamConfig advanceDaysConfig = context.getParamConfigMap() != null
+                ? context.getParamConfigMap().get("PRECISION_ADVANCE_DAYS") : null;
+        if (advanceDaysConfig != null && advanceDaysConfig.getParamValue() != null) {
+            try {
+                precisionAdvanceDays = Integer.parseInt(advanceDaysConfig.getParamValue());
+                log.info("精度提前天数配置：{}天", precisionAdvanceDays);
+            } catch (NumberFormatException e) {
+                log.warn("解析精度提前天数配置失败，使用默认3天");
+            }
+        }
+
+        LocalDate cutoffDate = scheduleDate.minusDays(precisionAdvanceDays);
+
+        List<CxPrecisionPlan> precisionPlans = precisionPlanMapper.selectList(
+                new LambdaQueryWrapper<CxPrecisionPlan>()
+                        .lt(CxPrecisionPlan::getPlanDate, java.sql.Date.valueOf(cutoffDate))
+                        .isNull(CxPrecisionPlan::getActualDate)
+                        .eq(CxPrecisionPlan::getIsDelete, "0"));
+        context.setPrecisionPlans(precisionPlans);
+
+        log.info("加载精度计划，cutoffDate={}（排程日期{}-{}天），未执行精度计划 {} 条",
+                cutoffDate, scheduleDate, precisionAdvanceDays, precisionPlans != null ? precisionPlans.size() : 0);
     }
 
     /**
@@ -383,6 +421,13 @@ public class ScheduleServiceImpl implements ScheduleService {
                 setHolidayFlags(context, scheduleDate);
             } catch (Exception e) {
                 log.warn("设置节假日标记失败，继续执行：{}", e.getMessage());
+            }
+
+            // 15.5 加载精度计划（planDate < 当前班次日期 - 3天 且 actualDate 为空）
+            try {
+                loadPrecisionPlans(context, scheduleDate);
+            } catch (Exception e) {
+                log.warn("加载精度计划失败，继续执行：{}", e.getMessage());
             }
 
             // 16. 加载物料收尾信息并计算收尾日
@@ -704,18 +749,44 @@ public class ScheduleServiceImpl implements ScheduleService {
             }
         }
 
-        // 加载硫化机停锅时间（停产日硫化停止时刻，HH:mm格式）
+        // 加载硫化机停锅时间（支持 yyyy-MM-dd HH:mm 完整日期时间格式，也兼容 HH:mm 格式）
         CxParamConfig vulcanizingStopTimeConfig = paramConfigMap.get(PARAM_CODE_VULCANIZING_STOP_TIME);
         if (vulcanizingStopTimeConfig != null && vulcanizingStopTimeConfig.getParamValue() != null) {
-            context.setVulcanizingStopTimeStr(vulcanizingStopTimeConfig.getParamValue());
-            log.info("硫化机停锅时间配置：{}", vulcanizingStopTimeConfig.getParamValue());
+            String stopTimeValue = vulcanizingStopTimeConfig.getParamValue().trim();
+            context.setVulcanizingStopTimeStr(stopTimeValue);
+            // 尝试解析为完整日期时间格式 yyyy-MM-dd HH:mm
+            try {
+                if (stopTimeValue.length() >= 16 && stopTimeValue.contains("-") && stopTimeValue.contains(":")) {
+                    LocalDateTime stopDateTime = LocalDateTime.parse(stopTimeValue,
+                            java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+                    context.setVulcanizingStopDateTime(stopDateTime);
+                    log.info("硫化机停锅时间配置（完整日期时间）：{}", stopDateTime);
+                } else {
+                    log.info("硫化机停锅时间配置（HH:mm格式）：{}", stopTimeValue);
+                }
+            } catch (Exception e) {
+                log.warn("解析硫化机停锅时间失败（非日期时间格式），使用原始值：{}", stopTimeValue);
+            }
         }
 
-        // 加载硫化开模时间（开产日硫化开始时刻，HH:mm格式）
+        // 加载硫化开模时间（支持 yyyy-MM-dd HH:mm 完整日期时间格式，也兼容 HH:mm 格式）
         CxParamConfig vulcanizingOpenTimeConfig = paramConfigMap.get(PARAM_CODE_VULCANIZING_OPEN_TIME);
         if (vulcanizingOpenTimeConfig != null && vulcanizingOpenTimeConfig.getParamValue() != null) {
-            context.setVulcanizingOpenTimeStr(vulcanizingOpenTimeConfig.getParamValue());
-            log.info("硫化开模时间配置：{}", vulcanizingOpenTimeConfig.getParamValue());
+            String openTimeValue = vulcanizingOpenTimeConfig.getParamValue().trim();
+            context.setVulcanizingOpenTimeStr(openTimeValue);
+            // 尝试解析为完整日期时间格式 yyyy-MM-dd HH:mm
+            try {
+                if (openTimeValue.length() >= 16 && openTimeValue.contains("-") && openTimeValue.contains(":")) {
+                    LocalDateTime openDateTime = LocalDateTime.parse(openTimeValue,
+                            java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+                    context.setVulcanizingOpenDateTime(openDateTime);
+                    log.info("硫化开模时间配置（完整日期时间）：{}", openDateTime);
+                } else {
+                    log.info("硫化开模时间配置（HH:mm格式）：{}", openTimeValue);
+                }
+            } catch (Exception e) {
+                log.warn("解析硫化开模时间失败（非日期时间格式），使用原始值：{}", openTimeValue);
+            }
         }
 
         // 加载预留消化时间（小时）

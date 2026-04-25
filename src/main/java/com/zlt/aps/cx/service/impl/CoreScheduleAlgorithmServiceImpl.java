@@ -1,5 +1,6 @@
 package com.zlt.aps.cx.service.impl;
 
+import com.zlt.aps.cx.api.domain.entity.CxPrecisionPlan;
 import com.zlt.aps.cx.api.domain.entity.CxStock;
 import com.zlt.aps.cx.entity.config.CxShiftConfig;
 import com.zlt.aps.cx.entity.schedule.CxScheduleDetail;
@@ -189,6 +190,12 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         // ==================== 合并多班次结果：每个机台一条记录，8个班次映射到CLASS1~8 ====================
         List<CxScheduleResult> allResults = buildFinalScheduleResultsFromShifts(context, shiftResults, allShiftConfigs);
 
+        // ==================== 精度计划扣量：成型停机做精度时，若可供硫化时长<4小时，硫化产能减半 ====================
+        applyPrecisionPlanDeduction(context, shiftResults);
+
+        // ==================== 班次量均衡：按结构班产标准，最大硫化机数胎胚调整班次均衡 ====================
+        balanceShiftQuantities(context, shiftResults, allShiftConfigs);
+
         // ==================== 构建子表：按"胎胚+整车"维度拆分车次，计算库存可供硫化时长和顺序 ====================
         List<CxScheduleDetail> allDetails = buildScheduleDetailsFromShifts(context, shiftResults, allShiftConfigs);
         log.info("子表记录构建完成，共 {} 条", allDetails.size());
@@ -357,6 +364,10 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         // 注意：按班次排程时不需要跨班次均衡（balanceShiftQuantities），
         // 因为每个班次独立 DFS 均衡，量已经按单班次需求分配
 
+        // ==================== 精度计划安排 ====================
+        // 机台按可供硫化时间降序排序，检查是否需要安排精度校验
+        applyPrecisionPlanDeduction(allAllocations, shiftProductionResults, context, scheduleDate);
+
         // 封装该班次排产结果
         ShiftScheduleResult shiftResult = new ShiftScheduleResult();
         shiftResult.setDay(day);
@@ -367,6 +378,221 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
 
         log.info("========== 班次排程完成，天={}, 班次={} ==========\n", day, shiftConfig.getShiftCode());
         return shiftResult;
+    }
+
+    /**
+     * 精度计划扣量处理
+     *
+     * <p>业务规则：
+     * <ul>
+     *   <li>1. 从CxPrecisionPlan获取未完成的精度计划（planDate < 排程日期-3天，actualDate为空）</li>
+     *   <li>2. 将机台按其下所有任务的可供硫化时间降序排序</li>
+     *   <li>3. 检查排序靠前的机台是否在精度计划列表中</li>
+     *   <li>4. 若可供硫化时长 >= 4小时：硫化不停机，只扣成型4小时产能</li>
+     *   <li>5. 若可供硫化时长 < 4小时：硫化产能减半（扣4/8=1/2），对应任务计划量减半</li>
+     *   <li>6. 每天最多安排2台机器做精度</li>
+     * </ul>
+     *
+     * @param context      排程上下文（含精度计划列表）
+     * @param shiftResults 所有班次的排产结果
+     */
+    private void applyPrecisionPlanDeduction(ScheduleContextVo context,
+                                              List<ShiftScheduleResult> shiftResults) {
+        List<CxPrecisionPlan> precisionPlans = context.getPrecisionPlans();
+        if (precisionPlans == null || precisionPlans.isEmpty()) {
+            log.info("无精度计划需要处理，跳过精度扣量");
+            return;
+        }
+
+        // 精度计划按机台编码索引
+        Set<String> precisionMachineCodes = precisionPlans.stream()
+                .map(CxPrecisionPlan::getMachineCode)
+                .collect(Collectors.toSet());
+
+        log.info("精度计划涉及机台：{}", precisionMachineCodes);
+
+        // 按天分组处理（每天最多2台做精度）
+        Map<Integer, List<ShiftScheduleResult>> dayShiftMap = shiftResults.stream()
+                .collect(Collectors.groupingBy(ShiftScheduleResult::getDay));
+
+        for (Map.Entry<Integer, List<ShiftScheduleResult>> dayEntry : dayShiftMap.entrySet()) {
+            int day = dayEntry.getKey();
+            List<ShiftScheduleResult> dayShifts = dayEntry.getValue();
+
+            // 收集该天所有机台，按可供硫化时间降序排序
+            // 可供硫化时间 = 机台下所有任务stockHours的总和
+            Map<String, BigDecimal> machineStockHoursMap = new LinkedHashMap<>();
+            Map<String, List<ShiftScheduleService.ShiftProductionResult>> machineResultsMap = new LinkedHashMap<>();
+
+            for (ShiftScheduleResult shiftResult : dayShifts) {
+                if (shiftResult.getShiftProductionResults() == null) continue;
+                for (ShiftScheduleService.ShiftProductionResult result : shiftResult.getShiftProductionResults()) {
+                    String machineCode = result.getMachineCode();
+                    machineStockHoursMap.merge(machineCode,
+                            result.getStockHours() != null ? result.getStockHours() : BigDecimal.ZERO,
+                            BigDecimal::add);
+                    machineResultsMap.computeIfAbsent(machineCode, k -> new ArrayList<>()).add(result);
+                }
+            }
+
+            // 按可供硫化时间降序排序机台
+            List<String> sortedMachines = machineStockHoursMap.entrySet().stream()
+                    .sorted(Map.Entry.<String, BigDecimal>comparingByValue().reversed())
+                    .map(Map.Entry::getKey)
+                    .collect(Collectors.toList());
+
+            // 精度扣量：最多2台机器
+            int precisionMachineCount = 0;
+            for (String machineCode : sortedMachines) {
+                if (!precisionMachineCodes.contains(machineCode)) continue;
+                if (precisionMachineCount >= 2) break;
+
+                BigDecimal totalStockHours = machineStockHoursMap.get(machineCode);
+                List<ShiftScheduleService.ShiftProductionResult> machineResults = machineResultsMap.get(machineCode);
+
+                log.info("精度扣量：天={}, 机台={}, 可供硫化时长={}h", day, machineCode, totalStockHours);
+
+                if (totalStockHours.compareTo(BigDecimal.valueOf(4)) >= 0) {
+                    // 可供硫化时长 >= 4小时：硫化不停机，只扣成型4小时产能
+                    // 成型精度4小时意味着该机台对应的任务需要扣4小时产能
+                    for (ShiftScheduleService.ShiftProductionResult result : machineResults) {
+                        if (result.getHourCapacity() != null && result.getHourCapacity() > 0) {
+                            // 扣4小时产能 = hourCapacity * 4 条
+                            int deduction = result.getHourCapacity() * 4;
+                            int newQty = Math.max(0, result.getQuantity() - deduction);
+                            log.info("  精度扣量（硫化不停机）：embryoCode={}, 原量={}, 扣量={}, 新量={}",
+                                    result.getEmbryoCode(), result.getQuantity(), deduction, newQty);
+                            result.setQuantity(newQty);
+                        }
+                    }
+                } else {
+                    // 可供硫化时长 < 4小时：硫化产能减半（扣4/8=1/2）
+                    // 对应机台里面那些任务，每个判断可供硫化时长小于4的要扣一半产能
+                    for (ShiftScheduleService.ShiftProductionResult result : machineResults) {
+                        BigDecimal taskStockHours = result.getStockHours() != null ? result.getStockHours() : BigDecimal.ZERO;
+                        if (taskStockHours.compareTo(BigDecimal.valueOf(4)) < 0) {
+                            // 可供硫化时长 < 4小时，扣一半产能
+                            int halfQty = result.getQuantity() / 2;
+                            int newQty = result.getQuantity() - halfQty;
+                            log.info("  精度扣量（硫化减半）：embryoCode={}, 原量={}, 扣量={}, 新量={}, 可供硫化时长={}h",
+                                    result.getEmbryoCode(), result.getQuantity(), halfQty, newQty, taskStockHours);
+                            result.setQuantity(newQty);
+                        }
+                    }
+                }
+
+                precisionMachineCount++;
+            }
+
+            log.info("精度扣量处理完成：天={}, 共处理 {} 台机器", day, precisionMachineCount);
+        }
+    }
+
+    /**
+     * 班次量均衡
+     *
+     * <p>业务规则：
+     * <ul>
+     *   <li>1. 按结构向下，找到绑定最大硫化机数的胎胚计划</li>
+     *   <li>2. 通过整车调整使每个班次的计划量趋于平衡</li>
+     *   <li>3. 最后一个班次的计划量 = 总量 - SUM(第1条到倒数第2条的计划量)</li>
+     * </ul>
+     *
+     * <p>示例：
+     * <pre>
+     * 序号  物料   硫化机数  班次计划量(夜-早-中)  均衡后的班次计划量
+     * 1    胎胚1   1        11-22-11              11-22-11
+     * 2    胎胚2   2        32-32-32              32-32-32
+     * 3    胎胚3   5        76-86-76              86-76-86（整车调整使班次均衡）
+     * </pre>
+     *
+     * @param context        排程上下文
+     * @param shiftResults   所有班次的排产结果
+     * @param allShiftConfigs 所有班次配置
+     */
+    private void balanceShiftQuantities(ScheduleContextVo context,
+                                         List<ShiftScheduleResult> shiftResults,
+                                         List<CxShiftConfig> allShiftConfigs) {
+        // 按天分组排产结果
+        Map<Integer, List<ShiftScheduleResult>> dayShiftMap = shiftResults.stream()
+                .collect(Collectors.groupingBy(ShiftScheduleResult::getDay));
+
+        for (Map.Entry<Integer, List<ShiftScheduleResult>> dayEntry : dayShiftMap.entrySet()) {
+            int day = dayEntry.getKey();
+            List<ShiftScheduleResult> dayShifts = dayEntry.getValue();
+
+            if (dayShifts.size() < 2) continue; // 至少2个班次才需要均衡
+
+            // 收集该天所有排产结果，按胎胚编码分组
+            // embryoCode -> List<ShiftProductionResult>（按班次顺序）
+            Map<String, List<ShiftScheduleService.ShiftProductionResult>> embryoByShiftMap = new LinkedHashMap<>();
+            for (ShiftScheduleResult shiftResult : dayShifts) {
+                if (shiftResult.getShiftProductionResults() == null) continue;
+                for (ShiftScheduleService.ShiftProductionResult result : shiftResult.getShiftProductionResults()) {
+                    embryoByShiftMap.computeIfAbsent(result.getEmbryoCode(), k -> new ArrayList<>()).add(result);
+                }
+            }
+
+            // 找到绑定最大硫化机数的胎胚
+            String maxMachineEmbryo = null;
+            int maxMachineCount = 0;
+            for (Map.Entry<String, List<ShiftScheduleService.ShiftProductionResult>> entry : embryoByShiftMap.entrySet()) {
+                String embryoCode = entry.getKey();
+                List<ShiftScheduleService.ShiftProductionResult> results = entry.getValue();
+                if (results.isEmpty()) continue;
+
+                // 从sourceTask获取硫化机数
+                int vulcanizeMachineCount = 0;
+                if (results.get(0).getSourceTask() != null && results.get(0).getSourceTask().getVulcanizeMachineCount() != null) {
+                    vulcanizeMachineCount = results.get(0).getSourceTask().getVulcanizeMachineCount();
+                }
+                if (vulcanizeMachineCount > maxMachineCount) {
+                    maxMachineCount = vulcanizeMachineCount;
+                    maxMachineEmbryo = embryoCode;
+                }
+            }
+
+            if (maxMachineEmbryo == null) {
+                log.info("天={}：未找到绑定最大硫化机数的胎胚，跳过均衡", day);
+                continue;
+            }
+
+            List<ShiftScheduleService.ShiftProductionResult> targetResults = embryoByShiftMap.get(maxMachineEmbryo);
+            log.info("班次均衡：天={}, 最大硫化机数胎胚={}, 硫化机数={}", day, maxMachineEmbryo, maxMachineCount);
+
+            // 对该胎胚的各班次计划量进行均衡
+            // 均衡策略：通过整车调整使各班次量趋于平衡
+            // 最后一个班次 = 总量 - SUM(第1条到倒数第2条的计划量)
+            int totalActualQty = targetResults.stream()
+                    .mapToInt(r -> r.getQuantity() != null ? r.getQuantity() : 0)
+                    .sum();
+
+            if (totalActualQty <= 0) continue;
+
+            // 获取整车条数
+            int tripCapacity = targetResults.get(0).getTripCapacity() != null ? targetResults.get(0).getTripCapacity() : 1;
+            if (tripCapacity <= 0) tripCapacity = 1;
+
+            // 计算每个班次应该分配的平均量（按整车取整）
+            int avgPerShift = totalActualQty / targetResults.size();
+            int avgCarsPerShift = avgPerShift / tripCapacity;
+
+            // 重新分配：前N-1个班次按整车取整，最后一个班次用余额
+            int allocatedTotal = 0;
+            for (int i = 0; i < targetResults.size() - 1; i++) {
+                ShiftScheduleService.ShiftProductionResult result = targetResults.get(i);
+                int balancedQty = avgCarsPerShift * tripCapacity;
+                result.setQuantity(balancedQty);
+                allocatedTotal += balancedQty;
+                log.info("  班次均衡：班次索引={}, 胚胎={}, 均衡后量={}", i, maxMachineEmbryo, balancedQty);
+            }
+
+            // 最后一个班次 = 总量 - 已分配
+            ShiftScheduleService.ShiftProductionResult lastResult = targetResults.get(targetResults.size() - 1);
+            int lastQty = totalActualQty - allocatedTotal;
+            lastResult.setQuantity(lastQty);
+            log.info("  班次均衡：最后班次，胚胎={}, 均衡后量={}（余额）", maxMachineEmbryo, lastQty);
+        }
     }
 
     /**
