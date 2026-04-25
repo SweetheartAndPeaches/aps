@@ -570,43 +570,6 @@ public class ScheduleDayTypeHelper {
         return ShiftType.NORMAL;
     }
 
-    // ==================== 判断方法（无工厂编号，兼容旧调用） ====================
-
-    /**
-     * 判断是否为停产班（本班次=0）
-     */
-    public boolean isClosedShift(LocalDate date, int shiftOrder) {
-        return determineShiftType(date, shiftOrder, null) == ShiftType.CLOSED;
-    }
-
-    /**
-     * 判断是否为开产首个班次（本班次=1 且 上班次=0）
-     */
-    public boolean isOpenStartShift(LocalDate date, int shiftOrder) {
-        return determineShiftType(date, shiftOrder, null) == ShiftType.OPEN_START;
-    }
-
-    /**
-     * 判断是否为停产班（本班次=0）
-     */
-    public boolean isClosingShift(LocalDate date, int shiftOrder) {
-        return determineShiftType(date, shiftOrder, null) == ShiftType.CLOSED;
-    }
-
-    /**
-     * 判断是否为停产前一个班次（本班次=1 且 下班次=0）
-     */
-    public boolean isBeforeCloseShift(LocalDate date, int shiftOrder) {
-        return determineShiftType(date, shiftOrder, null) == ShiftType.BEFORE_CLOSE;
-    }
-
-    /**
-     * 判断是否为正常班次（本班次=1 且 上下班次都是开产）
-     */
-    public boolean isNormalShift(LocalDate date, int shiftOrder) {
-        return determineShiftType(date, shiftOrder, null) == ShiftType.NORMAL;
-    }
-
     // ==================== 判断方法（带工厂编号） ====================
 
     /**
@@ -637,25 +600,7 @@ public class ScheduleDayTypeHelper {
         return determineShiftType(date, shiftOrder, factoryCode) == ShiftType.BEFORE_CLOSE;
     }
 
-    /**
-     * 判断是否为正常班次，带工厂编号
-     */
-    public boolean isNormalShift(LocalDate date, int shiftOrder, String factoryCode) {
-        return determineShiftType(date, shiftOrder, factoryCode) == ShiftType.NORMAL;
-    }
-
     // ==================== 班次停产判断（用于排程主循环跳过停产班次） ====================
-
-    /**
-     * 判断某天某班次是否停产（无工厂编号，兼容旧调用）
-     *
-     * @param date          查询日期
-     * @param dayShiftOrder 班次顺序（1=一班, 2=二班, 3=三班）
-     * @return true 表示该班次停产
-     */
-    public boolean isShiftStopped(LocalDate date, int dayShiftOrder) {
-        return SHIFT_FLAG_STOP.equals(getShiftFlag(date, dayShiftOrder));
-    }
 
     /**
      * 判断某天某班次是否停产（带工厂编号）
@@ -741,14 +686,7 @@ public class ScheduleDayTypeHelper {
     }
 
     /**
-     * 获取指定日期对应的 DayFlagInfo
-     */
-    public DayFlagInfo getDayFlagInfo(LocalDate date) {
-        return findNearestDayFlag(date);
-    }
-
-    /**
-     * 判断是否为停产日（已停产）
+     * 判断是否为停产日（已停产，往后停产）
      */
     public boolean isStopDay(LocalDate date) {
         return isStopDay(date, null);
@@ -801,10 +739,6 @@ public class ScheduleDayTypeHelper {
     /**
      * 判断是否正常生产日（既不是停产日也不是停产标识日）
      */
-    public boolean isNormalProductionDay(LocalDate date) {
-        return !isStopDay(date) && !isStopFlagDay(date);
-    }
-
     /**
      * 根据时间字符串（HH:mm格式）确定对应的班次序号
      *
@@ -853,16 +787,5 @@ public class ScheduleDayTypeHelper {
             return firstShift.getDayShiftOrder();
         }
         return null;
-    }
-
-    /**
-     * 清理缓存（测试用或需要重新加载时调用）
-     */
-    public void clearCache() {
-        calendarCache.clear();
-        cacheLoaded = false;
-        cachedFactoryCode = null;
-        cacheStartDate = null;
-        cacheEndDate = null;
     }
 }
