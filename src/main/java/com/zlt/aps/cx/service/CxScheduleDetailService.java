@@ -2,6 +2,7 @@ package com.zlt.aps.cx.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.zlt.aps.cx.entity.schedule.CxScheduleDetail;
+import com.zlt.aps.cx.vo.CxScheduleDetailVo;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -12,6 +13,35 @@ import java.util.List;
  * @author APS Team
  */
 public interface CxScheduleDetailService extends IService<CxScheduleDetail> {
+
+    /**
+     * 根据主表ID查询明细列表（带主表信息）
+     *
+     * @param mainId 主表ID
+     * @return 明细列表（包含主表关联信息）
+     */
+    List<CxScheduleDetailVo> listVoByMainId(Long mainId);
+
+    /**
+     * 根据机台和日期查询明细（带主表信息）
+     *
+     * @param cxMachineCode 成型机台编号
+     * @param scheduleDate  排程日期
+     * @return 明细列表（包含主表关联信息）
+     */
+    List<CxScheduleDetailVo> listVoByMachineAndDate(String cxMachineCode, LocalDate scheduleDate);
+
+    /**
+     * 根据机台和日期范围查询明细（带主表信息，按机台降序+胎胚排序）
+     *
+     * @param machineCodeStart 机台编号（起始）
+     * @param machineCodeEnd   机台编号（结束）
+     * @param scheduleDateStart 排程日期（起始）
+     * @param scheduleDateEnd   排程日期（结束）
+     * @return 明细列表（按机台降序+胎胚排序）
+     */
+    List<CxScheduleDetailVo> listVoByMachineAndDateRange(String machineCodeStart, String machineCodeEnd,
+                                                          LocalDate scheduleDateStart, LocalDate scheduleDateEnd);
 
     /**
      * 根据主表ID查询明细列表
