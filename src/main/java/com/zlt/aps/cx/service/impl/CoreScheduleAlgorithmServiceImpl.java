@@ -755,11 +755,35 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                             merged.setTripCapacity(existing.getTripCapacity());
                             merged.setStockHours(existing.getStockHours());
                             merged.setSequence(existing.getSequence());
-                            merged.setSourceTask(existing.getSourceTask());
                             merged.setPlanStartTime(existing.getPlanStartTime());
                             merged.setPlanEndTime(existing.getPlanEndTime());
+
+                            // ---- 合并 sourceTask：任一记录有 isUrgentEnding=true 则保留 ----
+                            CoreScheduleAlgorithmService.DailyEmbryoTask existingTask = existing.getSourceTask();
+                            CoreScheduleAlgorithmService.DailyEmbryoTask sprTask = spr.getSourceTask();
+                            boolean hasUrgentEnding = (existingTask != null && Boolean.TRUE.equals(existingTask.getIsUrgentEnding()))
+                                    || (sprTask != null && Boolean.TRUE.equals(sprTask.getIsUrgentEnding()));
+                            if (hasUrgentEnding || existingTask != null) {
+                                CoreScheduleAlgorithmService.DailyEmbryoTask mergedTask = new CoreScheduleAlgorithmService.DailyEmbryoTask();
+                                mergedTask.setEmbryoCode(existingTask != null ? existingTask.getEmbryoCode() : (sprTask != null ? sprTask.getEmbryoCode() : null));
+                                mergedTask.setMaterialCode(existingTask != null ? existingTask.getMaterialCode() : (sprTask != null ? sprTask.getMaterialCode() : null));
+                                mergedTask.setIsUrgentEnding(hasUrgentEnding);
+                                mergedTask.setIsEndingTask((existingTask != null && Boolean.TRUE.equals(existingTask.getIsEndingTask()))
+                                        || (sprTask != null && Boolean.TRUE.equals(sprTask.getIsEndingTask())));
+                                mergedTask.setIsTrialTask((existingTask != null && Boolean.TRUE.equals(existingTask.getIsTrialTask()))
+                                        || (sprTask != null && Boolean.TRUE.equals(sprTask.getIsTrialTask())));
+                                // ---- 合并 isLastEndingBatch：任一记录有 isLastEndingBatch=true 则保留 ----
+                                mergedTask.setIsLastEndingBatch(
+                                        Boolean.TRUE.equals(existingTask != null ? existingTask.getIsLastEndingBatch() : null)
+                                        || Boolean.TRUE.equals(sprTask != null ? sprTask.getIsLastEndingBatch() : null));
+                                merged.setSourceTask(mergedTask);
+                                // 同时设置 spr 的 isLastEndingBatch（buildTaskAnalysis 使用 spr.getIsLastEndingBatch()）
+                                merged.setIsLastEndingBatch(mergedTask.getIsLastEndingBatch());
+                            } else if (sprTask != null) {
+                                merged.setSourceTask(sprTask);
+                            }
+
                             // 注意：isLastEndingBatch 不在此处合并，每个班次保持独立状态
-                            // merged 对象不会被使用（因为 existing == null 时直接返回 spr）
                             return merged;
                         });
                 taskTotalQtyMap.merge(taskKey, spr.getQuantity() != null ? spr.getQuantity() : 0, Integer::sum);
@@ -1547,6 +1571,10 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 log.debug("查询示方书类型失败: materialCode={}, lhNo={}", materialCode, recipeNo);
             }
         }
+        // 兜底：如果查询不到 recipeType 但分析结果是收尾，设置 recipeType 为"收尾"
+        if (recipeType == null && analysis != null && analysis.contains("收尾")) {
+            recipeType = "收尾";
+        }
 
         switch (classField) {
             case "CLASS1":
@@ -1649,6 +1677,10 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 reasons.add("量试");
             }
             if (Boolean.TRUE.equals(spr.getIsLastEndingBatch())) {
+                reasons.add("收尾");
+            }
+            // 兜底：合并记录的 spr.getIsLastEndingBatch 可能为null，但 sourceTask.getIsEndingTask 可能为true
+            if (Boolean.TRUE.equals(task.getIsEndingTask()) && !reasons.contains("收尾")) {
                 reasons.add("收尾");
             }
             if (Boolean.TRUE.equals(task.getIsOpeningDayTask())) {
