@@ -811,6 +811,17 @@ public class ScheduleServiceImpl implements ScheduleService {
                 log.warn("解析H15机台最大胎胚种类数配置失败: {}", h15MaxTypesConfig.getParamValue());
             }
         }
+
+        // 加载库存可供硫化时长预警阈值（默认18小时）
+        CxParamConfig stockHoursWarningConfig = paramConfigMap.get("STOCK_HOURS_WARNING_THRESHOLD");
+        if (stockHoursWarningConfig != null && stockHoursWarningConfig.getParamValue() != null) {
+            try {
+                context.setStockHoursWarningThreshold(Integer.parseInt(stockHoursWarningConfig.getParamValue()));
+                log.info("库存可供硫化时长预警阈值：{}h", stockHoursWarningConfig.getParamValue());
+            } catch (NumberFormatException e) {
+                log.warn("解析库存可供硫化时长预警阈值配置失败: {}", stockHoursWarningConfig.getParamValue());
+            }
+        }
     }
 
     /**

@@ -196,12 +196,13 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         // ==================== 班次量均衡：按结构班产标准，最大硫化机数胎胚调整班次均衡 ====================
         balanceShiftQuantities(context, shiftResults, allShiftConfigs);
 
-        // ==================== 构建子表：按"胎胚+整车"维度拆分车次，计算库存可供硫化时长和顺序 ====================
-        List<CxScheduleDetail> allDetails = buildScheduleDetailsFromShifts(context, shiftResults, allShiftConfigs);
-        log.info("子表记录构建完成，共 {} 条", allDetails.size());
+        // ==================== 构建子表：按"机台+胎胚+车次"维度，8个班次合并一条，计算库存可供硫化时长和顺位 ====================
+        Map<String, List<CxScheduleDetail>> detailGroupMap = buildScheduleDetailsFromShifts(context, shiftResults, allShiftConfigs);
+        int totalDetails = detailGroupMap.values().stream().mapToInt(List::size).sum();
+        log.info("子表记录构建完成，共 {} 条（按机台+胎胚分组 {} 组）", totalDetails, detailGroupMap.size());
 
-        // ==================== 将子表明细关联到主表 ====================
-        associateDetailsToResults(allResults, allDetails);
+        // ==================== 将子表明细关联到主表（通过机台+胎胚匹配） ====================
+        associateDetailsToResults(allResults, detailGroupMap);
 
         log.info("排程算法执行完成，共 {} 个班次，总机台数: {}", shiftIndex, allResults.size());
         return allResults;
@@ -210,15 +211,15 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     /**
      * 将子表明细关联到主表结果
      * <p>匹配规则：机台编码 + 胎胚代码 一致
+     *
+     * @param allResults      主表结果列表
+     * @param detailGroupMap  子表分组（key=机台编码|胎胚代码, value=该分组下的子表明细列表）
      */
-    private void associateDetailsToResults(List<CxScheduleResult> allResults, List<CxScheduleDetail> allDetails) {
-        if (allDetails.isEmpty()) {
+    private void associateDetailsToResults(List<CxScheduleResult> allResults,
+                                           Map<String, List<CxScheduleDetail>> detailGroupMap) {
+        if (detailGroupMap.isEmpty()) {
             return;
         }
-
-        // 按 机台+胎胚 分组子表
-        Map<String, List<CxScheduleDetail>> detailGroupMap = allDetails.stream()
-                .collect(Collectors.groupingBy(d -> d.getCxMachineCode() + "|" + d.getEmbryoCode()));
 
         int matched = 0;
         for (CxScheduleResult result : allResults) {
@@ -229,7 +230,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                 matched += details.size();
             }
         }
-        log.info("子表关联主表完成：子表 {} 条，成功关联 {} 条", allDetails.size(), matched);
+        int totalDetails = detailGroupMap.values().stream().mapToInt(List::size).sum();
+        log.info("子表关联主表完成：子表 {} 条，成功关联 {} 条", totalDetails, matched);
     }
 
     /**
@@ -991,7 +993,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             // ---- 收尾提示 ----
             boolean isUrgentEnding = false;
             for (ShiftScheduleService.ShiftProductionResult spr : classSprMap.values()) {
-                if (Boolean.TRUE.equals(spr.getSourceTask() != null ? spr.getSourceTask().getIsUrgentEnding() : false)) {
+                if (spr != null && spr.getSourceTask() != null && Boolean.TRUE.equals(spr.getSourceTask().getIsUrgentEnding())) {
                     isUrgentEnding = true;
                     break;
                 }
@@ -1018,15 +1020,27 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
     }
 
     /**
-     * 按班次排程后构建子表记录（与 buildScheduleDetails 逻辑一致，但输入是 ShiftScheduleResult）
+     * 按班次排程后构建子表记录
+     *
+     * <p>核心逻辑：
+     * <ul>
+     *   <li>维度：机台 + 胎胚 + 车次</li>
+     *   <li>8个班次合并到一条记录（CLASS1~CLASS8）</li>
+     *   <li>顺位规则：同一胎胚内按库存可供硫化时长从小到大排序</li>
+     *   <li>预警规则：库存可供硫化时长 > 18小时（可配置）时预警</li>
+     * </ul>
+     *
+     * <p>公式：胎胚预计库存可供硫化时长 = （胎胚实时库存 + 计划量）/ 硫化机数 / 单台模数
+     *
+     * @return 分组子表（key=机台编码|胎胚代码, value=该分组下的子表明细列表）
      */
-    private List<CxScheduleDetail> buildScheduleDetailsFromShifts(
+    private Map<String, List<CxScheduleDetail>> buildScheduleDetailsFromShifts(
             ScheduleContextVo context,
             List<ShiftScheduleResult> shiftResults,
             List<CxShiftConfig> allShiftConfigs) {
 
         if (shiftResults == null || shiftResults.isEmpty()) {
-            return Collections.emptyList();
+            return Collections.emptyMap();
         }
 
         // 构建班次配置映射：shiftCode → classField
@@ -1040,6 +1054,7 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             }
         }
 
+        // 硫化结果映射（用于获取硫化消耗）
         Map<Long, LhScheduleResult> lhResultMap = new HashMap<>();
         if (context.getLhScheduleResults() != null) {
             for (LhScheduleResult lh : context.getLhScheduleResults()) {
@@ -1049,6 +1064,11 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             }
         }
 
+        // 获取库存预警阈值（默认18小时）
+        int stockHoursWarningThreshold = context.getStockHoursWarningThreshold() != null
+                ? context.getStockHoursWarningThreshold() : 18;
+
+        // ==================== 第一阶段：按胎胚+物料维度跟踪车次，递推计算库存可供硫化时长 ====================
         Map<String, EmbryoTripTracker> embryoTrackers = new LinkedHashMap<>();
 
         for (ShiftScheduleResult shiftResult : shiftResults) {
@@ -1084,7 +1104,6 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                     }
                 }
 
-                int beginStock = tracker.getCurrentStock();
                 int tripCapacity = spr.getTripCapacity() != null ? spr.getTripCapacity() : 12;
                 int planQty = spr.getQuantity() != null ? spr.getQuantity() : 0;
                 int tripCount = (planQty + tripCapacity - 1) / tripCapacity;
@@ -1108,26 +1127,31 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
                         ? (getClassPlanQtyByIndex(lhResult, vulcanizeClassIndex) != null
                         ? getClassPlanQtyByIndex(lhResult, vulcanizeClassIndex) : 0) : 0;
 
-                int cumulativeTripPlan = 0;
+                // 为每个车次创建 TripRecord
                 for (int i = 1; i <= tripCount; i++) {
                     int tripPlanQty = Math.min(tripCapacity, planQty - (i - 1) * tripCapacity);
-                    cumulativeTripPlan += tripPlanQty;
 
+                    // 计算当前车次前的累计库存可供硫化时长
                     int currentStock = tracker.getCurrentStock();
                     double stockHours = calculateStockHours(
                             currentStock, tracker.getCumulativeForming(),
                             tracker.getCumulativeVulcanize(),
                             tracker.getVulcanizeMachineCount(), tracker.getVulcanizeMoldCount());
 
+                    // 计算车次时间
                     LocalDateTime tripStartTime = null;
                     LocalDateTime tripEndTime = null;
                     if (spr.getPlanStartTime() != null && tracker.getHourlyCapacity() > 0) {
                         LocalDateTime shiftStart = spr.getPlanStartTime();
                         int hourlyCapacity = tracker.getHourlyCapacity();
 
+                        // 计算该车次之前的累计产量
                         int cumulativeBeforeTrip = 0;
-                        for (int j = 1; j < i; j++) {
-                            cumulativeBeforeTrip += Math.min(tripCapacity, planQty - (j - 1) * tripCapacity);
+                        for (TripRecord existingTrip : tracker.getTrips()) {
+                            if (existingTrip.getClassField().equals(classField)
+                                    && existingTrip.getTripNo() < i) {
+                                cumulativeBeforeTrip += existingTrip.getPlanQty();
+                            }
                         }
 
                         long minutesBefore = (long) cumulativeBeforeTrip * 60 / hourlyCapacity;
@@ -1163,56 +1187,85 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
             }
         }
 
-        // 对每个胎胚内的车次记录按顺位规则排序并分配顺序号
-        List<CxScheduleDetail> allDetails = new ArrayList<>();
+        // ==================== 第二阶段：按胎胚内车次排序并分配顺位 ====================
+        // 顺位规则：同一胎胚内，按库存可供硫化时长从小到大排序，跨班次全局排顺位
         for (EmbryoTripTracker tracker : embryoTrackers.values()) {
             List<TripRecord> allTrips = tracker.getTrips();
 
+            // 过滤出正常任务车次（非试制、非收尾）
             List<TripRecord> regularTrips = allTrips.stream()
                     .filter(t -> !t.getIsTrialTask() && !t.getIsEndingTask())
                     .collect(Collectors.toList());
 
-            regularTrips.sort((a, b) -> {
-                int classA = classFieldOrder.getOrDefault(a.getClassField(), 99);
-                int classB = classFieldOrder.getOrDefault(b.getClassField(), 99);
-                if (classA != classB) return Integer.compare(classA, classB);
-                return Double.compare(a.getStockHours().doubleValue(), b.getStockHours().doubleValue());
-            });
+            // 按库存可供硫化时长从小到大排序（顺位规则）
+            regularTrips.sort(Comparator.comparingDouble(a -> a.getStockHours().doubleValue()));
 
-            Map<String, Integer> classSeqMap = new HashMap<>();
+            // 分配全局顺位（跨班次）
+            int sequence = 1;
             for (TripRecord trip : regularTrips) {
-                int seq = classSeqMap.merge(trip.getClassField(), 1, Integer::sum);
-                trip.setSequence(seq);
-            }
+                trip.setSequence(sequence++);
 
-            for (TripRecord trip : allTrips) {
+                // 预警：库存可供硫化时长 > 阈值
+                if (trip.getStockHours().doubleValue() > stockHoursWarningThreshold) {
+                    log.warn("胎胚 {} 车次{} 库存可供硫化时长 {}h 超过预警阈值 {}h，库存水位过高！",
+                            trip.getEmbryoCode(), trip.getTripNo(),
+                            trip.getStockHours(), stockHoursWarningThreshold);
+                }
+            }
+        }
+
+        // ==================== 第三阶段：按 机台+胎胚+车次号 维度合并8班次到一条记录 ====================
+        // key = machineCode|embryoCode，用于关联主表
+        Map<String, List<CxScheduleDetail>> resultGroupMap = new LinkedHashMap<>();
+
+        for (EmbryoTripTracker tracker : embryoTrackers.values()) {
+            List<TripRecord> allTrips = tracker.getTrips();
+
+            // 按 车次号 分组（同一车次号在不同班次合并到一条记录）
+            Map<Integer, List<TripRecord>> tripsByNo = allTrips.stream()
+                    .collect(Collectors.groupingBy(TripRecord::getTripNo));
+
+            // 取第一个车次记录的机台编码作为分组键
+            String machineCode = allTrips.isEmpty() ? "" : allTrips.get(0).getMachineCode();
+            String embryoCode = tracker.getEmbryoCode();
+            String groupKey = machineCode + "|" + embryoCode;
+
+            List<CxScheduleDetail> details = new ArrayList<>();
+
+            for (Map.Entry<Integer, List<TripRecord>> entry : tripsByNo.entrySet()) {
                 CxScheduleDetail detail = new CxScheduleDetail();
-                detail.setEmbryoCode(trip.getEmbryoCode());
-                detail.setMaterialCode(trip.getMaterialCode());
-                detail.setCxMachineCode(trip.getMachineCode());
-                detail.setScheduleDate(context.getScheduleDate().plusDays(trip.getDay()));
 
-                setDetailClassField(detail, trip.getClassField(), trip);
-                allDetails.add(detail);
+                // 将8个班次的车次数据合并到一条记录中
+                for (TripRecord trip : entry.getValue()) {
+                    setDetailClassField(detail, trip.getClassField(), trip);
+                }
+
+                details.add(detail);
+            }
+
+            resultGroupMap.put(groupKey, details);
+        }
+
+        // 打印前5条验证数据
+        int printCount = 0;
+        for (Map.Entry<String, List<CxScheduleDetail>> entry : resultGroupMap.entrySet()) {
+            for (CxScheduleDetail d : entry.getValue()) {
+                if (printCount >= 5) break;
+                log.info("子表明细[{}]: groupKey={}, CLASS1=[PLAN={},TRIP={},HOURS={},SEQ={}], CLASS2=[PLAN={},TRIP={},HOURS={},SEQ={}], CLASS3=[PLAN={},TRIP={},HOURS={},SEQ={}], CLASS4=[PLAN={},TRIP={},HOURS={},SEQ={}], CLASS5=[PLAN={},TRIP={},HOURS={},SEQ={}], CLASS6=[PLAN={},TRIP={},HOURS={},SEQ={}], CLASS7=[PLAN={},TRIP={},HOURS={},SEQ={}], CLASS8=[PLAN={},TRIP={},HOURS={},SEQ={}]",
+                        printCount, entry.getKey(),
+                        d.getClass1PlanQty(), d.getClass1TripNo(), d.getClass1StockHours(), d.getClass1Sequence(),
+                        d.getClass2PlanQty(), d.getClass2TripNo(), d.getClass2StockHours(), d.getClass2Sequence(),
+                        d.getClass3PlanQty(), d.getClass3TripNo(), d.getClass3StockHours(), d.getClass3Sequence(),
+                        d.getClass4PlanQty(), d.getClass4TripNo(), d.getClass4StockHours(), d.getClass4Sequence(),
+                        d.getClass5PlanQty(), d.getClass5TripNo(), d.getClass5StockHours(), d.getClass5Sequence(),
+                        d.getClass6PlanQty(), d.getClass6TripNo(), d.getClass6StockHours(), d.getClass6Sequence(),
+                        d.getClass7PlanQty(), d.getClass7TripNo(), d.getClass7StockHours(), d.getClass7Sequence(),
+                        d.getClass8PlanQty(), d.getClass8TripNo(), d.getClass8StockHours(), d.getClass8Sequence());
+                printCount++;
             }
         }
 
-        log.info("子表构建完成（按班次）：共 {} 条车次记录", allDetails.size());
-        // 打印前5条验证数据
-        for (int i = 0; i < Math.min(5, allDetails.size()); i++) {
-            CxScheduleDetail d = allDetails.get(i);
-            log.info("子表明细[{}]: 机台={}, 胎胚={}, CLASS1=[TRIP={},PLAN={},HOURS={}], CLASS2=[TRIP={},PLAN={}], CLASS3=[TRIP={},PLAN={}], CLASS4=[TRIP={},PLAN={}], CLASS5=[TRIP={},PLAN={}], CLASS6=[TRIP={},PLAN={}], CLASS7=[TRIP={},PLAN={}], CLASS8=[TRIP={},PLAN={}]",
-                    i, d.getCxMachineCode(), d.getEmbryoCode(),
-                    d.getClass1TripNo(), d.getClass1PlanQty(), d.getClass1StockHours(),
-                    d.getClass2TripNo(), d.getClass2PlanQty(),
-                    d.getClass3TripNo(), d.getClass3PlanQty(),
-                    d.getClass4TripNo(), d.getClass4PlanQty(),
-                    d.getClass5TripNo(), d.getClass5PlanQty(),
-                    d.getClass6TripNo(), d.getClass6PlanQty(),
-                    d.getClass7TripNo(), d.getClass7PlanQty(),
-                    d.getClass8TripNo(), d.getClass8PlanQty());
-        }
-        return allDetails;
+        return resultGroupMap;
     }
 
     /**
@@ -1266,6 +1319,8 @@ public class CoreScheduleAlgorithmServiceImpl implements CoreScheduleAlgorithmSe
         }
 
         Integer getBeginStock() { return beginStock; }
+        String getEmbryoCode() { return embryoCode; }
+        String getMaterialCode() { return materialCode; }
         int getVulcanizeMachineCount() { return vulcanizeMachineCount; }
         void setVulcanizeMachineCount(int count) { this.vulcanizeMachineCount = count; }
         int getVulcanizeMoldCount() { return vulcanizeMoldCount; }

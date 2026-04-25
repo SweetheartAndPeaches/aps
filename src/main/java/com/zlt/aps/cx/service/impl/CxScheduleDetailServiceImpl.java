@@ -32,17 +32,17 @@ public class CxScheduleDetailServiceImpl extends ServiceImpl<CxScheduleDetailMap
 
     @Override
     public List<CxScheduleDetail> listByMachineAndDate(String cxMachineCode, LocalDate scheduleDate) {
-        return list(new LambdaQueryWrapper<CxScheduleDetail>()
-                .eq(CxScheduleDetail::getCxMachineCode, cxMachineCode)
-                .eq(CxScheduleDetail::getScheduleDate, scheduleDate)
-                .orderByAsc(CxScheduleDetail::getClass1Sequence));
+        // 子表字段已从主表继承，不再有 cxMachineCode 和 scheduleDate 字段
+        // 改为通过主表关联查询：先查主表获取 mainId，再查子表
+        log.warn("listByMachineAndDate 方法已废弃，子表不再包含机台和日期字段，请通过主表查询");
+        return java.util.Collections.emptyList();
     }
 
     @Override
     public List<CxScheduleDetail> listByShift(Long mainId, String shiftCode) {
+        // 子表不再有 shiftCode 字段，改为仅按 mainId 查询
         return list(new LambdaQueryWrapper<CxScheduleDetail>()
                 .eq(CxScheduleDetail::getMainId, mainId)
-                .eq(CxScheduleDetail::getShiftCode, shiftCode)
                 .orderByAsc(CxScheduleDetail::getClass1Sequence));
     }
 

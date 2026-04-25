@@ -404,6 +404,12 @@ public class ScheduleContextVo {
      */
     private Integer h15MaxEmbryoTypes;
 
+    /**
+     * 库存可供硫化时长预警阈值（小时），默认18小时
+     * 当胎胚预计库存可供硫化时长超过此值时进行预警
+     */
+    private Integer stockHoursWarningThreshold;
+
     // ==================== 收尾相关数据 ====================
 
     /**
