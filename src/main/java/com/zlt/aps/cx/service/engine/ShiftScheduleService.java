@@ -284,8 +284,10 @@ public class ShiftScheduleService {
                 continue;
             }
 
+            // 试制任务不补整车，cars按实际计算（不向上取整）
+            int trialCars = tripCapacity > 0 ? shiftQty / tripCapacity : 1;
             ShiftProductionResult result = buildResult(machineCode, shiftConfig, task, shiftQty,
-                    tripCapacity, tripCapacity > 0 ? (shiftQty + tripCapacity - 1) / tripCapacity : 1,
+                    tripCapacity, trialCars,
                     startTime, endTime, true, false, task.getIsContinueTask());
 
             results.add(result);

@@ -1001,10 +1001,21 @@ public class TaskGroupService {
         }
         task.setPlannedProduction(requiredProductionValue);
 
-        // Step 3: 整车取整
+        // Step 3: 整车取整（试制任务不补整车，直接用实际需求量）
         int tripCapacity = getTripCapacity(task.getStructureName(), context);
-        int plannedProduction = productionCalculator.roundToVehicle(requiredProductionValue, tripCapacity);
-        task.setRequiredCars((plannedProduction + tripCapacity - 1) / Math.max(tripCapacity, 1));
+        int plannedProduction;
+        int requiredCars;
+        if (Boolean.TRUE.equals(task.getIsTrialTask()) || Boolean.TRUE.equals(task.getIsProductionTrial())) {
+            // 试制任务：不补整车，使用实际需求量
+            plannedProduction = requiredProductionValue;
+            requiredCars = tripCapacity > 0 ? requiredProductionValue / tripCapacity : 0;
+        } else {
+            // 普通任务：整车取整
+            plannedProduction = productionCalculator.roundToVehicle(requiredProductionValue, tripCapacity);
+            requiredCars = tripCapacity > 0 ? (plannedProduction + tripCapacity - 1) / tripCapacity : 0;
+        }
+        task.setPlannedProduction(plannedProduction);
+        task.setRequiredCars(requiredCars);
         task.setEndingExtraInventory(plannedProduction);
     }
 
