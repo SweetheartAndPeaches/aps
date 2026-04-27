@@ -400,6 +400,23 @@ public class BalancingService {
         log.info("====== 均衡分配(含续作预扣)开始 ======");
         log.info("任务数={}, 可用机台数={}", tasks.size(), availableMachines.size());
         
+        // 过滤被收尾舍弃的任务（isLastEndingBatch=true 且 endingExtraInventory=0）
+        List<CoreScheduleAlgorithmService.DailyEmbryoTask> filteredTasks = tasks.stream()
+                .filter(t -> !(Boolean.TRUE.equals(t.getIsLastEndingBatch())
+                        && (t.getEndingExtraInventory() == null || t.getEndingExtraInventory() <= 0)))
+                .collect(Collectors.toList());
+        if (filteredTasks.size() < tasks.size()) {
+            log.info("收尾舍弃过滤: {} 个任务被移除，剩余 {} 个", tasks.size() - filteredTasks.size(), filteredTasks.size());
+            tasks = filteredTasks;
+        }
+        
+        if (tasks.isEmpty()) {
+            log.info("所有任务均被收尾舍弃，返回空结果");
+            BalancingResult emptyResult = new BalancingResult();
+            emptyResult.setAssignments(new ArrayList<>());
+            return emptyResult;
+        }
+        
         // 打印每个胎胚任务详情（关键诊断）
         for (CoreScheduleAlgorithmService.DailyEmbryoTask task : tasks) {
             log.info("  胎胚任务: embryoCode={}, materialCode={}, vulcanizeMachineCount={}",
