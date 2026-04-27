@@ -454,7 +454,6 @@ public class HolidayScheduleServiceImpl implements HolidayScheduleService {
         }
 
         // 设置到上下文
-        context.setIsOpeningDay(true);
         context.setFormingStartShift(formingStartShift);
         context.setVulcanizingStartShift(vulcanizingStartShift);
 

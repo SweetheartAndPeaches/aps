@@ -437,41 +437,7 @@ public class ContinueTaskProcessor {
         log.debug("胎胚 {} 当前库存：{}", task.getEmbryoCode(), currentStock);
     }
     
-    /**
-     * 计算任务的计划量（条）
-     *
-     * <p>硫化需求 − 库存抵扣后，调用 ProductionCalculator 整车取整。
-     * 仅在正常生产日执行，开停产日已在 handleOpeningClosingDay 中处理。
-     *
-     * @param task         任务
-     * @param context      排程上下文
-     * @param scheduleDate 排程日期
-     */
-    public void calculatePlannedProduction(
-            CoreScheduleAlgorithmService.DailyEmbryoTask task,
-            ScheduleContextVo context,
-            LocalDate scheduleDate,
-            boolean isOpeningDay) {
 
-        // 停产日已在 handleOpeningClosingDay 中设置 plannedProduction=0，跳过此处
-        if (scheduleDayTypeHelper.isStopDay(scheduleDate, context.getFactoryCode())) {
-            return;
-        }
-
-        // 硫化需求 − 库存抵扣 = 待排条数
-        int vulcanizeDemand = task.getVulcanizeDemand() != null ? task.getVulcanizeDemand() : 0;
-        int currentStock = task.getCurrentStock() != null ? task.getCurrentStock() : 0;
-        int requiredProduction = Math.max(0, vulcanizeDemand - currentStock);
-
-        // 整车取整（由 ProductionCalculator 统一管理）
-        int tripCapacity = getTripCapacity(task.getStructureName(), context);
-        int plannedProduction = productionCalculator.roundToVehicle(requiredProduction, tripCapacity);
-        task.setPlannedProduction(plannedProduction);
-
-        log.debug("任务 {} 待排产量：需求={}，库存={}，待排={}，胎面整车={}，计划量={}",
-                task.getEmbryoCode(), vulcanizeDemand, currentStock,
-                requiredProduction, tripCapacity, plannedProduction);
-    }
 
     
     /**
@@ -549,16 +515,11 @@ public class ContinueTaskProcessor {
      *
      * @param task         任务
      * @param context      排程上下文
-     * @param isOpeningDay 是否开产日（开产日不触发收尾处理）
      */
     public void handleEndingRemainder(
             CoreScheduleAlgorithmService.DailyEmbryoTask task,
-            ScheduleContextVo context,
-            boolean isOpeningDay) {
+            ScheduleContextVo context) {
         
-        if (isOpeningDay) {
-            return;
-        }
         if (!Boolean.TRUE.equals(task.getIsEndingTask()) && !Boolean.TRUE.equals(task.getIsNearEnding())) {
             return;
         }

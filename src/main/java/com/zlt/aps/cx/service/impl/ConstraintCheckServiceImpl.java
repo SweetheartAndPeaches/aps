@@ -332,19 +332,6 @@ public class ConstraintCheckServiceImpl implements ConstraintCheckService {
     }
 
     @Override
-    public ConstraintCheckResult checkKeyProductConstraint(MdmMaterialInfo material, boolean isOpeningDay, boolean isFirstShift) {
-        if (!isOpeningDay || !isFirstShift) {
-            return ConstraintCheckResult.pass();
-        }
-
-        // 检查是否为关键产品
-        // 注意：MdmMaterialInfo 没有直接的关键产品标识
-        // 实际应根据关键产品配置表判断（context.getKeyProductCodes()）
-        // 这里暂时通过配置判断，需要在调用时传入关键产品编码集合
-        return ConstraintCheckResult.pass();
-    }
-
-    @Override
     public ConstraintCheckResult checkTrialConstraint(LocalDateTime scheduleDate, int trialTaskCount, String shiftCode, int quantity) {
         List<String> violations = new ArrayList<>();
 

@@ -323,11 +323,6 @@ public class ScheduleContextVo {
     private Integer machineHourlyCapacity;
 
     /**
-     * 是否开产日
-     */
-    private Boolean isOpeningDay;
-
-    /**
      * 是否停产日
      */
     private Boolean isClosingDay;

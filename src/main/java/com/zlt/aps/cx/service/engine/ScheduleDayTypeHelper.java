@@ -722,24 +722,6 @@ public class ScheduleDayTypeHelper {
     }
 
     /**
-     * 判断是否为开产日
-     */
-    public boolean isOpeningDay(LocalDate date) {
-        return isOpeningDay(date, null);
-    }
-
-    /**
-     * 判断是否为开产日（带工厂编号）
-     */
-    public boolean isOpeningDay(LocalDate date, String factoryCode) {
-        DayFlagInfo flagInfo = findNearestDayFlag(date, factoryCode);
-        return flagInfo != null && "1".equals(flagInfo.dayFlag);
-    }
-
-    /**
-     * 判断是否正常生产日（既不是停产日也不是停产标识日）
-     */
-    /**
      * 根据时间字符串（HH:mm格式）确定对应的班次序号
      *
      * <p>逻辑：遍历班次配置（按dayShiftOrder排序），找到 startTime <= timeStr < endTime 的班次。
