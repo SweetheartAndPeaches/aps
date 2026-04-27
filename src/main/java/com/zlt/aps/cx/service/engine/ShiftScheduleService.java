@@ -1024,7 +1024,11 @@ public class ShiftScheduleService {
             ScheduleContextVo context) {
 
         LocalTime shiftStart = shiftConfig.getShiftStartTime();
-        LocalDateTime startTime = LocalDateTime.of(scheduleDate, shiftStart);
+        LocalDate startDate = scheduleDate;
+        if (shiftConfig.getIsCrossDay() != null && shiftConfig.getIsCrossDay() == 1) {
+            startDate = scheduleDate.minusDays(1);
+        }
+        LocalDateTime startTime = LocalDateTime.of(startDate, shiftStart);
         startTime = startTime.plusMinutes(getMachinePrepareMinutes(machineCode, context));
 
         return startTime;
@@ -1041,7 +1045,7 @@ public class ShiftScheduleService {
         }
         LocalDateTime endTime = LocalDateTime.of(scheduleDate, shiftEnd);
 
-        // 夜班跨天
+        // 跨天班次（isCrossDay=1）结束时间加1天
         if (shiftConfig.getIsCrossDay() != null && shiftConfig.getIsCrossDay() == 1) {
             endTime = endTime.plusDays(1);
         }

@@ -1480,15 +1480,12 @@ public class TaskGroupService {
         }
         CxShiftConfig currentShift = dayShifts.get(0);
         LocalTime startTime = currentShift.getShiftStartTime();
-        LocalTime endTime = currentShift.getShiftEndTime();
         if (startTime == null) {
             return null;
         }
-        // 跨天班次（endTime < startTime，如 22:00~05:59）的实际开始日期在前一天
-        // 例如 NIGHT_D2: scheduleDate=2026-05-19, 22:00~05:59 → 2026-05-18T22:00
-        // DAY_D2: scheduleDate=2026-05-19, 06:00~14:00 → 2026-05-19T06:00
+        // 跨天班次（isCrossDay=1，如 NIGHT_D2 22:00~05:59）实际开始日期在前一天
         LocalDate startDate = scheduleDate;
-        if (endTime != null && !endTime.isAfter(startTime)) {
+        if (currentShift.getIsCrossDay() != null && currentShift.getIsCrossDay() == 1) {
             startDate = scheduleDate.minusDays(1);
         }
         return LocalDateTime.of(startDate, startTime);
