@@ -365,15 +365,23 @@ public class TaskGroupService {
                 int stock = task.getCurrentStock() != null ? task.getCurrentStock() : 0;
                 int netDemand = Math.max(0, vulcanizeDmd - stock);
                 BigDecimal lossRate = context.getLossRate() != null ? context.getLossRate() : BigDecimal.ZERO;
+                boolean isTrialProduction = Boolean.TRUE.equals(task.getIsTrialTask()) || Boolean.TRUE.equals(task.getIsProductionTrial());
                 int tripCap = getTripCapacity(task.getStructureName(), context);
-                int plannedProd = task.getPlannedProduction() != null ? task.getPlannedProduction() : 0;
                 log.info("收尾任务[{}]: 剩余余量={}, 收尾日={}, 距收尾={}天, 紧急={}, 近期={}, 最后一批={}",
                         embryoCode, task.getEndingSurplusQty(), task.getEndingDate(),
                         task.getDaysToEnding(), task.getIsUrgentEnding(), task.getIsNearEnding(), task.getIsLastEndingBatch());
-                log.info("  排产计算: (硫化{} - 库存{}) × (1+损耗{}) = {}×{}={}, 整车({})取整→待排={}, 需车={}, 实际={}",
-                        vulcanizeDmd, stock, lossRate, netDemand,
-                        lossRate.add(BigDecimal.ONE).setScale(4, BigDecimal.ROUND_HALF_UP),
-                        plannedProd, tripCap, task.getPlannedProduction(), task.getRequiredCars(), task.getEndingExtraInventory());
+                if (isTrialProduction) {
+                    log.info("  排产计算[试制]: (硫化{} - 库存{}) = {}, 试制不补整车→待排={}, 需车={}, 实际={}",
+                            vulcanizeDmd, stock, netDemand,
+                            tripCap, task.getPlannedProduction(), task.getRequiredCars(), task.getEndingExtraInventory());
+                } else {
+                    int rawWithLoss = BigDecimal.valueOf(netDemand)
+                            .multiply(BigDecimal.ONE.add(lossRate))
+                            .setScale(0, BigDecimal.ROUND_UP).intValue();
+                    log.info("  排产计算: (硫化{} - 库存{}) = {}, ×(1+损耗{}) = {}, 向上整车({})取整→待排={}, 需车={}, 实际={}",
+                            vulcanizeDmd, stock, netDemand, lossRate, rawWithLoss,
+                            tripCap, task.getPlannedProduction(), task.getRequiredCars(), task.getEndingExtraInventory());
+                }
             }
             
             // 更新已使用的成型余量（累加当前任务的 endingExtraInventory）
@@ -935,14 +943,24 @@ public class TaskGroupService {
         // 1. 从 materialLhCapacityMap 获取该物料的日硫化量（key 是 materialCode，不是 embryoCode）
         Map<String, MonthPlanProductLhCapacityVo> lhCapacityMap = context.getMaterialLhCapacityMap();
         Integer dailyLhCapacity = null;
+        int originalDoubleMoldDayVulcanizationQty = 0;
+        boolean isStandardCapacity = false;
         if (lhCapacityMap != null) {
             String materialCode = task.getMaterialCode();
             MonthPlanProductLhCapacityVo capacityVo = lhCapacityMap.get(materialCode);
             if (capacityVo != null) {
                 if (capacityVo.getDayVulcanizationQty() != null && capacityVo.getDayVulcanizationQty() > 0) {
+                    originalDoubleMoldDayVulcanizationQty = capacityVo.getDayVulcanizationQty();
                     dailyLhCapacity = capacityVo.getDayVulcanizationQty() / 2; // 日硫化量是双模的，需要除以2得到单模产量
+                    log.info("物料 {} dayVulcanizationQty={}, standardCapacity={}, mesCapacity={}, apsCapacity={}",
+                            materialCode, capacityVo.getDayVulcanizationQty(), capacityVo.getStandardCapacity(),
+                            capacityVo.getMesCapacity(), capacityVo.getApsCapacity());
                 } else if (capacityVo.getStandardCapacity() != null && capacityVo.getStandardCapacity() > 0) {
+                    isStandardCapacity = true;
                     dailyLhCapacity = capacityVo.getStandardCapacity();
+                    log.info("物料 {} dayVulcanizationQty={}, 回退到standardCapacity={}, mesCapacity={}, apsCapacity={}",
+                            materialCode, capacityVo.getDayVulcanizationQty(), capacityVo.getStandardCapacity(),
+                            capacityVo.getMesCapacity(), capacityVo.getApsCapacity());
                 }
             }
         }
@@ -987,8 +1005,16 @@ public class TaskGroupService {
         boolean isHighStock = stockHours.compareTo(BigDecimal.valueOf(STOCK_HIGH_HOURS_THRESHOLD)) > 0;
         task.setIsStockHighWarning(isHighStock);
 
-        log.debug("物料 {} stockHours计算: 日硫化量={}, 单胎单模时长={}s, 模数={}, 库存={}, 库存可供时长={}h",
-                task.getEmbryoCode(), dailyLhCapacity, singleTireMoldSeconds, taskMoldQty, currentStock, stockHours);
+        String logDailyLhCapacity;
+        if (originalDoubleMoldDayVulcanizationQty > 0) {
+            logDailyLhCapacity = "双模=" + originalDoubleMoldDayVulcanizationQty + ", 单模=" + dailyLhCapacity;
+        } else if (isStandardCapacity) {
+            logDailyLhCapacity = "标准=" + dailyLhCapacity;
+        } else {
+            logDailyLhCapacity = "估算=" + dailyLhCapacity;
+        }
+        log.debug("物料 {} stockHours计算: 日硫化量({}), 单胎单模时长={}s, 模数={}, 库存={}, 库存可供时长={}h",
+                task.getEmbryoCode(), logDailyLhCapacity, singleTireMoldSeconds, taskMoldQty, currentStock, stockHours);
     }
 
     /**

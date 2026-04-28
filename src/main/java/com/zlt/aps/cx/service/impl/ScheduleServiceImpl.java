@@ -1481,23 +1481,28 @@ public class ScheduleServiceImpl implements ScheduleService {
                 for (LhScheduleResult lh : relatedTasks) {
                     String materialCode = lh.getMaterialCode();
                     int dayVulcanizationQty = 0;
-                    
-                    // 从 materialLhCapacityMap 获取日硫化量
+
+                    // 优先用班次计划量来判断当前班次是否排产
+                    ShiftPlanResult shiftResult = getShiftPlanQtyWithShiftName(lh, dayShifts, scheduleDate);
+                    if (shiftResult.planQty <= 0) {
+                        log.debug("胎胚 {} 硫化任务 {} 当前班次计划量为0，跳过分配", embryoCode, lh.getId());
+                        continue;
+                    }
+
+                    // 从 materialLhCapacityMap 获取日硫化量（用于比例计算，已按参数模式计算）
                     if (materialLhCapacityMap != null && materialCode != null) {
                         MonthPlanProductLhCapacityVo capacityVo = materialLhCapacityMap.get(materialCode);
                         if (capacityVo != null) {
-                            // 使用默认日硫化量（优先标准产能，其次MES产能）
-                            dayVulcanizationQty = capacityVo.getDefaultDayVulcanizationQty() != null 
-                                    ? capacityVo.getDefaultDayVulcanizationQty() : 0;
+                            dayVulcanizationQty = capacityVo.getDayVulcanizationQty() != null
+                                    ? capacityVo.getDayVulcanizationQty() : 0;
                         }
                     }
-                    
-                    // 如果日硫化量为0，使用班次计划量作为后备
+
                     if (dayVulcanizationQty <= 0) {
-                        ShiftPlanResult shiftResult = getShiftPlanQtyWithShiftName(lh, dayShifts, scheduleDate);
-                        dayVulcanizationQty = shiftResult.planQty;
+                        log.debug("胎胚 {} 硫化任务 {} 日硫化量=0，跳过分配", embryoCode, lh.getId());
+                        continue;
                     }
-                    
+
                     taskDemands.add(new TaskDemand(lh.getId(), dayVulcanizationQty, materialCode, "日硫化量"));
                     totalDemand += dayVulcanizationQty;
                 }

@@ -4,6 +4,7 @@ import com.zlt.aps.cx.enums.DayVulcanizationModeEnum;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.Serializable;
 import java.math.BigDecimal;
@@ -15,6 +16,7 @@ import java.math.BigDecimal;
  * @author APS Team
  */
 @Data
+@Slf4j
 @ApiModel(value = "SKU日硫化产能对象", description = "工厂月度排产-SKU日硫化产能对象")
 public class MonthPlanProductLhCapacityVo implements Serializable {
 
@@ -95,6 +97,10 @@ public class MonthPlanProductLhCapacityVo implements Serializable {
                 break;
             default:
                 this.dayVulcanizationQty = this.standardCapacity;
+        }
+        if (this.dayVulcanizationQty == null || this.dayVulcanizationQty <= 0) {
+            log.warn("日硫化量计算: 物料={}, 模式={}, 选中字段为null/0, mesCapacity={}, standardCapacity={}, apsCapacity={}",
+                    this.materialCode, mode.getDesc(), this.mesCapacity, this.standardCapacity, this.apsCapacity);
         }
     }
 
